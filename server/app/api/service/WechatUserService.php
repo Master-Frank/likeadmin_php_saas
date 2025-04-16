@@ -18,6 +18,9 @@ namespace app\api\service;
 use app\common\enum\YesNoEnum;
 use app\common\model\user\User;
 use app\common\service\storage\Driver as StorageDriver;
+use think\db\exception\DataNotFoundException;
+use think\db\exception\DbException;
+use think\db\exception\ModelNotFoundException;
 use app\common\model\user\{UserAuth};
 use app\common\enum\user\UserTerminalEnum;
 use app\common\service\{app\platformapi\config\common\service\ConfigService};
@@ -203,15 +206,15 @@ class WechatUserService
 
     /**
      * @notes 获取token
-     * @throws \think\db\exception\DataNotFoundException
-     * @throws \think\db\exception\DbException
-     * @throws \think\db\exception\ModelNotFoundException
+     * @throws DataNotFoundException
+     * @throws DbException
+     * @throws ModelNotFoundException
      * @author cjhao
      * @date 2021/8/2 16:45
      */
     private function getToken(): void
     {
-        $user = UserTokenService::setToken($this->user->id, $this->terminal);
+        $user = UserTokenService::setToken($this->user, $this->terminal);
         $this->user->token = $user['token'];
     }
 

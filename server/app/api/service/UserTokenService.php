@@ -36,7 +36,7 @@ class UserTokenService
     public static function setToken($user, $terminal)
     {
         $time = time();
-        $userSession = UserSession::where([['user_id', '=', $user->id], ['terminal', '=', $terminal]])->find();
+        $userSession = UserSession::query()->where([['user_id', '=', $user->id], ['terminal', '=', $terminal]])->find();
 
         //获取token延长过期的时间
         $expireTime = $time + Config::get('project.user_token.expire_duration');
