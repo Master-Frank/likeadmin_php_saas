@@ -250,7 +250,7 @@ VALUES (2, 0, 2, '个人中心',
         1661757188, 1710933097);
 INSERT INTO `la_decorate_page`
 VALUES (3, 0, 3, '客服设置',
-        '[{\"title\":\"客服设置\",\"name\":\"customer-service\",\"content\":{\"title\":\"添加客服二维码\",\"time\":\"早上 9:30 - 19:00\",\"mobile\":\"18578768757\",\"qrcode\":\"/resource/image/common/kefu01.png\",\"remark\":\"长按添加客服或拨打客服热线\"},\"styles\":{}}]',
+        '[{\"title\":\"客服设置\",\"name\":\"customer-service\",\"content\":{\"title\":\"添加客服二维码\",\"time\":\"早上 9:30 - 19:00\",\"mobile\":\"1888888888\",\"qrcode\":\"/resource/image/common/kefu01.png\",\"remark\":\"长按添加客服或拨打客服热线\"},\"styles\":{}}]',
         '', 1661757188, 1710929953);
 INSERT INTO `la_decorate_page`
 VALUES (4, 0, 4, 'PC设置',
