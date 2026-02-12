@@ -80,7 +80,7 @@ class ListsGenerator extends BaseGenerator implements GenerateInterface
 
             $templatePath = $this->getTemplatePath('php/tree_lists');
         }
-     
+
         // 替换内容
         $content = $this->replaceFileData($needReplace, $waitReplace, $templatePath);
 
@@ -111,10 +111,10 @@ class ListsGenerator extends BaseGenerator implements GenerateInterface
      */
     public function getUseContent()
     {
-        if ($this->moduleName == 'platformapi' || $this->moduleName == 'tenantapi') {
-            $tpl = "use app\\" . $this->moduleName . "\\lists\\BaseAdminDataLists;" . PHP_EOL;
-        } else {
+        if ($this->moduleName == 'api') {
             $tpl = "use app\\common\\lists\\BaseDataLists;" . PHP_EOL;
+        } else {
+            $tpl = "use app\\" . $this->moduleName . "\\lists\\BaseAdminDataLists;" . PHP_EOL;
         }
 
         if (!empty($this->classDir)) {
@@ -164,11 +164,11 @@ class ListsGenerator extends BaseGenerator implements GenerateInterface
      */
     public function getExtendsListsContent()
     {
-        $tpl = 'BaseAdminDataLists';
-        if ($this->moduleName != 'platformapi' || $this->moduleName != 'tenantapi') {
-            $tpl = 'BaseDataLists';
+        if ($this->moduleName == 'api') {
+            return 'BaseAdminDataLists';
+        } else {
+            return "BaseDataLists";
         }
-        return $tpl;
     }
 
 
@@ -330,9 +330,9 @@ class ListsGenerator extends BaseGenerator implements GenerateInterface
     public function fileInfo(): array
     {
         return [
-            'name' => $this->getGenerateName(),
-            'type' => 'php',
-            'content' => $this->content
+            'name'    => $this->getGenerateName(),
+            'type'    => 'php',
+            'content' => $this->content,
         ];
     }
 
