@@ -1530,8 +1530,8 @@ echo "dict_data_add_bad php_msg=$(jget msg <<<"$php_dd") go_msg=$(jget msg <<<"$
 if [[ "$(jget msg <<<"$php_dd")" != "$(jget msg <<<"$go_dd")" ]]; then
   fail=$((fail + 1))
 fi
-php_tul="$(curl -sS "$PHP/platformapi/tenant.tenantuser/lists" -H "token: $TOKEN")"
-go_tul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists" -H "token: $TOKEN")"
+php_tul="$(curl -sS "$PHP/platformapi/tenant.tenantUser/lists" -H "token: $TOKEN")"
+go_tul="$(curl -sS "$GO/platformapi/tenant.tenantUser/lists" -H "token: $TOKEN")"
 echo "tenantuser_lists_noid php_msg=$(jget msg <<<"$php_tul") go_msg=$(jget msg <<<"$go_tul")"
 if [[ "$(jget msg <<<"$php_tul")" != "$(jget msg <<<"$go_tul")" ]]; then
   fail=$((fail + 1))
