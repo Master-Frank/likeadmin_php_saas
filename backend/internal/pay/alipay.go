@@ -80,7 +80,15 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 }
 
 func AliVerifyNotify(c *gin.Context, form map[string][]string) bool {
-	cfg := AliCfg(c)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return AliVerifyNotifyByTenant(tid, form)
+}
+
+func AliVerifyNotifyByTenant(tenantID uint, form map[string][]string) bool {
+	cfg := AliCfgByTenant(tenantID)
 	pub := resolveAliPublicKey(cfg)
 	if pub == nil {
 		return true

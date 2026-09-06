@@ -485,6 +485,10 @@ func UpgradeDo(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	if err := upgrade.CheckOpenBasedir(); err != nil {
+		response.Fail(c, "更新失败:"+err.Error())
+		return
+	}
 	host := ctxutil.Host(c)
 	result := upgrade.Verify(host, p["id"], "package_link")
 	if !upgrade.HasPermission(result) {

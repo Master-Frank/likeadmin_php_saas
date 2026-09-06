@@ -188,6 +188,21 @@ func TestOAMenuCheck(t *testing.T) {
 	}
 }
 
+func TestCoerceOAMenuHasMenu(t *testing.T) {
+	out, _ := CoerceOAMenuHasMenu([]any{
+		map[string]any{"name": "菜单", "has_menu": 1},
+		map[string]any{"name": "空", "has_menu": 0},
+	}).([]any)
+	if len(out) != 2 {
+		t.Fatalf("len=%d", len(out))
+	}
+	first, _ := out[0].(map[string]any)
+	second, _ := out[1].(map[string]any)
+	if first["has_menu"] != true || second["has_menu"] != false {
+		t.Fatalf("has_menu %v %v", first["has_menu"], second["has_menu"])
+	}
+}
+
 func TestRechargeAPICheck(t *testing.T) {
 	if RechargeAPICheck(map[string]any{}, 1, 0) != "请填写充值金额" {
 		t.Fatal("money")

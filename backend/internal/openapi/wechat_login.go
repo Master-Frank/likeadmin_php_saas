@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -268,41 +269,66 @@ func handlePayNotify(c *gin.Context) {
 	raw := middleware.ReadBody(c)
 	_ = c.Request.ParseForm()
 	form := c.Request.PostForm
-	n := wechat.ParsePayNotify(raw, form)
-	if bytes.Contains(raw, []byte("<xml")) || bytes.Contains(raw, []byte("<xml>")) {
-		if !wechat.VerifyWechatV2XML(raw, pay.WechatCfg(c).SignKey) {
+	isV3 := strings.Contains(string(raw), "ciphertext") || strings.Contains(string(raw), "event_type")
+	isXML := bytes.Contains(raw, []byte("<xml")) || bytes.Contains(raw, []byte("<XML"))
+
+	var n wechat.PayNotify
+	if isXML {
+		n = wechat.ParsePayNotify(raw, nil)
+		if !wechat.VerifyWechatV2XML(raw, payNotifyWechatKey(c, wechat.RechargeSN(n.OutTradeNo))) {
 			c.String(200, "fail")
 			return
 		}
-	}
-	if strings.Contains(string(raw), "ciphertext") {
-		dec, ok := pay.DecryptWechatV3OK(raw, pay.WechatCfg(c).SignKey)
+	} else if isV3 {
+		dec, ok := pay.DecryptWechatV3WithKeys(raw, pay.CollectWechatSignKeys(ctxutil.Get(c).TenantID))
 		if !ok {
 			c.JSON(200, gin.H{"code": "FAIL", "message": "验签失败"})
 			return
 		}
 		n = dec
-	}
-	if len(form) > 0 && (form.Get("trade_status") != "" || form.Get("sign") != "") {
-		if !pay.AliVerifyNotify(c, form) {
-			c.String(200, "fail")
-			return
-		}
-	}
-	if wechat.ShouldMarkRechargePaid(n) {
-		sn := wechat.RechargeSN(n.OutTradeNo)
-		if sn != "" {
-			var order model.RechargeOrder
-			if tdb(c).Where("sn = ? AND delete_time IS NULL", sn).First(&order).Error == nil && order.PayStatus != 1 {
-				_ = markRechargePaid(&order, n.TransactionID)
+	} else {
+		n = wechat.ParsePayNotify(raw, form)
+		if len(form) > 0 && (form.Get("trade_status") != "" || form.Get("sign") != "") {
+			tid := ctxutil.Get(c).TenantID
+			if order, err := findRechargeBySN(wechat.RechargeSN(n.OutTradeNo)); err == nil && order != nil {
+				tid = order.TenantID
+			}
+			if !pay.AliVerifyNotifyByTenant(tid, form) {
+				c.String(200, "fail")
+				return
 			}
 		}
 	}
-	if strings.Contains(string(raw), "ciphertext") || strings.Contains(string(raw), "event_type") {
+	if wechat.ShouldMarkRechargePaid(n) {
+		if order, err := findRechargeBySN(wechat.RechargeSN(n.OutTradeNo)); err == nil && order != nil && order.PayStatus != 1 {
+			_ = markRechargePaid(order, n.TransactionID)
+		}
+	}
+	if isV3 {
 		c.JSON(200, gin.H{"code": "SUCCESS", "message": "成功"})
 		return
 	}
 	c.String(200, "success")
+}
+
+func payNotifyWechatKey(c *gin.Context, sn string) string {
+	if order, err := findRechargeBySN(sn); err == nil && order != nil {
+		if cfg := pay.WechatCfgByTenant(order.TenantID); cfg.SignKey != "" {
+			return cfg.SignKey
+		}
+	}
+	return pay.WechatCfg(c).SignKey
+}
+
+func findRechargeBySN(sn string) (*model.RechargeOrder, error) {
+	if sn == "" || bootstrap.DB == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var order model.RechargeOrder
+	if err := bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
 }
 
 func WechatJsConfigReal(c *gin.Context) {

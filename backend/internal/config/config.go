@@ -11,6 +11,7 @@ import (
 type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	Database DatabaseConfig `mapstructure:"database"`
+	Pgsql    DatabaseConfig `mapstructure:"pgsql"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Project  ProjectConfig  `mapstructure:"project"`
 }

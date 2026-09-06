@@ -27,6 +27,7 @@ func (User) TableName() string { return T("user") }
 
 type UserSession struct {
 	ID         uint   `gorm:"column:id;primaryKey"`
+	TenantID   uint   `gorm:"column:tenant_id"`
 	UserID     uint   `gorm:"column:user_id"`
 	Terminal   int    `gorm:"column:terminal"`
 	Token      string `gorm:"column:token"`

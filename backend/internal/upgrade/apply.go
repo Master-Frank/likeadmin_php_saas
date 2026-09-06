@@ -2,6 +2,8 @@ package upgrade
 
 import (
 	"archive/zip"
+	"database/sql"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -16,8 +18,25 @@ import (
 	"gorm.io/gorm"
 )
 
+const openBasedirMsg = "请临时关闭服务器本站点的跨域攻击设置，并重启 nginx、PHP，具体参考相关升级文档"
+
+// CheckOpenBasedir mirrors PHP UpgradeLogic::upgrade open_basedir precheck.
+func CheckOpenBasedir() error {
+	basedir := os.Getenv("LIKEADMIN_OPEN_BASEDIR")
+	if basedir == "" {
+		basedir = os.Getenv("PHP_OPEN_BASEDIR")
+	}
+	if strings.Contains(basedir, "server") {
+		return errStatus(openBasedirMsg)
+	}
+	return nil
+}
+
 // ApplyPackage downloads, extracts, and applies a likeadmin upgrade zip (SQL / menu / files).
 func ApplyPackage(link, zipName string) error {
+	if err := CheckOpenBasedir(); err != nil {
+		return err
+	}
 	root := serverRoot()
 	localDir := filepath.Join(root, "upgrade")
 	tempDir := filepath.Join(localDir, "temp")
@@ -38,6 +57,9 @@ func ApplyPackage(link, zipName string) error {
 			return err
 		}
 		if err := upgradeMenu(tx, filepath.Join(tempDir, "project", "menu")); err != nil {
+			return err
+		}
+		if err := upgradePgSQL(filepath.Join(tempDir, "project", "pg")); err != nil {
 			return err
 		}
 		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), filepath.Dir(root)+string(os.PathSeparator)); err != nil {
@@ -278,4 +300,73 @@ func upgradeFile(tempFile, oldFile string) error {
 		}
 		return nil
 	})
+}
+
+func upgradePgSQL(dir string) error {
+	st, err := os.Stat(dir)
+	if err != nil || !st.IsDir() {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return applyError("更新PG数据库数据失败")
+	}
+	var files []string
+	for _, ent := range entries {
+		if ent.IsDir() || !strings.HasSuffix(strings.ToLower(ent.Name()), ".sql") {
+			continue
+		}
+		files = append(files, filepath.Join(dir, ent.Name()))
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	db, err := openPgsqlDB()
+	if err != nil || db == nil {
+		return applyError("更新PG数据库数据失败")
+	}
+	defer db.Close()
+	prefix := config.C.Pgsql.Prefix
+	if prefix == "" {
+		prefix = "la_"
+	}
+	for _, path := range files {
+		raw, err := os.ReadFile(path)
+		if err != nil || len(raw) == 0 {
+			continue
+		}
+		sqlText := strings.ReplaceAll(string(raw), "la_", prefix)
+		for _, stmt := range strings.Split(sqlText, ";") {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := db.Exec(stmt); err != nil {
+				return applyError("更新PG数据库数据失败")
+			}
+		}
+	}
+	return nil
+}
+
+func openPgsqlDB() (*sql.DB, error) {
+	cfg := config.C.Pgsql
+	if cfg.Hostname == "" || cfg.Database == "" {
+		return nil, fmt.Errorf("pgsql not configured")
+	}
+	port := cfg.Hostport
+	if port == 0 {
+		port = 5432
+	}
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Hostname, port, cfg.Username, cfg.Password, cfg.Database)
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
 }

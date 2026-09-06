@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/wechat"
 )
 
@@ -47,6 +49,48 @@ func DecryptWechatV3OK(raw []byte, apiV3Key string) (wechat.PayNotify, bool) {
 		dec.Attach = n.Attach
 	}
 	return dec, true
+}
+
+// DecryptWechatV3WithKeys tries each API v3 key until ciphertext authenticates.
+func DecryptWechatV3WithKeys(raw []byte, keys []string) (wechat.PayNotify, bool) {
+	for _, key := range keys {
+		if n, ok := DecryptWechatV3OK(raw, key); ok {
+			return n, true
+		}
+	}
+	return wechat.PayNotify{}, false
+}
+
+// WechatPayTenantIDs lists tenants that have a wechat pay config row.
+func WechatPayTenantIDs() []uint {
+	if bootstrap.DB == nil {
+		return nil
+	}
+	var ids []uint
+	bootstrap.DB.Model(&model.TenantPayConfig{}).Where("pay_way = ?", WayWechat).Distinct("tenant_id").Pluck("tenant_id", &ids)
+	return ids
+}
+
+// CollectWechatSignKeys prefers the given tenant IDs, then every wechat pay config, then platform.
+func CollectWechatSignKeys(prefer ...uint) []string {
+	seen := map[string]bool{}
+	var keys []string
+	add := func(tid uint) {
+		k := WechatCfgByTenant(tid).SignKey
+		if k == "" || seen[k] {
+			return
+		}
+		seen[k] = true
+		keys = append(keys, k)
+	}
+	for _, tid := range prefer {
+		add(tid)
+	}
+	for _, tid := range WechatPayTenantIDs() {
+		add(tid)
+	}
+	add(0)
+	return keys
 }
 
 func aesGCMDecrypt(key, nonce, aad, ciphertextB64 string) ([]byte, error) {

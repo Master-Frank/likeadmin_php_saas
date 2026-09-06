@@ -710,7 +710,7 @@ func OAReplySort(c *gin.Context) {
 
 func OAMenuDetail(c *gin.Context) {
 	data := cfgsvc.Get(c, "oa_setting", "menu", []any{})
-	response.Data(c, data)
+	response.Data(c, util.CoerceOAMenuHasMenu(data))
 }
 
 func OAMenuSave(c *gin.Context) {

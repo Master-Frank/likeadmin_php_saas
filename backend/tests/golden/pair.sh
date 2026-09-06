@@ -232,6 +232,31 @@ if [[ -n "$TENANT_HOST" ]]; then
     fail=$((fail + 1))
   fi
   UT="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_ul")"
+  if [[ -n "$UT" ]] && command -v mysql >/dev/null; then
+    sess_tid="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT tenant_id FROM la_user_session WHERE token='$UT'" 2>/dev/null)"
+    echo "user_session_tenant_id=$sess_tid"
+    if [[ "$sess_tid" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+    go_ul2="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$login_body")"
+    UT2="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_ul2")"
+    echo "user_token_rotate old=${UT:0:8} new=${UT2:0:8}"
+    if [[ -z "$UT2" || "$UT2" == "$UT" ]]; then
+      fail=$((fail + 1))
+    else
+      old_code="$(curl -sS "$GO/api/user/center" -H "Host: $TENANT_HOST" -H "token: $UT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))')"
+      echo "user_token_old_after_rotate code=$old_code"
+      if [[ "$old_code" == "1" ]]; then
+        fail=$((fail + 1))
+      fi
+      UT="$UT2"
+    fi
+    uid="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT id FROM la_user WHERE account='$acc' AND delete_time IS NULL LIMIT 1" 2>/dev/null)"
+    if [[ -n "$uid" ]]; then
+      now="$(date +%s)"
+      mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -e "INSERT INTO la_user_account_log (sn,user_id,change_object,change_type,action,change_amount,left_amount,remark,tenant_id,create_time) VALUES ('al$now',$uid,1,1,1,10.50,10.50,'pair',1,$now)" 2>/dev/null || true
+    fi
+  fi
   if [[ -n "$UT" ]]; then
     for upath in /api/user/center /api/user/info /api/recharge/lists /api/account_log/lists /api/recharge/config /api/article/collect; do
       safe="${upath//\//_}"
@@ -255,6 +280,12 @@ if [[ -n "$TENANT_HOST" ]]; then
     go_ak="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
     echo "account_log_lists_keys php=$php_ak go=$go_ak"
     if [[ -n "$php_ak" && "$php_ak" != "$go_ak" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_am="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
+    go_am="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
+    echo "account_log_amount php=$php_am go=$go_am"
+    if [[ -n "$php_am" && "$php_am" != "$go_am" ]]; then
       fail=$((fail + 1))
     fi
   fi
@@ -955,6 +986,21 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   echo "oa_menu_type php_msg=$(jget msg <<<"$php_menu2") go_msg=$(jget msg <<<"$go_menu2")"
   if [[ "$(jget msg <<<"$php_menu2")" != "$(jget msg <<<"$go_menu2")" ]]; then
     fail=$((fail + 1))
+  fi
+  php_menu3="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":0,"type":"click","key":"pair"}]')"
+  go_menu3="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":0,"type":"click","key":"pair"}]')"
+  echo "oa_menu_save php_code=$(jcode <<<"$php_menu3") go_code=$(jcode <<<"$go_menu3")"
+  if [[ "$(jcode <<<"$php_menu3")" != "1" || "$(jcode <<<"$go_menu3")" != "1" ]]; then
+    fail=$((fail + 1))
+  else
+    php_md="$(curl -sS "$PHP/tenantapi/channel.official_account_menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_md="$(curl -sS "$GO/tenantapi/channel.official_account_menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_hm="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(type((ls[0] if ls else {}).get("has_menu")).__name__, (ls[0] if ls else {}).get("has_menu"))' <<<"$php_md")"
+    go_hm="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(type((ls[0] if ls else {}).get("has_menu")).__name__, (ls[0] if ls else {}).get("has_menu"))' <<<"$go_md")"
+    echo "oa_menu_has_menu php=$php_hm go=$go_hm"
+    if [[ "$php_hm" != "$go_hm" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
   php_rf="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_rf="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -1703,6 +1749,25 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     if [[ "$go_pssig" != "0" ]]; then
       fail=$((fail + 1))
     fi
+    old_cfg="$(mysqlq "SELECT config FROM la_tenant_pay_config WHERE tenant_id=1 AND pay_way=2 LIMIT 1")"
+    if [[ -n "$old_cfg" ]]; then
+      new_cfg="$(python3 -c 'import json,sys; m=json.loads(sys.argv[1] or "{}"); m["pay_sign_key"]="pairkey1234567890"; print(json.dumps(m,separators=(",",":")))' "$old_cfg")"
+      mysqlq "UPDATE la_tenant_pay_config SET config='${new_cfg//\'/\\\'}' WHERE tenant_id=1 AND pay_way=2"
+      mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('xhost$now',$uid,2,0,9,1,0,1,$now)"
+      sign="$(python3 -c '
+import hashlib,sys
+fields={"out_trade_no":sys.argv[1],"transaction_id":"wxxhost","attach":"recharge","result_code":"SUCCESS"}
+s="&".join(k+"="+fields[k] for k in sorted(fields))+"&key=pairkey1234567890"
+print(hashlib.md5(s.encode()).hexdigest().upper())
+' "xhost$now")"
+      go_xh="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>xhost$now</out_trade_no><transaction_id>wxxhost</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code><sign>$sign</sign></xml>")"
+      go_xhp="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='xhost$now'")"
+      echo "pay_notify_order_tenant go_pay=$go_xhp go_body=${go_xh:0:80}"
+      if [[ "$go_xhp" != "1" ]]; then
+        fail=$((fail + 1))
+      fi
+      mysqlq "UPDATE la_tenant_pay_config SET config='${old_cfg//\'/\\\'}' WHERE tenant_id=1 AND pay_way=2"
+    fi
   fi
 fi
 
@@ -1766,7 +1831,13 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   )"
   mysqlq "DELETE FROM la_generate_column WHERE table_id IN (SELECT id FROM la_generate_table WHERE table_name='la_pair_gencrud')"
   mysqlq "DELETE FROM la_generate_table WHERE table_name='la_pair_gencrud'"
-  mysqlq "INSERT INTO la_generate_table (table_name,table_comment,template_type,author,generate_type,module_name,class_dir,class_comment,menu,\`delete\`,tree,relations,create_time) VALUES ('la_pair_gencrud','对拍生成器',0,'likeadmin',1,'platform','','对拍生成器','{\"pid\":0,\"type\":0,\"name\":\"对拍生成器\"}','{\"type\":1,\"name\":\"delete_time\"}','{}','[]',UNIX_TIMESTAMP())"
+  mysqlq "CREATE TABLE IF NOT EXISTS la_pair_gencrud_item (
+    id int unsigned NOT NULL AUTO_INCREMENT,
+    pid int unsigned NOT NULL DEFAULT 0,
+    title varchar(64) NOT NULL DEFAULT '',
+    PRIMARY KEY (id)
+  )"
+  mysqlq "INSERT INTO la_generate_table (table_name,table_comment,template_type,author,generate_type,module_name,class_dir,class_comment,menu,\`delete\`,tree,relations,create_time) VALUES ('la_pair_gencrud','对拍生成器',0,'likeadmin',1,'platform','','对拍生成器','{\"pid\":0,\"type\":0,\"name\":\"对拍生成器\"}','{\"type\":1,\"name\":\"delete_time\"}','{}','[{\"name\":\"items\",\"model\":\"PairGencrudItem\",\"type\":\"has_many\",\"local_key\":\"id\",\"foreign_key\":\"pid\"}]',UNIX_TIMESTAMP())"
   gid="$(mysqlq "SELECT id FROM la_generate_table WHERE table_name='la_pair_gencrud' ORDER BY id DESC LIMIT 1")"
   if [[ -n "$gid" && "$gid" != "0" ]]; then
     mysqlq "INSERT INTO la_generate_column (table_id,column_name,column_comment,column_type,is_required,is_pk,is_insert,is_update,is_lists,is_query,query_type,view_type,create_time) VALUES
@@ -1812,6 +1883,14 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
       if [[ "$go_dn" != "n$ts" ]]; then
         fail=$((fail + 1))
       fi
+      mysqlq "INSERT INTO la_pair_gencrud_item (pid,title) VALUES ($go_id,'c1'),($go_id,'c2')"
+      go_ls2="$(curl -sS "$GO/platformapi/pair_gencrud/lists?name=n$ts" -H "token: $TOKEN")"
+      go_items="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(len((ls[0] if ls else {}).get("items") or []))' <<<"$go_ls2")"
+      echo "gencrud_has_many items=$go_items"
+      if [[ "$go_items" != "2" ]]; then
+        echo "  go_ls2=${go_ls2:0:300}"
+        fail=$((fail + 1))
+      fi
       go_ed="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$go_id,\"name\":\"e$ts\",\"status\":0}")"
       echo "gencrud_edit go_code=$(jcode <<<"$go_ed")"
       if [[ "$(jcode <<<"$go_ed")" != "1" ]]; then
@@ -1835,6 +1914,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     echo "gencrud_table insert failed"
     fail=$((fail + 1))
   fi
+  mysqlq "DROP TABLE IF EXISTS la_pair_gencrud_item"
   mysqlq "DROP TABLE IF EXISTS la_pair_gencrud"
 
   now="$(date +%s)"

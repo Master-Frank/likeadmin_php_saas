@@ -416,14 +416,15 @@ func AccountLogLists(c *gin.Context) {
 		if r.Action == biz.DEC {
 			symbol = "-"
 		}
+		amt := util.MoneyString(r.ChangeAmount)
 		out = append(out, map[string]any{
 			"change_type":        r.ChangeType,
-			"change_amount":      r.ChangeAmount,
+			"change_amount":      amt,
 			"action":             r.Action,
 			"create_time":        util.FormatDateTime(r.CreateTime),
 			"remark":             r.Remark,
 			"type_desc":          biz.ChangeTypeDesc(r.ChangeType),
-			"change_amount_desc": symbol + util.ToString(r.ChangeAmount),
+			"change_amount_desc": symbol + amt,
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)

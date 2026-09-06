@@ -136,20 +136,26 @@ func attachRelations(c *gin.Context, sp *spec, rows []map[string]any) {
 	}
 	db := session(c)
 	for _, rel := range sp.rels {
-		if strings.EqualFold(rel.Type, "has_many") {
-			continue
-		}
 		ids := uniqueIDs(rows, rel.LocalKey)
 		if len(ids) == 0 {
+			if strings.EqualFold(rel.Type, "has_many") {
+				attachHasMany(rows, nil, rel)
+			}
 			continue
 		}
 		var related []map[string]any
 		if db.Table(rel.Table).Where(rel.ForeignKey+" IN ?", ids).Find(&related).Error != nil {
 			continue
 		}
-		index := map[string]map[string]any{}
 		for _, item := range related {
 			normalizeMap(item)
+		}
+		if strings.EqualFold(rel.Type, "has_many") {
+			attachHasMany(rows, related, rel)
+			continue
+		}
+		index := map[string]map[string]any{}
+		for _, item := range related {
 			index[util.ToString(item[rel.ForeignKey])] = item
 		}
 		label := rel.Label
@@ -166,6 +172,22 @@ func attachRelations(c *gin.Context, sp *spec, rows []map[string]any) {
 				row[rel.Name+"_name"] = item[label]
 			}
 		}
+	}
+}
+
+func attachHasMany(rows, related []map[string]any, rel relSpec) {
+	grouped := map[string][]map[string]any{}
+	for _, item := range related {
+		k := util.ToString(item[rel.ForeignKey])
+		grouped[k] = append(grouped[k], item)
+	}
+	for _, row := range rows {
+		k := util.ToString(row[rel.LocalKey])
+		if list := grouped[k]; list != nil {
+			row[rel.Name] = list
+			continue
+		}
+		row[rel.Name] = []map[string]any{}
 	}
 }
 

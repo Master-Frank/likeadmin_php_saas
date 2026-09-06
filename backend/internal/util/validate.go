@@ -691,6 +691,29 @@ func phpLooseTrue(v any) bool {
 	}
 }
 
+// CoerceOAMenuHasMenu mirrors OfficialAccountMenuLogic::detail: has_menu is a bool.
+func CoerceOAMenuHasMenu(data any) any {
+	arr, ok := data.([]any)
+	if !ok {
+		return data
+	}
+	out := make([]any, 0, len(arr))
+	for _, item := range arr {
+		m, ok := item.(map[string]any)
+		if !ok || m == nil {
+			out = append(out, item)
+			continue
+		}
+		cp := make(map[string]any, len(m)+1)
+		for k, v := range m {
+			cp[k] = v
+		}
+		cp["has_menu"] = phpLooseTrue(cp["has_menu"])
+		out = append(out, cp)
+	}
+	return out
+}
+
 func OAMenuCheck(menu []any) string {
 	if len(menu) == 0 {
 		return "请设置正确格式菜单"

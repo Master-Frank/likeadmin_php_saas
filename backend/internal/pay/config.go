@@ -96,7 +96,15 @@ func WechatCfgByTenant(tenantID uint) WechatPayCfg {
 }
 
 func AliCfg(c *gin.Context) AliPayCfg {
-	m := loadPayConfig(c, WayAli)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return AliCfgByTenant(tid)
+}
+
+func AliCfgByTenant(tenantID uint) AliPayCfg {
+	m := loadPayConfigByTenant(tenantID, WayAli)
 	if m == nil {
 		return AliPayCfg{}
 	}

@@ -84,6 +84,12 @@ func TestDecryptWechatV3(t *testing.T) {
 	if _, ok := DecryptWechatV3OK([]byte(`{"resource":{"ciphertext":"xxxx"}}`), ""); ok {
 		t.Fatal("empty key accepted")
 	}
+	if n, ok := DecryptWechatV3WithKeys(raw, []string{"", "wrong-key-wrong-key-wrong-key!!", key}); !ok || n.OutTradeNo != "SN1234567890123456" {
+		t.Fatalf("fallback %+v ok=%v", n, ok)
+	}
+	if _, ok := DecryptWechatV3WithKeys(raw, []string{"", "wrong-key-wrong-key-wrong-key!!"}); ok {
+		t.Fatal("all bad keys accepted")
+	}
 }
 
 func TestNormalizePEM(t *testing.T) {

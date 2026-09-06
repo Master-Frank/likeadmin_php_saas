@@ -1,6 +1,8 @@
 package upgrade
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -119,5 +121,38 @@ func TestHasPermission(t *testing.T) {
 	}
 	if HasPermission(map[string]any{"has_permission": false}) || HasPermission(map[string]any{"has_permission": 0}) {
 		t.Fatal("false")
+	}
+}
+
+func TestCheckOpenBasedir(t *testing.T) {
+	t.Setenv("LIKEADMIN_OPEN_BASEDIR", "")
+	t.Setenv("PHP_OPEN_BASEDIR", "")
+	if err := CheckOpenBasedir(); err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	t.Setenv("LIKEADMIN_OPEN_BASEDIR", "/var/www/server/public")
+	if err := CheckOpenBasedir(); err == nil || !strings.Contains(err.Error(), "跨域攻击") {
+		t.Fatalf("server path: %v", err)
+	}
+	t.Setenv("LIKEADMIN_OPEN_BASEDIR", "/tmp")
+	if err := CheckOpenBasedir(); err != nil {
+		t.Fatalf("other path: %v", err)
+	}
+}
+
+func TestUpgradePgSQL(t *testing.T) {
+	if err := upgradePgSQL(filepath.Join(t.TempDir(), "missing")); err != nil {
+		t.Fatalf("missing: %v", err)
+	}
+	empty := t.TempDir()
+	if err := upgradePgSQL(empty); err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "01.sql"), []byte("SELECT 1;"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := upgradePgSQL(dir); err == nil || !strings.Contains(err.Error(), "更新PG数据库数据失败") {
+		t.Fatalf("sql without pgsql: %v", err)
 	}
 }

@@ -106,19 +106,33 @@ func SetUserToken(c *gin.Context, userID uint, terminal int) map[string]any {
 	var sess model.UserSession
 	err := db.Where("user_id = ? AND terminal = ?", userID, terminal).First(&sess).Error
 	token := util.CreateToken(util.ToString(userID), config.C.Project.UniqueIdentification)
+	tid := userSessionTenantID(c, db, userID)
 	if err == nil {
-		if sess.ExpireTime < now {
-			cache.DeleteUserInfo(sess.Token)
-			sess.Token = token
-		}
+		// PHP UserTokenService::setToken always deletes the old cache and issues a new token.
+		cache.DeleteUserInfo(sess.Token)
+		sess.Token = token
 		sess.ExpireTime = expire
 		sess.UpdateTime = &now
+		sess.TenantID = tid
 		db.Save(&sess)
 	} else {
-		sess = model.UserSession{UserID: userID, Terminal: terminal, Token: token, ExpireTime: expire, UpdateTime: &now}
+		sess = model.UserSession{UserID: userID, TenantID: tid, Terminal: terminal, Token: token, ExpireTime: expire, UpdateTime: &now}
 		db.Create(&sess)
 	}
 	return cache.SetUserInfo(sess.Token, db)
+}
+
+func userSessionTenantID(c *gin.Context, db *gorm.DB, userID uint) uint {
+	if c != nil {
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			return tid
+		}
+	}
+	var user model.User
+	if db != nil && userID > 0 && db.Select("tenant_id").First(&user, userID).Error == nil {
+		return user.TenantID
+	}
+	return 0
 }
 
 func ExpireUserToken(c *gin.Context, token string) {

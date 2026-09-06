@@ -59,6 +59,27 @@ func TestParseRelations(t *testing.T) {
 	if len(rels) != 1 || rels[0].Table != "la_user" || rels[0].LocalKey != "user_id" || rels[0].Label != "nickname" {
 		t.Fatalf("%+v", rels)
 	}
+	many := parseRelations(model.GenerateTable{Relations: `[{"name":"items","model":"PairItem","type":"has_many","local_key":"id","foreign_key":"pid"}]`})
+	if len(many) != 1 || many[0].Type != "has_many" || many[0].Table != "la_pair_item" || many[0].ForeignKey != "pid" {
+		t.Fatalf("%+v", many)
+	}
+}
+
+func TestAttachHasMany(t *testing.T) {
+	rows := []map[string]any{{"id": 1, "name": "a"}, {"id": 2, "name": "b"}}
+	related := []map[string]any{
+		{"id": 11, "pid": 1, "title": "x"},
+		{"id": 12, "pid": 1, "title": "y"},
+	}
+	attachHasMany(rows, related, relSpec{Name: "items", LocalKey: "id", ForeignKey: "pid"})
+	first, _ := rows[0]["items"].([]map[string]any)
+	if len(first) != 2 {
+		t.Fatalf("parent items=%v", rows[0]["items"])
+	}
+	second, _ := rows[1]["items"].([]map[string]any)
+	if len(second) != 0 {
+		t.Fatalf("empty has_many=%v", rows[1]["items"])
+	}
 }
 
 func TestImageCol(t *testing.T) {
