@@ -96,24 +96,24 @@ func ArticleCollect(c *gin.Context) {
 }
 
 func ArticleDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	collect := false
+	if uid := ctxutil.Get(c).UserID; uid > 0 && id > 0 {
+		var n int64
+		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, id).Count(&n)
+		collect = n > 0
+	}
 	var a model.Article
-	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "文章不存在")
+	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
+		response.Data(c, gin.H{"collect": collect})
 		return
 	}
 	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
-	collect := 0
-	if uid := ctxutil.Get(c).UserID; uid > 0 {
-		var n int64
-		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
-		if n > 0 {
-			collect = 1
-		}
-	}
 	response.Data(c, gin.H{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
-		"click": a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
+		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+		"content": filesvc.RewriteContentDomains(c, a.Content),
+		"click":   a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
 		"collect": collect,
 	})
 }
@@ -465,7 +465,7 @@ func PcIndex(c *gin.Context) {
 	}
 	_ = db.First(&page)
 	response.Data(c, gin.H{
-		"page": page,
+		"page": decoratePageMap(page),
 		"all":  limitArticles(c, "all", 5, 0, 0),
 		"new":  limitArticles(c, "new", 7, 0, 0),
 		"hot":  limitArticles(c, "hot", 8, 0, 0),
@@ -527,7 +527,7 @@ func PcArticleDetail(c *gin.Context) {
 		source = "default"
 	}
 	var a model.Article
-	if tdb(c).First(&a, id).Error != nil {
+	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
 		response.Fail(c, "文章不存在")
 		return
 	}
@@ -562,7 +562,7 @@ func PcArticleDetail(c *gin.Context) {
 	tdb(c).First(&cate, a.Cid)
 	response.Data(c, gin.H{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
+		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
 		"click": a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
 		"last": last, "next": next, "new": limitArticles(c, "new", 8, int(a.Cid), int(a.ID)),
 		"collect": collect, "cate_name": cate.Name,
@@ -599,9 +599,6 @@ func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
 			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
-			"is_show": a.IsShow, "sort": a.Sort, "tenant_id": a.TenantID,
-			"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
-			"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
 		})
 	}
 	return out
@@ -614,7 +611,19 @@ func IndexIndex(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	_ = db.First(&page)
-	response.Data(c, gin.H{"page": page, "article": limitArticles(c, "new", 20, 0, 0)})
+	response.Data(c, gin.H{
+		"page":    decoratePageMap(page),
+		"article": limitArticles(c, "new", 20, 0, 0),
+	})
+}
+
+func decoratePageMap(page model.DecoratePage) gin.H {
+	return gin.H{
+		"id": page.ID, "type": page.Type, "name": page.Name,
+		"data": page.Data, "meta": page.Meta, "tenant_id": page.TenantID,
+		"create_time": util.FormatDateTime(page.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(page.UpdateTime),
+	}
 }
 
 func UploadImage(c *gin.Context) {

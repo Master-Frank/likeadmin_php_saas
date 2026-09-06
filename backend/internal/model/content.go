@@ -221,6 +221,7 @@ type RefundLog struct {
 	RefundAmount float64 `gorm:"column:refund_amount" json:"refund_amount"`
 	RefundStatus int     `gorm:"column:refund_status" json:"refund_status"`
 	RefundMsg    string  `gorm:"column:refund_msg" json:"refund_msg"`
+	TenantID     uint    `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	UpdateTime   *int64  `gorm:"column:update_time" json:"update_time"`
 }

@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -20,18 +21,35 @@ func RunOnce() {
 	bootstrap.DB.Where("status = 1").Find(&rows)
 	now := util.NowUnix()
 	for _, item := range rows {
+		if item.LastTime == nil || *item.LastTime <= 0 {
+			if e, err := biz.ParseCron(item.Expression); err == nil {
+				if next := e.Next(time.Unix(now, 0)); !next.IsZero() {
+					ts := next.Unix()
+					bootstrap.DB.Model(&item).Update("last_time", ts)
+				}
+			}
+			continue
+		}
 		if !due(item, now) {
 			continue
 		}
 		start := time.Now()
 		errMsg := runCommand(item)
+		elapsed := time.Since(start).Seconds()
+		maxTime := elapsed
+		if prev := util.ToFloat(item.MaxTime); prev > maxTime {
+			maxTime = prev
+		}
 		updates := map[string]any{
 			"last_time": now,
-			"time":      time.Since(start).String(),
+			"time":      fmt.Sprintf("%.2f", elapsed),
+			"max_time":  fmt.Sprintf("%.2f", maxTime),
 			"error":     errMsg,
 		}
 		if errMsg != "" {
 			updates["status"] = 3
+		} else {
+			updates["error"] = ""
 		}
 		bootstrap.DB.Model(&item).Updates(updates)
 	}

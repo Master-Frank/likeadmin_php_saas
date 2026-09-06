@@ -68,6 +68,8 @@ func GeneratorGenerateTable(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, map[string]any{
 			"id": r.ID, "table_name": r.Name, "table_comment": r.TableComment,
+			"template_type": r.TemplateType, "template_type_desc": generatorTemplateTypeDesc(r.TemplateType),
+			"generate_type": r.GenerateType, "module_name": r.ModuleName,
 			"author": r.Author, "remark": r.Remark, "create_time": util.FormatDateTime(r.CreateTime),
 		})
 	}
@@ -126,8 +128,9 @@ func GeneratorSelectTable(c *gin.Context) {
 		gt := model.GenerateTable{
 			Name: name, TableComment: comment, Author: "likeadmin",
 			ModuleName: "platform", ClassDir: strings.TrimPrefix(name, config.Prefix()),
-			GenerateType: 1, Menu: util.EncodeJSON(map[string]any{"pid": 0, "type": 1, "name": comment}),
-			Delete:    util.EncodeJSON(map[string]any{"type": 1, "name": "delete_time"}),
+			TemplateType: 0, GenerateType: 0,
+			Menu:      util.EncodeJSON(map[string]any{"pid": 0, "type": 0, "name": comment}),
+			Delete:    util.EncodeJSON(map[string]any{"type": 0, "name": "delete_time"}),
 			Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
 			AdminID: adminID, CreateTime: now,
 		}
@@ -141,6 +144,10 @@ func GeneratorSelectTable(c *gin.Context) {
 }
 
 func GeneratorDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "记录不存在")
@@ -148,7 +155,7 @@ func GeneratorDetail(c *gin.Context) {
 	}
 	var cols []model.GenerateColumn
 	bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-	response.Data(c, gin.H{"base": t, "column": cols})
+	response.Data(c, formatGeneratorDetail(t, cols))
 }
 
 func GeneratorSyncColumn(c *gin.Context) {
@@ -262,7 +269,7 @@ func GeneratorPreview(c *gin.Context) {
 	}
 	var cols []model.GenerateColumn
 	bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-	response.Success(c, "", generateBundle(t, cols))
+	response.Data(c, generateBundle(t, cols))
 }
 
 func GeneratorGenerate(c *gin.Context) {
@@ -302,7 +309,7 @@ func GeneratorGenerate(c *gin.Context) {
 		var cols []model.GenerateColumn
 		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
 		for _, f := range generateBundle(t, cols) {
-			name := t.ClassDir + "/" + util.ToString(f["name"])
+			name := util.ToString(f["name"])
 			w, err := zw.Create(name)
 			if err != nil {
 				continue
@@ -456,16 +463,102 @@ func generateBundle(t model.GenerateTable, cols []model.GenerateColumn) []map[st
 	vueIndex := fmt.Sprintf("<template>\n  <div class=\"%s-lists\">\n    <el-table :data=\"lists\">\n%s    </el-table>\n  </div>\n</template>\n<script lang=\"ts\" setup>\nimport { api%sLists } from '@/api/%s'\nconst lists = ref([])\n</script>\n", snake, vueCols.String(), name, snake)
 	vueEdit := fmt.Sprintf("<template>\n  <el-form :model=\"form\">\n    <el-form-item label=\"%s\"><el-input v-model=\"form.%s\" /></el-form-item>\n  </el-form>\n</template>\n<script lang=\"ts\" setup>\nconst form = reactive({ %s: '' })\n</script>\n", comment, pk, pk)
 	sql := fmt.Sprintf("-- menu for %s\n-- author: %s\n", comment, author)
+	modAPI := mod + "api"
+	relDir := strings.Trim(strings.ReplaceAll(t.ClassDir, "\\", "/"), "/")
+	phpSub := ""
+	if relDir != "" {
+		phpSub = "/" + relDir
+	}
 	return []map[string]any{
-		{"name": name + "Controller.php", "type": "php", "content": ctrl},
-		{"name": name + "Lists.php", "type": "php", "content": lists},
-		{"name": name + ".php", "type": "php", "content": modelPHP},
-		{"name": name + "Validate.php", "type": "php", "content": validate},
-		{"name": name + "Logic.php", "type": "php", "content": logic},
-		{"name": snake + ".ts", "type": "typescript", "content": vueAPI},
-		{"name": "index.vue", "type": "vue", "content": vueIndex},
-		{"name": "edit.vue", "type": "vue", "content": vueEdit},
-		{"name": snake + ".sql", "type": "sql", "content": sql},
+		{"name": fmt.Sprintf("%s/controller%s/%sController.php", modAPI, phpSub, name), "type": "php", "content": ctrl},
+		{"name": fmt.Sprintf("%s/lists%s/%sLists.php", modAPI, phpSub, name), "type": "php", "content": lists},
+		{"name": fmt.Sprintf("common/model%s/%s.php", phpSub, name), "type": "php", "content": modelPHP},
+		{"name": fmt.Sprintf("%s/validate%s/%sValidate.php", modAPI, phpSub, name), "type": "php", "content": validate},
+		{"name": fmt.Sprintf("%s/logic%s/%sLogic.php", modAPI, phpSub, name), "type": "php", "content": logic},
+		{"name": fmt.Sprintf("vue/api/%s.ts", snake), "type": "typescript", "content": vueAPI},
+		{"name": fmt.Sprintf("vue/views/%s/index.vue", snake), "type": "vue", "content": vueIndex},
+		{"name": fmt.Sprintf("vue/views/%s/edit.vue", snake), "type": "vue", "content": vueEdit},
+		{"name": fmt.Sprintf("sql/%s.sql", snake), "type": "sql", "content": sql},
+	}
+}
+
+func generatorTemplateTypeDesc(t int) string {
+	if t == 1 {
+		return "树表(增删改查)"
+	}
+	return "单表(增删改查)"
+}
+
+func formatGeneratorDetail(t model.GenerateTable, cols []model.GenerateColumn) map[string]any {
+	menu := util.DecodeJSONMap(t.Menu)
+	del := util.DecodeJSONMap(t.Delete)
+	tree := util.DecodeJSONMap(t.Tree)
+	relRaw := util.DecodeJSON(t.Relations)
+	rels := make([]any, 0)
+	if arr, ok := relRaw.([]any); ok {
+		for _, item := range arr {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
+			}
+			typ := util.ToString(m["type"])
+			if typ == "" {
+				typ = "has_one"
+			}
+			local := util.ToString(m["local_key"])
+			if local == "" {
+				local = "id"
+			}
+			foreign := util.ToString(m["foreign_key"])
+			if foreign == "" {
+				foreign = "id"
+			}
+			rels = append(rels, map[string]any{
+				"name": util.ToString(m["name"]), "model": util.ToString(m["model"]),
+				"type": typ, "local_key": local, "foreign_key": foreign,
+			})
+		}
+	}
+	menuName := util.ToString(menu["name"])
+	if menuName == "" {
+		menuName = t.TableComment
+	}
+	delName := util.ToString(del["name"])
+	if delName == "" {
+		delName = "delete_time"
+	}
+	columns := make([]map[string]any, 0, len(cols))
+	for _, col := range cols {
+		columns = append(columns, map[string]any{
+			"id": col.ID, "table_id": col.TableID, "column_name": col.ColumnName,
+			"column_comment": col.ColumnComment, "column_type": col.ColumnType,
+			"is_required": col.IsRequired, "is_pk": col.IsPk, "is_insert": col.IsInsert,
+			"is_update": col.IsUpdate, "is_lists": col.IsLists, "is_query": col.IsQuery,
+			"query_type": col.QueryType, "view_type": col.ViewType, "dict_type": col.DictType,
+			"create_time": util.FormatDateTime(col.CreateTime),
+			"update_time": util.FormatDateTimeOrNil(col.UpdateTime),
+		})
+	}
+	return map[string]any{
+		"id": t.ID, "table_name": t.Name, "table_comment": t.TableComment,
+		"template_type": t.TemplateType, "author": t.Author, "remark": t.Remark,
+		"generate_type": t.GenerateType, "module_name": t.ModuleName, "class_dir": t.ClassDir,
+		"class_comment": t.ClassComment, "admin_id": t.AdminID,
+		"menu": map[string]any{
+			"pid": util.ToInt(menu["pid"]), "type": util.ToInt(menu["type"]), "name": menuName,
+		},
+		"delete": map[string]any{
+			"type": util.ToInt(del["type"]), "name": delName,
+		},
+		"tree": map[string]any{
+			"tree_id":   util.ToString(tree["tree_id"]),
+			"tree_pid":  util.ToString(tree["tree_pid"]),
+			"tree_name": util.ToString(tree["tree_name"]),
+		},
+		"relations":    rels,
+		"table_column": columns,
+		"create_time":  util.FormatDateTime(t.CreateTime),
+		"update_time":  util.FormatDateTimeOrNil(t.UpdateTime),
 	}
 }
 

@@ -18,23 +18,15 @@ func DeptLists(c *gin.Context) {
 	if name := httpx.Str(c, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
+	if status := httpx.Str(c, "status"); status != "" {
+		db = db.Where("status = ?", util.ParseInt(status))
+	}
 	var rows []model.TenantDept
 	db.Order("sort desc, id desc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
 	root := 0
 	for i, d := range rows {
-		statusDesc := "停用"
-		if d.Status == 1 {
-			statusDesc = "正常"
-		}
-		maps = append(maps, map[string]any{
-			"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
-			"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
-			"tenant_id":   d.TenantID,
-			"create_time": util.FormatDateTime(d.CreateTime),
-			"update_time": util.FormatDateTimePtr(d.UpdateTime),
-			"delete_time": util.FormatDateTimePtr(d.DeleteTime),
-		})
+		maps = append(maps, tenantDeptMap(d))
 		if i == 0 || int(d.Pid) < root {
 			root = int(d.Pid)
 		}
@@ -48,8 +40,12 @@ func DeptLeader(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
-	response.SuccessSilent(c, "", rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, map[string]any{"id": d.ID, "name": d.Name})
+	}
+	response.SuccessSilent(c, "", out)
 }
 
 func DeptAdd(c *gin.Context) {
@@ -142,22 +138,33 @@ func DeptDelete(c *gin.Context) {
 
 func DeptDetail(c *gin.Context) {
 	var d model.TenantDept
-	tdb(c).First(&d, httpx.Uint(c, "id"))
-	response.Data(c, d)
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&d).Error != nil {
+		response.Fail(c, "部门不存在")
+		return
+	}
+	response.Data(c, tenantDeptMap(d))
 }
 
 func DeptAll(c *gin.Context) {
 	var rows []model.TenantDept
-	db := tdb(c).Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL AND status = 1")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Find(&rows)
-	maps := make([]map[string]any, 0, len(rows))
-	for _, d := range rows {
-		maps = append(maps, map[string]any{"id": d.ID, "pid": d.Pid, "name": d.Name})
+	db.Order("sort desc, id desc").Find(&rows)
+	if len(rows) == 0 {
+		response.Data(c, []any{})
+		return
 	}
-	response.Data(c, util.LinearToTree(maps, "children", "id", "pid", 0))
+	maps := make([]map[string]any, 0, len(rows))
+	root := int(rows[0].Pid)
+	for _, d := range rows {
+		maps = append(maps, tenantDeptMap(d))
+		if int(d.Pid) < root {
+			root = int(d.Pid)
+		}
+	}
+	response.Data(c, util.DeptTree(maps, root))
 }
 
 func JobsLists(c *gin.Context) {
@@ -166,11 +173,24 @@ func JobsLists(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
+	if name := lists.Param(q, "name"); name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+	if code := lists.Param(q, "code"); code != "" {
+		db = db.Where("code = ?", code)
+	}
+	if lists.Param(q, "status") != "" {
+		db = db.Where("status = ?", lists.ParamInt(q, "status"))
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantJobs
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	out := make([]map[string]any, 0, len(rows))
+	for _, j := range rows {
+		out = append(out, tenantJobsMap(j))
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func JobsAdd(c *gin.Context) {
@@ -245,8 +265,11 @@ func JobsDelete(c *gin.Context) {
 
 func JobsDetail(c *gin.Context) {
 	var j model.TenantJobs
-	tdb(c).First(&j, httpx.Uint(c, "id"))
-	response.Data(c, j)
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&j).Error != nil {
+		response.Fail(c, "岗位不存在")
+		return
+	}
+	response.Data(c, tenantJobsMap(j))
 }
 
 func tenantDeptExists(c *gin.Context, id uint) bool {
@@ -287,10 +310,41 @@ func tenantJobsCodeTaken(c *gin.Context, id uint, code string) bool {
 
 func JobsAll(c *gin.Context) {
 	var rows []model.TenantJobs
-	db := tdb(c).Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL AND status = 1")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Find(&rows)
-	response.Data(c, rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, j := range rows {
+		out = append(out, tenantJobsMap(j))
+	}
+	response.Data(c, out)
+}
+
+func tenantDeptMap(d model.TenantDept) map[string]any {
+	statusDesc := "停用"
+	if d.Status == 1 {
+		statusDesc = "正常"
+	}
+	return map[string]any{
+		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
+		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
+		"tenant_id":   d.TenantID,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimePtr(d.UpdateTime),
+		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
+	}
+}
+
+func tenantJobsMap(j model.TenantJobs) map[string]any {
+	desc := "停用"
+	if j.Status == 1 {
+		desc = "正常"
+	}
+	return map[string]any{
+		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
+		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
+	}
 }

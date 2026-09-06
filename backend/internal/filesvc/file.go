@@ -1,6 +1,7 @@
 package filesvc
 
 import (
+	"regexp"
 	"strings"
 
 	"likeadmin/backend/internal/cfgsvc"
@@ -24,6 +25,40 @@ func GetFileURL(c *gin.Context, uri string) string {
 		}
 	}
 	return Format(domain, uri)
+}
+
+// RewriteContentDomains prefixes relative img/video src with the file domain,
+// matching PHP get_file_domain().
+func RewriteContentDomains(c *gin.Context, content string) string {
+	return rewriteContent(GetFileURL(c, ""), content)
+}
+
+var (
+	imgSrcRe   = regexp.MustCompile(`(?is)(<img\s+[^>]*src=")([^"]*)(")`)
+	videoSrcRe = regexp.MustCompile(`(?is)(<video\s+[^>]*src=")([^"]*)(")`)
+)
+
+func rewriteContent(fileURL, content string) string {
+	if content == "" || fileURL == "" {
+		return content
+	}
+	return videoSrcRe.ReplaceAllStringFunc(imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
+		return prefixMediaSrc(fileURL, imgSrcRe, m)
+	}), func(m string) string {
+		return prefixMediaSrc(fileURL, videoSrcRe, m)
+	})
+}
+
+func prefixMediaSrc(fileURL string, re *regexp.Regexp, match string) string {
+	parts := re.FindStringSubmatch(match)
+	if len(parts) != 4 {
+		return match
+	}
+	src := parts[2]
+	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+		return match
+	}
+	return parts[1] + fileURL + src + parts[3]
 }
 
 func SetFileURL(c *gin.Context, uri string) string {

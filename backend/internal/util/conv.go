@@ -142,6 +142,20 @@ func MoneyString(v float64) string {
 	return strconv.FormatFloat(v, 'f', 2, 64)
 }
 
+// FormatAmount mirrors PHP format_amount(): strip trailing zeros down to
+// integer, one decimal, or the original float.
+func FormatAmount(v float64) any {
+	iv := int64(v)
+	if v == float64(iv) {
+		return iv
+	}
+	one := strconv.FormatFloat(v, 'f', 1, 64)
+	if parsed, err := strconv.ParseFloat(one, 64); err == nil && parsed == v {
+		return one
+	}
+	return v
+}
+
 func InFold(list []string, v string) bool {
 	v = strings.TrimSpace(v)
 	for _, item := range list {

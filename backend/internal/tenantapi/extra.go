@@ -297,9 +297,14 @@ func FinanceRefundLog(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		statusText := map[int]string{0: "退款中", 1: "退款成功", 2: "退款失败"}[r.RefundStatus]
+		handler := ""
+		var admin model.TenantAdmin
+		if r.HandleID > 0 && tdb(c).Where("id = ?", r.HandleID).First(&admin).Error == nil {
+			handler = admin.Name
+		}
 		out = append(out, map[string]any{
 			"id": r.ID, "sn": r.SN, "record_id": r.RecordID, "user_id": r.UserID,
-			"handle_id": r.HandleID, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
+			"handle_id": r.HandleID, "handler": handler, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
 			"refund_status": r.RefundStatus, "refund_status_text": statusText,
 			"create_time": util.FormatDateTime(r.CreateTime),
 		})
@@ -399,7 +404,7 @@ func RechargeRefund(c *gin.Context) {
 		return tx.Create(&model.RefundLog{
 			SN: util.GenerateSN(logExists, "", 4), RecordID: rec.ID, UserID: order.UserID, HandleID: adminID,
 			OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount, RefundStatus: 0,
-			RefundMsg: "后台退款", CreateTime: util.NowUnix(),
+			RefundMsg: "后台退款", TenantID: order.TenantID, CreateTime: util.NowUnix(),
 		}).Error
 	})
 	if err != nil {
@@ -407,8 +412,7 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	if order.PayWay != 2 && order.PayWay != 3 {
-		tdb(c).Model(&model.RefundRecord{}).Where("id = ?", rec.ID).Update("refund_status", 2)
-		tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", rec.ID).Updates(map[string]any{"refund_status": 2, "refund_msg": "支付方式异常"})
+		refundFailHandle(c, rec.ID, 0, "支付方式异常")
 		response.Fail(c, "支付方式异常")
 		return
 	}
@@ -417,6 +421,40 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	response.SuccessNotice(c, "操作成功")
+}
+
+func refundFailHandle(c *gin.Context, recID, logID uint, msg string) {
+	if recID == 0 {
+		return
+	}
+	tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
+	q := tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", recID)
+	if logID > 0 {
+		q = q.Where("id = ?", logID)
+	} else {
+		var last model.RefundLog
+		if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+			q = tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID)
+		}
+	}
+	q.Updates(map[string]any{"refund_status": 2, "refund_msg": msg})
+}
+
+func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uint, res pay.AliRefundResult) {
+	msg := ""
+	if res.Raw != nil {
+		msg = util.EncodeJSON(res.Raw)
+	}
+	tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 1)
+	var last model.RefundLog
+	if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+		tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID).Updates(map[string]any{
+			"refund_status": 1, "refund_msg": msg,
+		})
+	}
+	if order != nil && recID > 0 {
+		tdb(c).Model(order).Update("refund_transaction_id", res.TradeNo)
+	}
 }
 
 func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, recID uint) error {
@@ -428,14 +466,14 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 	case 2:
 		err = pay.WechatRefund(c, order.TransactionID, refundSN, order.OrderAmount, order.OrderAmount)
 	case 3:
-		err = pay.AliRefund(c, order.SN, refundSN, order.OrderAmount)
+		var res pay.AliRefundResult
+		res, err = pay.AliRefund(c, order.SN, refundSN, order.OrderAmount)
+		if err == nil && res.OK {
+			applyAliRefundSuccess(c, order, recID, res)
+		}
 	}
 	if err != nil {
-		if recID > 0 {
-			tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
-			tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", recID).Update("refund_status", 2)
-		}
-		tdb(c).Model(order).Update("refund_status", 2)
+		refundFailHandle(c, recID, 0, err.Error())
 		return err
 	}
 	return nil
@@ -470,11 +508,10 @@ func RechargeRefundAgain(c *gin.Context) {
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
 		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 0,
-		RefundMsg: "重新退款", CreateTime: util.NowUnix(),
+		RefundMsg: "重新退款", TenantID: rec.TenantID, CreateTime: util.NowUnix(),
 	})
 	if againOrder.PayWay != 2 && againOrder.PayWay != 3 {
-		tdb(c).Model(&rec).Update("refund_status", 2)
-		tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", rec.ID).Updates(map[string]any{"refund_status": 2, "refund_msg": "支付方式异常"})
+		refundFailHandle(c, rec.ID, 0, "支付方式异常")
 		response.Fail(c, "支付方式异常")
 		return
 	}

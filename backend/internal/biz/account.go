@@ -2,6 +2,7 @@ package biz
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
@@ -25,6 +26,17 @@ var UMChangeTypeDesc = map[string]string{
 	"101": "充值订单退款减少余额",
 	"200": "平台增加余额",
 	"201": "充值增加余额",
+}
+
+func UserMoneyChangeTypes() []int {
+	return []int{UMDecAdmin, UMDecRechargeRefund, UMIncAdmin, UMIncRecharge}
+}
+
+func ChangeTypeDesc(changeType int) string {
+	if s, ok := UMChangeTypeDesc[strconv.Itoa(changeType)]; ok {
+		return s
+	}
+	return ""
 }
 
 func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action int, amount, left float64, sourceSN, remark string) {

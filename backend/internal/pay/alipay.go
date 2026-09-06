@@ -148,14 +148,23 @@ func firstForm(form map[string][]string, key string) string {
 	return ""
 }
 
-func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) error {
+type AliRefundResult struct {
+	OK         bool
+	Code       string
+	Msg        string
+	FundChange string
+	TradeNo    string
+	Raw        map[string]any
+}
+
+func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) (AliRefundResult, error) {
 	cfg := AliCfg(c)
 	if cfg.AppID == "" || cfg.PrivateKey == "" || orderSN == "" {
-		return nil
+		return AliRefundResult{}, nil
 	}
 	key, err := parseRSAPrivateKey(cfg.PrivateKey)
 	if err != nil {
-		return err
+		return AliRefundResult{}, err
 	}
 	biz, _ := json.Marshal(map[string]any{
 		"out_trade_no":   orderSN,
@@ -174,7 +183,7 @@ func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) error {
 	}
 	sig, err := rsaSHA256Base64(key, aliSignContent(params))
 	if err != nil {
-		return err
+		return AliRefundResult{}, err
 	}
 	params["sign"] = sig
 	form := url.Values{}
@@ -183,20 +192,40 @@ func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) error {
 	}
 	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm("https://openapi.alipay.com/gateway.do", form)
 	if err != nil {
-		return err
+		return AliRefundResult{}, err
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	var out map[string]any
 	if json.Unmarshal(raw, &out) != nil {
-		return fmt.Errorf("支付宝退款响应无效")
+		return AliRefundResult{}, fmt.Errorf("支付宝退款响应无效")
 	}
-	if body, ok := out["alipay_trade_refund_response"].(map[string]any); ok {
-		if util.ToString(body["code"]) != "" && util.ToString(body["code"]) != "10000" {
-			return fmt.Errorf("支付宝退款:%s", firstNonEmpty(util.ToString(body["sub_msg"]), util.ToString(body["msg"])))
-		}
+	body, _ := out["alipay_trade_refund_response"].(map[string]any)
+	res := ParseAliRefundBody(body)
+	if res.Code != "" && res.Code != "10000" {
+		return res, fmt.Errorf("支付宝退款:%s", firstNonEmpty(util.ToString(body["sub_msg"]), res.Msg))
 	}
-	return nil
+	return res, nil
+}
+
+// ParseAliRefundBody mirrors PHP RefundLogic::aliPayRefund success checks.
+func ParseAliRefundBody(body map[string]any) AliRefundResult {
+	res := AliRefundResult{Raw: body}
+	if body == nil {
+		return res
+	}
+	res.Code = util.ToString(body["code"])
+	res.Msg = util.ToString(body["msg"])
+	res.FundChange = util.ToString(body["fund_change"])
+	if res.FundChange == "" {
+		res.FundChange = util.ToString(body["fundChange"])
+	}
+	res.TradeNo = util.ToString(body["trade_no"])
+	if res.TradeNo == "" {
+		res.TradeNo = util.ToString(body["tradeNo"])
+	}
+	res.OK = res.Code == "10000" && res.Msg == "Success" && res.FundChange == "Y"
+	return res
 }
 
 func aliSignWithKey(key *rsa.PrivateKey, params map[string]string) (string, error) {

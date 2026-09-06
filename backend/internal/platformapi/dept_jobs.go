@@ -147,12 +147,20 @@ func DeptDetail(c *gin.Context) {
 
 func DeptAll(c *gin.Context) {
 	var rows []model.Dept
-	bootstrap.DB.Where("delete_time IS NULL").Order("sort desc").Find(&rows)
-	maps := make([]map[string]any, 0, len(rows))
-	for _, d := range rows {
-		maps = append(maps, map[string]any{"id": d.ID, "pid": d.Pid, "name": d.Name})
+	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
+	if len(rows) == 0 {
+		response.Data(c, []any{})
+		return
 	}
-	response.Data(c, util.LinearToTree(maps, "children", "id", "pid", 0))
+	maps := make([]map[string]any, 0, len(rows))
+	root := int(rows[0].Pid)
+	for _, d := range rows {
+		maps = append(maps, deptMap(d))
+		if int(d.Pid) < root {
+			root = int(d.Pid)
+		}
+	}
+	response.Data(c, util.DeptTree(maps, root))
 }
 
 func JobsLists(c *gin.Context) {
@@ -173,14 +181,7 @@ func JobsLists(c *gin.Context) {
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, j := range rows {
-		desc := "正常"
-		if j.Status != 1 {
-			desc = "停用"
-		}
-		out = append(out, map[string]any{
-			"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
-			"remark": j.Remark, "create_time": util.FormatDateTime(j.CreateTime), "status_desc": desc,
-		})
+		out = append(out, jobsMap(j))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
@@ -266,13 +267,17 @@ func JobsDetail(c *gin.Context) {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	response.Data(c, j)
+	response.Data(c, jobsMap(j))
 }
 
 func JobsAll(c *gin.Context) {
 	var rows []model.Jobs
-	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc").Find(&rows)
-	response.Data(c, rows)
+	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, j := range rows {
+		out = append(out, jobsMap(j))
+	}
+	response.Data(c, out)
 }
 
 func deptExists(id uint) bool {
@@ -322,5 +327,17 @@ func deptMap(d model.Dept) map[string]any {
 		"create_time": util.FormatDateTime(d.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
+	}
+}
+
+func jobsMap(j model.Jobs) map[string]any {
+	desc := "正常"
+	if j.Status != 1 {
+		desc = "停用"
+	}
+	return map[string]any{
+		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
+		"remark": j.Remark, "create_time": util.FormatDateTime(j.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
 	}
 }

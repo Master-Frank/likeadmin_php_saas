@@ -28,6 +28,16 @@ func TenantLists(c *gin.Context) {
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
 	}
+	if start := lists.Param(q, "create_time_start"); start != "" {
+		if ts := util.ParseDateTime(start); ts > 0 {
+			db = db.Where("create_time >= ?", ts)
+		}
+	}
+	if end := lists.Param(q, "create_time_end"); end != "" {
+		if ts := util.ParseDateTime(end); ts > 0 {
+			db = db.Where("create_time <= ?", ts)
+		}
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.Tenant
@@ -304,12 +314,10 @@ func TenantAdminEdit(c *gin.Context) {
 	now := util.NowUnix()
 	data := map[string]any{
 		"name":             httpx.Str(c, "name"),
+		"account":          httpx.Str(c, "account"),
 		"disable":          httpx.Int(c, "disable"),
 		"multipoint_login": httpx.Int(c, "multipoint_login"),
 		"update_time":      now,
-	}
-	if _, ok := p["account"]; ok {
-		data["account"] = httpx.Str(c, "account")
 	}
 	if avatar := httpx.Str(c, "avatar"); avatar != "" {
 		data["avatar"] = filesvc.SetFileURL(c, avatar)
@@ -338,6 +346,7 @@ func TenantAdminEdit(c *gin.Context) {
 	if httpx.Int(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
 		expireTenantAdminTokens(id)
 	}
+	cache.Del("tenant_auth_url_" + util.ToString(id))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -371,6 +380,7 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	expireTenantAdminTokens(id)
+	cache.Del("tenant_auth_url_" + util.ToString(id))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -525,7 +535,7 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	admin := model.TenantAdmin{
 		TenantID: tenant.ID, Account: account, Name: "超级管理员",
 		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
-		Root: 1, MultipointLogin: 1, CreateTime: now,
+		Root:     1, MultipointLogin: 1, CreateTime: now,
 	}
 	if err := sdb.Create(&admin).Error; err != nil {
 		return err

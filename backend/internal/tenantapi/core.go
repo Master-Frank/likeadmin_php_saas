@@ -130,17 +130,32 @@ func ConfigDict(c *gin.Context) {
 	types := strings.Split(typ, ",")
 	var rows []model.DictData
 	tdb(c).Where("type_value IN ? AND delete_time IS NULL", types).Find(&rows)
+	if len(rows) == 0 {
+		response.Data(c, []any{})
+		return
+	}
 	result := map[string]any{}
 	for _, t := range types {
-		list := []model.DictData{}
+		list := make([]map[string]any, 0)
 		for _, d := range rows {
 			if d.TypeValue == t {
-				list = append(list, d)
+				list = append(list, dictDataMap(d))
 			}
 		}
-		result[t] = list
+		if len(list) > 0 {
+			result[t] = list
+		}
 	}
 	response.Data(c, result)
+}
+
+func dictDataMap(d model.DictData) map[string]any {
+	return map[string]any{
+		"id": d.ID, "name": d.Name, "value": d.Value, "type_id": d.TypeID,
+		"type_value": d.TypeValue, "sort": d.Sort, "status": d.Status, "remark": d.Remark,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+	}
 }
 
 func WorkbenchIndex(c *gin.Context) {
@@ -421,7 +436,8 @@ func ArticleAdd(c *gin.Context) {
 		Abstract: httpx.Str(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.Str(c, "image")),
 		Author: httpx.Str(c, "author"), Content: httpx.Str(c, "content"),
 		IsShow: httpx.Int(c, "is_show"), Sort: httpx.Int(c, "sort"),
-		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		ClickVirtual: httpx.Int(c, "click_virtual"),
+		TenantID:     tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&a)
 	response.SuccessNotice(c, "添加成功")
@@ -465,7 +481,8 @@ func ArticleEdit(c *gin.Context) {
 		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
 		"abstract": httpx.Str(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.Str(c, "image")),
 		"author": httpx.Str(c, "author"), "content": httpx.Str(c, "content"),
-		"is_show": httpx.Int(c, "is_show"), "sort": httpx.Int(c, "sort"), "update_time": now,
+		"is_show": httpx.Int(c, "is_show"), "sort": httpx.Int(c, "sort"),
+		"click_virtual": httpx.Int(c, "click_virtual"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
@@ -491,7 +508,16 @@ func ArticleDetail(c *gin.Context) {
 		response.Fail(c, "资讯不存在")
 		return
 	}
-	response.Data(c, a)
+	response.Data(c, map[string]any{
+		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
+		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+		"content": filesvc.RewriteContentDomains(c, a.Content),
+		"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
+		"click": a.ClickActual + a.ClickVirtual, "tenant_id": a.TenantID,
+		"create_time": util.FormatDateTime(a.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
+	})
 }
 
 func ArticleCateLists(c *gin.Context) {

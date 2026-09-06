@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"likeadmin/backend/internal/authsvc"
+	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
@@ -310,10 +311,20 @@ func ArticleLists(c *gin.Context) {
 	if cid := lists.ParamInt(q, "cid"); cid > 0 {
 		db = db.Where("cid = ?", cid)
 	}
+	if kw := lists.Param(q, "keyword"); kw != "" {
+		db = db.Where("title LIKE ?", "%"+kw+"%")
+	}
+	order := "sort desc, id desc"
+	switch lists.Param(q, "sort") {
+	case "new":
+		order = "id desc"
+	case "hot":
+		order = "(click_actual + click_virtual) desc, id desc"
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.Article
-	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order(order).Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	collects := map[uint]bool{}
 	if uid := ctxutil.Get(c).UserID; uid > 0 && len(rows) > 0 {
 		ids := make([]uint, 0, len(rows))
@@ -369,23 +380,53 @@ func SearchHot(c *gin.Context) {
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND delete_time IS NULL", uid)
+	db := tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid)
 	var count int64
 	db.Count(&count)
 	var rows []model.RechargeOrder
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, map[string]any{
+			"order_amount": r.OrderAmount,
+			"create_time":  util.FormatDateTime(r.CreateTime),
+			"tips":         "充值" + util.ToString(util.FormatAmount(r.OrderAmount)) + "元",
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func AccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
 	db := tdb(c).Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid)
+	if lists.Param(q, "type") == "um" {
+		db = db.Where("change_type IN ?", biz.UserMoneyChangeTypes())
+	}
+	if action := lists.Param(q, "action"); action != "" {
+		db = db.Where("action = ?", lists.ParamInt(q, "action"))
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.UserAccountLog
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		symbol := "+"
+		if r.Action == biz.DEC {
+			symbol = "-"
+		}
+		out = append(out, map[string]any{
+			"change_type":        r.ChangeType,
+			"change_amount":      r.ChangeAmount,
+			"action":             r.Action,
+			"create_time":        util.FormatDateTime(r.CreateTime),
+			"remark":             r.Remark,
+			"type_desc":          biz.ChangeTypeDesc(r.ChangeType),
+			"change_amount_desc": symbol + util.ToString(r.ChangeAmount),
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func WechatJsConfig(c *gin.Context) { WechatJsConfigReal(c) }

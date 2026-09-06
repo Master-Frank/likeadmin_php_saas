@@ -38,15 +38,26 @@ func ConfigDict(c *gin.Context) {
 	types := strings.Split(typ, ",")
 	var rows []model.DictData
 	bootstrap.DB.Where("type_value IN ? AND delete_time IS NULL", types).Find(&rows)
+	if len(rows) == 0 {
+		response.Data(c, []any{})
+		return
+	}
 	result := map[string]any{}
 	for _, t := range types {
-		list := []model.DictData{}
+		list := make([]map[string]any, 0)
 		for _, d := range rows {
 			if d.TypeValue == t {
-				list = append(list, d)
+				list = append(list, map[string]any{
+					"id": d.ID, "name": d.Name, "value": d.Value, "type_id": d.TypeID,
+					"type_value": d.TypeValue, "sort": d.Sort, "status": d.Status, "remark": d.Remark,
+					"create_time": util.FormatDateTime(d.CreateTime),
+					"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+				})
 			}
 		}
-		result[t] = list
+		if len(list) > 0 {
+			result[t] = list
+		}
 	}
 	response.Data(c, result)
 }

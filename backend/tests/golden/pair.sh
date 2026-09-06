@@ -86,7 +86,9 @@ paths=(
   /platformapi/auth.menu/lists
   /platformapi/dept.dept/lists
   /platformapi/dept.dept/leaderDept
+  /platformapi/dept.dept/all
   /platformapi/dept.jobs/lists
+  /platformapi/dept.jobs/all
   /platformapi/notice.notice/settingLists
   /platformapi/notice.notice/detail?id=1
   /platformapi/setting.pay.pay_config/getConfig?id=1
@@ -125,7 +127,9 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/auth.menu/lists
     /tenantapi/auth.role/lists
     /tenantapi/dept.dept/lists
+    /tenantapi/dept.dept/all
     /tenantapi/dept.jobs/lists
+    /tenantapi/dept.jobs/all
     /tenantapi/article.article/lists
     /tenantapi/article.article_cate/lists
     /tenantapi/article.article_cate/all
@@ -214,6 +218,18 @@ if [[ -n "$TENANT_HOST" ]]; then
         fail=$((fail + 1))
       fi
     done
+    php_rk="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    go_rk="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    echo "recharge_lists_keys php=$php_rk go=$go_rk"
+    if [[ -n "$php_rk" && "$php_rk" != "$go_rk" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_ak="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    go_ak="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    echo "account_log_lists_keys php=$php_ak go=$go_ak"
+    if [[ -n "$php_ak" && "$php_ak" != "$go_ak" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
 fi
 
@@ -1179,6 +1195,81 @@ go_dd="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_data/add" -H "token
 echo "dict_data_add_bad php_msg=$(jget msg <<<"$php_dd") go_msg=$(jget msg <<<"$go_dd")"
 if [[ "$(jget msg <<<"$php_dd")" != "$(jget msg <<<"$go_dd")" ]]; then
   fail=$((fail + 1))
+fi
+
+if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
+  php_jl="$(curl -sS "$PHP/tenantapi/dept.jobs/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_jl="$(curl -sS "$GO/tenantapi/dept.jobs/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] or {}).get("status_desc",""))' <<<"$php_jl")"
+  go_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] or {}).get("status_desc",""))' <<<"$go_jl")"
+  echo "jobs_lists_status_desc php=$php_js go=$go_js"
+  if [[ -n "$php_js" && "$php_js" != "$go_js" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_da="$(curl -sS "$PHP/tenantapi/dept.dept/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_da="$(curl -sS "$GO/tenantapi/dept.dept/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_dl="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("level" in ls[0]))' <<<"$php_da")"
+  go_dl="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("level" in ls[0]))' <<<"$go_da")"
+  echo "dept_all_shape php=$php_dl go=$go_dl"
+  if [[ "$php_dl" != "$go_dl" ]]; then
+    fail=$((fail + 1))
+  fi
+fi
+
+gcomment="pair-gen-${ts:-$RANDOM}"
+php_gsel="$(curl -sS -X POST "$PHP/platformapi/tools.generator/selectTable" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"table\":[{\"name\":\"la_config\",\"comment\":\"$gcomment\"}]}")"
+echo "generator_select php_code=$(jcode <<<"$php_gsel") php_msg=$(jget msg <<<"$php_gsel")"
+if [[ "$(jcode <<<"$php_gsel")" == "1" ]]; then
+  glist="$(curl -sS "$GO/platformapi/tools.generator/generateTable?table_comment=$gcomment" -H "token: $TOKEN")"
+  gid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
+' "$gcomment" <<<"$glist")"
+  if [[ "$gid" != "0" && -n "$gid" ]]; then
+    php_gd="$(curl -sS "$PHP/platformapi/tools.generator/detail?id=$gid" -H "token: $TOKEN")"
+    go_gd="$(curl -sS "$GO/platformapi/tools.generator/detail?id=$gid" -H "token: $TOKEN")"
+    php_gk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(int(isinstance(d.get("table_column"), list) and isinstance(d.get("menu"), dict) and isinstance(d.get("delete"), dict) and isinstance(d.get("relations"), list)))' <<<"$php_gd")"
+    go_gk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(int(isinstance(d.get("table_column"), list) and isinstance(d.get("menu"), dict) and isinstance(d.get("delete"), dict) and isinstance(d.get("relations"), list)))' <<<"$go_gd")"
+    echo "generator_detail_shape php=$php_gk go=$go_gk id=$gid"
+    if [[ "$php_gk" != "1" || "$go_gk" != "1" ]]; then
+      echo "  php_gd=${php_gd:0:240}"
+      echo "  go_gd=${go_gd:0:240}"
+      fail=$((fail + 1))
+    fi
+    php_pv="$(curl -sS "$PHP/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
+    go_pv="$(curl -sS "$GO/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
+    echo "generator_preview php_code=$(jcode <<<"$php_pv") go_code=$(jcode <<<"$go_pv") php_msg=$(jget msg <<<"$php_pv") go_msg=$(jget msg <<<"$go_pv")"
+    if [[ "$(jcode <<<"$php_pv")" != "$(jcode <<<"$go_pv")" ]]; then
+      fail=$((fail + 1))
+    fi
+    curl -sS -X POST "$PHP/platformapi/tools.generator/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}" >/dev/null
+  else
+    echo "generator_select could not resolve id"
+    fail=$((fail + 1))
+  fi
+fi
+
+if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  if [[ -n "$uid" ]]; then
+    mysqlq "UPDATE la_user SET user_money = user_money + 20 WHERE id=$uid"
+    now="$(date +%s)"
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('prf$now',$uid,1,1,10,1,0,1,$now),('grf$now',$uid,1,1,10,1,0,1,$now)"
+    pid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='prf$now'")"
+    gid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='grf$now'")"
+    php_rfo="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"recharge_id\":$pid}")"
+    go_rfo="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"recharge_id\":$gid}")"
+    php_rs="$(mysqlq "SELECT refund_status FROM la_recharge_order WHERE id=$pid")"
+    go_rs="$(mysqlq "SELECT refund_status FROM la_recharge_order WHERE id=$gid")"
+    echo "refund_payway php_msg=$(jget msg <<<"$php_rfo") go_msg=$(jget msg <<<"$go_rfo") php_order=$php_rs go_order=$go_rs"
+    if [[ "$(jget msg <<<"$php_rfo")" != "$(jget msg <<<"$go_rfo")" || "$php_rs" != "1" || "$go_rs" != "1" ]]; then
+      echo "  php_rfo=${php_rfo:0:240}"
+      echo "  go_rfo=${go_rfo:0:240}"
+      fail=$((fail + 1))
+    fi
+  fi
 fi
 
 echo "failed=$fail"
