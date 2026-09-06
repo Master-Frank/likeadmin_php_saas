@@ -69,7 +69,7 @@ func IndexDecorate(c *gin.Context) {
 	}
 	response.Data(c, gin.H{
 		"type": p.Type, "name": p.Name,
-		"data": util.DecodeJSON(p.Data), "meta": util.DecodeJSON(p.Meta),
+		"data": p.Data, "meta": p.Meta,
 	})
 }
 

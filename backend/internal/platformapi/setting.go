@@ -188,7 +188,10 @@ func DictTypeLists(c *gin.Context) {
 		}
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "type": r.Type, "status": r.Status, "remark": r.Remark,
-			"create_time": util.FormatDateTime(r.CreateTime), "status_desc": desc,
+			"create_time": util.FormatDateTime(r.CreateTime),
+			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
+			"status_desc": desc,
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)

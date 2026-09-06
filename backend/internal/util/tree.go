@@ -20,7 +20,9 @@ func LinearToTree(data []map[string]any, subKey, idName, parentIDName string, pa
 		if equalID(row[parentIDName], parentID) {
 			temp := copyMap(row)
 			child := LinearToTree(data, subKey, idName, parentIDName, row[idName])
-			temp[subKey] = child
+			if len(child) > 0 {
+				temp[subKey] = child
+			}
 			tree = append(tree, temp)
 		}
 	}
