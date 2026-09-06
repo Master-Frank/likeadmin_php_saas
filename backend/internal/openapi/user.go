@@ -70,7 +70,7 @@ func IndexDecorate(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if db.First(&p).Error != nil {
-		response.Data(c, gin.H{"type": 0, "name": "", "data": "", "meta": ""})
+		response.Data(c, []any{})
 		return
 	}
 	response.Data(c, gin.H{

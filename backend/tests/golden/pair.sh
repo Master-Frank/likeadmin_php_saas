@@ -959,8 +959,8 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
   php_dec="$(curl -sS "$PHP/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
   go_dec="$(curl -sS "$GO/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
-  echo "decorate_miss php_code=$(jcode <<<"$php_dec") go_code=$(jcode <<<"$go_dec") php_type=$(jget data.type <<<"$php_dec") go_type=$(jget data.type <<<"$go_dec")"
-  if [[ "$(jcode <<<"$php_dec")" != "$(jcode <<<"$go_dec")" || "$(jget data.type <<<"$php_dec")" != "$(jget data.type <<<"$go_dec")" ]]; then
+  echo "decorate_miss php_code=$(jcode <<<"$php_dec") go_code=$(jcode <<<"$go_dec") php_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$php_dec") go_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$go_dec")"
+  if [[ "$(jcode <<<"$php_dec")" != "$(jcode <<<"$go_dec")" || "$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$php_dec")" != "$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$go_dec")" ]]; then
     echo "  php_dec=${php_dec:0:200}"
     echo "  go_dec=${go_dec:0:200}"
     fail=$((fail + 1))
