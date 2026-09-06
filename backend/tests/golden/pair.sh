@@ -220,24 +220,19 @@ if [[ -n "$TENANT_HOST" ]]; then
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
-  cid="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_tenantapi_article.article_cate_lists.json")); print(((d.get("data") or {}).get("lists") or [{}])[0].get("id") or 0)')"
+  cate_json="$(curl -sS "$GO/tenantapi/article.article_cate/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  cid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("data") or {}).get("lists") or [{}])[0].get("id") or 0)' <<<"$cate_json")"
   title="pairwrite$(date +%s)"
   add_body="{\"cid\":$cid,\"title\":\"$title\",\"is_show\":1,\"content\":\"go-php-pair\",\"abstract\":\"pair\"}"
   php_add="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$add_body")"
   php_ac="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_add")"
-  echo "article_add php_code=$php_ac"
+  echo "article_add php_code=$php_ac cid=$cid"
   if [[ "$php_ac" != "1" ]]; then
     echo "  php_add=$php_add"
     fail=$((fail + 1))
   fi
-  aid="$(python3 - <<PY
-import json,urllib.request
-req=urllib.request.Request("$PHP/tenantapi/article.article/lists?title=$title", headers={"Host":"$TENANT_HOST","token":"$TENANT_TOKEN"})
-data=json.load(urllib.request.urlopen(req))
-lists=(data.get("data") or {}).get("lists") or []
-print(lists[0]["id"] if lists else 0)
-PY
-)"
+  list_json="$(curl -sS "$PHP/tenantapi/article.article/lists?title=$title" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  aid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(ls[0]["id"] if ls else 0)' <<<"$list_json")"
   if [[ "$aid" != "0" && -n "$aid" ]]; then
     php_d="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     go_d="$(curl -sS "$GO/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
