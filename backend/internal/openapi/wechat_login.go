@@ -122,6 +122,10 @@ func LoginUpdateUser(c *gin.Context) {
 		response.Fail(c, "请先登录")
 		return
 	}
+	if msg := util.LoginUpdateUserCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	now := util.NowUnix()
 	tdb(c).Model(&u).Updates(map[string]any{
 		"nickname":    httpx.Str(c, "nickname"),

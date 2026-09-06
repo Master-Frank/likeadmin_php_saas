@@ -1058,6 +1058,106 @@ func JobsWriteCheck(p map[string]any, needID bool) string {
 	return ""
 }
 
+func PaySceneName(scene int) string {
+	switch scene {
+	case 1:
+		return "H5"
+	case 2:
+		return "微信公众号"
+	case 3:
+		return "微信小程序"
+	case 4:
+		return "APP"
+	case 5:
+		return "PC"
+	default:
+		return ""
+	}
+}
+
+// PayWaySetCheck mirrors PHP PayWayLogic::setPayWay scene rules.
+func PayWaySetCheck(p map[string]any) string {
+	for key, raw := range p {
+		arr, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		name := PaySceneName(ToInt(key))
+		defaults, ons := 0, 0
+		items := make([]map[string]any, 0, len(arr))
+		for _, item := range arr {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
+			}
+			items = append(items, m)
+			if ToInt(m["is_default"]) == 1 {
+				defaults++
+			}
+			if ToInt(m["status"]) == 1 {
+				ons++
+			}
+		}
+		if len(items) == 0 {
+			continue
+		}
+		if defaults == 0 {
+			return name + "支付场景缺少默认支付"
+		}
+		if defaults > 1 {
+			return name + "支付场景的默认值只能存在一个"
+		}
+		if ons == 0 {
+			return name + "支付场景至少开启一个支付状态"
+		}
+		for _, m := range items {
+			if ToInt(m["is_default"]) == 1 && ToInt(m["status"]) == 0 {
+				return name + "支付场景的默认支付未开启支付状态"
+			}
+		}
+	}
+	return ""
+}
+
+func UserSetInfoCheck(p map[string]any) string {
+	if !phpRequired(p, "field") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "value") {
+		return "值不存在"
+	}
+	field := ToString(p["field"])
+	switch field {
+	case "nickname", "account", "sex", "avatar", "real_name":
+	default:
+		return "参数错误"
+	}
+	return ""
+}
+
+func LoginUpdateUserCheck(p map[string]any) string {
+	if !phpRequired(p, "nickname") {
+		return "昵称缺少"
+	}
+	if !phpRequired(p, "avatar") {
+		return "头像缺少"
+	}
+	return ""
+}
+
+func OAReplySortCheck(p map[string]any) string {
+	if !phpRequired(p, "new_sort") {
+		return "请输入新排序值"
+	}
+	if !isWholeNumber(p["new_sort"]) {
+		return "新排序值须为整型"
+	}
+	if ToInt(p["new_sort"]) < 0 {
+		return "新排序值须大于或等于0"
+	}
+	return ""
+}
+
 func PayQueryCheck(p map[string]any) string {
 	if !phpRequired(p, "from") {
 		return "参数缺失"

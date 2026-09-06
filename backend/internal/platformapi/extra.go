@@ -114,18 +114,30 @@ func PayWayGet(c *gin.Context) {
 
 func PayWaySet(c *gin.Context) {
 	data := httpx.Params(c)
-	if raw, ok := data["data"]; ok {
-		if arr, ok := raw.([]any); ok {
-			for _, item := range arr {
-				m, _ := item.(map[string]any)
-				id := util.ToInt(m["id"])
-				bootstrap.DB.Model(&model.PayWay{}).Where("id = ?", id).Updates(map[string]any{
-					"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
-				})
+	if msg := util.PayWaySetCheck(data); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	for _, raw := range data {
+		arr, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range arr {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
 			}
+			id := util.ToInt(m["id"])
+			if id == 0 {
+				continue
+			}
+			bootstrap.DB.Model(&model.PayWay{}).Where("id = ?", id).Updates(map[string]any{
+				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
+			})
 		}
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func crontabTypeDesc(t int) string {

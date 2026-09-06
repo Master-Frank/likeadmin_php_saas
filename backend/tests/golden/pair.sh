@@ -907,6 +907,18 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     if [[ "$(jget msg <<<"$php_bm")" != "$(jget msg <<<"$go_bm")" ]]; then
       fail=$((fail + 1))
     fi
+    php_si="$(curl -sS -X POST "$PHP/api/user/setInfo" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"field":"nickname","value":""}')"
+    go_si="$(curl -sS -X POST "$GO/api/user/setInfo" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"field":"nickname","value":""}')"
+    echo "setinfo_empty php_msg=$(jget msg <<<"$php_si") go_msg=$(jget msg <<<"$go_si")"
+    if [[ "$(jget msg <<<"$php_si")" != "$(jget msg <<<"$go_si")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_uu="$(curl -sS -X POST "$PHP/api/login/updateUser" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_uu="$(curl -sS -X POST "$GO/api/login/updateUser" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "update_user_bad php_msg=$(jget msg <<<"$php_uu") go_msg=$(jget msg <<<"$go_uu")"
+    if [[ "$(jget msg <<<"$php_uu")" != "$(jget msg <<<"$go_uu")" ]]; then
+      fail=$((fail + 1))
+    fi
     php_up="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     go_up="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     echo "upload_empty php_msg=$(jget msg <<<"$php_up") go_msg=$(jget msg <<<"$go_up")"
@@ -1022,6 +1034,45 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   go_cs2="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","sort":0,"is_show":2}')"
   echo "cate_bad_show php_msg=$(jget msg <<<"$php_cs2") go_msg=$(jget msg <<<"$go_cs2")"
   if [[ "$(jget msg <<<"$php_cs2")" != "$(jget msg <<<"$go_cs2")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_as="$(curl -sS -X POST "$PHP/tenantapi/article.article/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_as="$(curl -sS -X POST "$GO/tenantapi/article.article/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "article_status_bad php_msg=$(jget msg <<<"$php_as") go_msg=$(jget msg <<<"$go_as")"
+  if [[ "$(jget msg <<<"$php_as")" != "$(jget msg <<<"$go_as")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_os="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  go_os="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  echo "oa_sort_bad php_msg=$(jget msg <<<"$php_os") go_msg=$(jget msg <<<"$go_os")"
+  if [[ "$(jget msg <<<"$php_os")" != "$(jget msg <<<"$go_os")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_os2="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"new_sort":1.5}')"
+  go_os2="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"new_sort":1.5}')"
+  echo "oa_sort_float php_msg=$(jget msg <<<"$php_os2") go_msg=$(jget msg <<<"$go_os2")"
+  if [[ "$(jget msg <<<"$php_os2")" != "$(jget msg <<<"$go_os2")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ost="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_ost="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "oa_status_bad php_msg=$(jget msg <<<"$php_ost") go_msg=$(jget msg <<<"$go_ost")"
+  if [[ "$(jget msg <<<"$php_ost")" != "$(jget msg <<<"$go_ost")" ]]; then
+    fail=$((fail + 1))
+  fi
+  pwjson="$(curl -sS "$PHP/tenantapi/setting.pay.pay_way/getPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  pwbad="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=d.get("data") or {}
+for x in (data.get("1") or []):
+    x["is_default"]=0
+print(json.dumps(data,ensure_ascii=False))
+' <<<"$pwjson")"
+  php_pws="$(curl -sS -X POST "$PHP/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$pwbad")"
+  go_pws="$(curl -sS -X POST "$GO/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$pwbad")"
+  echo "payway_set_bad php_msg=$(jget msg <<<"$php_pws") go_msg=$(jget msg <<<"$go_pws")"
+  if [[ "$(jget msg <<<"$php_pws")" != "$(jget msg <<<"$go_pws")" ]]; then
     fail=$((fail + 1))
   fi
   rname="pr${ts: -6}"

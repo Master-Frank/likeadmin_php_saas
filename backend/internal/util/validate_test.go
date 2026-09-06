@@ -334,6 +334,48 @@ func TestAuthAdminEditCheck(t *testing.T) {
 	}
 }
 
+func TestPayWaySetCheck(t *testing.T) {
+	p := map[string]any{
+		"1": []any{
+			map[string]any{"id": 1, "is_default": 0, "status": 1},
+		},
+	}
+	if PayWaySetCheck(p) != "H5支付场景缺少默认支付" {
+		t.Fatal(PayWaySetCheck(p))
+	}
+	p["1"] = []any{
+		map[string]any{"id": 1, "is_default": 1, "status": 0},
+		map[string]any{"id": 2, "is_default": 0, "status": 1},
+	}
+	if PayWaySetCheck(p) != "H5支付场景的默认支付未开启支付状态" {
+		t.Fatal(PayWaySetCheck(p))
+	}
+}
+
+func TestUserSetInfoCheck(t *testing.T) {
+	if UserSetInfoCheck(map[string]any{}) != "参数缺失" {
+		t.Fatal(UserSetInfoCheck(map[string]any{}))
+	}
+	if UserSetInfoCheck(map[string]any{"field": "nickname"}) != "值不存在" {
+		t.Fatal(UserSetInfoCheck(map[string]any{"field": "nickname"}))
+	}
+	if UserSetInfoCheck(map[string]any{"field": "nickname", "value": "n"}) != "" {
+		t.Fatal("expected ok")
+	}
+}
+
+func TestOAReplySortCheck(t *testing.T) {
+	if OAReplySortCheck(map[string]any{}) != "请输入新排序值" {
+		t.Fatal(OAReplySortCheck(map[string]any{}))
+	}
+	if OAReplySortCheck(map[string]any{"new_sort": 1.5}) != "新排序值须为整型" {
+		t.Fatal(OAReplySortCheck(map[string]any{"new_sort": 1.5}))
+	}
+	if OAReplySortCheck(map[string]any{"new_sort": -1}) != "新排序值须大于或等于0" {
+		t.Fatal(OAReplySortCheck(map[string]any{"new_sort": -1}))
+	}
+}
+
 func TestArticleCateShowCheck(t *testing.T) {
 	if ArticleCateShowCheck(map[string]any{}) != "is_show不能为空" {
 		t.Fatal(ArticleCateShowCheck(map[string]any{}))

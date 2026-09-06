@@ -64,6 +64,15 @@ func ArticleUpdateStatus(c *gin.Context) {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}
+	var row model.Article
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+		response.Fail(c, "资讯不存在")
+		return
+	}
+	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }
@@ -601,11 +610,20 @@ func OAReplyStatus(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	row, ok := oaReplyByID(c, httpx.Uint(c, "id"))
+	if !ok {
+		response.Fail(c, "记录不存在")
+		return
+	}
+	status := 0
+	if row.Status == 0 {
+		status = 1
+	}
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", row.ID)
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
-	q.Update("status", httpx.Int(c, "status"))
+	q.Update("status", status)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -614,18 +632,11 @@ func OAReplySort(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if _, ok := httpx.Params(c)["new_sort"]; !ok && httpx.Int(c, "sort") == 0 && httpx.Int(c, "new_sort") == 0 {
-		response.Fail(c, "请输入新排序值")
+	if msg := util.OAReplySortCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	sort := httpx.Int(c, "new_sort")
-	if _, ok := httpx.Params(c)["new_sort"]; !ok {
-		sort = httpx.Int(c, "sort")
-	}
-	if sort < 0 {
-		response.Fail(c, "新排序值须大于或等于0")
-		return
-	}
 	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)

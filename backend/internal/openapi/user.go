@@ -275,21 +275,13 @@ func UserSetInfo(c *gin.Context) {
 		response.Fail(c, "请先登录")
 		return
 	}
+	p := httpx.Params(c)
+	if msg := util.UserSetInfoCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	field := httpx.Str(c, "field")
-	if field == "" {
-		response.Fail(c, "参数缺失")
-		return
-	}
-	if _, ok := httpx.Params(c)["value"]; !ok {
-		response.Fail(c, "值不存在")
-		return
-	}
 	value := httpx.Any(c, "value")
-	allow := map[string]bool{"nickname": true, "account": true, "sex": true, "avatar": true, "real_name": true}
-	if !allow[field] {
-		response.Fail(c, "参数错误")
-		return
-	}
 	if field == "account" {
 		var n int64
 		q := tdb(c).Model(&model.User{}).Where("account = ? AND id <> ? AND delete_time IS NULL", util.ToString(value), u.ID)

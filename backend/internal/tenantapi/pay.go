@@ -132,6 +132,10 @@ func PayWayGet(c *gin.Context) {
 
 func PayWaySet(c *gin.Context) {
 	params := httpx.Params(c)
+	if msg := util.PayWaySetCheck(params); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	for _, v := range params {
 		arr, ok := v.([]any)
 		if !ok {
@@ -151,5 +155,5 @@ func PayWaySet(c *gin.Context) {
 			})
 		}
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
