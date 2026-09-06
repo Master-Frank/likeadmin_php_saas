@@ -348,6 +348,21 @@ func round2(v float64) float64 {
 	return float64(int(v*100+0.5)) / 100
 }
 
+func rechargeUserMoneyEnough(db *gorm.DB, userID, tenantID uint, amount float64) bool {
+	if db == nil {
+		return false
+	}
+	var user model.User
+	q := db.Where("id = ? AND delete_time IS NULL", userID)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	if q.First(&user).Error != nil {
+		return false
+	}
+	return user.UserMoney >= amount
+}
+
 func RechargeRefund(c *gin.Context) {
 	if _, ok := httpx.Params(c)["recharge_id"]; !ok {
 		response.Fail(c, "参数缺失")
@@ -372,6 +387,10 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	udb := tenantdb.ForTenant(order.TenantID)
+	if !rechargeUserMoneyEnough(udb, order.UserID, order.TenantID, order.OrderAmount) {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
+		return
+	}
 	adminID := ctxutil.Get(c).AdminID
 	var rec model.RefundRecord
 	var user model.User
@@ -550,6 +569,10 @@ func RechargeRefundAgain(c *gin.Context) {
 		oq = oq.Where("tenant_id = ?", tid)
 	}
 	oq.First(&againOrder)
+	if !rechargeUserMoneyEnough(tenantdb.ForTenant(rec.TenantID), rec.UserID, rec.TenantID, againOrder.OrderAmount) {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
+		return
+	}
 	againLog := model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64

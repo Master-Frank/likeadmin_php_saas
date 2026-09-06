@@ -1,6 +1,10 @@
 package filesvc
 
-import "testing"
+import (
+	"testing"
+
+	"likeadmin/backend/internal/cache"
+)
 
 func TestRewriteContentDomains(t *testing.T) {
 	in := `<p><img src="uploads/images/a.png"><video src="uploads/video/b.mp4"></video><img src="https://cdn.example/c.png"></p>`
@@ -11,5 +15,26 @@ func TestRewriteContentDomains(t *testing.T) {
 	}
 	if rewriteContent("", in) != in {
 		t.Fatal("empty domain should keep content")
+	}
+}
+
+func TestStorageCache(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	if storageDefault(nil) != "qiniu" {
+		t.Fatalf("default=%s", storageDefault(nil))
+	}
+	eng := storageEngine(nil, "qiniu")
+	if eng == nil || eng["domain"] != "https://cdn.example/" {
+		t.Fatalf("engine=%v", eng)
+	}
+	if got := GetFileURL(nil, "uploads/a.png"); got != "https://cdn.example/uploads/a.png" {
+		t.Fatalf("url=%s", got)
 	}
 }

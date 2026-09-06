@@ -1,6 +1,11 @@
 package middleware
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"likeadmin/backend/internal/cache"
+)
 
 func TestFormatURIPerms(t *testing.T) {
 	if got := formatURI("auth.admin/lists"); got != "auth.admin/lists" {
@@ -29,5 +34,24 @@ func TestRejectWrongTenant(t *testing.T) {
 	}
 	if rejectWrongTenant(true, 1, 0) {
 		t.Fatal("unset host tenant should pass")
+	}
+}
+
+func TestAuthURIListCache(t *testing.T) {
+	key := "admin_auth_url_test"
+	cache.Del(key)
+	t.Cleanup(func() { cache.Del(key) })
+	if loadURIList(key) != nil {
+		t.Fatal("empty cache should miss")
+	}
+	storeURIList(key, nil)
+	if loadURIList(key) != nil {
+		t.Fatal("empty list should not be cached")
+	}
+	want := []string{"auth.admin/lists", "user.user/adjustmoney"}
+	storeURIList(key, want)
+	got := loadURIList(key)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v want %#v", got, want)
 	}
 }

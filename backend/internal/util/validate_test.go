@@ -116,6 +116,21 @@ func TestOAReplyWriteCheck(t *testing.T) {
 	if OAReplyWriteCheck(p, false) != "请输入关键词" {
 		t.Fatal(OAReplyWriteCheck(p, false))
 	}
+	p["keyword"] = "k"
+	p["matching_type"] = 1
+	p["sort"] = -1
+	p["reply_num"] = 1
+	if OAReplyWriteCheck(p, false) != "排序值须大于或等于0" {
+		t.Fatal(OAReplyWriteCheck(p, false))
+	}
+	p["sort"] = 0
+	if OAReplyWriteCheck(p, true) != "参数缺失" {
+		t.Fatal(OAReplyWriteCheck(p, true))
+	}
+	p["id"] = 1
+	if OAReplyWriteCheck(p, true) != "" {
+		t.Fatal(OAReplyWriteCheck(p, true))
+	}
 }
 
 func TestUserPasswordCheck(t *testing.T) {

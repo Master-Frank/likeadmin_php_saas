@@ -883,6 +883,15 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
     if [[ "$(jcode <<<"$php_od")" != "$(jcode <<<"$go_od")" || "$php_ok" != "1" || "$go_ok" != "1" ]]; then
       fail=$((fail + 1))
     fi
+    oa_edit="{\"id\":$oaid,\"reply_type\":2,\"name\":\"$oaname\",\"content_type\":1,\"content\":\"hi\",\"status\":0,\"keyword\":\"$oaname\",\"matching_type\":1,\"sort\":-1,\"reply_num\":1}"
+    php_oe="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$oa_edit")"
+    go_oe="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$oa_edit")"
+    echo "oa_reply_edit_sort php_msg=$(jget msg <<<"$php_oe") go_msg=$(jget msg <<<"$go_oe")"
+    if [[ "$(jget msg <<<"$php_oe")" != "$(jget msg <<<"$go_oe")" || "$(jget msg <<<"$go_oe")" != *排序值须大于或等于0* ]]; then
+      echo "  php_oe=${php_oe:0:200}"
+      echo "  go_oe=${go_oe:0:200}"
+      fail=$((fail + 1))
+    fi
     php_odel="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$oaid}")"
     echo "oa_reply_delete php_code=$(jcode <<<"$php_odel")"
     if [[ "$(jcode <<<"$php_odel")" != "1" ]]; then
@@ -1592,6 +1601,16 @@ php_pe="$(curl -sS -X POST "$PHP/platformapi/auth.admin/edit" -H "token: $TOKEN"
 go_pe="$(curl -sS -X POST "$GO/platformapi/auth.admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
 echo "platform_admin_edit_bad php_msg=$(jget msg <<<"$php_pe") go_msg=$(jget msg <<<"$go_pe")"
 if [[ "$(jget msg <<<"$php_pe")" != "$(jget msg <<<"$go_pe")" ]]; then
+  fail=$((fail + 1))
+fi
+php_alr="$(curl -sS "$PHP/platformapi/auth.admin/lists?role_id=99999" -H "token: $TOKEN")"
+go_alr="$(curl -sS "$GO/platformapi/auth.admin/lists?role_id=99999" -H "token: $TOKEN")"
+php_alrn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") if isinstance(d.get("data"), dict) else len((d.get("data") or {}).get("lists") or d.get("data") or []))' <<<"$php_alr")"
+go_alrn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") if isinstance(d.get("data"), dict) else len((d.get("data") or {}).get("lists") or d.get("data") or []))' <<<"$go_alr")"
+echo "platform_admin_empty_role php_n=$php_alrn go_n=$go_alrn"
+if [[ "$(jcode <<<"$php_alr")" != "$(jcode <<<"$go_alr")" || "$php_alrn" != "$go_alrn" || "$go_alrn" == "0" ]]; then
+  echo "  php_alr=${php_alr:0:200}"
+  echo "  go_alr=${go_alr:0:200}"
   fail=$((fail + 1))
 fi
 php_dd="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"

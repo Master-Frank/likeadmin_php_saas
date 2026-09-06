@@ -34,6 +34,26 @@ func serverRoot() string {
 	return "server"
 }
 
+// backendRoot is the Go module root (sibling of server/). Upgrade zips may
+// ship project/backend/ with the same layout as this directory.
+func backendRoot() string {
+	root := serverRoot()
+	candidate := filepath.Join(filepath.Dir(root), "backend")
+	if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+		return candidate
+	}
+	wd, _ := os.Getwd()
+	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
+		if st, err := os.Stat(filepath.Join(d, "cmd", "api")); err == nil && st.IsDir() {
+			return d
+		}
+		if st, err := os.Stat(filepath.Join(d, "backend", "cmd", "api")); err == nil && st.IsDir() {
+			return filepath.Join(d, "backend")
+		}
+	}
+	return candidate
+}
+
 // GetRemoteVersion mirrors UpgradeLogic::getRemoteVersion.
 func GetRemoteVersion(pageNo, pageSize int) map[string]any {
 	key := fmt.Sprintf("version_lists%d", pageNo)

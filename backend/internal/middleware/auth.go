@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/bootstrap"
@@ -219,11 +221,17 @@ func isNotNeed(table map[string][]string, meta *ctxutil.RequestMeta) bool {
 func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 	// PHP AuthLogic uses menu.perms (API URIs), not frontend paths.
 	if meta.App == "platformapi" {
-		var menus []model.SystemMenu
-		bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus)
-		all = collectPerms(menus)
+		all = cachedURIList("admin_auth_all", func() []string {
+			var menus []model.SystemMenu
+			bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus)
+			return collectPerms(menus)
+		})
 		if util.ToInt(meta.AdminInfo["root"]) == 1 {
 			return all, all
+		}
+		urlKey := "admin_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+		if cached := loadURIList(urlKey); cached != nil {
+			return all, cached
 		}
 		roleIDs := toUintSlice(meta.AdminInfo["role_id"])
 		if len(roleIDs) == 0 {
@@ -235,19 +243,35 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		if len(menuIDs) > 0 {
 			bootstrap.DB.Where("id IN ? AND is_disable = 0 AND perms <> ''", menuIDs).Find(&allowed)
 		}
-		return all, collectPerms(allowed)
+		mine = collectPerms(allowed)
+		storeURIList(urlKey, mine)
+		return all, mine
 	}
 	db := tenantdb.Use(c)
 	if db == nil {
 		db = bootstrap.DB
 	}
-	var menus []model.TenantSystemMenu
-	q := db.Where("is_disable = 0 AND perms <> ''")
-	if meta.TenantID > 0 {
-		q = q.Where("tenant_id = ?", meta.TenantID)
+	tid := meta.TenantID
+	allKey := "tenant_auth_all"
+	if tid > 0 {
+		allKey += "_" + strconv.FormatUint(uint64(tid), 10)
 	}
-	q.Find(&menus)
-	all = collectTenantPerms(menus)
+	all = cachedURIList(allKey, func() []string {
+		var menus []model.TenantSystemMenu
+		q := db.Where("is_disable = 0 AND perms <> ''")
+		if tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Find(&menus)
+		return collectTenantPerms(menus)
+	})
+	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+	if tid > 0 {
+		urlKey = "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+	}
+	if cached := loadURIList(urlKey); cached != nil {
+		return all, cached
+	}
 	roleIDs := toUintSlice(meta.AdminInfo["role_id"])
 	if len(roleIDs) == 0 {
 		return all, mine
@@ -257,12 +281,38 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 	var allowed []model.TenantSystemMenu
 	if len(menuIDs) > 0 {
 		aq := db.Where("id IN ? AND is_disable = 0 AND perms <> ''", menuIDs)
-		if meta.TenantID > 0 {
-			aq = aq.Where("tenant_id = ?", meta.TenantID)
+		if tid > 0 {
+			aq = aq.Where("tenant_id = ?", tid)
 		}
 		aq.Find(&allowed)
 	}
-	return all, collectTenantPerms(allowed)
+	mine = collectTenantPerms(allowed)
+	storeURIList(urlKey, mine)
+	return all, mine
+}
+
+func cachedURIList(key string, load func() []string) []string {
+	if cached := loadURIList(key); cached != nil {
+		return cached
+	}
+	out := load()
+	storeURIList(key, out)
+	return out
+}
+
+func loadURIList(key string) []string {
+	var out []string
+	if cache.GetJSON(key, &out) && out != nil {
+		return out
+	}
+	return nil
+}
+
+func storeURIList(key string, uris []string) {
+	if len(uris) == 0 {
+		return
+	}
+	cache.Set(key, uris, time.Hour)
 }
 
 func collectPerms(menus []model.SystemMenu) []string {

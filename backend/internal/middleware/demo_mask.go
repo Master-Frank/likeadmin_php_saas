@@ -42,7 +42,7 @@ func (w *maskWriter) WriteString(s string) (int, error) {
 
 func DemoMask() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !config.C.Project.DemoEnv || c.Request.Method != "GET" {
+		if !config.C.Project.DemoEnv {
 			c.Next()
 			return
 		}

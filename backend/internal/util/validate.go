@@ -238,6 +238,9 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 		if _, ok := p["sort"]; !ok {
 			return "请输入排序值"
 		}
+		if ToInt(p["sort"]) < 0 {
+			return "排序值须大于或等于0"
+		}
 		if _, ok := p["reply_num"]; !ok {
 			return "请选择回复数量"
 		}

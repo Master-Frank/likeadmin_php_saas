@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
 
@@ -14,15 +15,12 @@ func GetFileURL(c *gin.Context, uri string) string {
 	if strings.Contains(uri, "http://") || strings.Contains(uri, "https://") {
 		return uri
 	}
-	def := cfgsvc.GetString(c, "storage", "default", "local")
+	def := storageDefault(c)
 	var domain string
 	if def == "local" {
 		domain = ctxutil.Domain(c)
-	} else {
-		engine := cfgsvc.Get(c, "storage", def, nil)
-		if m, ok := engine.(map[string]any); ok {
-			domain, _ = m["domain"].(string)
-		}
+	} else if engine := storageEngine(c, def); engine != nil {
+		domain, _ = engine["domain"].(string)
 	}
 	return Format(domain, uri)
 }
@@ -76,6 +74,30 @@ func SetFileURL(c *gin.Context, uri string) string {
 		}
 	}
 	return strings.ReplaceAll(uri, strings.TrimRight(domain, "/")+"/", "")
+}
+
+func storageDefault(c *gin.Context) string {
+	if raw, ok := cache.Get("STORAGE_DEFAULT"); ok && raw != "" {
+		return raw
+	}
+	def := cfgsvc.GetString(c, "storage", "default", "local")
+	if def != "" {
+		cache.Set("STORAGE_DEFAULT", def, 0)
+	}
+	return def
+}
+
+func storageEngine(c *gin.Context, def string) map[string]any {
+	var cached map[string]any
+	if cache.GetJSON("STORAGE_ENGINE", &cached) && cached != nil {
+		return cached
+	}
+	engine := cfgsvc.Get(c, "storage", def, nil)
+	if m, ok := engine.(map[string]any); ok && m != nil {
+		cache.Set("STORAGE_ENGINE", m, 0)
+		return m
+	}
+	return nil
 }
 
 func Format(domain, uri string) string {

@@ -140,6 +140,34 @@ func TestCheckOpenBasedir(t *testing.T) {
 	}
 }
 
+func TestBackendRoot(t *testing.T) {
+	root := backendRoot()
+	if st, err := os.Stat(filepath.Join(root, "cmd", "api")); err != nil || !st.IsDir() {
+		t.Fatalf("backendRoot=%s: %v", root, err)
+	}
+}
+
+func TestUpgradeFileBackend(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "internal", "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "internal", "pkg", "x.go"), []byte("package pkg\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := upgradeFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "internal", "pkg", "x.go"))
+	if err != nil || string(got) != "package pkg\n" {
+		t.Fatalf("copied=%q err=%v", got, err)
+	}
+	if err := upgradeFile(filepath.Join(t.TempDir(), "missing"), dst); err != nil {
+		t.Fatalf("missing backend dir: %v", err)
+	}
+}
+
 func TestUpgradePgSQL(t *testing.T) {
 	if err := upgradePgSQL(filepath.Join(t.TempDir(), "missing")); err != nil {
 		t.Fatalf("missing: %v", err)

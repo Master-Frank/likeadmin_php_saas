@@ -27,14 +27,12 @@ func AdminLists(c *gin.Context) {
 	if account := lists.Param(q, "account"); account != "" {
 		db = db.Where("account LIKE ?", "%"+account+"%")
 	}
-	if rid := lists.ParamInt(q, "role_id"); rid > 0 {
+	if rid := lists.Param(q, "role_id"); rid != "" {
 		var ids []uint
-		bootstrap.DB.Model(&model.AdminRole{}).Where("role_id = ?", rid).Pluck("admin_id", &ids)
-		if len(ids) == 0 {
-			response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
-			return
+		bootstrap.DB.Model(&model.AdminRole{}).Where("role_id = ?", lists.ParamInt(q, "role_id")).Pluck("admin_id", &ids)
+		if len(ids) > 0 {
+			db = db.Where("id IN ?", ids)
 		}
-		db = db.Where("id IN ?", ids)
 	}
 	var count int64
 	db.Count(&count)

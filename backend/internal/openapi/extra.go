@@ -341,14 +341,22 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 		}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.User{}).Where("id = ?", order.UserID).Updates(map[string]any{
+		uq := tx.Model(&model.User{}).Where("id = ?", order.UserID)
+		if order.TenantID > 0 {
+			uq = uq.Where("tenant_id = ?", order.TenantID)
+		}
+		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money + ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount + ?", order.OrderAmount),
 		}).Error; err != nil {
 			return err
 		}
 		var user model.User
-		tx.First(&user, order.UserID)
+		uq = tx.Where("id = ?", order.UserID)
+		if order.TenantID > 0 {
+			uq = uq.Where("tenant_id = ?", order.TenantID)
+		}
+		uq.First(&user)
 		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, user.UserMoney, order.SN, "用户充值")
 		return nil
 	})

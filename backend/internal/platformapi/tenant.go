@@ -54,7 +54,7 @@ func TenantLists(c *gin.Context) {
 		users := tenantUserCount(t)
 		def := httpPrefix + t.SN + "." + root + "/admin/"
 		domain := def
-		if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
+		if t.DomainAliasEnable == 0 {
 			domain = httpPrefix + t.DomainAlias + "/admin/"
 		}
 		avatar := t.Avatar
@@ -90,7 +90,7 @@ func TenantDetail(c *gin.Context) {
 	}
 	def := httpPrefix + t.SN + "." + root + "/admin/"
 	domain := def
-	if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
+	if t.DomainAliasEnable == 0 {
 		domain = httpPrefix + t.DomainAlias + "/admin/"
 	}
 	avatar := t.Avatar
@@ -574,8 +574,8 @@ func TenantUserLists(c *gin.Context) {
 	for _, u := range rows {
 		out = append(out, map[string]any{
 			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
-			"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-			"sex": util.SexDesc(u.Sex), "channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable, "user_money": util.MoneyString(u.UserMoney),
+			"nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
+			"sex": util.SexDesc(u.Sex), "channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
 			"create_time": util.FormatDateTime(u.CreateTime),
 		})
 	}

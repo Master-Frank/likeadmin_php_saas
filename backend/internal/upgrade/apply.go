@@ -65,6 +65,9 @@ func ApplyPackage(link, zipName string) error {
 		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), filepath.Dir(root)+string(os.PathSeparator)); err != nil {
 			return err
 		}
+		if err := upgradeFile(filepath.Join(tempDir, "project", "backend"), backendRoot()); err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		return err
