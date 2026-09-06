@@ -499,9 +499,13 @@ func ArticleCateLists(c *gin.Context) {
 	for _, r := range rows {
 		var n int64
 		tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
+		showDesc := "隐藏"
+		if r.IsShow == 1 {
+			showDesc = "显示"
+		}
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
-			"article_count": n, "tenant_id": r.TenantID,
+			"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
 			"create_time": util.FormatDateTime(r.CreateTime),
 			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),

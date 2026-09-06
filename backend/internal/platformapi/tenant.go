@@ -242,7 +242,8 @@ func TenantUserLists(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if kw := lists.Param(q, "keyword"); kw != "" {
-		db = db.Where("nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+		like := "%" + kw + "%"
+		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
 	}
 	var count int64
 	db.Count(&count)
@@ -253,7 +254,7 @@ func TenantUserLists(c *gin.Context) {
 		out = append(out, map[string]any{
 			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 			"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-			"sex": u.Sex, "channel": u.Channel, "is_disable": u.IsDisable, "user_money": u.UserMoney,
+			"sex": util.SexDesc(u.Sex), "channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable, "user_money": util.MoneyString(u.UserMoney),
 			"create_time": util.FormatDateTime(u.CreateTime),
 		})
 	}
@@ -595,8 +596,9 @@ func userMap(c *gin.Context, u model.User) map[string]any {
 		"id": u.ID, "sn": u.SN,
 		"avatar":    filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 		"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-		"sex": u.Sex, "channel": u.Channel, "is_disable": u.IsDisable, "login_ip": u.LoginIP,
-		"login_time": util.FormatDateTimePtr(u.LoginTime), "user_money": u.UserMoney,
+		"sex": util.SexDesc(u.Sex), "sexCode": u.Sex, "channel": util.ChannelDesc(u.Channel),
+		"is_disable": u.IsDisable, "login_ip": u.LoginIP,
+		"login_time": util.FormatDateTimePtr(u.LoginTime), "user_money": util.MoneyString(u.UserMoney),
 		"create_time": util.FormatDateTime(u.CreateTime),
 	}
 }

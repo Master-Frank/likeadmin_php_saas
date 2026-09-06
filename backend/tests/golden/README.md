@@ -17,7 +17,7 @@
 | 租户业务 | 文章/用户 lists、装修 tabbar/page；文章/分类写路径、用户 edit/adjustMoney | 对拍已接写路径 |
 | 用户端 | `/api` config/decorate/article/search；注册+登录+center/info | 对拍已过（含注册重复、登录后 lists） |
 | 定时/安装 | crontab 执行、`/install` 导入 like.sql 并写 lock/.env | 安装导入已实现；本库 lock 已存在未重装 |
-| 全量切流 | `cmd/strangler` 把 API 切 Go，其余回 PHP；nginx 配置仍可用 | 本机可用 strangler :8090 |
+| 全量切流 | `cmd/strangler` 把 API 切 Go，其余回 PHP；nginx 配置仍可用 | strangler :8090 对拍 failed=0；本机未装 nginx |
 
 允许差异：新签发 `token`、键顺序、工作台随机演示曲线。不允许：`code`/`show`/`msg` 语义、列表字段、空 `data` 形态、时间格式。
 
@@ -27,5 +27,9 @@
 export PHP=http://127.0.0.1:8000
 export GO=http://127.0.0.1:8080
 export TENANT_HOST=pair1.likeadmin.test
+./backend/tests/golden/pair.sh
+
+# 切流代理（API 走 Go，其余回 PHP）
+export GO=http://127.0.0.1:8090
 ./backend/tests/golden/pair.sh
 ```
