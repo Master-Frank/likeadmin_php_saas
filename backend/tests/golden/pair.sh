@@ -391,9 +391,10 @@ print((ls[0] if ls else {}).get("id") or 0)
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,1,$now)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,999,$now)"
       go_addc="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"id\":${aid:-1}}")"
-      ctid="$(mysqlq "SELECT tenant_id FROM la_article_collect WHERE user_id=$uid AND article_id=${aid:-1} AND status=1 AND delete_time IS NULL ORDER BY id DESC LIMIT 1")"
-      echo "collect_add go_code=$(jcode <<<"$go_addc") tenant_id=$ctid"
-      if [[ "$(jcode <<<"$go_addc")" != "1" || "$ctid" != "1" ]]; then
+      own_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect WHERE user_id=$uid AND article_id=${aid:-1} AND status=1 AND delete_time IS NULL AND tenant_id=1")"
+      leak_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect WHERE user_id=$uid AND tenant_id=999 AND status=1 AND create_time=$now")"
+      echo "collect_add go_code=$(jcode <<<"$go_addc") own=$own_cl leak=$leak_cl"
+      if [[ "$(jcode <<<"$go_addc")" != "1" || "$own_cl" == "0" || "$leak_cl" != "1" ]]; then
         echo "  go_addc=${go_addc:0:200}"
         fail=$((fail + 1))
       fi
