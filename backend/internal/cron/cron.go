@@ -113,14 +113,22 @@ func queryRefund() string {
 
 func applyRefundQuery(lg model.RefundLog) {
 	var rec model.RefundRecord
-	if bootstrap.DB.First(&rec, lg.RecordID).Error != nil {
+	rq := bootstrap.DB.Where("id = ?", lg.RecordID)
+	if lg.TenantID > 0 {
+		rq = rq.Where("tenant_id = ?", lg.TenantID)
+	}
+	if rq.First(&rec).Error != nil {
 		return
 	}
 	if rec.OrderType != "recharge" {
 		return
 	}
 	var order model.RechargeOrder
-	if bootstrap.DB.First(&order, rec.OrderID).Error != nil {
+	oq := bootstrap.DB.Where("id = ?", rec.OrderID)
+	if rec.TenantID > 0 {
+		oq = oq.Where("tenant_id = ?", rec.TenantID)
+	}
+	if oq.First(&order).Error != nil {
 		return
 	}
 	if order.PayWay != 2 {

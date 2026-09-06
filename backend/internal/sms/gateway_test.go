@@ -56,4 +56,10 @@ func TestTencentParams(t *testing.T) {
 	if len(got) != 1 || got[0] != "8888" {
 		t.Fatalf("%v", got)
 	}
+	ordered := tencentParamsFrom("您好${nickname}，验证码${code}", map[string]string{
+		"code": "8888", "nickname": "张三", "extra": "x",
+	})
+	if len(ordered) != 2 || ordered[0] != "张三" || ordered[1] != "8888" {
+		t.Fatalf("order %v", ordered)
+	}
 }

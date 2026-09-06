@@ -93,6 +93,13 @@ func TestNormalizePEM(t *testing.T) {
 	}
 }
 
+func TestWechatRefundMissingConfig(t *testing.T) {
+	err := WechatRefund(nil, "", "rf1", 1, 1)
+	if err == nil || err.Error() != "请先完成支付渠道配置" {
+		t.Fatalf("cfg %v", err)
+	}
+}
+
 func TestParseWechatRefundQuery(t *testing.T) {
 	ok, msg, known := ParseWechatRefundQuery(nil)
 	if ok || known || msg != "" {

@@ -39,6 +39,38 @@ func TestParamName(t *testing.T) {
 	}
 }
 
+func TestModelToTable(t *testing.T) {
+	if modelToTable(`app\common\model\User`) != "la_user" {
+		t.Fatalf("user %s", modelToTable(`app\common\model\User`))
+	}
+	if modelToTable("ArticleCate") != "la_article_cate" {
+		t.Fatalf("cate %s", modelToTable("ArticleCate"))
+	}
+	if modelToTable("la_user") != "la_user" {
+		t.Fatalf("prefixed %s", modelToTable("la_user"))
+	}
+	if modelToTable("id;drop") != "" {
+		t.Fatal("unsafe model")
+	}
+}
+
+func TestParseRelations(t *testing.T) {
+	rels := parseRelations(model.GenerateTable{Relations: `[{"name":"user","model":"User","type":"has_one","local_key":"user_id","foreign_key":"id","label":"nickname"}]`})
+	if len(rels) != 1 || rels[0].Table != "la_user" || rels[0].LocalKey != "user_id" || rels[0].Label != "nickname" {
+		t.Fatalf("%+v", rels)
+	}
+}
+
+func TestImageCol(t *testing.T) {
+	sp := newSpec(model.GenerateTable{Name: "la_pair_gencrud"}, []model.GenerateColumn{
+		{ColumnName: "cover", ViewType: "imageSelect"},
+		{ColumnName: "name", ViewType: "input"},
+	})
+	if !isImageCol(sp, "cover") || isImageCol(sp, "name") {
+		t.Fatal("image col")
+	}
+}
+
 func TestNewSpecSoftDeleteAndPk(t *testing.T) {
 	sp := newSpec(model.GenerateTable{
 		Name:   "la_pair_gencrud",

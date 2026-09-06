@@ -8,6 +8,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -38,6 +39,16 @@ type spec struct {
 	treeID     string
 	treePID    string
 	allowed    map[string]bool
+	rels       []relSpec
+}
+
+type relSpec struct {
+	Name       string
+	Table      string
+	Type       string
+	LocalKey   string
+	ForeignKey string
+	Label      string
 }
 
 func Match(app, ctrl, action string) bool {
@@ -113,6 +124,7 @@ func newSpec(t model.GenerateTable, cols []model.GenerateColumn) *spec {
 		treeID:    firstNonEmpty(util.ToString(tree["tree_id"]), "id"),
 		treePID:   firstNonEmpty(util.ToString(tree["tree_pid"]), "pid"),
 		allowed:   map[string]bool{},
+		rels:      parseRelations(t),
 	}
 	for _, col := range cols {
 		if validIdent(col.ColumnName) {
@@ -183,8 +195,9 @@ func doLists(c *gin.Context, sp *spec) {
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, formatRow(sp, row))
+		out = append(out, formatRow(c, sp, row))
 	}
+	attachRelations(c, sp, out)
 	if sp.tree {
 		out = util.LinearToTree(out, "children", sp.treeID, sp.treePID, 0)
 	}
@@ -217,6 +230,10 @@ func doEdit(c *gin.Context, sp *spec) {
 		return
 	}
 	data := writeData(c, sp, p, true)
+	if msg := treeCycleMsg(c, sp, id, data); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	q := scoped(c, sp).Where(sp.pk+" = ?", id)
 	if err := q.Updates(data).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -260,7 +277,9 @@ func doDetail(c *gin.Context, sp *spec) {
 		response.Data(c, []any{})
 		return
 	}
-	response.Data(c, formatRow(sp, row))
+	formatted := formatRow(c, sp, row)
+	attachRelations(c, sp, []map[string]any{formatted})
+	response.Data(c, formatted)
 }
 
 func session(c *gin.Context) *gorm.DB {
@@ -432,8 +451,8 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 	return ""
 }
 
-func formatRow(sp *spec, row map[string]any) map[string]any {
-	out := make(map[string]any, len(row))
+func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
+	out := make(map[string]any, len(row)+4)
 	for k, v := range row {
 		if b, ok := v.([]byte); ok {
 			v = string(b)
@@ -442,7 +461,14 @@ func formatRow(sp *spec, row map[string]any) map[string]any {
 			out[k] = util.FormatDateTime(util.ToInt64(v))
 			continue
 		}
+		if isImageCol(sp, k) {
+			out[k] = filesvc.GetFileURL(c, util.ToString(v))
+			continue
+		}
 		out[k] = v
+		if label := dictLabel(sp, k, v); label != "" {
+			out[k+"_text"] = label
+		}
 	}
 	return out
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/util"
@@ -29,8 +30,31 @@ func LocalVersion() string {
 		ver = "1.0.0"
 	}
 	_ = os.MkdirAll(dir, 0755)
-	_ = os.WriteFile(path, []byte(`{"version":"`+ver+`"}`), 0644)
+	_ = os.WriteFile(path, versionJSON(ver), 0644)
 	return ver
+}
+
+func versionJSON(ver string) []byte {
+	b, _ := json.Marshal(map[string]string{"version": ver})
+	return b
+}
+
+// WriteLocalVersion persists the installed version after a successful upgrade.
+func WriteLocalVersion(ver string) error {
+	ver = strings.TrimSpace(ver)
+	if ver == "" {
+		return nil
+	}
+	for _, r := range ver {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '.' && r != '_' && r != '-' {
+			return nil
+		}
+	}
+	dir := filepath.Join(serverRoot(), "upgrade")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "version.json"), versionJSON(ver), 0644)
 }
 
 // FormatLists mirrors UpgradeLogic::formatLists.

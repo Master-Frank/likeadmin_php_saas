@@ -106,8 +106,11 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 
 func WechatRefund(c *gin.Context, transactionID, refundSN string, refundAmount, totalAmount float64) error {
 	cfg := WechatCfg(c)
-	if cfg.MchID == "" || cfg.APIClientKey == "" || transactionID == "" {
-		return nil
+	if cfg.MchID == "" || cfg.APIClientKey == "" {
+		return fmt.Errorf("请先完成支付渠道配置")
+	}
+	if transactionID == "" {
+		return fmt.Errorf("第三方交易号缺失")
 	}
 	key, err := parseRSAPrivateKey(cfg.APIClientKey)
 	if err != nil {

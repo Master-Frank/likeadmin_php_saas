@@ -104,6 +104,12 @@ func TestPkgLinkName(t *testing.T) {
 	}
 }
 
+func TestVersionJSON(t *testing.T) {
+	if string(versionJSON("2.1.0")) != `{"version":"2.1.0"}` {
+		t.Fatalf("%s", versionJSON("2.1.0"))
+	}
+}
+
 func TestHasPermission(t *testing.T) {
 	if HasPermission(nil) || HasPermission(map[string]any{}) {
 		t.Fatal("empty")

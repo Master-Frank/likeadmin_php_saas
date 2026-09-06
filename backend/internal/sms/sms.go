@@ -96,7 +96,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if bootstrap.DB != nil {
 		row := model.TenantSmsLog{
 			SceneID: scene, Mobile: mobile, Code: code, Content: content,
-			SendStatus: 1, SendTime: &now, TenantID: tid, CreateTime: now,
+			SendStatus: 0, SendTime: &now, TenantID: tid, CreateTime: now,
 		}
 		_ = bootstrap.DB.Create(&row).Error
 		logID = row.ID
@@ -106,6 +106,10 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if err := maybeGatewaySend(c, mobile, scene, code, logID); err != nil {
 		cache.Del(cacheKey(scene, mobile))
 		return 0, "", err
+	}
+	if logID > 0 {
+		bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ? AND send_status = 0", logID).
+			Updates(map[string]any{"send_status": 1})
 	}
 	return scene, code, nil
 }
@@ -170,7 +174,7 @@ func markLogVerified(c *gin.Context, mobile, code string, scene int) {
 func tooFrequent(c *gin.Context, mobile string, scene int) bool {
 	now := util.NowUnix()
 	q := bootstrap.DB.Model(&model.TenantSmsLog{}).
-		Where("mobile = ? AND send_status = 1 AND scene_id = ? AND send_time >= ?", mobile, scene, now-60)
+		Where("mobile = ? AND send_status IN (0,1) AND scene_id = ? AND send_time >= ?", mobile, scene, now-60)
 	if c != nil {
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			q = q.Where("tenant_id = ?", tid)

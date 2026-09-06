@@ -78,7 +78,7 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, log
 		if err != nil {
 			raw, _ = json.Marshal(err.Error())
 			bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ?", logID).Updates(map[string]any{
-				"send_status": 3, "results": string(raw), "content": content,
+				"send_status": 2, "results": string(raw), "content": content,
 			})
 		} else {
 			bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ?", logID).Updates(map[string]any{
@@ -141,23 +141,47 @@ func formatContent(tpl string, vars map[string]string) string {
 }
 
 func tencentParams(notice map[string]any, code, mobile string) []string {
-	content := util.ToString(notice["content"])
-	if content == "" || strings.Contains(content, "${code}") {
-		return []string{code}
+	return tencentParamsFrom(util.ToString(notice["content"]), map[string]string{
+		"code": code, "mobile": mobile,
+	})
+}
+
+// tencentParamsFrom matches PHP SmsMessageService::setSmsParams for TENCENT:
+// collect ${key} placeholders, then order by strpos($content, $key).
+func tencentParamsFrom(content string, params map[string]string) []string {
+	type item struct {
+		pos int
+		key string
 	}
-	order := []string{}
-	for _, key := range []string{"code", "mobile"} {
-		if strings.Contains(content, "${"+key+"}") {
-			order = append(order, key)
+	found := make([]item, 0, len(params))
+	seen := map[string]bool{}
+	for k := range params {
+		if k == "" || seen[k] || !strings.Contains(content, "${"+k+"}") {
+			continue
+		}
+		seen[k] = true
+		pos := strings.Index(content, k)
+		if pos < 0 {
+			pos = 0
+		}
+		found = append(found, item{pos: pos, key: k})
+	}
+	if len(found) == 0 {
+		if code := params["code"]; code != "" {
+			return []string{code}
+		}
+		return nil
+	}
+	for i := 0; i < len(found); i++ {
+		for j := i + 1; j < len(found); j++ {
+			if found[j].pos < found[i].pos {
+				found[i], found[j] = found[j], found[i]
+			}
 		}
 	}
-	if len(order) == 0 {
-		return []string{code}
-	}
-	out := make([]string, 0, len(order))
-	vars := map[string]string{"code": code, "mobile": mobile}
-	for _, k := range order {
-		out = append(out, vars[k])
+	out := make([]string, 0, len(found))
+	for _, it := range found {
+		out = append(out, params[it.key])
 	}
 	return out
 }

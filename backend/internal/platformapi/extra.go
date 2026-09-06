@@ -498,6 +498,9 @@ func UpgradeDo(c *gin.Context) {
 		response.Fail(c, "更新失败:"+err.Error())
 		return
 	}
+	if ver := upgrade.VersionByID(p["id"]); ver != nil {
+		_ = upgrade.WriteLocalVersion(util.ToString(ver["version_no"]))
+	}
 	upgrade.AddLog(host, p["id"], 1, true, "")
 	response.SuccessNotice(c, "更新成功")
 }

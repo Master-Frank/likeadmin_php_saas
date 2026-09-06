@@ -1514,6 +1514,17 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
       echo "  go_rfo=${go_rfo:0:240}"
       fail=$((fail + 1))
     fi
+    mysqlq "UPDATE la_user SET user_money = user_money + 8, total_recharge_amount = total_recharge_amount + 8 WHERE id=$uid"
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,transaction_id,tenant_id,create_time) VALUES ('wxf$now',$uid,2,1,8,1,0,'tx$now',1,$now)"
+    wid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='wxf$now'")"
+    go_wr="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"recharge_id\":$wid}")"
+    go_wrmsg="$(jget msg <<<"$go_wr")"
+    go_wrec="$(mysqlq "SELECT refund_status FROM la_refund_record WHERE order_id=$wid ORDER BY id DESC LIMIT 1")"
+    echo "refund_wechat_noconfig go_msg=$go_wrmsg rec=$go_wrec"
+    if [[ "$go_wrmsg" != *支付渠道* || "$go_wrec" != "2" ]]; then
+      echo "  go_wr=${go_wr:0:240}"
+      fail=$((fail + 1))
+    fi
   fi
 fi
 
@@ -1850,6 +1861,11 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   echo "sms_notice_record n=$nrec"
   if [[ "$(jcode <<<"$go_sms")" == "1" && "$nrec" == "0" ]]; then
     echo "  go_sms=${go_sms:0:240}"
+    fail=$((fail + 1))
+  fi
+  sms_st="$(mysqlq "SELECT send_status FROM la_tenant_sms_log WHERE mobile='$mobile' ORDER BY id DESC LIMIT 1")"
+  echo "sms_send_status=$sms_st"
+  if [[ "$(jcode <<<"$go_sms")" == "1" && "$sms_st" != "1" ]]; then
     fail=$((fail + 1))
   fi
 fi
