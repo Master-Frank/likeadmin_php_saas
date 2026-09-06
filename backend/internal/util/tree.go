@@ -1,5 +1,10 @@
 package util
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 func LinearToTree(data []map[string]any, subKey, idName, parentIDName string, parentID any) []map[string]any {
 	if subKey == "" {
 		subKey = "sub"
@@ -65,6 +70,11 @@ func toInt64(v any) int64 {
 		return int64(n)
 	case float32:
 		return int64(n)
+	case string:
+		return int64(ParseInt(strings.TrimSpace(n)))
+	case json.Number:
+		iv, _ := n.Int64()
+		return iv
 	default:
 		return 0
 	}

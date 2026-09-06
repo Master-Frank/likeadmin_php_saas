@@ -298,7 +298,7 @@ func StorageLists(c *gin.Context) {
 		{"name": "阿里云OSS", "path": "存储在阿里云，请前往阿里云开通存储服务", "engine": "aliyun", "status": bool01(def == "aliyun")},
 		{"name": "腾讯云COS", "path": "存储在腾讯云，请前往腾讯云开通存储服务", "engine": "qcloud", "status": bool01(def == "qcloud")},
 	}
-	response.Success(c, "", out)
+	response.Success(c, "获取成功", out)
 }
 
 func bool01(ok bool) int {

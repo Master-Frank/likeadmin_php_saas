@@ -34,8 +34,12 @@ func DeptLists(c *gin.Context) {
 
 func DeptLeader(c *gin.Context) {
 	var rows []model.Dept
-	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc").Find(&rows)
-	response.SuccessSilent(c, "", rows)
+	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, map[string]any{"id": d.ID, "name": d.Name})
+	}
+	response.SuccessSilent(c, "", out)
 }
 
 func DeptAdd(c *gin.Context) {
@@ -179,7 +183,7 @@ func deptMap(d model.Dept) map[string]any {
 		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
 		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
 		"create_time": util.FormatDateTime(d.CreateTime),
-		"update_time": util.FormatDateTimePtr(d.UpdateTime),
-		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
+		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
 	}
 }

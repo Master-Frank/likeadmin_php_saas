@@ -10,6 +10,12 @@ func TestDecodeJSONObject(t *testing.T) {
 	}
 }
 
+func TestToIntString(t *testing.T) {
+	if ToInt("1") != 1 || ToInt("01") != 1 {
+		t.Fatalf("ToInt string failed")
+	}
+}
+
 func TestEncodeJSONRoundTrip(t *testing.T) {
 	raw := EncodeJSON(map[string]any{"path": "/x"})
 	if DecodeJSONMap(raw)["path"] != "/x" {

@@ -41,6 +41,13 @@ func FormatDateTimePtr(ts *int64) string {
 	return FormatDateTime(*ts)
 }
 
+func FormatDateTimeOrNil(ts *int64) any {
+	if ts == nil || *ts <= 0 {
+		return nil
+	}
+	return FormatDateTime(*ts)
+}
+
 func NowUnix() int64 {
 	return time.Now().Unix()
 }
