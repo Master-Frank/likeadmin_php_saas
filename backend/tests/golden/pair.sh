@@ -1433,7 +1433,7 @@ fi
 
 ts="${ts:-$(date +%s)}"
 tsn="pt${ts: -6}"
-php_ta="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$tsn\",\"host_name\":\"$tsn\",\"account\":\"$tsn\",\"password\":\"likeadmin\",\"avatar\":\"\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0}")"
+php_ta="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$tsn\",\"host_name\":\"$tsn\",\"account\":\"$tsn\",\"password\":\"likeadmin\",\"avatar\":\"\",\"tel\":\"\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0,\"notes\":\"\"}")"
 echo "tenant_add php_code=$(jcode <<<"$php_ta") php_msg=$(jget msg <<<"$php_ta")"
 if [[ "$(jcode <<<"$php_ta")" == "1" ]]; then
   tlist="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$tsn" -H "token: $TOKEN")"
