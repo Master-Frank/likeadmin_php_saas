@@ -170,11 +170,7 @@ func GeneratorPreview(c *gin.Context) {
 	}
 	var cols []model.GenerateColumn
 	bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-	goCode, vueCode := renderGoVue(t, cols)
-	response.Success(c, "", []map[string]any{
-		{"name": t.ClassDir + ".go", "type": "go", "content": goCode},
-		{"name": t.ClassDir + "/lists.vue", "type": "vue", "content": vueCode},
-	})
+	response.Success(c, "", generateBundle(t, cols))
 }
 
 func GeneratorGenerate(c *gin.Context) {
@@ -194,11 +190,13 @@ func GeneratorGenerate(c *gin.Context) {
 		}
 		var cols []model.GenerateColumn
 		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-		goCode, vueCode := renderGoVue(t, cols)
-		dir := filepath.Join(root, t.ClassDir)
-		_ = os.MkdirAll(dir, 0755)
-		_ = os.WriteFile(filepath.Join(dir, t.ClassDir+".go"), []byte(goCode), 0644)
-		_ = os.WriteFile(filepath.Join(dir, "lists.vue"), []byte(vueCode), 0644)
+		for _, f := range generateBundle(t, cols) {
+			name := util.ToString(f["name"])
+			content := util.ToString(f["content"])
+			path := filepath.Join(root, t.ClassDir, name)
+			_ = os.MkdirAll(filepath.Dir(path), 0755)
+			_ = os.WriteFile(path, []byte(content), 0644)
+		}
 	}
 	response.Success(c, "生成成功", nil)
 }
@@ -231,16 +229,13 @@ func GeneratorDownload(c *gin.Context) {
 		}
 		var cols []model.GenerateColumn
 		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-		goCode, vueCode := renderGoVue(t, cols)
-		for name, content := range map[string]string{
-			t.ClassDir + "/" + t.ClassDir + ".go": goCode,
-			t.ClassDir + "/lists.vue":             vueCode,
-		} {
+		for _, f := range generateBundle(t, cols) {
+			name := t.ClassDir + "/" + util.ToString(f["name"])
 			w, err := zw.Create(name)
 			if err != nil {
 				continue
 			}
-			_, _ = w.Write([]byte(content))
+			_, _ = w.Write([]byte(util.ToString(f["content"])))
 		}
 	}
 	_ = zw.Close()
@@ -291,23 +286,69 @@ func syncColumns(tableID uint, tableName string) {
 	}
 }
 
-func renderGoVue(t model.GenerateTable, cols []model.GenerateColumn) (string, string) {
-	structName := toExported(t.ClassDir)
-	if structName == "" {
-		structName = toExported(strings.TrimPrefix(t.Name, config.Prefix()))
+func generateBundle(t model.GenerateTable, cols []model.GenerateColumn) []map[string]any {
+	name := toExported(t.ClassDir)
+	if name == "" {
+		name = toExported(strings.TrimPrefix(t.Name, config.Prefix()))
 	}
-	var b strings.Builder
-	b.WriteString("package generated\n\n")
-	b.WriteString(fmt.Sprintf("// %s %s\n", structName, t.TableComment))
-	b.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+	mod := t.ModuleName
+	if mod == "" {
+		mod = "admin"
+	}
+	author := t.Author
+	if author == "" {
+		author = "likeadmin"
+	}
+	comment := t.TableComment
+	if comment == "" {
+		comment = name
+	}
+	var fields strings.Builder
+	var vueCols strings.Builder
+	pk := "id"
 	for _, col := range cols {
-		b.WriteString(fmt.Sprintf("\t%s %s `gorm:\"column:%s\" json:\"%s\"`\n",
-			toExported(col.ColumnName), goType(col.ColumnType), col.ColumnName, col.ColumnName))
+		fields.WriteString(fmt.Sprintf("    public $%s;\n", col.ColumnName))
+		if col.IsPk == 1 {
+			pk = col.ColumnName
+		}
+		if col.IsLists == 1 {
+			vueCols.WriteString(fmt.Sprintf("      { label: '%s', field: '%s' },\n", firstNonEmpty(col.ColumnComment, col.ColumnName), col.ColumnName))
+		}
 	}
-	b.WriteString("}\n\n")
-	b.WriteString(fmt.Sprintf("func (%s) TableName() string { return %q }\n", structName, t.Name))
-	vue := fmt.Sprintf("<template>\n  <div class=\"%s-lists\">代码生成：%s</div>\n</template>\n", t.ClassDir, t.TableComment)
-	return b.String(), vue
+	snake := strings.TrimPrefix(t.Name, config.Prefix())
+	if snake == "" {
+		snake = t.ClassDir
+	}
+	phpNS := "app\\" + mod
+	ctrl := fmt.Sprintf("<?php\nnamespace %s\\controller%s;\n\nuse %s\\controller\\BaseAdminController;\nuse %s\\lists%s\\%sLists;\nuse %s\\logic%s\\%sLogic;\nuse %s\\validate%s\\%sValidate;\n\n/** %s */\nclass %sController extends BaseAdminController\n{\n    public function lists()\n    {\n        return $this->dataLists(new %sLists());\n    }\n    public function add()\n    {\n        $params = (new %sValidate())->post()->goCheck('add');\n        %sLogic::add($params);\n        return $this->success('添加成功', [], 1, 1);\n    }\n    public function edit()\n    {\n        $params = (new %sValidate())->post()->goCheck('edit');\n        %sLogic::edit($params);\n        return $this->success('编辑成功', [], 1, 1);\n    }\n    public function delete()\n    {\n        $params = (new %sValidate())->post()->goCheck('delete');\n        %sLogic::delete($params);\n        return $this->success('删除成功', [], 1, 1);\n    }\n    public function detail()\n    {\n        $params = (new %sValidate())->goCheck('detail');\n        return $this->data(%sLogic::detail($params));\n    }\n}\n",
+		phpNS, classDirNS(t.ClassDir), phpNS, phpNS, classDirNS(t.ClassDir), name, phpNS, classDirNS(t.ClassDir), name, phpNS, classDirNS(t.ClassDir), name, comment, name, name, name, name, name, name, name, name, name, name)
+	lists := fmt.Sprintf("<?php\nnamespace %s\\lists%s;\n\nuse %s\\lists\\BaseAdminDataLists;\nuse app\\common\\model%s\\%s;\n\n/** %s列表 */\nclass %sLists extends BaseAdminDataLists\n{\n    public function lists(): array\n    {\n        return %s::limit($this->limitOffset, $this->limitLength)->order('%s desc')->select()->toArray();\n    }\n    public function count(): int\n    {\n        return %s::count();\n    }\n}\n", phpNS, classDirNS(t.ClassDir), phpNS, classDirNS(t.ClassDir), name, comment, name, name, pk, name)
+	modelPHP := fmt.Sprintf("<?php\nnamespace app\\common\\model%s;\n\nuse app\\common\\model\\BaseModel;\nuse think\\model\\concern\\SoftDelete;\n\n/** %s */\nclass %s extends BaseModel\n{\n    use SoftDelete;\n    protected $name = '%s';\n    protected $deleteTime = 'delete_time';\n%s}\n", classDirNS(t.ClassDir), comment, name, snake, fields.String())
+	validate := fmt.Sprintf("<?php\nnamespace %s\\validate%s;\n\nuse app\\common\\validate\\BaseValidate;\n\nclass %sValidate extends BaseValidate\n{\n    protected $rule = ['id' => 'require'];\n    public function sceneAdd() { return $this->remove('id', true); }\n    public function sceneEdit() { return $this; }\n    public function sceneDelete() { return $this->only(['id']); }\n    public function sceneDetail() { return $this->only(['id']); }\n}\n", phpNS, classDirNS(t.ClassDir), name)
+	logic := fmt.Sprintf("<?php\nnamespace %s\\logic%s;\n\nuse app\\common\\logic\\BaseLogic;\nuse app\\common\\model%s\\%s;\n\nclass %sLogic extends BaseLogic\n{\n    public static function add(array $params) { %s::create($params); return true; }\n    public static function edit(array $params) { %s::update($params); return true; }\n    public static function delete(array $params) { %s::destroy($params['id']); return true; }\n    public static function detail(array $params) { return %s::findOrEmpty($params['id'])->toArray(); }\n}\n", phpNS, classDirNS(t.ClassDir), classDirNS(t.ClassDir), name, name, name, name, name, name)
+	vueAPI := fmt.Sprintf("import request from '@/utils/request'\n\nexport function api%sLists(params: any) {\n  return request.get({ url: '/%s/%s/lists', params })\n}\nexport function api%sAdd(params: any) {\n  return request.post({ url: '/%s/%s/add', params })\n}\nexport function api%sEdit(params: any) {\n  return request.post({ url: '/%s/%s/edit', params })\n}\nexport function api%sDelete(params: any) {\n  return request.post({ url: '/%s/%s/delete', params })\n}\nexport function api%sDetail(params: any) {\n  return request.get({ url: '/%s/%s/detail', params })\n}\n", name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake)
+	vueIndex := fmt.Sprintf("<template>\n  <div class=\"%s-lists\">\n    <el-table :data=\"lists\">\n%s    </el-table>\n  </div>\n</template>\n<script lang=\"ts\" setup>\nimport { api%sLists } from '@/api/%s'\nconst lists = ref([])\n</script>\n", snake, vueCols.String(), name, snake)
+	vueEdit := fmt.Sprintf("<template>\n  <el-form :model=\"form\">\n    <el-form-item label=\"%s\"><el-input v-model=\"form.%s\" /></el-form-item>\n  </el-form>\n</template>\n<script lang=\"ts\" setup>\nconst form = reactive({ %s: '' })\n</script>\n", comment, pk, pk)
+	sql := fmt.Sprintf("-- menu for %s\n-- author: %s\n", comment, author)
+	return []map[string]any{
+		{"name": name + "Controller.php", "type": "php", "content": ctrl},
+		{"name": name + "Lists.php", "type": "php", "content": lists},
+		{"name": name + ".php", "type": "php", "content": modelPHP},
+		{"name": name + "Validate.php", "type": "php", "content": validate},
+		{"name": name + "Logic.php", "type": "php", "content": logic},
+		{"name": snake + ".ts", "type": "typescript", "content": vueAPI},
+		{"name": "index.vue", "type": "vue", "content": vueIndex},
+		{"name": "edit.vue", "type": "vue", "content": vueEdit},
+		{"name": snake + ".sql", "type": "sql", "content": sql},
+	}
+}
+
+func classDirNS(dir string) string {
+	dir = strings.Trim(dir, "\\/")
+	if dir == "" {
+		return ""
+	}
+	return "\\" + strings.ReplaceAll(dir, "/", "\\")
 }
 
 func toExported(s string) string {
@@ -323,16 +364,4 @@ func toExported(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func goType(colType string) string {
-	t := strings.ToLower(colType)
-	switch {
-	case strings.Contains(t, "int"):
-		return "int64"
-	case strings.Contains(t, "decimal"), strings.Contains(t, "float"), strings.Contains(t, "double"):
-		return "float64"
-	default:
-		return "string"
-	}
 }

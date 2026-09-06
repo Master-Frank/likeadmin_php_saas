@@ -14,6 +14,12 @@ go run ./cmd/api
 
 默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。
 
+Strangler 切流（API 走 Go，页面/未覆盖路径走 PHP）：
+
+```bash
+LIKEADMIN_STRANGLER=127.0.0.1:8090 LIKEADMIN_GO=http://127.0.0.1:8080 LIKEADMIN_PHP=http://127.0.0.1:8000 go run ./cmd/strangler
+```
+
 定时任务（循环执行 `la_dev_crontab`，`LIKEADMIN_CRON_ONCE=1` 只跑一轮）：
 
 ```bash

@@ -219,5 +219,56 @@ if [[ -n "$TENANT_HOST" ]]; then
   fi
 fi
 
+if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
+  cid="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_tenantapi_article.article_cate_lists.json")); print(((d.get("data") or {}).get("lists") or [{}])[0].get("id") or 0)')"
+  title="pairwrite$(date +%s)"
+  add_body="{\"cid\":$cid,\"title\":\"$title\",\"is_show\":1,\"content\":\"go-php-pair\",\"abstract\":\"pair\"}"
+  php_add="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$add_body")"
+  php_ac="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_add")"
+  echo "article_add php_code=$php_ac"
+  if [[ "$php_ac" != "1" ]]; then
+    echo "  php_add=$php_add"
+    fail=$((fail + 1))
+  fi
+  aid="$(python3 - <<PY
+import json,urllib.request
+req=urllib.request.Request("$PHP/tenantapi/article.article/lists?title=$title", headers={"Host":"$TENANT_HOST","token":"$TENANT_TOKEN"})
+data=json.load(urllib.request.urlopen(req))
+lists=(data.get("data") or {}).get("lists") or []
+print(lists[0]["id"] if lists else 0)
+PY
+)"
+  if [[ "$aid" != "0" && -n "$aid" ]]; then
+    php_d="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_d="$(curl -sS "$GO/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_dc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_d")"
+    go_dc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_d")"
+    echo "article_detail id=$aid php_code=$php_dc go_code=$go_dc"
+    if [[ "$php_dc" != "$go_dc" ]]; then
+      fail=$((fail + 1))
+    fi
+    edit_body="{\"id\":$aid,\"cid\":$cid,\"title\":\"${title}e\",\"is_show\":0,\"content\":\"edited\"}"
+    go_ed="$(curl -sS -X POST "$GO/tenantapi/article.article/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$edit_body")"
+    php_ed="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_edc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_ed")"
+    php_title="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("title") or "")' <<<"$php_ed")"
+    echo "article_edit go_code=$go_edc php_title=$php_title"
+    if [[ "$go_edc" != "1" || "$php_title" != "${title}e" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_del="$(curl -sS -X POST "$PHP/tenantapi/article.article/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$aid}")"
+    go_gone="$(curl -sS "$GO/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_delc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_del")"
+    go_gc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_gone")"
+    echo "article_delete php_code=$php_delc go_detail=$go_gc"
+    if [[ "$php_delc" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "article_add could not resolve id"
+    fail=$((fail + 1))
+  fi
+fi
+
 echo "failed=$fail"
 exit "$fail"

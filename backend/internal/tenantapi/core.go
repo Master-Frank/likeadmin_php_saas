@@ -336,6 +336,10 @@ func ArticleLists(c *gin.Context) {
 }
 
 func ArticleAdd(c *gin.Context) {
+	if msg := articleWriteCheck(c, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	a := model.Article{
 		Cid: httpx.Uint(c, "cid"), Title: httpx.Str(c, "title"), Desc: httpx.Str(c, "desc"),
 		Abstract: httpx.Str(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.Str(c, "image")),
@@ -347,7 +351,33 @@ func ArticleAdd(c *gin.Context) {
 	response.Success(c, "添加成功", nil)
 }
 
+func articleWriteCheck(c *gin.Context, needID bool) string {
+	if needID && httpx.Uint(c, "id") == 0 {
+		return "资讯id不能为空"
+	}
+	if needID {
+		var a model.Article
+		if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+			return "资讯不存在"
+		}
+	}
+	if httpx.Str(c, "title") == "" {
+		return "标题不能为空"
+	}
+	if len(httpx.Str(c, "title")) > 255 {
+		return "标题长度须在1-255位字符"
+	}
+	if httpx.Uint(c, "cid") == 0 {
+		return "所属栏目必须存在"
+	}
+	return ""
+}
+
 func ArticleEdit(c *gin.Context) {
+	if msg := articleWriteCheck(c, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	now := util.NowUnix()
 	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
@@ -359,6 +389,15 @@ func ArticleEdit(c *gin.Context) {
 }
 
 func ArticleDelete(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯id不能为空")
+		return
+	}
+	var a model.Article
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+		response.Fail(c, "资讯不存在")
+		return
+	}
 	now := util.NowUnix()
 	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
@@ -366,8 +405,8 @@ func ArticleDelete(c *gin.Context) {
 
 func ArticleDetail(c *gin.Context) {
 	var a model.Article
-	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "文章不存在")
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+		response.Fail(c, "资讯不存在")
 		return
 	}
 	response.Data(c, a)
