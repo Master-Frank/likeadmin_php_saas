@@ -535,6 +535,29 @@ except Exception:
     echo "article_add could not resolve id list=${list_json:0:300}"
     fail=$((fail + 1))
   fi
+  if command -v mysql >/dev/null; then
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    now="$(date +%s)"
+    mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (999,1,'pairleak','a','resource/image/x.png','','',1,0,$now)"
+    leak_id="$(mysqlq "SELECT id FROM la_article WHERE tenant_id=999 AND title='pairleak' ORDER BY id DESC LIMIT 1")"
+    if [[ -n "$leak_id" && "$leak_id" != "0" ]]; then
+      go_leak="$(curl -sS "$GO/tenantapi/article.article/detail?id=$leak_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      echo "article_cross_tenant go_msg=$(jget msg <<<"$go_leak")"
+      if [[ "$(jget msg <<<"$go_leak")" != *资讯不存在* ]]; then
+        echo "  go_leak=${go_leak:0:200}"
+        fail=$((fail + 1))
+      fi
+      if [[ -n "${UT:-}" ]]; then
+        go_uleak="$(curl -sS "$GO/api/article/detail?id=$leak_id" -H "Host: $TENANT_HOST" -H "token: $UT")"
+        go_utitle="$(jget data.title <<<"$go_uleak")"
+        echo "article_open_cross_tenant title=$go_utitle"
+        if [[ "$go_utitle" == "pairleak" ]]; then
+          fail=$((fail + 1))
+        fi
+      fi
+      mysqlq "DELETE FROM la_article WHERE id=$leak_id"
+    fi
+  fi
 
   cname="paircate$(date +%s)"
   php_cate="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cname\",\"is_show\":1,\"sort\":0}")"
@@ -1955,6 +1978,29 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
   fi
 else
   echo "  php_ta=${php_ta:0:300}"
+  fail=$((fail + 1))
+fi
+
+gsn="gd${ts: -6}"
+go_gta="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$gsn\",\"host_name\":\"$gsn\",\"account\":\"$gsn\",\"password\":\"likeadmin\",\"avatar\":\"\",\"tel\":\"13800000000\",\"domain_alias\":\"$gsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0,\"notes\":\"\"}")"
+echo "shared_tenant_add go_code=$(jcode <<<"$go_gta") go_msg=$(jget msg <<<"$go_gta")"
+if [[ "$(jcode <<<"$go_gta")" == "1" ]] && command -v mysql >/dev/null; then
+  glist="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$gsn" -H "token: $TOKEN")"
+  gid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
+' "$gsn" <<<"$glist")"
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  tpl_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  got_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=$gid AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  echo "shared_dept_copy id=$gid tpl=$tpl_dept got=$got_dept"
+  if [[ -z "$got_dept" || "$got_dept" != "$tpl_dept" ]]; then
+    fail=$((fail + 1))
+  fi
+  curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}" >/dev/null || true
+elif [[ "$(jcode <<<"$go_gta")" != "1" ]]; then
+  echo "  go_gta=${go_gta:0:240}"
   fail=$((fail + 1))
 fi
 

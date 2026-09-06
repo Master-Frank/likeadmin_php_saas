@@ -78,7 +78,7 @@ func DeptEdit(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "id")
 	var cur model.TenantDept
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&cur).Error != nil {
 		response.Fail(c, "当前部门信息缺失")
 		return
 	}
@@ -99,7 +99,7 @@ func DeptEdit(c *gin.Context) {
 		response.Fail(c, "部门名称已存在")
 		return
 	}
-	tdb(c).Model(&model.TenantDept{}).Where("id = ?", id).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "pid": pid, "sort": httpx.Int(c, "sort"),
 		"leader": httpx.Str(c, "leader"), "mobile": httpx.Str(c, "mobile"), "status": httpx.Int(c, "status"),
 	})
@@ -113,12 +113,12 @@ func DeptDelete(c *gin.Context) {
 		return
 	}
 	var cur model.TenantDept
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&cur).Error != nil {
 		response.Fail(c, "部门不存在")
 		return
 	}
 	var child int64
-	tdb(c).Model(&model.TenantDept{}).Where("pid = ? AND delete_time IS NULL", id).Count(&child)
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("pid = ? AND delete_time IS NULL", id), c).Count(&child)
 	if child > 0 {
 		response.Fail(c, "已关联下级部门,暂不可删除")
 		return
@@ -133,13 +133,13 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	tdb(c).Unscoped().Where("id = ?", id).Delete(&model.TenantDept{})
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Update("delete_time", util.NowUnix())
 	response.SuccessNotice(c, "删除成功")
 }
 
 func DeptDetail(c *gin.Context) {
 	var d model.TenantDept
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&d).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&d).Error != nil {
 		response.Fail(c, "部门不存在")
 		return
 	}
@@ -223,7 +223,7 @@ func JobsEdit(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "id")
 	var exist model.TenantJobs
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
@@ -235,7 +235,7 @@ func JobsEdit(c *gin.Context) {
 		response.Fail(c, "岗位编码已存在")
 		return
 	}
-	tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "code": httpx.Str(c, "code"), "sort": httpx.Int(c, "sort"),
 		"status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"),
 	})
@@ -249,7 +249,7 @@ func JobsDelete(c *gin.Context) {
 		return
 	}
 	var exist model.TenantJobs
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
@@ -259,13 +259,13 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	tdb(c).Unscoped().Where("id = ?", id).Delete(&model.TenantJobs{})
+	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Update("delete_time", util.NowUnix())
 	response.SuccessNotice(c, "删除成功")
 }
 
 func JobsDetail(c *gin.Context) {
 	var j model.TenantJobs
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&j).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&j).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
@@ -274,13 +274,13 @@ func JobsDetail(c *gin.Context) {
 
 func tenantDeptExists(c *gin.Context, id uint) bool {
 	var n int64
-	tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id).Count(&n)
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id), c).Count(&n)
 	return n > 0
 }
 
 func tenantDeptNameTaken(c *gin.Context, id uint, name string) bool {
 	var n int64
-	q := tdb(c).Model(&model.TenantDept{}).Where("name = ? AND delete_time IS NULL", name)
+	q := scopeTID(tdb(c).Model(&model.TenantDept{}).Where("name = ? AND delete_time IS NULL", name), c)
 	if id > 0 {
 		q = q.Where("id <> ?", id)
 	}
@@ -290,7 +290,7 @@ func tenantDeptNameTaken(c *gin.Context, id uint, name string) bool {
 
 func tenantJobsNameTaken(c *gin.Context, id uint, name string) bool {
 	var n int64
-	q := tdb(c).Model(&model.TenantJobs{}).Where("name = ? AND delete_time IS NULL", name)
+	q := scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("name = ? AND delete_time IS NULL", name), c)
 	if id > 0 {
 		q = q.Where("id <> ?", id)
 	}
@@ -300,7 +300,7 @@ func tenantJobsNameTaken(c *gin.Context, id uint, name string) bool {
 
 func tenantJobsCodeTaken(c *gin.Context, id uint, code string) bool {
 	var n int64
-	q := tdb(c).Model(&model.TenantJobs{}).Where("code = ? AND delete_time IS NULL", code)
+	q := scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("code = ? AND delete_time IS NULL", code), c)
 	if id > 0 {
 		q = q.Where("id <> ?", id)
 	}

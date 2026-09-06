@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -615,11 +616,9 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if err := tx.Create(&admin).Error; err != nil {
 		return err
 	}
-	dept := model.TenantDept{Name: "公司", Pid: 0, Sort: 0, Status: 1, TenantID: tenant.ID, CreateTime: util.NowUnix()}
-	if err := tx.Create(&dept).Error; err != nil {
+	if err := copyTenantDept(tx, tenant.ID, admin.ID); err != nil {
 		return err
 	}
-	_ = tx.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
 	if err := copyTenantMenus(tx, tenant.ID); err != nil {
 		return err
 	}
@@ -662,6 +661,21 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		return err
 	}
 	return sdb.Create(&model.TenantAdminDept{AdminID: 1, DeptID: 1}).Error
+}
+
+func copyTenantDept(tx *gorm.DB, tenantID, adminID uint) error {
+	var tpl model.TenantDept
+	if err := tx.Where("tenant_id = 0 AND delete_time IS NULL").First(&tpl).Error; err != nil {
+		return fmt.Errorf("部门模板缺失")
+	}
+	dept := model.TenantDept{
+		Name: tpl.Name, Pid: 0, Sort: tpl.Sort, Leader: tpl.Leader, Mobile: tpl.Mobile,
+		Status: tpl.Status, TenantID: tenantID, CreateTime: util.NowUnix(),
+	}
+	if err := tx.Create(&dept).Error; err != nil {
+		return err
+	}
+	return tx.Create(&model.TenantAdminDept{AdminID: adminID, DeptID: dept.ID}).Error
 }
 
 func copyTenantArticles(tx *gorm.DB, tenantID uint) error {

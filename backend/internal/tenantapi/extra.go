@@ -49,7 +49,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 		return
 	}
 	var row model.ArticleCate
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
@@ -57,7 +57,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_show", httpx.Int(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }
 
@@ -67,7 +67,7 @@ func ArticleUpdateStatus(c *gin.Context) {
 		return
 	}
 	var row model.Article
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
@@ -75,7 +75,7 @@ func ArticleUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_show", httpx.Int(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }
 

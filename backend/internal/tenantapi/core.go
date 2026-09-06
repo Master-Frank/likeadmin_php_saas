@@ -279,6 +279,13 @@ func tenantDB(c *gin.Context) uint {
 	return ctxutil.Get(c).TenantID
 }
 
+func scopeTID(db *gorm.DB, c *gin.Context) *gorm.DB {
+	if tid := tenantDB(c); tid > 0 {
+		return db.Where("tenant_id = ?", tid)
+	}
+	return db
+}
+
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -428,7 +435,7 @@ func ArticleLists(c *gin.Context) {
 		Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	cates := map[uint]string{}
 	var cateRows []model.ArticleCate
-	tdb(c).Find(&cateRows)
+	scopeTID(tdb(c).Where("delete_time IS NULL"), c).Find(&cateRows)
 	for _, cate := range cateRows {
 		cates[cate.ID] = cate.Name
 	}
@@ -470,7 +477,7 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	}
 	if needID {
 		var a model.Article
-		if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
 			return "资讯不存在"
 		}
 	}
@@ -498,7 +505,7 @@ func ArticleEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
 		"abstract": httpx.Str(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.Str(c, "image")),
 		"author": httpx.Str(c, "author"), "content": httpx.Str(c, "content"),
@@ -514,18 +521,18 @@ func ArticleDelete(c *gin.Context) {
 		return
 	}
 	var a model.Article
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 
 func ArticleDetail(c *gin.Context) {
 	var a model.Article
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
@@ -568,7 +575,7 @@ func articleCateWriteCheck(c *gin.Context, needID bool) string {
 			return "资讯分类id不能为空"
 		}
 		var row model.ArticleCate
-		if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 			return "资讯分类不存在"
 		}
 	}
@@ -600,7 +607,7 @@ func ArticleCateEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "sort": httpx.Int(c, "sort"), "is_show": httpx.Int(c, "is_show"),
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -612,18 +619,18 @@ func ArticleCateDelete(c *gin.Context) {
 		return
 	}
 	var row model.ArticleCate
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
 	var n int64
-	tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", httpx.Uint(c, "id")).Count(&n)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).Count(&n)
 	if n > 0 {
 		response.Fail(c, "资讯分类已使用，请先删除绑定该资讯分类的资讯")
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -643,7 +650,7 @@ func ArticleCateAll(c *gin.Context) {
 
 func articleCateMap(c *gin.Context, r model.ArticleCate) map[string]any {
 	var n int64
-	tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID), c).Count(&n)
 	showDesc := "停用"
 	if r.IsShow == 1 {
 		showDesc = "启用"
@@ -702,12 +709,12 @@ func DecoratePageSave(c *gin.Context) {
 		return
 	}
 	var page model.DecoratePage
-	if tdb(c).Where("id = ?", id).First(&page).Error != nil {
+	if scopeTID(tdb(c).Where("id = ?", id), c).First(&page).Error != nil {
 		response.Fail(c, "信息不存在")
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&page).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.DecoratePage{}).Where("id = ?", id), c).Updates(map[string]any{
 		"type": httpx.Int(c, "type"), "data": data,
 		"meta": decoratePayload(c, "meta"), "update_time": now,
 	})

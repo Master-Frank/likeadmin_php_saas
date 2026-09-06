@@ -51,7 +51,7 @@ func FileMove(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "update_time": now,
 	})
 	response.SuccessNotice(c, "移动成功")
@@ -64,7 +64,7 @@ func FileRename(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "update_time": now,
 	})
 	response.SuccessNotice(c, "重命名成功")
@@ -78,13 +78,13 @@ func FileDelete(c *gin.Context) {
 		return
 	}
 	var rows []model.TenantFile
-	tdb(c).Where("id IN ? AND delete_time IS NULL", ids).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ? AND delete_time IS NULL", ids), c).Find(&rows)
 	uris := make([]string, 0, len(rows))
 	for _, row := range rows {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	tdb(c).Unscoped().Where("id IN ?", ids).Delete(&model.TenantFile{})
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Update("delete_time", util.NowUnix())
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -127,7 +127,7 @@ func FileEditCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -142,18 +142,19 @@ func FileDelCate(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	ids := filesvc.CateIDsInclusive(tdb(c), &model.TenantFileCate{}, id)
 	var files []model.TenantFile
-	tdb(c).Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
+	scopeTID(tdb(c).Where("cid IN ? AND delete_time IS NULL", ids), c).Find(&files)
 	fileIDs := make([]uint, 0, len(files))
 	uris := make([]string, 0, len(files))
 	for _, f := range files {
 		fileIDs = append(fileIDs, f.ID)
 		uris = append(uris, f.URI)
 	}
+	now := util.NowUnix()
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		tdb(c).Unscoped().Where("id IN ?", fileIDs).Delete(&model.TenantFile{})
+		scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs), c).Update("delete_time", now)
 	}
-	tdb(c).Unscoped().Where("id IN ?", ids).Delete(&model.TenantFileCate{})
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids), c).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 

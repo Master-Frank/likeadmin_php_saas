@@ -525,7 +525,7 @@ func authAdminIDPresent(p map[string]any) bool {
 }
 
 func tenantAdminAccountTaken(c *gin.Context, account string, excludeID uint) bool {
-	q := tdb(c).Model(&model.TenantAdmin{}).Where("account = ? AND delete_time IS NULL", account)
+	q := scopeTID(tdb(c).Model(&model.TenantAdmin{}).Where("account = ? AND delete_time IS NULL", account), c)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -535,7 +535,7 @@ func tenantAdminAccountTaken(c *gin.Context, account string, excludeID uint) boo
 }
 
 func tenantAdminNameTaken(c *gin.Context, name string, excludeID uint) bool {
-	q := tdb(c).Model(&model.TenantAdmin{}).Where("name = ? AND delete_time IS NULL", name)
+	q := scopeTID(tdb(c).Model(&model.TenantAdmin{}).Where("name = ? AND delete_time IS NULL", name), c)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -644,7 +644,7 @@ func tenantMenuUniqueName(c *gin.Context, id uint, typ, name string) string {
 		return ""
 	}
 	var n int64
-	q := tdb(c).Model(&model.TenantSystemMenu{}).Where("type = ? AND name = ?", typ, name)
+	q := scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("type = ? AND name = ?", typ, name), c)
 	if id > 0 {
 		q = q.Where("id <> ?", id)
 	}
@@ -657,7 +657,7 @@ func tenantMenuUniqueName(c *gin.Context, id uint, typ, name string) string {
 
 func tenantRoleNameTaken(c *gin.Context, id uint, name string) bool {
 	var n int64
-	q := tdb(c).Model(&model.TenantSystemRole{}).Where("name = ? AND delete_time IS NULL", name)
+	q := scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("name = ? AND delete_time IS NULL", name), c)
 	if id > 0 {
 		q = q.Where("id <> ?", id)
 	}

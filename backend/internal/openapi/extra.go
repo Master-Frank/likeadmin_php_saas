@@ -94,7 +94,7 @@ func ArticleDetail(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, id)
 	var a model.Article
-	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {
 		response.Data(c, gin.H{"collect": collect})
 		return
 	}
@@ -525,7 +525,7 @@ func PcArticleDetail(c *gin.Context) {
 		source = "default"
 	}
 	var a model.Article
-	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {
 		response.Data(c, pcArticleMissing(c, id))
 		return
 	}
