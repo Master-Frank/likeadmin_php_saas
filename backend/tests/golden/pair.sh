@@ -911,8 +911,13 @@ except Exception:
     fi
     php_dr="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
     go_dr="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
-    echo "upgrade_dl_real id=$vid php_msg=$(jget msg <<<"$php_dr") go_msg=$(jget msg <<<"$go_dr")"
-    if [[ "$(jcode <<<"$php_dr")" != "$(jcode <<<"$go_dr")" || "$(jget msg <<<"$php_dr")" != "$(jget msg <<<"$go_dr")" ]]; then
+    php_drm="$(jget msg <<<"$php_dr")"
+    go_drm="$(jget msg <<<"$go_dr")"
+    echo "upgrade_dl_real id=$vid php_msg=$php_drm go_msg=$go_drm"
+    if [[ "$(jcode <<<"$php_dr")" != "$(jcode <<<"$go_dr")" ]]; then
+      fail=$((fail + 1))
+    elif [[ "$php_drm" != "$go_drm" && ! ( "$php_drm" == ip未授权:* && "$go_drm" == ip未授权:* ) ]]; then
+      # Remote license text embeds the caller's egress IP; PHP/Go may leave via different NICs.
       fail=$((fail + 1))
     fi
   fi

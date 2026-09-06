@@ -59,15 +59,18 @@ func FindLikeSQL(publicDir string) string {
 	return ""
 }
 
-func WriteEnv(path string, host, dbName, user, pass string, port int, prefix, httpHost string) error {
+func WriteEnv(path string, host, dbName, user, pass string, port int, prefix, httpHost, uniqueID string) error {
 	if prefix == "" {
 		prefix = "la_"
 	}
 	if port == 0 {
 		port = 3306
 	}
-	content := fmt.Sprintf("APP_DEBUG = true\n\n[APP]\nDEFAULT_TIMEZONE = Asia/Shanghai\n\n[DATABASE]\nTYPE = mysql\nHOSTNAME = \"%s\"\nDATABASE = \"%s\"\nUSERNAME = \"%s\"\nPASSWORD = \"%s\"\nHOSTPORT = \"%d\"\nCHARSET = utf8mb4\nPREFIX = \"%s\"\n\n[PROJECT]\nUNIQUE_IDENTIFICATION = likeadmin\nHTTP_HOST = \"%s\"\n",
-		host, dbName, user, pass, port, prefix, httpHost)
+	if uniqueID == "" {
+		uniqueID = "likeadmin"
+	}
+	content := fmt.Sprintf("APP_DEBUG = true\n\n[APP]\nDEFAULT_TIMEZONE = Asia/Shanghai\n\n[DATABASE]\nTYPE = mysql\nHOSTNAME = \"%s\"\nDATABASE = \"%s\"\nUSERNAME = \"%s\"\nPASSWORD = \"%s\"\nHOSTPORT = \"%d\"\nCHARSET = utf8mb4\nPREFIX = \"%s\"\n\n[PROJECT]\nUNIQUE_IDENTIFICATION = \"%s\"\nHTTP_HOST = \"%s\"\n",
+		host, dbName, user, pass, port, prefix, uniqueID, httpHost)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
