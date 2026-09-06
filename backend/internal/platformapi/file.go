@@ -50,26 +50,36 @@ func FileLists(c *gin.Context) {
 }
 
 func FileMove(c *gin.Context) {
+	p := httpx.Params(c)
 	ids := httpx.Uints(c, "ids")
-	cid := httpx.Uint(c, "cid")
-	if len(ids) > 0 {
-		bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("cid", cid)
+	if msg := util.FileMoveCheck(p, ids); msg != "" {
+		response.Fail(c, msg)
+		return
 	}
-	response.Success(c, "移动成功", nil)
+	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("cid", httpx.Uint(c, "cid"))
+	response.SuccessNotice(c, "移动成功")
 }
 
 func FileRename(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileRenameCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	bootstrap.DB.Model(&model.File{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "重命名成功")
 }
 
 func FileDelete(c *gin.Context) {
+	p := httpx.Params(c)
 	ids := httpx.Uints(c, "ids")
-	now := util.NowUnix()
-	if len(ids) > 0 {
-		bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("delete_time", now)
+	if msg := util.FileDeleteCheck(p, ids); msg != "" {
+		response.Fail(c, msg)
+		return
 	}
-	response.Success(c, "删除成功", nil)
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("delete_time", now)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func FileListCate(c *gin.Context) {
@@ -89,22 +99,37 @@ func FileListCate(c *gin.Context) {
 }
 
 func FileAddCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileAddCateCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	row := model.FileCate{Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"), CreateTime: util.NowUnix()}
 	bootstrap.DB.Create(&row)
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func FileEditCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileEditCateCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func FileDelCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileIDCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", id).Update("delete_time", now)
 	bootstrap.DB.Model(&model.File{}).Where("cid = ?", id).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func UploadImage(c *gin.Context) { uploadSave(c, 10, "uploads/images", config.C.Project.FileImage) }

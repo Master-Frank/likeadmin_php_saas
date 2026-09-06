@@ -88,6 +88,8 @@ paths=(
   /platformapi/dept.dept/leaderDept
   /platformapi/dept.jobs/lists
   /platformapi/notice.notice/settingLists
+  /platformapi/notice.notice/detail?id=1
+  /platformapi/setting.pay.pay_config/getConfig?id=1
   /platformapi/setting.dict.dict_type/lists
   /platformapi/tenant.tenant/lists
   /platformapi/setting.storage/lists
@@ -128,6 +130,9 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/setting.web.web_setting/getWebsite
     /tenantapi/setting.hot_search/getConfig
     /tenantapi/notice.notice/settingLists
+    /tenantapi/notice.notice/detail?id=1
+    /tenantapi/setting.pay.pay_config/getConfig?id=1
+    /tenantapi/file/listCate?type=10
     /tenantapi/finance.account_log/getUmChangeType
     /tenantapi/recharge.recharge/getConfig
     /tenantapi/channel.official_account_setting/getConfig
@@ -451,6 +456,135 @@ data["notes"]=sys.argv[1]
 print(json.dumps(data, ensure_ascii=False))
 ' "$old_notes" <<<"$td")"
   curl -sS -X POST "$PHP/platformapi/tenant.tenant/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$restore_t" >/dev/null
+
+  fname="pairfile$(date +%s)"
+  php_fa="$(curl -sS -X POST "$PHP/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"type\":10,\"pid\":0,\"name\":\"$fname\"}")"
+  echo "file_cate_add php_code=$(jcode <<<"$php_fa") php_msg=$(jget msg <<<"$php_fa")"
+  if [[ "$(jcode <<<"$php_fa")" != "1" ]]; then
+    echo "  php_fa=${php_fa:0:300}"
+    fail=$((fail + 1))
+  fi
+  flist="$(curl -sS "$GO/tenantapi/file/listCate?type=10" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  fid="$(python3 -c '
+import json,sys
+name=sys.argv[1]
+def walk(nodes):
+    for n in nodes or []:
+        if n.get("name")==name:
+            return n.get("id")
+        found=walk(n.get("children") or [])
+        if found:
+            return found
+    return 0
+d=json.loads(sys.stdin.read())
+print(walk((d.get("data") or {}).get("lists") or []))
+' "$fname" <<<"$flist")"
+  if [[ "$fid" != "0" && -n "$fid" ]]; then
+    go_fe="$(curl -sS -X POST "$GO/tenantapi/file/editCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$fid,\"name\":\"${fname}e\"}")"
+    echo "file_cate_edit go_code=$(jcode <<<"$go_fe") go_msg=$(jget msg <<<"$go_fe")"
+    if [[ "$(jcode <<<"$go_fe")" != "1" || "$(jget msg <<<"$go_fe")" != "编辑成功" ]]; then
+      echo "  go_fe=${go_fe:0:300}"
+      fail=$((fail + 1))
+    fi
+    php_fd="$(curl -sS -X POST "$PHP/tenantapi/file/delCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$fid}")"
+    echo "file_cate_delete php_code=$(jcode <<<"$php_fd")"
+    if [[ "$(jcode <<<"$php_fd")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "file_cate_add could not resolve id list=${flist:0:300}"
+    fail=$((fail + 1))
+  fi
+  php_fn="$(curl -sS -X POST "$PHP/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":0}')"
+  go_fn="$(curl -sS -X POST "$GO/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":0}')"
+  echo "file_cate_name php_msg=$(jget msg <<<"$php_fn") go_msg=$(jget msg <<<"$go_fn")"
+  if [[ "$(jget msg <<<"$php_fn")" != "$(jget msg <<<"$go_fn")" ]]; then
+    fail=$((fail + 1))
+  fi
+
+  nd="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_nd="$(curl -sS "$GO/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "notice_detail php_type=$(jget data.type <<<"$nd") go_type=$(jget data.type <<<"$go_nd")"
+  if [[ "$(jcode <<<"$nd")" != "$(jcode <<<"$go_nd")" || "$(jget data.type <<<"$nd")" != "$(jget data.type <<<"$go_nd")" ]]; then
+    echo "  php_nd=${nd:0:300}"
+    echo "  go_nd=${go_nd:0:300}"
+    fail=$((fail + 1))
+  fi
+  save_notice="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=d.get("data") or {}
+tpl={}
+for key in ("sms_notice","oa_notice","mnp_notice","system_notice"):
+    item=data.get(key)
+    if isinstance(item, dict):
+        item=dict(item)
+        if not item.get("type"):
+            item["type"]=key.removesuffix("_notice")
+        tpl[key]=item
+print(json.dumps({"id": data.get("id") or 1, "template": tpl}, ensure_ascii=False))
+' <<<"$nd")"
+  go_ns="$(curl -sS -X POST "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_notice")"
+  php_nd2="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "notice_set go_code=$(jcode <<<"$go_ns") php_type=$(jget data.type <<<"$php_nd2")"
+  if [[ "$(jcode <<<"$go_ns")" != "1" || "$(jcode <<<"$php_nd2")" != "1" ]]; then
+    echo "  go_ns=${go_ns:0:300}"
+    fail=$((fail + 1))
+  fi
+  php_ns="$(curl -sS -X POST "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_notice")"
+  echo "notice_set_restore php_code=$(jcode <<<"$php_ns")"
+  go_nbad="$(curl -sS -X POST "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  php_nbad="$(curl -sS -X POST "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  echo "notice_set_bad php_msg=$(jget msg <<<"$php_nbad") go_msg=$(jget msg <<<"$go_nbad")"
+  if [[ "$(jget msg <<<"$php_nbad")" != "$(jget msg <<<"$go_nbad")" ]]; then
+    fail=$((fail + 1))
+  fi
+
+  plist="$(curl -sS "$GO/tenantapi/setting.pay.pay_config/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  pay_id="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+row=next((x for x in ls if x.get("pay_way")==1), ls[0] if ls else {})
+print(row.get("id") or 0)
+' <<<"$plist")"
+  if [[ "$pay_id" != "0" && -n "$pay_id" ]]; then
+    php_pg="$(curl -sS "$PHP/tenantapi/setting.pay.pay_config/getConfig?id=$pay_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_pg="$(curl -sS "$GO/tenantapi/setting.pay.pay_config/getConfig?id=$pay_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "pay_get id=$pay_id php_code=$(jcode <<<"$php_pg") go_code=$(jcode <<<"$go_pg") php_name=$(jget data.name <<<"$php_pg") go_name=$(jget data.name <<<"$go_pg")"
+    if [[ "$(jcode <<<"$php_pg")" != "$(jcode <<<"$go_pg")" || "$(jget data.name <<<"$php_pg")" != "$(jget data.name <<<"$go_pg")" ]]; then
+      echo "  php_pg=${php_pg:0:300}"
+      echo "  go_pg=${go_pg:0:300}"
+      fail=$((fail + 1))
+    fi
+    old_remark="$(jget data.remark <<<"$php_pg")"
+    marker="pairpay$(date +%s)"
+    set_pay="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["remark"]=sys.argv[1]
+data.pop("domain", None)
+print(json.dumps(data, ensure_ascii=False))
+' "$marker" <<<"$php_pg")"
+    go_ps="$(curl -sS -X POST "$GO/tenantapi/setting.pay.pay_config/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$set_pay")"
+    php_pg2="$(curl -sS "$PHP/tenantapi/setting.pay.pay_config/getConfig?id=$pay_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "pay_set go_code=$(jcode <<<"$go_ps") php_remark=$(jget data.remark <<<"$php_pg2")"
+    if [[ "$(jcode <<<"$go_ps")" != "1" || "$(jget data.remark <<<"$php_pg2")" != "$marker" ]]; then
+      echo "  go_ps=${go_ps:0:400}"
+      echo "  set_pay=${set_pay:0:300}"
+      fail=$((fail + 1))
+    fi
+    restore_pay="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["remark"]=sys.argv[1]
+data.pop("domain", None)
+print(json.dumps(data, ensure_ascii=False))
+' "$old_remark" <<<"$php_pg")"
+    curl -sS -X POST "$PHP/tenantapi/setting.pay.pay_config/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$restore_pay" >/dev/null
+  fi
 fi
 
 echo "failed=$fail"

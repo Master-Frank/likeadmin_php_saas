@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
@@ -39,25 +41,46 @@ func PayConfigLists(c *gin.Context) {
 }
 
 func PayConfigGet(c *gin.Context) {
-	var r model.PayConfig
-	if bootstrap.DB.First(&r, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "配置不存在")
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "id不能为空")
 		return
 	}
-	var cfg any
-	_ = json.Unmarshal([]byte(r.Config), &cfg)
-	response.Success(c, "", gin.H{
-		"id": r.ID, "name": r.Name, "pay_way": r.PayWay, "icon": r.Icon, "sort": r.Sort, "remark": r.Remark, "config": cfg,
-	})
+	var r model.PayConfig
+	if bootstrap.DB.First(&r, id).Error != nil {
+		response.Fail(c, "支付方式不存在")
+		return
+	}
+	response.Success(c, "获取成功", biz.PayConfigView(
+		r.ID, r.Name, r.PayWay, filesvc.GetFileURL(c, r.Icon), r.Sort, r.Remark, r.Config, ctxutil.Domain(c),
+	))
 }
 
 func PayConfigSet(c *gin.Context) {
+	p := httpx.Params(c)
 	id := httpx.Uint(c, "id")
-	cfg, _ := json.Marshal(httpx.Any(c, "config"))
+	var r model.PayConfig
+	exists := bootstrap.DB.First(&r, id).Error == nil && r.ID > 0
+	var taken int64
+	if name := httpx.Str(c, "name"); name != "" {
+		bootstrap.DB.Model(&model.PayConfig{}).Where("name = ? AND id <> ?", name, id).Count(&taken)
+	}
+	_, sortOK := p["sort"]
+	_, cfgOK := p["config"]
+	in := biz.PayConfigInput{
+		ID: id, Name: httpx.Str(c, "name"), Icon: httpx.Str(c, "icon"), Remark: httpx.Str(c, "remark"),
+		Sort: httpx.Any(c, "sort"), SortPresent: sortOK, Config: httpx.Any(c, "config"), ConfigPresent: cfgOK,
+		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
+	}
+	if msg := biz.CheckPayConfig(in); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	bootstrap.DB.Model(&model.PayConfig{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "icon": httpx.Str(c, "icon"), "sort": httpx.Int(c, "sort"), "config": string(cfg),
+		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
+		"config": biz.BuildPayConfigJSON(r.PayWay, in.Config), "remark": in.Remark,
 	})
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func PayWayGet(c *gin.Context) {
@@ -186,28 +209,32 @@ func NoticeSettingLists(c *gin.Context) {
 }
 
 func NoticeDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var r model.NoticeSetting
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
-	response.Data(c, r)
+	if bootstrap.DB.First(&r, id).Error != nil || r.ID == 0 {
+		response.Data(c, []any{})
+		return
+	}
+	response.Data(c, biz.FormatNoticeDetail(
+		r.ID, r.Type, r.SceneID, r.SceneName, r.SceneDesc,
+		r.SystemNotice, r.SmsNotice, r.OaNotice, r.MnpNotice, r.Support,
+	))
 }
 
 func NoticeSet(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	p := httpx.Params(c)
-	b, _ := json.Marshal(p)
-	_ = b
-	updates := map[string]any{}
-	if v, ok := p["sms_notice"]; ok {
-		raw, _ := json.Marshal(v)
-		updates["sms_notice"] = string(raw)
+	var r model.NoticeSetting
+	exists := bootstrap.DB.First(&r, id).Error == nil && r.ID > 0
+	updates, err := biz.ApplyNoticeSet(exists, id, httpx.Any(c, "template"))
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
 	}
-	if v, ok := p["system_notice"]; ok {
-		raw, _ := json.Marshal(v)
-		updates["system_notice"] = string(raw)
-	}
-	if len(updates) > 0 {
-		bootstrap.DB.Model(&model.NoticeSetting{}).Where("id = ?", id).Updates(updates)
-	}
+	bootstrap.DB.Model(&model.NoticeSetting{}).Where("id = ?", id).Updates(updates)
 	response.Success(c, "设置成功", nil)
 }
 

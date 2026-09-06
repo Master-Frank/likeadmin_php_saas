@@ -1,8 +1,8 @@
 package tenantapi
 
 import (
-	"encoding/json"
-
+	"likeadmin/backend/internal/biz"
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -33,27 +33,50 @@ func PayConfigLists(c *gin.Context) {
 }
 
 func PayConfigGet(c *gin.Context) {
-	var r model.TenantPayConfig
-	if tdb(c).First(&r, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "配置不存在")
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "id不能为空")
 		return
 	}
-	var cfg any
-	_ = json.Unmarshal([]byte(r.Config), &cfg)
-	response.Success(c, "", gin.H{
-		"id": r.ID, "name": r.Name, "pay_way": r.PayWay, "icon": filesvc.GetFileURL(c, r.Icon),
-		"sort": r.Sort, "remark": r.Remark, "config": cfg,
-	})
+	var r model.TenantPayConfig
+	if tdb(c).First(&r, id).Error != nil {
+		response.Fail(c, "支付方式不存在")
+		return
+	}
+	response.Success(c, "获取成功", biz.PayConfigView(
+		r.ID, r.Name, r.PayWay, filesvc.GetFileURL(c, r.Icon), r.Sort, r.Remark, r.Config, ctxutil.Domain(c),
+	))
 }
 
 func PayConfigSet(c *gin.Context) {
+	p := httpx.Params(c)
 	id := httpx.Uint(c, "id")
-	cfg, _ := json.Marshal(httpx.Any(c, "config"))
+	var r model.TenantPayConfig
+	exists := tdb(c).First(&r, id).Error == nil && r.ID > 0
+	var taken int64
+	if name := httpx.Str(c, "name"); name != "" {
+		q := tdb(c).Model(&model.TenantPayConfig{}).Where("name = ? AND id <> ?", name, id)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Count(&taken)
+	}
+	_, sortOK := p["sort"]
+	_, cfgOK := p["config"]
+	in := biz.PayConfigInput{
+		ID: id, Name: httpx.Str(c, "name"), Icon: httpx.Str(c, "icon"), Remark: httpx.Str(c, "remark"),
+		Sort: httpx.Any(c, "sort"), SortPresent: sortOK, Config: httpx.Any(c, "config"), ConfigPresent: cfgOK,
+		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
+	}
+	if msg := biz.CheckPayConfig(in); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.TenantPayConfig{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "icon": filesvc.SetFileURL(c, httpx.Str(c, "icon")),
-		"sort": httpx.Int(c, "sort"), "config": string(cfg),
+		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
+		"config": biz.BuildPayConfigJSON(r.PayWay, in.Config), "remark": in.Remark,
 	})
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func PayWayGet(c *gin.Context) {

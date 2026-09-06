@@ -2,6 +2,7 @@ package util
 
 import (
 	"regexp"
+	"strings"
 	"unicode"
 )
 
@@ -98,6 +99,65 @@ func ValidChinaMobile(mobile string) string {
 		return "手机号码格式错误"
 	}
 	return ""
+}
+
+func FileNameCheck(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return "请填写分组名称"
+	}
+	if n := len([]rune(name)); n > 20 {
+		return "分组名称长度须为20字符内"
+	}
+	return ""
+}
+
+func FileMoveCheck(p map[string]any, ids []uint) string {
+	if _, ok := p["ids"]; !ok || len(ids) == 0 {
+		return "缺少ids参数"
+	}
+	if _, ok := p["cid"]; !ok {
+		return "缺少cid参数"
+	}
+	return ""
+}
+
+func FileDeleteCheck(p map[string]any, ids []uint) string {
+	if _, ok := p["ids"]; !ok || len(ids) == 0 {
+		return "缺少ids参数"
+	}
+	return ""
+}
+
+func FileIDCheck(p map[string]any) string {
+	if _, ok := p["id"]; !ok || ToInt(p["id"]) == 0 {
+		return "缺少id参数"
+	}
+	return ""
+}
+
+func FileAddCateCheck(p map[string]any) string {
+	if _, ok := p["type"]; !ok {
+		return "缺少type参数"
+	}
+	typ := ToInt(p["type"])
+	if typ != 10 && typ != 20 && typ != 30 {
+		return "type必须在 10,20,30 范围内"
+	}
+	if _, ok := p["pid"]; !ok {
+		return "缺少pid参数"
+	}
+	return FileNameCheck(ToString(p["name"]))
+}
+
+func FileEditCateCheck(p map[string]any) string {
+	if msg := FileIDCheck(p); msg != "" {
+		return msg
+	}
+	return FileNameCheck(ToString(p["name"]))
+}
+
+func FileRenameCheck(p map[string]any) string {
+	return FileEditCateCheck(p)
 }
 
 func LoginWayAllows(raw any, scene int) bool {

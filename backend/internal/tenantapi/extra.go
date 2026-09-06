@@ -1,8 +1,6 @@
 package tenantapi
 
 import (
-	"encoding/json"
-
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
@@ -639,26 +637,32 @@ func TenantNoticeLists(c *gin.Context) {
 }
 
 func TenantNoticeDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var r model.TenantNoticeSetting
-	tdb(c).First(&r, httpx.Uint(c, "id"))
-	response.Data(c, r)
+	if tdb(c).First(&r, id).Error != nil || r.ID == 0 {
+		response.Data(c, []any{})
+		return
+	}
+	response.Data(c, biz.FormatNoticeDetail(
+		r.ID, r.Type, r.SceneID, r.SceneName, r.SceneDesc,
+		r.SystemNotice, r.SmsNotice, r.OaNotice, r.MnpNotice, r.Support,
+	))
 }
 
 func TenantNoticeSet(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	p := httpx.Params(c)
-	updates := map[string]any{}
-	if v, ok := p["sms_notice"]; ok {
-		raw, _ := json.Marshal(v)
-		updates["sms_notice"] = string(raw)
+	var r model.TenantNoticeSetting
+	exists := tdb(c).First(&r, id).Error == nil && r.ID > 0
+	updates, err := biz.ApplyNoticeSet(exists, id, httpx.Any(c, "template"))
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
 	}
-	if v, ok := p["system_notice"]; ok {
-		raw, _ := json.Marshal(v)
-		updates["system_notice"] = string(raw)
-	}
-	if len(updates) > 0 {
-		tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id).Updates(updates)
-	}
+	tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id).Updates(updates)
 	response.Success(c, "设置成功", nil)
 }
 

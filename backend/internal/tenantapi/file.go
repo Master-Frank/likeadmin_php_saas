@@ -52,26 +52,36 @@ func FileLists(c *gin.Context) {
 }
 
 func FileMove(c *gin.Context) {
+	p := httpx.Params(c)
 	ids := httpx.Uints(c, "ids")
-	cid := httpx.Uint(c, "cid")
-	if len(ids) > 0 {
-		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("cid", cid)
+	if msg := util.FileMoveCheck(p, ids); msg != "" {
+		response.Fail(c, msg)
+		return
 	}
-	response.Success(c, "移动成功", nil)
+	tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("cid", httpx.Uint(c, "cid"))
+	response.SuccessNotice(c, "移动成功")
 }
 
 func FileRename(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileRenameCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "重命名成功")
 }
 
 func FileDelete(c *gin.Context) {
+	p := httpx.Params(c)
 	ids := httpx.Uints(c, "ids")
-	now := util.NowUnix()
-	if len(ids) > 0 {
-		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
+	if msg := util.FileDeleteCheck(p, ids); msg != "" {
+		response.Fail(c, msg)
+		return
 	}
-	response.Success(c, "删除成功", nil)
+	now := util.NowUnix()
+	tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func FileListCate(c *gin.Context) {
@@ -94,25 +104,40 @@ func FileListCate(c *gin.Context) {
 }
 
 func FileAddCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileAddCateCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	row := model.TenantFileCate{
 		Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&row)
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func FileEditCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileEditCateCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func FileDelCate(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.FileIDCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
 	now := util.NowUnix()
 	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", id).Update("delete_time", now)
 	tdb(c).Model(&model.TenantFile{}).Where("cid = ?", id).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func UploadImage(c *gin.Context) { tenantUpload(c, 10, "uploads/images", config.C.Project.FileImage) }

@@ -83,6 +83,31 @@ func TestLoginWayAllows(t *testing.T) {
 	}
 }
 
+func TestFileNameCheck(t *testing.T) {
+	if FileNameCheck("") != "请填写分组名称" {
+		t.Fatal(FileNameCheck(""))
+	}
+	long := "一二三四五六七八九十一二三四五六七八九十X"
+	if FileNameCheck(long) != "分组名称长度须为20字符内" {
+		t.Fatal(FileNameCheck(long))
+	}
+	if FileNameCheck("图片") != "" {
+		t.Fatal("expected ok")
+	}
+}
+
+func TestFileMoveCheck(t *testing.T) {
+	if FileMoveCheck(map[string]any{}, nil) != "缺少ids参数" {
+		t.Fatal("ids")
+	}
+	if FileMoveCheck(map[string]any{"ids": []any{1}}, []uint{1}) != "缺少cid参数" {
+		t.Fatal("cid")
+	}
+	if FileMoveCheck(map[string]any{"ids": []any{1}, "cid": 0}, []uint{1}) != "" {
+		t.Fatal("cid 0 should be allowed")
+	}
+}
+
 func TestParseDateTime(t *testing.T) {
 	if ParseDateTime("2024-01-02 03:04:05") == 0 {
 		t.Fatal("expected unix ts")
