@@ -636,14 +636,29 @@ func TenantNoticeLists(c *gin.Context) {
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
+func tenantNoticeByID(c *gin.Context, id uint) (model.TenantNoticeSetting, bool) {
+	var r model.TenantNoticeSetting
+	if id == 0 {
+		return r, false
+	}
+	q := tdb(c).Where("id = ?", id)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&r).Error != nil || r.ID == 0 {
+		return r, false
+	}
+	return r, true
+}
+
 func TenantNoticeDetail(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	var r model.TenantNoticeSetting
-	if tdb(c).First(&r, id).Error != nil || r.ID == 0 {
+	r, ok := tenantNoticeByID(c, id)
+	if !ok {
 		response.Data(c, []any{})
 		return
 	}
@@ -655,14 +670,17 @@ func TenantNoticeDetail(c *gin.Context) {
 
 func TenantNoticeSet(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	var r model.TenantNoticeSetting
-	exists := tdb(c).First(&r, id).Error == nil && r.ID > 0
+	_, exists := tenantNoticeByID(c, id)
 	updates, err := biz.ApplyNoticeSet(exists, id, httpx.Any(c, "template"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id).Updates(updates)
+	q := tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Updates(updates)
 	response.Success(c, "设置成功", nil)
 }
 

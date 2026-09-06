@@ -32,14 +32,29 @@ func PayConfigLists(c *gin.Context) {
 	response.Lists(c, out, int64(len(rows)), q.PageNo, q.PageSize, nil)
 }
 
+func tenantPayConfigByID(c *gin.Context, id uint) (model.TenantPayConfig, bool) {
+	var r model.TenantPayConfig
+	if id == 0 {
+		return r, false
+	}
+	q := tdb(c).Where("id = ?", id)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&r).Error != nil || r.ID == 0 {
+		return r, false
+	}
+	return r, true
+}
+
 func PayConfigGet(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	if id == 0 {
 		response.Fail(c, "id不能为空")
 		return
 	}
-	var r model.TenantPayConfig
-	if tdb(c).First(&r, id).Error != nil {
+	r, ok := tenantPayConfigByID(c, id)
+	if !ok {
 		response.Fail(c, "支付方式不存在")
 		return
 	}
@@ -51,8 +66,7 @@ func PayConfigGet(c *gin.Context) {
 func PayConfigSet(c *gin.Context) {
 	p := httpx.Params(c)
 	id := httpx.Uint(c, "id")
-	var r model.TenantPayConfig
-	exists := tdb(c).First(&r, id).Error == nil && r.ID > 0
+	r, exists := tenantPayConfigByID(c, id)
 	var taken int64
 	if name := httpx.Str(c, "name"); name != "" {
 		q := tdb(c).Model(&model.TenantPayConfig{}).Where("name = ? AND id <> ?", name, id)
@@ -72,7 +86,11 @@ func PayConfigSet(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.TenantPayConfig{}).Where("id = ?", id).Updates(map[string]any{
+	q := tdb(c).Model(&model.TenantPayConfig{}).Where("id = ?", id)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Updates(map[string]any{
 		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
 		"config": biz.BuildPayConfigJSON(r.PayWay, in.Config), "remark": in.Remark,
 	})

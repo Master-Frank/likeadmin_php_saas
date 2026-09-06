@@ -130,8 +130,6 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/setting.web.web_setting/getWebsite
     /tenantapi/setting.hot_search/getConfig
     /tenantapi/notice.notice/settingLists
-    /tenantapi/notice.notice/detail?id=1
-    /tenantapi/setting.pay.pay_config/getConfig?id=1
     /tenantapi/file/listCate?type=10
     /tenantapi/finance.account_log/getUmChangeType
     /tenantapi/recharge.recharge/getConfig
@@ -502,9 +500,16 @@ print(walk((d.get("data") or {}).get("lists") or []))
     fail=$((fail + 1))
   fi
 
-  nd="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  go_nd="$(curl -sS "$GO/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  echo "notice_detail php_type=$(jget data.type <<<"$nd") go_type=$(jget data.type <<<"$go_nd")"
+  nlist="$(curl -sS "$GO/tenantapi/notice.notice/settingLists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  nid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+print(ls[0]["id"] if ls else 0)
+' <<<"$nlist")"
+  nd="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=$nid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_nd="$(curl -sS "$GO/tenantapi/notice.notice/detail?id=$nid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "notice_detail id=$nid php_type=$(jget data.type <<<"$nd") go_type=$(jget data.type <<<"$go_nd")"
   if [[ "$(jcode <<<"$nd")" != "$(jcode <<<"$go_nd")" || "$(jget data.type <<<"$nd")" != "$(jget data.type <<<"$go_nd")" ]]; then
     echo "  php_nd=${nd:0:300}"
     echo "  go_nd=${go_nd:0:300}"
@@ -522,10 +527,10 @@ for key in ("sms_notice","oa_notice","mnp_notice","system_notice"):
         if not item.get("type"):
             item["type"]=key.removesuffix("_notice")
         tpl[key]=item
-print(json.dumps({"id": data.get("id") or 1, "template": tpl}, ensure_ascii=False))
-' <<<"$nd")"
+print(json.dumps({"id": data.get("id") or int(sys.argv[1]), "template": tpl}, ensure_ascii=False))
+' "$nid" <<<"$nd")"
   go_ns="$(curl -sS -X POST "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_notice")"
-  php_nd2="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_nd2="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=$nid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "notice_set go_code=$(jcode <<<"$go_ns") php_type=$(jget data.type <<<"$php_nd2")"
   if [[ "$(jcode <<<"$go_ns")" != "1" || "$(jcode <<<"$php_nd2")" != "1" ]]; then
     echo "  go_ns=${go_ns:0:300}"
@@ -533,8 +538,8 @@ print(json.dumps({"id": data.get("id") or 1, "template": tpl}, ensure_ascii=Fals
   fi
   php_ns="$(curl -sS -X POST "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_notice")"
   echo "notice_set_restore php_code=$(jcode <<<"$php_ns")"
-  go_nbad="$(curl -sS -X POST "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
-  php_nbad="$(curl -sS -X POST "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  go_nbad="$(curl -sS -X POST "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$nid}")"
+  php_nbad="$(curl -sS -X POST "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$nid}")"
   echo "notice_set_bad php_msg=$(jget msg <<<"$php_nbad") go_msg=$(jget msg <<<"$go_nbad")"
   if [[ "$(jget msg <<<"$php_nbad")" != "$(jget msg <<<"$go_nbad")" ]]; then
     fail=$((fail + 1))
