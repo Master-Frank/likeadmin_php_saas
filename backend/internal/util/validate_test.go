@@ -212,6 +212,69 @@ func TestDictTypeWriteCheck(t *testing.T) {
 	}
 }
 
+func TestUploadExtCheck(t *testing.T) {
+	img := []string{"jpg", "png"}
+	vid := []string{"mp4"}
+	file := []string{"txt", "pdf"}
+	if UploadExtCheck("image", "exe", img, vid, file) != "不允许上传exe后缀文件" {
+		t.Fatal(UploadExtCheck("image", "exe", img, vid, file))
+	}
+	if UploadExtCheck("image", "txt", img, vid, file) != "上传图片不允许上传txt文件" {
+		t.Fatal(UploadExtCheck("image", "txt", img, vid, file))
+	}
+	if UploadExtCheck("image", "jpg", img, vid, file) != "" {
+		t.Fatal("jpg should pass")
+	}
+}
+
+func TestAdminEditSelfCheck(t *testing.T) {
+	if AdminEditSelfCheck(map[string]any{}) != "请填写名称" {
+		t.Fatal(AdminEditSelfCheck(map[string]any{}))
+	}
+	if AdminEditSelfCheck(map[string]any{"name": "n"}) != "请选择头像" {
+		t.Fatal("avatar")
+	}
+	if AdminEditSelfCheck(map[string]any{"name": "n", "avatar": "a.png", "password": "123456"}) != "请填写当前密码" {
+		t.Fatal("old")
+	}
+}
+
+func TestMenuRoleDeptJobsCheck(t *testing.T) {
+	if MenuWriteCheck(map[string]any{}, false) != "请选择上级菜单" {
+		t.Fatal(MenuWriteCheck(map[string]any{}, false))
+	}
+	if RoleWriteCheck(map[string]any{}, false) != "请输入角色名称" {
+		t.Fatal(RoleWriteCheck(map[string]any{}, false))
+	}
+	if DeptWriteCheck(map[string]any{}, false) != "请选择上级部门" {
+		t.Fatal(DeptWriteCheck(map[string]any{}, false))
+	}
+	if JobsWriteCheck(map[string]any{}, false) != "请填写岗位名称" {
+		t.Fatal(JobsWriteCheck(map[string]any{}, false))
+	}
+}
+
+func TestPayQueryCheck(t *testing.T) {
+	if PayQueryCheck(map[string]any{}) != "参数缺失" {
+		t.Fatal("from")
+	}
+	if PayQueryCheck(map[string]any{"from": "recharge"}) != "订单参数缺失" {
+		t.Fatal("order")
+	}
+}
+
+func TestDbFieldType(t *testing.T) {
+	if DbFieldType("varchar(255)") != "string" {
+		t.Fatal(DbFieldType("varchar(255)"))
+	}
+	if DbFieldType("int(11)") != "int" {
+		t.Fatal(DbFieldType("int(11)"))
+	}
+	if DbFieldType("decimal(10,2)") != "float" {
+		t.Fatal(DbFieldType("decimal(10,2)"))
+	}
+}
+
 func TestParseDateTime(t *testing.T) {
 	if ParseDateTime("2024-01-02 03:04:05") == 0 {
 		t.Fatal("expected unix ts")

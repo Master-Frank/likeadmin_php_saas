@@ -53,6 +53,13 @@ func FormatDateTime(ts int64) string {
 	return time.Unix(ts, 0).In(time.Local).Format("2006-01-02 15:04:05")
 }
 
+func FormatDateTimeMinute(ts int64) string {
+	if ts <= 0 {
+		return ""
+	}
+	return time.Unix(ts, 0).In(time.Local).Format("2006-01-02 15:04")
+}
+
 func FormatDateTimePtr(ts *int64) string {
 	if ts == nil || *ts <= 0 {
 		return ""

@@ -87,7 +87,7 @@ func DecorateDataArticle(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
 		})
 	}
@@ -96,11 +96,7 @@ func DecorateDataArticle(c *gin.Context) {
 
 func DecorateDataPC(c *gin.Context) {
 	var p model.DecoratePage
-	db := tdb(c).Where("type = 4")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	_ = db.First(&p)
+	_ = tdb(c).First(&p, 4)
 	update := util.FormatDateTimePtr(p.UpdateTime)
 	if update == "" {
 		update = util.FormatDateTime(util.NowUnix())

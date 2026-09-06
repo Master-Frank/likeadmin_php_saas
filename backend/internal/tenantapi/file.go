@@ -1,18 +1,12 @@
 package tenantapi
 
 import (
-	"path/filepath"
-	"strings"
-	"time"
-
-	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
-	"likeadmin/backend/internal/storage"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -33,9 +27,7 @@ func FileLists(c *gin.Context) {
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
-	if _, ok := q.Params["cid"]; ok {
-		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
-	}
+	db = filesvc.ApplyFileCID(db, &model.TenantFileCate{}, q.Params)
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantFile
@@ -79,6 +71,13 @@ func FileDelete(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	var rows []model.TenantFile
+	tdb(c).Where("id IN ? AND delete_time IS NULL", ids).Find(&rows)
+	uris := make([]string, 0, len(rows))
+	for _, row := range rows {
+		uris = append(uris, row.URI)
+	}
+	filesvc.DeleteStored(c, uris...)
 	now := util.NowUnix()
 	tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
@@ -134,54 +133,36 @@ func FileDelCate(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
+	ids := filesvc.CateIDsInclusive(tdb(c), &model.TenantFileCate{}, id)
 	now := util.NowUnix()
-	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", id).Update("delete_time", now)
-	tdb(c).Model(&model.TenantFile{}).Where("cid = ?", id).Update("delete_time", now)
+	tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids).Update("delete_time", now)
+	var files []model.TenantFile
+	tdb(c).Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
+	fileIDs := make([]uint, 0, len(files))
+	uris := make([]string, 0, len(files))
+	for _, f := range files {
+		fileIDs = append(fileIDs, f.ID)
+		uris = append(uris, f.URI)
+	}
+	if len(fileIDs) > 0 {
+		filesvc.DeleteStored(c, uris...)
+		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs).Update("delete_time", now)
+	}
 	response.SuccessNotice(c, "删除成功")
 }
 
-func UploadImage(c *gin.Context) { tenantUpload(c, 10, "uploads/images", config.C.Project.FileImage) }
-func UploadVideo(c *gin.Context) { tenantUpload(c, 20, "uploads/video", config.C.Project.FileVideo) }
-func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", config.C.Project.FileFile) }
+func UploadImage(c *gin.Context) { tenantUpload(c, 10, "uploads/images", "image") }
+func UploadVideo(c *gin.Context) { tenantUpload(c, 20, "uploads/video", "video") }
+func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", "file") }
 
-func tenantUpload(c *gin.Context, typ int, dir string, allow []string) {
-	fh, err := c.FormFile("file")
-	if err != nil {
-		response.Fail(c, "请选择文件")
+func tenantUpload(c *gin.Context, typ int, dir, scene string) {
+	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
+	if errMsg != "" {
+		response.Fail(c, errMsg)
 		return
-	}
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fh.Filename), "."))
-	ok := false
-	for _, a := range allow {
-		if a == ext {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		response.Fail(c, "不支持的文件类型")
-		return
-	}
-	name := time.Now().Format("20060102150405") + util.MD5(fh.Filename)[:8] + "." + ext
-	rel := filepath.ToSlash(filepath.Join(dir, time.Now().Format("20060102"), name))
-	src, err := fh.Open()
-	if err != nil {
-		response.Fail(c, err.Error())
-		return
-	}
-	defer src.Close()
-	if _, err = storage.Save(c, rel, src, fh.Size, fh.Header.Get("Content-Type")); err != nil {
-		response.Fail(c, err.Error())
-		return
-	}
-	cid := uint(0)
-	if v := c.PostForm("cid"); v != "" {
-		cid = uint(util.ParseInt(v))
-	} else {
-		cid = httpx.Uint(c, "cid")
 	}
 	row := model.TenantFile{
-		Cid: cid, Type: typ, Name: fh.Filename, URI: rel, Source: 2,
+		Cid: filesvc.UploadCID(c), Type: typ, Name: name, URI: rel, Source: filesvc.SourceAdmin,
 		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&row)

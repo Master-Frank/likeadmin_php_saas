@@ -14,10 +14,8 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/pay"
-	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
-	"likeadmin/backend/internal/tenantapi"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
@@ -56,34 +54,42 @@ func ArticleCancelCollect(c *gin.Context) {
 func ArticleCollect(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND status = 1 AND delete_time IS NULL", uid)
-	var count int64
-	db.Count(&count)
 	var cols []model.ArticleCollect
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&cols)
+	tdb(c).Where("user_id = ? AND status = 1 AND delete_time IS NULL", uid).Order("id desc").Find(&cols)
 	ids := make([]uint, 0, len(cols))
 	for _, col := range cols {
 		ids = append(ids, col.ArticleID)
 	}
 	var arts []model.Article
 	if len(ids) > 0 {
-		tdb(c).Where("id IN ? AND delete_time IS NULL", ids).Find(&arts)
+		tdb(c).Where("id IN ? AND is_show = 1 AND delete_time IS NULL", ids).Find(&arts)
 	}
 	byID := map[uint]model.Article{}
 	for _, a := range arts {
 		byID[a.ID] = a
 	}
-	out := make([]map[string]any, 0, len(cols))
+	filtered := make([]model.ArticleCollect, 0, len(cols))
 	for _, col := range cols {
-		a := byID[col.ArticleID]
-		if a.ID == 0 {
-			continue
+		if _, ok := byID[col.ArticleID]; ok {
+			filtered = append(filtered, col)
 		}
+	}
+	count := int64(len(filtered))
+	start, end := q.Offset, q.Offset+q.PageSize
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	out := make([]map[string]any, 0, end-start)
+	for _, col := range filtered[start:end] {
+		a := byID[col.ArticleID]
 		out = append(out, map[string]any{
-			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+			"id": col.ID, "article_id": col.ArticleID, "title": a.Title,
+			"image": filesvc.GetFileURL(c, a.Image), "desc": a.Desc, "is_show": a.IsShow,
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
-			"collect": 1,
+			"collect_time": util.FormatDateTimeMinute(col.CreateTime),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -156,6 +162,10 @@ func RechargeConfig(c *gin.Context) {
 }
 
 func PayWay(c *gin.Context) {
+	if msg := util.PayQueryCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
 	if from != "recharge" {
@@ -290,6 +300,10 @@ func PayPrepay(c *gin.Context) {
 }
 
 func PayStatus(c *gin.Context) {
+	if msg := util.PayQueryCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
 	uid := ctxutil.Get(c).UserID
@@ -402,14 +416,14 @@ func UserResetPassword(c *gin.Context) {
 }
 
 func UserBindMobile(c *gin.Context) {
+	if !phpRequiredParam(httpx.Params(c), "code") {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	u := currentUser(c)
 	mobile := httpx.Str(c, "mobile")
 	code := httpx.Str(c, "code")
 	typ := httpx.Str(c, "type")
-	if mobile == "" {
-		response.Fail(c, "请输入手机号")
-		return
-	}
 	scene := "BGSJHM"
 	if typ == "bind" {
 		scene = "BDSJHM"
@@ -604,9 +618,30 @@ func IndexIndex(c *gin.Context) {
 }
 
 func UploadImage(c *gin.Context) {
-	if ctxutil.Get(c).TenantID > 0 || ctxutil.Get(c).Source == ctxutil.SourceTenant {
-		tenantapi.UploadImage(c)
+	name, rel, errMsg := filesvc.ReceiveUpload(c, "image", "uploads/images")
+	if errMsg != "" {
+		response.Fail(c, errMsg)
 		return
 	}
-	platformapi.UploadImage(c)
+	row := model.TenantFile{
+		Cid: filesvc.UploadCID(c), Type: 10, Name: name, URI: rel,
+		Source: filesvc.SourceUser, SourceID: ctxutil.Get(c).UserID,
+		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
+	}
+	if err := tdb(c).Create(&row).Error; err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, "上传成功", gin.H{
+		"id": row.ID, "cid": row.Cid, "type": row.Type, "name": row.Name,
+		"uri": filesvc.GetFileURL(c, rel), "url": rel,
+	})
+}
+
+func phpRequiredParam(p map[string]any, key string) bool {
+	v, ok := p[key]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
 }

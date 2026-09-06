@@ -53,17 +53,39 @@ func MenuDetail(c *gin.Context) {
 }
 
 func MenuAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.MenuWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	if msg := menuUniqueName(0, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	m := menuFromReq(c)
 	m.CreateTime = util.NowUnix()
 	if err := bootstrap.DB.Create(&m).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func MenuEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.MenuWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
+	if id == httpx.Uint(c, "pid") {
+		response.Fail(c, "上级菜单不能选择自己")
+		return
+	}
+	if msg := menuUniqueName(id, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	m := menuFromReq(c)
 	now := util.NowUnix()
 	m.UpdateTime = &now
@@ -71,30 +93,43 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func MenuDelete(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	var child int64
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("pid = ?", id).Count(&child)
 	if child > 0 {
-		response.Fail(c, "请先删除子菜单")
+		response.Fail(c, "存在子菜单,不允许删除")
+		return
+	}
+	var bind int64
+	bootstrap.DB.Model(&model.SystemRoleMenu{}).Where("menu_id = ?", id).Count(&bind)
+	if bind > 0 {
+		response.Fail(c, "已分配菜单不可删除")
 		return
 	}
 	bootstrap.DB.Delete(&model.SystemMenu{}, id)
-	bootstrap.DB.Where("menu_id = ?", id).Delete(&model.SystemRoleMenu{})
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func MenuUpdateStatus(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("id = ?", id).Updates(map[string]any{
 		"is_disable":  httpx.Int(c, "is_disable"),
 		"update_time": now,
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func RoleLists(c *gin.Context) {
@@ -127,6 +162,15 @@ func RoleLists(c *gin.Context) {
 }
 
 func RoleAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.RoleWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	if roleNameTaken(0, httpx.Str(c, "name")) {
+		response.Fail(c, "角色名称已存在")
+		return
+	}
 	now := util.NowUnix()
 	r := model.SystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), CreateTime: now}
 	if err := bootstrap.DB.Create(&r).Error; err != nil {
@@ -136,11 +180,25 @@ func RoleAdd(c *gin.Context) {
 	for _, id := range httpx.Uints(c, "menu_id") {
 		bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func RoleEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.RoleWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
+	var exist model.SystemRole
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+		response.Fail(c, "角色不存在")
+		return
+	}
+	if roleNameTaken(id, httpx.Str(c, "name")) {
+		response.Fail(c, "角色名称已存在")
+		return
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"), "update_time": now,
@@ -149,15 +207,30 @@ func RoleEdit(c *gin.Context) {
 	for _, mid := range httpx.Uints(c, "menu_id") {
 		bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: id, MenuID: mid})
 	}
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func RoleDelete(c *gin.Context) {
 	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "请选择角色")
+		return
+	}
+	var exist model.SystemRole
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+		response.Fail(c, "角色不存在")
+		return
+	}
+	var used int64
+	bootstrap.DB.Model(&model.AdminRole{}).Where("role_id = ?", id).Count(&used)
+	if used > 0 {
+		response.Fail(c, "有管理员在使用该角色，不允许删除")
+		return
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Update("delete_time", now)
 	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func RoleDetail(c *gin.Context) {
@@ -266,4 +339,30 @@ func buttonPerms(admin model.Admin) []string {
 
 func mustAdminID(c *gin.Context) uint {
 	return ctxutil.Get(c).AdminID
+}
+
+func menuUniqueName(id uint, typ, name string) string {
+	if typ != "M" {
+		return ""
+	}
+	var n int64
+	q := bootstrap.DB.Model(&model.SystemMenu{}).Where("type = ? AND name = ?", typ, name)
+	if id > 0 {
+		q = q.Where("id <> ?", id)
+	}
+	q.Count(&n)
+	if n > 0 {
+		return "菜单名称已存在"
+	}
+	return ""
+}
+
+func roleNameTaken(id uint, name string) bool {
+	var n int64
+	q := bootstrap.DB.Model(&model.SystemRole{}).Where("name = ? AND delete_time IS NULL", name)
+	if id > 0 {
+		q = q.Where("id <> ?", id)
+	}
+	q.Count(&n)
+	return n > 0
 }

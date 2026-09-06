@@ -127,7 +127,7 @@ func GeneratorSelectTable(c *gin.Context) {
 			Name: name, TableComment: comment, Author: "likeadmin",
 			ModuleName: "platform", ClassDir: strings.TrimPrefix(name, config.Prefix()),
 			GenerateType: 1, Menu: util.EncodeJSON(map[string]any{"pid": 0, "type": 1, "name": comment}),
-			Delete: util.EncodeJSON(map[string]any{"type": 1, "name": "delete_time"}),
+			Delete:    util.EncodeJSON(map[string]any{"type": 1, "name": "delete_time"}),
 			Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
 			AdminID: adminID, CreateTime: now,
 		}
@@ -152,10 +152,14 @@ func GeneratorDetail(c *gin.Context) {
 }
 
 func GeneratorSyncColumn(c *gin.Context) {
+	if _, ok := httpx.Params(c)["id"]; !ok || httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
-		response.Fail(c, "记录不存在")
+		response.Fail(c, "信息不存在")
 		return
 	}
 	bootstrap.DB.Where("table_id = ?", id).Delete(&model.GenerateColumn{})
@@ -347,24 +351,32 @@ func generatorRuntime() string {
 func GeneratorGetModels(c *gin.Context) {
 	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", "common", "model")
 	out := []string{}
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil || info.IsDir() || !strings.HasSuffix(path, ".php") {
-			return nil
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		response.Result(c, 1, 1, "", out)
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			sub, err := os.ReadDir(filepath.Join(root, entry.Name()))
+			if err != nil {
+				continue
+			}
+			for _, item := range sub {
+				if item.IsDir() || !strings.HasSuffix(item.Name(), ".php") {
+					continue
+				}
+				out = append(out, `\app\common\model\`+entry.Name()+`\`+strings.TrimSuffix(item.Name(), ".php"))
+			}
+			continue
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return nil
+		base := strings.TrimSuffix(entry.Name(), ".php")
+		if base == "BaseModel" || !strings.HasSuffix(entry.Name(), ".php") {
+			continue
 		}
-		rel = strings.TrimSuffix(rel, ".php")
-		parts := strings.Split(rel, string(os.PathSeparator))
-		name := `\app\common\model`
-		for _, p := range parts {
-			name += `\` + p
-		}
-		out = append(out, name)
-		return nil
-	})
-	response.Data(c, out)
+		out = append(out, `\app\common\model\`+base)
+	}
+	response.Result(c, 1, 1, "", out)
 }
 
 func syncColumns(tableID uint, tableName string) {
@@ -393,7 +405,7 @@ func syncColumns(tableID uint, tableName string) {
 		}
 		bootstrap.DB.Create(&model.GenerateColumn{
 			TableID: tableID, ColumnName: col.ColumnName, ColumnComment: col.ColumnComment,
-			ColumnType: col.ColumnType, IsPk: pk, IsRequired: req,
+			ColumnType: util.DbFieldType(col.ColumnType), IsPk: pk, IsRequired: req,
 			IsInsert: ins, IsUpdate: upd, IsLists: lists, IsQuery: query,
 			QueryType: "=", ViewType: "input", CreateTime: now,
 		})

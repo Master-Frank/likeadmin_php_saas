@@ -189,7 +189,7 @@ func AdminDelete(c *gin.Context) {
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminRole{})
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminDept{})
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminJobs{})
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminDetail(c *gin.Context) {
@@ -243,6 +243,11 @@ func AdminMySelf(c *gin.Context) {
 }
 
 func AdminEditSelf(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.AdminEditSelfCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	meta := ctxutil.Get(c)
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", meta.AdminID).First(&admin).Error != nil {
@@ -256,14 +261,14 @@ func AdminEditSelf(c *gin.Context) {
 	}
 	if pwd := httpx.Str(c, "password"); pwd != "" {
 		old := httpx.Str(c, "password_old")
-		if old != "" && admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
-			response.Fail(c, "原密码错误")
+		if admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
+			response.Fail(c, "当前密码错误")
 			return
 		}
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	bootstrap.DB.Model(&admin).Updates(data)
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func saveAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {

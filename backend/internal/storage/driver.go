@@ -26,6 +26,34 @@ type SaveResult struct {
 	Engine string
 }
 
+func Delete(c *gin.Context, uri string) error {
+	if uri == "" {
+		return nil
+	}
+	engine := cfgsvc.GetString(c, "storage", "default", "local")
+	if engine == "" {
+		engine = "local"
+	}
+	key := strings.TrimLeft(uri, "/")
+	if engine == "local" {
+		abs := filepath.Join(config.C.App.PublicDir, key)
+		if _, err := os.Stat(abs); err != nil {
+			return nil
+		}
+		return os.Remove(abs)
+	}
+	cfg := asMap(cfgsvc.Get(c, "storage", engine, map[string]any{}))
+	switch engine {
+	case "qiniu", "aliyun", "qcloud":
+		if str(cfg, "access_key") == "" || str(cfg, "secret_key") == "" || str(cfg, "bucket") == "" {
+			return nil
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType string) (SaveResult, error) {
 	engine := cfgsvc.GetString(c, "storage", "default", "local")
 	if engine == "" {

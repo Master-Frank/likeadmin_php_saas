@@ -863,3 +863,230 @@ func LoginWayAllows(raw any, scene int) bool {
 		return ToInt(raw) == scene
 	}
 }
+
+func UploadExtCheck(scene, ext string, images, videos, files []string) string {
+	ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
+	in := func(list []string) bool {
+		for _, item := range list {
+			if strings.EqualFold(strings.TrimSpace(item), ext) {
+				return true
+			}
+		}
+		return false
+	}
+	all := append(append(append([]string{}, images...), videos...), files...)
+	if !in(all) {
+		return "不允许上传" + ext + "后缀文件"
+	}
+	switch scene {
+	case "image":
+		if !in(images) {
+			return "上传图片不允许上传" + ext + "文件"
+		}
+	case "video":
+		if !in(videos) {
+			return "上传视频不允许上传" + ext + "文件"
+		}
+	default:
+		if !in(files) {
+			return "上传文件不允许上传" + ext + "文件"
+		}
+	}
+	return ""
+}
+
+func AdminEditSelfCheck(p map[string]any) string {
+	if !phpRequired(p, "name") {
+		return "请填写名称"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 16 {
+		return "名称须在1-16位字符"
+	}
+	if !phpRequired(p, "avatar") {
+		return "请选择头像"
+	}
+	if !phpRequired(p, "password") {
+		return ""
+	}
+	pwd := ToString(p["password"])
+	if n := len(pwd); n < 6 || n > 32 {
+		return "密码长度须在6-32位字符"
+	}
+	if !phpRequired(p, "password_old") {
+		return "请填写当前密码"
+	}
+	if !phpRequired(p, "password_confirm") {
+		return "确认密码不能为空"
+	}
+	if ToString(p["password"]) != ToString(p["password_confirm"]) {
+		return "两次输入的密码不一致"
+	}
+	return ""
+}
+
+func MenuWriteCheck(p map[string]any, needID bool) string {
+	if needID && !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "pid") {
+		return "请选择上级菜单"
+	}
+	if !phpRequired(p, "type") {
+		return "请选择菜单类型"
+	}
+	typ := ToString(p["type"])
+	if typ != "M" && typ != "C" && typ != "A" {
+		return "菜单类型参数值错误"
+	}
+	if !phpRequired(p, "name") {
+		return "请填写菜单名称"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 30 {
+		return "菜单名称长度需为1~30个字符"
+	}
+	if n := len([]rune(ToString(p["icon"]))); n > 100 {
+		return "图标名称不能超过100个字符"
+	}
+	if !phpRequired(p, "sort") {
+		return "请填写排序"
+	}
+	if ToInt(p["sort"]) < 0 {
+		return "排序值需大于或等于0"
+	}
+	if n := len([]rune(ToString(p["perms"]))); n > 100 {
+		return "权限字符不能超过100个字符"
+	}
+	if n := len([]rune(ToString(p["paths"]))); n > 200 {
+		return "路由地址不能超过200个字符"
+	}
+	if n := len([]rune(ToString(p["component"]))); n > 200 {
+		return "组件路径不能超过200个字符"
+	}
+	if n := len([]rune(ToString(p["selected"]))); n > 200 {
+		return "选中菜单路径不能超过200个字符"
+	}
+	if n := len([]rune(ToString(p["params"]))); n > 200 {
+		return "路由参数不能超过200个字符"
+	}
+	if !phpRequired(p, "is_cache") {
+		return "请选择缓存状态"
+	}
+	if !inZeroOne(p["is_cache"]) {
+		return "缓存状态参数值错误"
+	}
+	if !phpRequired(p, "is_show") {
+		return "请选择显示状态"
+	}
+	if !inZeroOne(p["is_show"]) {
+		return "显示状态参数值错误"
+	}
+	if !phpRequired(p, "is_disable") {
+		return "请选择菜单状态"
+	}
+	if !inZeroOne(p["is_disable"]) {
+		return "菜单状态参数值错误"
+	}
+	return ""
+}
+
+func RoleWriteCheck(p map[string]any, needID bool) string {
+	if needID && !phpRequired(p, "id") {
+		return "请选择角色"
+	}
+	if !phpRequired(p, "name") {
+		return "请输入角色名称"
+	}
+	if n := len([]rune(ToString(p["name"]))); n > 64 {
+		return "角色名称最长为16个字符"
+	}
+	if v, ok := p["menu_id"]; ok && v != nil && !isArrayValue(v) {
+		return "权限格式错误"
+	}
+	return ""
+}
+
+func DeptWriteCheck(p map[string]any, needID bool) string {
+	if needID && !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "pid") {
+		return "请选择上级部门"
+	}
+	if !isWholeNumber(p["pid"]) {
+		return "上级部门参数错误"
+	}
+	if !phpRequired(p, "name") {
+		return "请填写部门名称"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 30 {
+		return "部门名称长度须在1-30位字符"
+	}
+	if !phpRequired(p, "status") {
+		return "请选择部门状态"
+	}
+	if !inZeroOne(p["status"]) {
+		return "部门状态值错误"
+	}
+	if _, ok := p["sort"]; ok && ToInt(p["sort"]) < 0 {
+		return "排序值不正确"
+	}
+	return ""
+}
+
+func JobsWriteCheck(p map[string]any, needID bool) string {
+	if needID && !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "name") {
+		return "请填写岗位名称"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 50 {
+		return "岗位名称长度须在1-50位字符"
+	}
+	if !phpRequired(p, "code") {
+		return "请填写岗位编码"
+	}
+	if !phpRequired(p, "status") {
+		return "请选择岗位状态"
+	}
+	if !inZeroOne(p["status"]) {
+		return "岗位状态值错误"
+	}
+	if _, ok := p["sort"]; ok && ToInt(p["sort"]) < 0 {
+		return "排序值不正确"
+	}
+	return ""
+}
+
+func PayQueryCheck(p map[string]any) string {
+	if !phpRequired(p, "from") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "order_id") {
+		return "订单参数缺失"
+	}
+	return ""
+}
+
+func DbFieldType(typ string) string {
+	t := strings.ToLower(strings.TrimSpace(typ))
+	switch {
+	case strings.HasPrefix(t, "set") || strings.HasPrefix(t, "enum"):
+		return "string"
+	case strings.Contains(t, "double") || strings.Contains(t, "float") || strings.Contains(t, "decimal") ||
+		strings.Contains(t, "real") || strings.Contains(t, "numeric"):
+		return "float"
+	case strings.Contains(t, "int") || strings.Contains(t, "serial") || strings.Contains(t, "bit"):
+		return "int"
+	case strings.Contains(t, "bool"):
+		return "bool"
+	case strings.HasPrefix(t, "timestamp"):
+		return "timestamp"
+	case strings.HasPrefix(t, "datetime"):
+		return "datetime"
+	case strings.HasPrefix(t, "date"):
+		return "date"
+	default:
+		return "string"
+	}
+}
