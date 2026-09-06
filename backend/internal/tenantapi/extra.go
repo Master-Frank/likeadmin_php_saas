@@ -116,14 +116,17 @@ func DecorateDataArticle(c *gin.Context) {
 
 func DecorateDataPC(c *gin.Context) {
 	var p model.DecoratePage
-	q := tdb(c).Where("type = ?", 4)
+	q := tdb(c).Where("id = ?", 4)
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
-	_ = q.Order("id asc").First(&p)
-	update := util.FormatDateTimePtr(p.UpdateTime)
-	if update == "" {
-		update = util.FormatDateTime(p.CreateTime)
+	_ = q.First(&p)
+	update := ""
+	if p.ID > 0 {
+		update = util.FormatDateTimePtr(p.UpdateTime)
+		if update == "" {
+			update = util.FormatDateTime(p.CreateTime)
+		}
 	}
 	if update == "" {
 		update = util.FormatDateTime(util.NowUnix())
@@ -142,11 +145,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		arr = httpx.List(c)
 	}
 	now := util.NowUnix()
-	q := tdb(c)
-	if tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	q.Delete(&model.DecorateTabbar{})
+	tdb(c).Where("tenant_id = ?", tid).Delete(&model.DecorateTabbar{})
 	for _, item := range arr {
 		m, _ := item.(map[string]any)
 		if m == nil {
@@ -171,11 +170,7 @@ func HotSearchSet(c *gin.Context) {
 	arr, _ := data.([]any)
 	if len(arr) > 0 {
 		tid := tenantDB(c)
-		q := tdb(c)
-		if tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		q.Where("id > 0").Delete(&model.HotSearch{})
+		tdb(c).Where("tenant_id = ? AND id > 0", tid).Delete(&model.HotSearch{})
 		now := util.NowUnix()
 		for _, item := range arr {
 			m, _ := item.(map[string]any)

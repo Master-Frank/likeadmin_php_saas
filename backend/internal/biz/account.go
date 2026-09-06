@@ -48,7 +48,11 @@ func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action i
 	}
 	exists := func(sn string) bool {
 		var n int64
-		db.Model(&model.UserAccountLog{}).Where("sn = ?", sn).Count(&n)
+		q := db.Model(&model.UserAccountLog{}).Where("sn = ?", sn)
+		if tenantID > 0 {
+			q = q.Where("tenant_id = ?", tenantID)
+		}
+		q.Count(&n)
 		return n > 0
 	}
 	row := model.UserAccountLog{

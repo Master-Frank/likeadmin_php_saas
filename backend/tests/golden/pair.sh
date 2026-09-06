@@ -2071,6 +2071,12 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
       echo "  go_ued=${go_ued:0:200}"
       fail=$((fail + 1))
     fi
+    go_pud="$(curl -sS "$GO/platformapi/tenant.tenantUser/detail?id=$user_id&tenant_id=1" -H "token: $TOKEN")"
+    echo "platform_user_cross_tenant go_msg=$(jget msg <<<"$go_pud")"
+    if [[ "$(jget msg <<<"$go_pud")" != *用户不存在* ]]; then
+      echo "  go_pud=${go_pud:0:200}"
+      fail=$((fail + 1))
+    fi
   fi
   mysqlq "DELETE FROM la_article_cate WHERE tenant_id=999 AND name='paircateleak'"
   mysqlq "DELETE FROM la_tenant_admin WHERE tenant_id=999 AND account='leakadm$now'"

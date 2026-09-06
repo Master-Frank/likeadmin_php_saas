@@ -592,7 +592,11 @@ func TenantUserDetail(c *gin.Context) {
 		tid = ctxutil.Get(c).TenantID
 	}
 	var u model.User
-	if tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&u).Error != nil {
+	q := tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
+	if tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&u).Error != nil {
 		response.Fail(c, "用户不存在")
 		return
 	}

@@ -764,11 +764,7 @@ func SettingSetWebsite(c *gin.Context) {
 
 func HotSearchGet(c *gin.Context) {
 	var rows []model.HotSearch
-	db := tdb(c)
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	db.Order("sort desc, id desc").Find(&rows)
+	tdb(c).Where("tenant_id = ?", tenantDB(c)).Order("sort desc, id desc").Find(&rows)
 	data := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})

@@ -177,18 +177,18 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 		return
 	}
 	var exist model.UserAuth
-	if tdb(c).Where("openid = ?", sess.Openid).First(&exist).Error == nil {
+	if userAuthQ(c).Where("openid = ?", sess.Openid).First(&exist).Error == nil {
 		response.Fail(c, "该微信已被绑定")
 		return
 	}
 	if sess.Unionid != "" {
-		if tdb(c).Where("unionid = ? AND user_id <> ?", sess.Unionid, uid).First(&exist).Error == nil {
+		if userAuthQ(c).Where("unionid = ? AND user_id <> ?", sess.Unionid, uid).First(&exist).Error == nil {
 			response.Fail(c, "该微信已被绑定")
 			return
 		}
 	}
 	if err := tdb(c).Create(&model.UserAuth{
-		UserID: uid, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
+		TenantID: ctxutil.Get(c).TenantID, UserID: uid, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
 	}).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -207,7 +207,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		Joins("JOIN "+tenantdb.Table(c, model.UserAuth{}.TableName())+" au ON au.user_id = u.id").
 		Where("u.delete_time IS NULL AND (au.openid = ? OR (au.unionid <> '' AND au.unionid = ?))", sess.Openid, sess.Unionid)
 	if tid > 0 {
-		q = q.Where("u.tenant_id = ?", tid)
+		q = q.Where("u.tenant_id = ? AND au.tenant_id = ?", tid, tid)
 	}
 	err := q.First(&user).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
@@ -238,7 +238,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 				return err
 			}
 			return tx.Create(&model.UserAuth{
-				UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
+				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
 			}).Error
 		}); err != nil {
 			return nil, err
@@ -254,9 +254,9 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			}
 		}
 		var auth model.UserAuth
-		if tdb(c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
+		if userAuthQ(c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
 			tdb(c).Create(&model.UserAuth{
-				UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
+				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
 			})
 		} else if auth.Unionid == "" && sess.Unionid != "" {
 			tdb(c).Model(&auth).Update("unionid", sess.Unionid)

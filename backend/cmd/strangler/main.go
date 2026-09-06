@@ -2,12 +2,15 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
 )
+
+const maxUpload = 50 << 20
 
 // Strangler front door: API prefixes go to the Go backend, everything else to PHP.
 func main() {
@@ -20,9 +23,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	goProxy := httputil.NewSingleHostReverseProxy(goURL)
-	phpProxy := httputil.NewSingleHostReverseProxy(phpURL)
+	goProxy := newForwardProxy(goURL)
+	phpProxy := newForwardProxy(phpURL)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 		if goAPI(r.URL.Path) {
 			goProxy.ServeHTTP(w, r)
 			return
@@ -31,6 +35,38 @@ func main() {
 	})
 	log.Printf("strangler listening on %s (api->%s other->%s)", listen, goURL, phpURL)
 	log.Fatal(http.ListenAndServe(listen, nil))
+}
+
+func newForwardProxy(target *url.URL) *httputil.ReverseProxy {
+	p := httputil.NewSingleHostReverseProxy(target)
+	orig := p.Director
+	p.Director = func(req *http.Request) {
+		host := req.Host
+		orig(req)
+		req.Host = host
+		setForwarded(req, host)
+	}
+	return p
+}
+
+func setForwarded(req *http.Request, host string) {
+	if req.Header.Get("X-Forwarded-Host") == "" && host != "" {
+		req.Header.Set("X-Forwarded-Host", host)
+	}
+	if req.Header.Get("X-Forwarded-Proto") == "" {
+		proto := "http"
+		if req.TLS != nil {
+			proto = "https"
+		}
+		req.Header.Set("X-Forwarded-Proto", proto)
+	}
+	if req.Header.Get("X-Real-IP") == "" {
+		if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+			req.Header.Set("X-Real-IP", ip)
+		} else if req.RemoteAddr != "" {
+			req.Header.Set("X-Real-IP", req.RemoteAddr)
+		}
+	}
 }
 
 func goAPI(path string) bool {

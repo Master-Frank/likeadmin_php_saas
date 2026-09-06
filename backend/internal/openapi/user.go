@@ -31,6 +31,10 @@ func scopeTenant(db *gorm.DB, c *gin.Context) *gorm.DB {
 	return db
 }
 
+func userAuthQ(c *gin.Context) *gorm.DB {
+	return scopeTenant(tdb(c).Model(&model.UserAuth{}), c)
+}
+
 func articleCollectDB(c *gin.Context) *gorm.DB {
 	return scopeTenant(tdb(c).Model(&model.ArticleCollect{}).Where("delete_time IS NULL"), c)
 }
@@ -267,7 +271,7 @@ func UserCenter(c *gin.Context) {
 		term := util.ToInt(info["terminal"])
 		if term == 1 || term == 2 {
 			var n int64
-			tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal = ?", u.ID, term).Count(&n)
+			scopeTenant(tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal = ?", u.ID, term), c).Count(&n)
 			if n > 0 {
 				out["is_auth"] = 1
 			} else {
@@ -283,7 +287,7 @@ func UserInfo(c *gin.Context) {
 	hasAuth := false
 	if tdb(c) != nil && u.ID > 0 {
 		var n int64
-		tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}).Count(&n)
+		scopeTenant(tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}), c).Count(&n)
 		hasAuth = n > 0
 	}
 	response.Data(c, gin.H{
@@ -390,11 +394,7 @@ func ArticleCate(c *gin.Context) {
 
 func SearchHot(c *gin.Context) {
 	var rows []model.HotSearch
-	db := tdb(c)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	db.Order("sort desc, id desc").Find(&rows)
+	tdb(c).Where("tenant_id = ?", ctxutil.Get(c).TenantID).Order("sort desc, id desc").Find(&rows)
 	data := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})
