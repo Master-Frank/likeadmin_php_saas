@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"fmt"
+	"strings"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
@@ -208,9 +209,26 @@ func PayWay(c *gin.Context) {
 }
 
 func PayPrepay(c *gin.Context) {
+	p := httpx.Params(c)
+	if _, ok := p["from"]; !ok || strings.TrimSpace(util.ToString(p["from"])) == "" {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	if _, ok := p["pay_way"]; !ok {
+		response.Fail(c, "支付方式参数缺失")
+		return
+	}
+	payWay := httpx.Int(c, "pay_way")
+	if payWay != 1 && payWay != 2 && payWay != 3 {
+		response.Fail(c, "支付方式参数错误")
+		return
+	}
+	if _, ok := p["order_id"]; !ok || strings.TrimSpace(util.ToString(p["order_id"])) == "" {
+		response.Fail(c, "订单参数缺失")
+		return
+	}
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
-	payWay := httpx.Int(c, "pay_way")
 	if from != "recharge" {
 		response.Fail(c, "充值订单不存在")
 		return

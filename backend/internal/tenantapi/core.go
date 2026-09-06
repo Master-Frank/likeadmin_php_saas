@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
+	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -772,28 +773,128 @@ func RechargeLists(c *gin.Context) {
 
 func FinanceAccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.UserAccountLog{}).Where("delete_time IS NULL")
+	al := model.UserAccountLog{}.TableName()
+	u := model.User{}.TableName()
+	db := tdb(c).Table(al+" AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
 	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+		db = db.Where("al.tenant_id = ?", tid)
+	}
+	if lists.Param(q, "change_type") != "" {
+		db = db.Where("al.change_type = ?", lists.ParamInt(q, "change_type"))
+	}
+	if lists.Param(q, "type") == "um" {
+		db = db.Where("al.change_type IN ?", []int{biz.UMDecAdmin, biz.UMDecRechargeRefund, biz.UMIncAdmin, biz.UMIncRecharge})
+	}
+	if info := lists.Param(q, "user_info"); info != "" {
+		like := "%" + info + "%"
+		db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
+	}
+	if q.StartTime != "" {
+		db = db.Where("al.create_time >= ?", util.ParseDateTime(q.StartTime))
+	}
+	if q.EndTime != "" {
+		db = db.Where("al.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
 	var count int64
 	db.Count(&count)
-	var rows []model.UserAccountLog
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	type row struct {
+		Nickname     string  `gorm:"column:nickname"`
+		Account      string  `gorm:"column:account"`
+		SN           string  `gorm:"column:sn"`
+		Avatar       string  `gorm:"column:avatar"`
+		Mobile       string  `gorm:"column:mobile"`
+		Action       int     `gorm:"column:action"`
+		ChangeAmount float64 `gorm:"column:change_amount"`
+		LeftAmount   float64 `gorm:"column:left_amount"`
+		ChangeType   int     `gorm:"column:change_type"`
+		SourceSN     string  `gorm:"column:source_sn"`
+		CreateTime   int64   `gorm:"column:create_time"`
+	}
+	var rows []row
+	db.Select("u.nickname,u.account,u.sn,u.avatar,u.mobile,al.action,al.change_amount,al.left_amount,al.change_type,al.source_sn,al.create_time").
+		Order("al.id desc").Offset(q.Offset).Limit(q.PageSize).Scan(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		sym := "-"
+		if r.Action == biz.INC {
+			sym = "+"
+		}
+		out = append(out, map[string]any{
+			"nickname": r.Nickname, "account": r.Account, "sn": r.SN,
+			"avatar": filesvc.GetFileURL(c, r.Avatar), "mobile": r.Mobile,
+			"action": r.Action, "change_amount": sym + util.ToString(r.ChangeAmount),
+			"left_amount": r.LeftAmount, "change_type": r.ChangeType, "source_sn": r.SourceSN,
+			"create_time": util.FormatDateTime(r.CreateTime),
+			"change_type_desc": biz.UMChangeTypeDesc[util.ToString(r.ChangeType)],
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func FinanceRefundRecord(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.RefundRecord{})
+	rt := model.RefundRecord{}.TableName()
+	u := model.User{}.TableName()
+	base := tdb(c).Table(rt+" AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+		base = base.Where("r.tenant_id = ?", tid)
+	}
+	if sn := lists.Param(q, "sn"); sn != "" {
+		base = base.Where("r.sn = ?", sn)
+	}
+	if osn := lists.Param(q, "order_sn"); osn != "" {
+		base = base.Where("r.order_sn = ?", osn)
+	}
+	if lists.Param(q, "refund_type") != "" {
+		base = base.Where("r.refund_type = ?", lists.ParamInt(q, "refund_type"))
+	}
+	if info := lists.Param(q, "user_info"); info != "" {
+		like := "%" + info + "%"
+		base = base.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
+	}
+	if q.StartTime != "" {
+		base = base.Where("r.create_time >= ?", util.ParseDateTime(q.StartTime))
+	}
+	if q.EndTime != "" {
+		base = base.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
+	}
+	extendDB := base.Session(&gorm.Session{})
+	if lists.Param(q, "refund_status") != "" {
+		base = base.Where("r.refund_status = ?", lists.ParamInt(q, "refund_status"))
 	}
 	var count int64
-	db.Count(&count)
-	var rows []model.RefundRecord
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	base.Count(&count)
+	type row struct {
+		model.RefundRecord
+		Nickname string `gorm:"column:nickname"`
+		Avatar   string `gorm:"column:avatar"`
+	}
+	var rows []row
+	base.Select("r.*,u.nickname,u.avatar").Order("r.id desc").Offset(q.Offset).Limit(q.PageSize).Scan(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, map[string]any{
+			"id": r.ID, "sn": r.SN, "user_id": r.UserID, "order_id": r.OrderID, "order_sn": r.OrderSN,
+			"order_type": r.OrderType, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
+			"refund_type": r.RefundType, "transaction_id": r.TransactionID, "refund_way": r.RefundWay,
+			"refund_status": r.RefundStatus, "create_time": util.FormatDateTime(r.CreateTime),
+			"nickname": r.Nickname, "avatar": filesvc.GetFileURL(c, r.Avatar),
+			"refund_type_text":   util.RefundTypeText(r.RefundType),
+			"refund_status_text": util.RefundStatusText(r.RefundStatus),
+			"refund_way_text":    util.RefundWayText(r.RefundWay),
+		})
+	}
+	type extRow struct {
+		Total   int64 `gorm:"column:total"`
+		Ing     int64 `gorm:"column:ing"`
+		Success int64 `gorm:"column:success"`
+		Error   int64 `gorm:"column:error"`
+	}
+	var ext extRow
+	extendDB.Select("count(r.id) as total, count(IF(r.refund_status=0,1,null)) as ing, count(IF(r.refund_status=1,1,null)) as success, count(IF(r.refund_status=2,1,null)) as error").Scan(&ext)
+	response.Lists(c, out, count, q.PageNo, q.PageSize, gin.H{
+		"total": ext.Total, "ing": ext.Ing, "success": ext.Success, "error": ext.Error,
+	})
 }
 
 func OAReplyIndex(c *gin.Context) {

@@ -858,6 +858,30 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     if [[ "$(jget msg <<<"$php_rc")" != "$(jget msg <<<"$go_rc")" ]]; then
       fail=$((fail + 1))
     fi
+    php_pay="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_pay="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "pay_prepay_bad php_msg=$(jget msg <<<"$php_pay") go_msg=$(jget msg <<<"$go_pay")"
+    if [[ "$(jget msg <<<"$php_pay")" != "$(jget msg <<<"$go_pay")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_sms2="$(curl -sS -X POST "$PHP/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_sms2="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "sms_send_bad php_msg=$(jget msg <<<"$php_sms2") go_msg=$(jget msg <<<"$go_sms2")"
+    if [[ "$(jget msg <<<"$php_sms2")" != "$(jget msg <<<"$go_sms2")" ]]; then
+      fail=$((fail + 1))
+    fi
+  fi
+  php_fin="$(curl -sS "$PHP/tenantapi/finance.account_log/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_fin="$(curl -sS "$GO/tenantapi/finance.account_log/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "account_log php_code=$(jcode <<<"$php_fin") go_code=$(jcode <<<"$go_fin")"
+  if [[ "$(jcode <<<"$php_fin")" != "$(jcode <<<"$go_fin")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_rr="$(curl -sS "$PHP/tenantapi/finance.refund/record" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rr="$(curl -sS "$GO/tenantapi/finance.refund/record" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "refund_record php_code=$(jcode <<<"$php_rr") go_code=$(jcode <<<"$go_rr") php_ext=$(jget data.extend.total <<<"$php_rr") go_ext=$(jget data.extend.total <<<"$go_rr")"
+  if [[ "$(jcode <<<"$php_rr")" != "$(jcode <<<"$go_rr")" ]]; then
+    fail=$((fail + 1))
   fi
 fi
 

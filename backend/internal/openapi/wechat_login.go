@@ -319,7 +319,20 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 }
 
 func SmsSendCodeReal(c *gin.Context) {
+	p := httpx.Params(c)
+	if _, ok := p["mobile"]; !ok || strings.TrimSpace(util.ToString(p["mobile"])) == "" {
+		response.Fail(c, "请输入手机号")
+		return
+	}
 	mobile := httpx.Str(c, "mobile")
+	if util.ValidChinaMobile(mobile) != "" {
+		response.Fail(c, "请输入正确手机号")
+		return
+	}
+	if _, ok := p["scene"]; !ok || strings.TrimSpace(util.ToString(p["scene"])) == "" {
+		response.Fail(c, "请输入场景值")
+		return
+	}
 	scene := httpx.Str(c, "scene")
 	if _, _, err := sms.Send(c, mobile, scene); err != nil {
 		response.Fail(c, err.Error())

@@ -800,6 +800,37 @@ func PayWayText(way int) string {
 	}
 }
 
+func RefundTypeText(t int) string {
+	if t == 1 {
+		return "后台退款"
+	}
+	return ""
+}
+
+func RefundStatusText(status int) string {
+	switch status {
+	case 0:
+		return "退款中"
+	case 1:
+		return "退款成功"
+	case 2:
+		return "退款失败"
+	default:
+		return ""
+	}
+}
+
+func RefundWayText(way int) string {
+	switch way {
+	case 1:
+		return "线上退款"
+	case 2:
+		return "线下退款"
+	default:
+		return ""
+	}
+}
+
 func PayStatusText(status int) string {
 	switch status {
 	case 1:
