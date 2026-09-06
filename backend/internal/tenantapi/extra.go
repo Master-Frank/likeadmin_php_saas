@@ -11,6 +11,7 @@ import (
 	"likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 
@@ -359,14 +360,15 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, "订单已发起退款,退款失败请到退款记录重新退款")
 		return
 	}
+	udb := tenantdb.ForTenant(order.TenantID)
 	var user model.User
-	if tdb(c).First(&user, order.UserID).Error != nil || user.UserMoney < order.OrderAmount {
+	if udb.First(&user, order.UserID).Error != nil || user.UserMoney < order.OrderAmount {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
 	adminID := ctxutil.Get(c).AdminID
 	var rec model.RefundRecord
-	err := tdb(c).Transaction(func(tx *gorm.DB) error {
+	err := udb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Update("refund_status", 1).Error; err != nil {
 			return err
 		}
@@ -496,7 +498,7 @@ func RechargeRefundAgain(c *gin.Context) {
 	var user model.User
 	var againOrder model.RechargeOrder
 	tdb(c).First(&againOrder, rec.OrderID)
-	if tdb(c).First(&user, rec.UserID).Error != nil || user.UserMoney < againOrder.OrderAmount {
+	if tenantdb.ForTenant(rec.TenantID).First(&user, rec.UserID).Error != nil || user.UserMoney < againOrder.OrderAmount {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
@@ -679,6 +681,13 @@ func OAReplyStatus(c *gin.Context) {
 	status := 0
 	if row.Status == 0 {
 		status = 1
+	}
+	if row.ReplyType != 2 && status == 1 {
+		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", row.ReplyType, row.ID)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Update("status", 0)
 	}
 	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", row.ID)
 	if tid := tenantDB(c); tid > 0 {

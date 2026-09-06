@@ -105,7 +105,11 @@ func LoginRegister(c *gin.Context) {
 	}
 	tid := ctxutil.Get(c).TenantID
 	var exist model.User
-	if tdb(c).Where("account = ? AND delete_time IS NULL", account).First(&exist).Error == nil {
+	existQ := tdb(c).Where("account = ? AND delete_time IS NULL", account)
+	if tid > 0 {
+		existQ = existQ.Where("tenant_id = ?", tid)
+	}
+	if existQ.First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}

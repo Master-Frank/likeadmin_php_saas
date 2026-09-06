@@ -89,6 +89,38 @@ func UseSN(sn string) *gorm.DB {
 	return bootstrap.DB.WithContext(context.WithValue(context.Background(), ctxKey{}, sn))
 }
 
+// Table returns la_{base} or la_{base}_{sn} when the current request is a tactics=1 tenant.
+func Table(c *gin.Context, name string) string {
+	sn := ""
+	if c != nil {
+		meta := ctxutil.Get(c)
+		if meta.Tactics == 1 {
+			sn = meta.TenantSN
+		}
+	}
+	return tableWithSN(name, sn)
+}
+
+func tableWithSN(name, sn string) string {
+	if name == "" {
+		return name
+	}
+	if !strings.HasPrefix(name, "la_") {
+		name = "la_" + name
+	}
+	if sn == "" {
+		return name
+	}
+	base := strings.TrimPrefix(name, "la_")
+	if _, ok := shardable[base]; !ok {
+		return name
+	}
+	if strings.HasSuffix(name, "_"+sn) {
+		return name
+	}
+	return name + "_" + sn
+}
+
 func rewrite(db *gorm.DB) {
 	if db == nil || db.Statement == nil || db.Statement.Context == nil {
 		return

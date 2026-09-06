@@ -346,11 +346,8 @@ func PayStatus(c *gin.Context) {
 
 func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 	db := bootstrap.DB
-	if order != nil && order.TenantID > 0 {
-		var t model.Tenant
-		if bootstrap.DB.First(&t, order.TenantID).Error == nil && t.Tactics == 1 && t.SN != "" {
-			db = tenantdb.UseSN(t.SN)
-		}
+	if order != nil {
+		db = tenantdb.ForTenant(order.TenantID)
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()

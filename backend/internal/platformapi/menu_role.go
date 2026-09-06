@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
@@ -35,7 +36,7 @@ func MenuLists(c *gin.Context) {
 
 func MenuAll(c *gin.Context) {
 	var rows []model.SystemMenu
-	bootstrap.DB.Select("id, pid, name").Order("sort desc, id asc").Find(&rows)
+	bootstrap.DB.Select("id, pid, name").Where("is_disable = 0").Order("sort desc, id desc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
 	for _, m := range rows {
 		maps = append(maps, map[string]any{"id": m.ID, "pid": m.Pid, "name": m.Name})
@@ -115,6 +116,7 @@ func MenuDelete(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Delete(&model.SystemMenu{}, id)
+	bootstrap.DB.Where("menu_id = ?", id).Delete(&model.SystemRoleMenu{})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -328,20 +330,20 @@ func buttonPerms(admin model.Admin) []string {
 	if len(roleIDs) > 0 {
 		bootstrap.DB.Model(&model.SystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 	}
-	var menus []model.SystemMenu
-	if len(menuIDs) > 0 {
-		bootstrap.DB.Where("id IN ? AND perms <> ''", menuIDs).Find(&menus)
-	}
-	out := []string{}
-	for _, m := range menus {
-		if m.Perms != "" {
-			out = append(out, m.Perms)
+	return authsvc.BtnAuth(false, platformMenuPerms(menuIDs, true), platformMenuPerms(nil, false))
+}
+
+func platformMenuPerms(menuIDs []uint, filterIDs bool) []string {
+	q := bootstrap.DB.Model(&model.SystemMenu{}).Where("is_disable = 0 AND perms <> ''")
+	if filterIDs {
+		if len(menuIDs) == 0 {
+			return []string{}
 		}
+		q = q.Where("id IN ?", menuIDs)
 	}
-	if len(out) == 0 {
-		return []string{}
-	}
-	return out
+	var perms []string
+	q.Distinct("perms").Pluck("perms", &perms)
+	return perms
 }
 
 func mustAdminID(c *gin.Context) uint {

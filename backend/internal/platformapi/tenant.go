@@ -50,8 +50,7 @@ func TenantLists(c *gin.Context) {
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, t := range rows {
-		var users int64
-		bootstrap.DB.Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
+		users := tenantUserCount(t)
 		def := httpPrefix + t.SN + "." + root + "/admin/"
 		domain := def
 		if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
@@ -82,8 +81,7 @@ func TenantDetail(c *gin.Context) {
 		response.Fail(c, "租户不存在")
 		return
 	}
-	var users int64
-	bootstrap.DB.Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
+	users := tenantUserCount(t)
 	root := rootDomain(c)
 	httpPrefix := "http://"
 	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
@@ -851,6 +849,12 @@ func randomSN() string {
 			return sn
 		}
 	}
+}
+
+func tenantUserCount(t model.Tenant) int64 {
+	var users int64
+	tenantdb.ForTenant(t.ID).Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
+	return users
 }
 
 func stripHost(s string) string {

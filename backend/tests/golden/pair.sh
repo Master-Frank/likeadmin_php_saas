@@ -84,6 +84,8 @@ paths=(
   /platformapi/auth.admin/lists
   /platformapi/auth.role/lists
   /platformapi/auth.menu/lists
+  /platformapi/auth.menu/route
+  /platformapi/auth.menu/all
   /platformapi/dept.dept/lists
   /platformapi/dept.dept/leaderDept
   /platformapi/dept.dept/all
@@ -125,6 +127,8 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/auth.admin/mySelf
     /tenantapi/auth.admin/lists
     /tenantapi/auth.menu/lists
+    /tenantapi/auth.menu/route
+    /tenantapi/auth.menu/all
     /tenantapi/auth.role/lists
     /tenantapi/dept.dept/lists
     /tenantapi/dept.dept/all
@@ -200,6 +204,48 @@ except Exception:
 echo "upgrade_lists_keys php=$php_uk go=$go_uk"
 if [[ -n "$php_uk" && "$php_uk" != "$go_uk" ]]; then
   fail=$((fail + 1))
+fi
+
+check_menu_route() {
+  local label="$1" php_file="$2" go_file="$3"
+  python3 - "$label" "$php_file" "$go_file" <<'PY' || return 1
+import json, sys
+label, pf, gf = sys.argv[1], sys.argv[2], sys.argv[3]
+php, go = json.load(open(pf)), json.load(open(gf))
+pd, gd = php.get("data"), go.get("data")
+ok = isinstance(pd, list) and isinstance(gd, list) and php.get("code") == go.get("code")
+print("%s php_type=%s go_type=%s php_n=%s go_n=%s" % (
+    label, type(pd).__name__, type(gd).__name__,
+    len(pd) if isinstance(pd, list) else "-",
+    len(gd) if isinstance(gd, list) else "-",
+))
+if not ok:
+    print("  php=%s" % (str(php)[:240],))
+    print("  go=%s" % (str(go)[:240],))
+    raise SystemExit(1)
+PY
+}
+if ! check_menu_route "platform_menu_route" "$OUT/php_platformapi_auth.menu_route.json" "$OUT/go_platformapi_auth.menu_route.json"; then
+  fail=$((fail + 1))
+fi
+if [[ -n "$TENANT_HOST" ]]; then
+  if ! check_menu_route "tenant_menu_route" "$OUT/php_tenantapi_auth.menu_route.json" "$OUT/go_tenantapi_auth.menu_route.json"; then
+    fail=$((fail + 1))
+  fi
+fi
+php_perm="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print((d.get("data") or {}).get("permissions"))' "$OUT/php_platformapi_auth.admin_mySelf.json")"
+go_perm="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print((d.get("data") or {}).get("permissions"))' "$OUT/go_platformapi_auth.admin_mySelf.json")"
+echo "platform_myself_perms php=$php_perm go=$go_perm"
+if [[ "$php_perm" != "$go_perm" || "$go_perm" != *'*'* ]]; then
+  fail=$((fail + 1))
+fi
+if [[ -n "$TENANT_HOST" ]]; then
+  php_tperm="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print((d.get("data") or {}).get("permissions"))' "$OUT/php_tenantapi_auth.admin_mySelf.json")"
+  go_tperm="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print((d.get("data") or {}).get("permissions"))' "$OUT/go_tenantapi_auth.admin_mySelf.json")"
+  echo "tenant_myself_perms php=$php_tperm go=$go_tperm"
+  if [[ "$php_tperm" != "$go_tperm" || "$go_tperm" != *'*'* ]]; then
+    fail=$((fail + 1))
+  fi
 fi
 
 if [[ -n "$TENANT_HOST" ]]; then
@@ -1284,6 +1330,30 @@ print(next((x.get("id") for x in ls if x.get("account")==sys.argv[1]), 0))
     echo "admin_role_add could not resolve id php=${php_role:0:200}"
     fail=$((fail + 1))
   fi
+  mid="$(python3 -c 'import json,sys
+d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("id")), 0))
+' <<<"$(curl -sS "$GO/tenantapi/auth.menu/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")")"
+  cname="cr${ts: -6}"
+  go_cr="$(curl -sS -X POST "$GO/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cname\",\"sort\":0,\"menu_id\":[$mid]}")"
+  clist="$(curl -sS "$GO/tenantapi/auth.role/lists?name=$cname" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  cidr="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
+' "$cname" <<<"$clist")"
+  echo "role_cascade_add go_code=$(jcode <<<"$go_cr") id=$cidr menu=$mid"
+  if [[ "$cidr" != "0" && -n "$cidr" ]]; then
+    go_cdel="$(curl -sS -X POST "$GO/tenantapi/auth.role/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cidr}")"
+    left_rm="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_system_role_menu WHERE role_id=$cidr" 2>/dev/null || echo "?")"
+    echo "role_cascade_delete go_code=$(jcode <<<"$go_cdel") role_menu=$left_rm"
+    if [[ "$(jcode <<<"$go_cdel")" != "1" || "$left_rm" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "role_cascade_add could not resolve id go=${go_cr:0:200}"
+    fail=$((fail + 1))
+  fi
   php_dec="$(curl -sS "$PHP/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
   go_dec="$(curl -sS "$GO/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
   echo "decorate_miss php_code=$(jcode <<<"$php_dec") go_code=$(jcode <<<"$go_dec") php_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$php_dec") go_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$go_dec")"
@@ -1797,6 +1867,13 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     echo "shard_tenant_user_lists n=$go_suln"
     if [[ "$go_suln" == "0" ]]; then
       echo "  go_sul=${go_sul:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_tdu="$(curl -sS "$GO/platformapi/tenant.tenant/detail?id=$sid" -H "token: $TOKEN")"
+    go_utc="$(jget data.user_total <<<"$go_tdu")"
+    echo "shard_tenant_user_total=$go_utc"
+    if [[ "$go_utc" == "0" || -z "$go_utc" ]]; then
+      echo "  go_tdu=${go_tdu:0:240}"
       fail=$((fail + 1))
     fi
     now="$(date +%s)"

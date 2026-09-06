@@ -18,6 +18,7 @@ import (
 	"likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 
@@ -201,9 +202,9 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	}
 	tid := ctxutil.Get(c).TenantID
 	var user model.User
-	q := tdb(c).Table(model.User{}.TableName()+" u").
+	q := tdb(c).Table(tenantdb.Table(c, model.User{}.TableName())+" u").
 		Select("u.*").
-		Joins("JOIN "+model.UserAuth{}.TableName()+" au ON au.user_id = u.id").
+		Joins("JOIN "+tenantdb.Table(c, model.UserAuth{}.TableName())+" au ON au.user_id = u.id").
 		Where("u.delete_time IS NULL AND (au.openid = ? OR (au.unionid <> '' AND au.unionid = ?))", sess.Openid, sess.Unionid)
 	if tid > 0 {
 		q = q.Where("u.tenant_id = ?", tid)

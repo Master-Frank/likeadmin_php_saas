@@ -268,7 +268,12 @@ func AdminDetail(c *gin.Context) {
 }
 
 func MenuRoute(c *gin.Context) {
-	AdminMySelf(c)
+	var admin model.TenantAdmin
+	if tdb(c).Where("id = ?", ctxutil.Get(c).AdminID).First(&admin).Error != nil {
+		response.Data(c, []any{})
+		return
+	}
+	response.Data(c, tenantMenuTreeByAdmin(c, admin))
 }
 
 func MenuLists(c *gin.Context) {
@@ -288,11 +293,11 @@ func MenuLists(c *gin.Context) {
 
 func MenuAll(c *gin.Context) {
 	var rows []model.TenantSystemMenu
-	db := tdb(c).Select("id,pid,name")
+	db := tdb(c).Select("id,pid,name").Where("is_disable = 0")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
+	db.Order("sort desc, id desc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
 	for _, m := range rows {
 		maps = append(maps, map[string]any{"id": m.ID, "pid": m.Pid, "name": m.Name})
@@ -361,6 +366,7 @@ func MenuDelete(c *gin.Context) {
 		return
 	}
 	tdb(c).Delete(&model.TenantSystemMenu{}, id)
+	tdb(c).Where("menu_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -469,6 +475,7 @@ func RoleDelete(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Update("delete_time", now)
+	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -670,4 +677,30 @@ func tenantMenuMap(m model.TenantSystemMenu) map[string]any {
 		"tenant_id": m.TenantID, "create_time": util.FormatDateTime(m.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(m.UpdateTime),
 	}
+}
+
+func tenantMenuTreeByAdmin(c *gin.Context, admin model.TenantAdmin) []map[string]any {
+	var rows []model.TenantSystemMenu
+	q := tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"})
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if admin.Root != 1 {
+		var roleIDs []uint
+		tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
+		var menuIDs []uint
+		if len(roleIDs) > 0 {
+			tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
+		}
+		if len(menuIDs) == 0 {
+			return []map[string]any{}
+		}
+		q = q.Where("id IN ?", menuIDs)
+	}
+	q.Order("sort desc, id asc").Find(&rows)
+	maps := make([]map[string]any, 0, len(rows))
+	for _, m := range rows {
+		maps = append(maps, tenantMenuMap(m))
+	}
+	return util.LinearToTree(maps, "children", "id", "pid", 0)
 }

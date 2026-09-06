@@ -223,19 +223,38 @@ func AdminMySelf(c *gin.Context) {
 			"update_time": util.FormatDateTimeOrNil(m.UpdateTime),
 		})
 	}
-	perms := []string{"*"}
-	if admin.Root != 1 {
-		perms = []string{}
-		for _, m := range menus {
-			if m.Perms != "" {
-				perms = append(perms, m.Perms)
-			}
-		}
-	}
 	response.Data(c, gin.H{
-		"user": tenantSelfUser(c, admin, roleIDs, deptIDs, jobIDs),
-		"menu": util.LinearToTree(maps, "children", "id", "pid", 0), "permissions": perms,
+		"user":        tenantSelfUser(c, admin, roleIDs, deptIDs, jobIDs),
+		"menu":        util.LinearToTree(maps, "children", "id", "pid", 0),
+		"permissions": tenantBtnAuth(c, admin, roleIDs),
 	})
+}
+
+func tenantBtnAuth(c *gin.Context, admin model.TenantAdmin, roleIDs []uint) []string {
+	if admin.Root == 1 {
+		return []string{"*"}
+	}
+	var menuIDs []uint
+	if len(roleIDs) > 0 {
+		tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
+	}
+	return authsvc.BtnAuth(false, tenantMenuPerms(c, menuIDs, true), tenantMenuPerms(c, nil, false))
+}
+
+func tenantMenuPerms(c *gin.Context, menuIDs []uint, filterIDs bool) []string {
+	q := tdb(c).Model(&model.TenantSystemMenu{}).Where("is_disable = 0 AND perms <> ''")
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if filterIDs {
+		if len(menuIDs) == 0 {
+			return []string{}
+		}
+		q = q.Where("id IN ?", menuIDs)
+	}
+	var perms []string
+	q.Distinct("perms").Pluck("perms", &perms)
+	return perms
 }
 
 func tenantSelfUser(c *gin.Context, admin model.TenantAdmin, roleIDs, deptIDs, jobIDs []uint) gin.H {
@@ -768,8 +787,8 @@ func RechargeSetConfig(c *gin.Context) {
 
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
-	ro := model.RechargeOrder{}.TableName()
-	u := model.User{}.TableName()
+	ro := tenantdb.Table(c, model.RechargeOrder{}.TableName())
+	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(ro + " AS ro").Joins("JOIN " + u + " AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("ro.tenant_id = ?", tid)
@@ -827,8 +846,8 @@ func RechargeLists(c *gin.Context) {
 
 func FinanceAccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
-	al := model.UserAccountLog{}.TableName()
-	u := model.User{}.TableName()
+	al := tenantdb.Table(c, model.UserAccountLog{}.TableName())
+	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(al + " AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("al.tenant_id = ?", tid)
@@ -887,8 +906,8 @@ func FinanceAccountLogLists(c *gin.Context) {
 
 func FinanceRefundRecord(c *gin.Context) {
 	q := lists.Parse(c)
-	rt := model.RefundRecord{}.TableName()
-	u := model.User{}.TableName()
+	rt := tenantdb.Table(c, model.RefundRecord{}.TableName())
+	u := tenantdb.Table(c, model.User{}.TableName())
 	base := tdb(c).Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 	if tid := tenantDB(c); tid > 0 {
 		base = base.Where("r.tenant_id = ?", tid)
