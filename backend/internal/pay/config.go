@@ -33,12 +33,20 @@ type AliPayCfg struct {
 }
 
 func loadPayConfig(c *gin.Context, payWay int) map[string]any {
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return loadPayConfigByTenant(tid, payWay)
+}
+
+func loadPayConfigByTenant(tenantID uint, payWay int) map[string]any {
 	if bootstrap.DB == nil {
 		return nil
 	}
 	q := bootstrap.DB.Model(&model.TenantPayConfig{}).Where("pay_way = ?", payWay)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
 	}
 	var row model.TenantPayConfig
 	if q.First(&row).Error != nil {
@@ -63,7 +71,15 @@ func decodeCfg(raw string) map[string]any {
 }
 
 func WechatCfg(c *gin.Context) WechatPayCfg {
-	m := loadPayConfig(c, WayWechat)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return WechatCfgByTenant(tid)
+}
+
+func WechatCfgByTenant(tenantID uint) WechatPayCfg {
+	m := loadPayConfigByTenant(tenantID, WayWechat)
 	if m == nil {
 		return WechatPayCfg{}
 	}

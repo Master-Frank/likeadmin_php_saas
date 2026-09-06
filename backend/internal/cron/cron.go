@@ -10,6 +10,7 @@ import (
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
+	paycfg "likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/util"
 )
 
@@ -90,23 +91,52 @@ func queryRefund() string {
 	var logs []model.RefundLog
 	bootstrap.DB.Where("refund_status = 0").Find(&logs)
 	for _, lg := range logs {
-		var rec model.RefundRecord
-		if bootstrap.DB.First(&rec, lg.RecordID).Error != nil {
-			continue
-		}
-		if rec.OrderType != "recharge" {
-			continue
-		}
-		var order model.RechargeOrder
-		if bootstrap.DB.First(&order, rec.OrderID).Error != nil {
-			continue
-		}
-		if order.PayWay != 2 && order.PayWay != 3 {
-			continue
-		}
-		// Without live gateway credentials, leave in-progress records untouched.
+		applyRefundQuery(lg)
 	}
 	return ""
+}
+
+func applyRefundQuery(lg model.RefundLog) {
+	var rec model.RefundRecord
+	if bootstrap.DB.First(&rec, lg.RecordID).Error != nil {
+		return
+	}
+	if rec.OrderType != "recharge" {
+		return
+	}
+	var order model.RechargeOrder
+	if bootstrap.DB.First(&order, rec.OrderID).Error != nil {
+		return
+	}
+	if order.PayWay != 2 {
+		return
+	}
+	cfg := paycfg.WechatCfgByTenant(order.TenantID)
+	if cfg.MchID == "" || cfg.APIClientKey == "" {
+		return
+	}
+	result, err := paycfg.WechatQueryRefund(cfg, lg.SN)
+	if err != nil || result == nil {
+		return
+	}
+	ok, msg, known := paycfg.ParseWechatRefundQuery(result)
+	if !known {
+		return
+	}
+	if ok {
+		updateRefundSuccess(lg.ID, rec.ID)
+		return
+	}
+	updateRefundMsg(lg.ID, "微信:"+msg)
+}
+
+func updateRefundSuccess(logID, recordID uint) {
+	bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", logID).Update("refund_status", 1)
+	bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", recordID).Update("refund_status", 1)
+}
+
+func updateRefundMsg(logID uint, msg string) {
+	bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", logID).Update("refund_msg", msg)
 }
 
 func Loop(interval time.Duration) {

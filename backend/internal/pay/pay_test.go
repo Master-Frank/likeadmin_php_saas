@@ -86,3 +86,22 @@ func TestNormalizePEM(t *testing.T) {
 		t.Fatalf("pem wrap failed: %s", got)
 	}
 }
+
+func TestParseWechatRefundQuery(t *testing.T) {
+	ok, msg, known := ParseWechatRefundQuery(nil)
+	if ok || known || msg != "" {
+		t.Fatalf("nil %+v %q %v", ok, msg, known)
+	}
+	ok, msg, known = ParseWechatRefundQuery(map[string]any{"status": "SUCCESS"})
+	if !ok || !known || msg != "" {
+		t.Fatalf("success %+v %q %v", ok, msg, known)
+	}
+	ok, msg, known = ParseWechatRefundQuery(map[string]any{"code": "PARAM_ERROR", "message": "bad"})
+	if ok || !known || msg != "PARAM_ERROR-bad" {
+		t.Fatalf("err %+v %q %v", ok, msg, known)
+	}
+	ok, msg, known = ParseWechatRefundQuery(map[string]any{"status": "PROCESSING"})
+	if ok || known || msg != "" {
+		t.Fatalf("processing %+v %q %v", ok, msg, known)
+	}
+}

@@ -1351,5 +1351,118 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
   fi
 fi
 
+php_tl="$(curl -sS "$PHP/platformapi/tenant.tenant/lists" -H "token: $TOKEN")"
+go_tl="$(curl -sS "$GO/platformapi/tenant.tenant/lists" -H "token: $TOKEN")"
+php_tk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted(k for k in (ls[0] if ls else {}) if k in ("id","sn","name","disable","domain_alias","users_count","default_domain","domain"))))' <<<"$php_tl")"
+go_tk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted(k for k in (ls[0] if ls else {}) if k in ("id","sn","name","disable","domain_alias","users_count","default_domain","domain"))))' <<<"$go_tl")"
+echo "tenant_lists_keys php=$php_tk go=$go_tk"
+if [[ -n "$php_tk" && "$php_tk" != "$go_tk" ]]; then
+  fail=$((fail + 1))
+fi
+php_alias="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(next((x.get("domain_alias") or "" for x in ls if x.get("domain_alias")), ""))' <<<"$php_tl")"
+if [[ -n "$php_alias" ]]; then
+  php_kw="$(curl -sS "$PHP/platformapi/tenant.tenant/lists?keyword=$php_alias" -H "token: $TOKEN")"
+  go_kw="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$php_alias" -H "token: $TOKEN")"
+  php_kn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$php_kw")"
+  go_kn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$go_kw")"
+  echo "tenant_lists_alias php_count=$php_kn go_count=$go_kn"
+  if [[ "$php_kn" != "$go_kn" || "$php_kn" == "0" ]]; then
+    fail=$((fail + 1))
+  fi
+fi
+
+php_cl="$(curl -sS "$PHP/platformapi/crontab.crontab/lists" -H "token: $TOKEN")"
+go_cl="$(curl -sS "$GO/platformapi/crontab.crontab/lists" -H "token: $TOKEN")"
+cid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("id") or 0)' <<<"$php_cl")"
+if [[ "$cid" != "0" && -n "$cid" ]]; then
+  php_cd="$(curl -sS "$PHP/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
+  go_cd="$(curl -sS "$GO/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
+  php_ck="$(python3 -c 'import json,sys; print(",".join(sorted((json.load(sys.stdin).get("data") or {}).keys())))' <<<"$php_cd")"
+  go_ck="$(python3 -c 'import json,sys; print(",".join(sorted((json.load(sys.stdin).get("data") or {}).keys())))' <<<"$go_cd")"
+  echo "crontab_detail_keys php=$php_ck go=$go_ck"
+  if [[ "$php_ck" != "$go_ck" ]]; then
+    fail=$((fail + 1))
+  fi
+fi
+
+if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
+  php_fl="$(curl -sS "$PHP/tenantapi/file/lists?type=10" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_fl="$(curl -sS "$GO/tenantapi/file/lists?type=10" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_fk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))' <<<"$php_fl")"
+  go_fk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))' <<<"$go_fl")"
+  echo "file_lists_keys php=$php_fk go=$go_fk"
+  if [[ -n "$php_fk" && "$php_fk" != "$go_fk" ]]; then
+    fail=$((fail + 1))
+  fi
+fi
+
+ts="${ts:-$(date +%s)}"
+tsn="pt${ts: -6}"
+php_ta="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$tsn\",\"host_name\":\"$tsn\",\"account\":\"$tsn\",\"password\":\"likeadmin\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0}")"
+echo "tenant_add php_code=$(jcode <<<"$php_ta") php_msg=$(jget msg <<<"$php_ta")"
+if [[ "$(jcode <<<"$php_ta")" == "1" ]]; then
+  tlist="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$tsn" -H "token: $TOKEN")"
+  tid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
+' "$tsn" <<<"$tlist")"
+  if [[ "$tid" != "0" && -n "$tid" ]]; then
+    php_td2="$(curl -sS "$PHP/platformapi/tenant.tenant/detail?id=$tid" -H "token: $TOKEN")"
+    go_td2="$(curl -sS "$GO/platformapi/tenant.tenant/detail?id=$tid" -H "token: $TOKEN")"
+    echo "tenant_add_detail php_sn=$(jget data.sn <<<"$php_td2") go_sn=$(jget data.sn <<<"$go_td2")"
+    if [[ "$(jget data.sn <<<"$php_td2")" != "$tsn" || "$(jget data.sn <<<"$go_td2")" != "$tsn" ]]; then
+      fail=$((fail + 1))
+    fi
+    go_dis="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$tid,\"name\":\"$tsn\",\"avatar\":\"\",\"tel\":\"\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"disable\":1,\"notes\":\"\"}")"
+    php_dis="$(curl -sS "$PHP/api/index/config" -H "Host: $tsn.likeadmin.test")"
+    go_disa="$(curl -sS "$GO/api/index/config" -H "Host: $tsn.likeadmin.test")"
+    echo "tenant_disable go_edit=$(jcode <<<"$go_dis") php_code=$(jcode <<<"$php_dis") go_code=$(jcode <<<"$go_disa") php_show=$(jget show <<<"$php_dis") go_show=$(jget show <<<"$go_disa")"
+    if [[ "$(jcode <<<"$go_dis")" != "1" || "$(jcode <<<"$php_dis")" != "3" || "$(jcode <<<"$go_disa")" != "3" || "$(jget show <<<"$php_dis")" != "0" || "$(jget show <<<"$go_disa")" != "0" ]]; then
+      echo "  php_dis=${php_dis:0:240}"
+      echo "  go_disa=${go_disa:0:240}"
+      fail=$((fail + 1))
+    fi
+    php_del="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$tid}")"
+    echo "tenant_delete php_code=$(jcode <<<"$php_del")"
+    if [[ "$(jcode <<<"$php_del")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "tenant_add could not resolve id"
+    fail=$((fail + 1))
+  fi
+else
+  echo "  php_ta=${php_ta:0:300}"
+  fail=$((fail + 1))
+fi
+
+if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  if [[ -n "$uid" ]]; then
+    now="$(date +%s)"
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('att$now',$uid,2,0,9,1,0,1,$now),('atg$now',$uid,2,0,9,1,0,1,$now)"
+    php_n1="$(curl -sS -X POST "$PHP/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>att$now</out_trade_no><transaction_id>wxatt</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    go_n1="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>atg$now</out_trade_no><transaction_id>wxatg</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    php_ps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='att$now'")"
+    go_ps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='atg$now'")"
+    echo "pay_notify_empty_attach php_pay=$php_ps1 go_pay=$go_ps1"
+    if [[ "$php_ps1" != "0" || "$go_ps1" != "0" ]]; then
+      echo "  php_n1=${php_n1:0:160} go_n1=${go_n1:0:160}"
+      fail=$((fail + 1))
+    fi
+    php_n2="$(curl -sS -X POST "$PHP/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>att$now</out_trade_no><transaction_id>wxatt</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    go_n2="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>atg$now</out_trade_no><transaction_id>wxatg</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    php_ps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='att$now'")"
+    go_ps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='atg$now'")"
+    echo "pay_notify_recharge php_pay=$php_ps2 go_pay=$go_ps2"
+    if [[ "$go_ps2" != "1" ]]; then
+      echo "  php_n2=${php_n2:0:160} go_n2=${go_n2:0:160}"
+      fail=$((fail + 1))
+    fi
+  fi
+fi
+
 echo "failed=$fail"
 exit "$fail"

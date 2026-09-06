@@ -26,7 +26,8 @@ func TenantLists(c *gin.Context) {
 	q := lists.Parse(c)
 	db := bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL")
 	if kw := lists.Param(q, "keyword"); kw != "" {
-		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+		like := "%" + kw + "%"
+		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ? OR domain_alias LIKE ?", like, like, like, like)
 	}
 	if start := lists.Param(q, "create_time_start"); start != "" {
 		if ts := util.ParseDateTime(start); ts > 0 {
@@ -58,7 +59,7 @@ func TenantLists(c *gin.Context) {
 		}
 		avatar := t.Avatar
 		if avatar == "" {
-			avatar = config.C.Project.Website["shop_logo"]
+			avatar = firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])
 		}
 		out = append(out, map[string]any{
 			"id": t.ID, "sn": t.SN, "name": t.Name,
@@ -93,8 +94,12 @@ func TenantDetail(c *gin.Context) {
 	if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
 		domain = httpPrefix + t.DomainAlias + "/admin/"
 	}
+	avatar := t.Avatar
+	if avatar == "" {
+		avatar = firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])
+	}
 	response.Success(c, "获取成功", gin.H{
-		"id": t.ID, "sn": t.SN, "name": t.Name, "avatar": filesvc.GetFileURL(c, t.Avatar),
+		"id": t.ID, "sn": t.SN, "name": t.Name, "avatar": filesvc.GetFileURL(c, avatar),
 		"tel": t.Tel, "domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
 		"disable": t.Disable, "create_time": util.FormatDateTime(t.CreateTime), "notes": t.Notes,
 		"user_total": users, "default_domain": def, "domain": domain,
@@ -108,12 +113,10 @@ func TenantAdd(c *gin.Context) {
 		return
 	}
 	alias := stripHost(httpx.Str(c, "domain_alias"))
-	if alias != "" {
-		var aliasRow model.Tenant
-		if bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", alias).First(&aliasRow).Error == nil {
-			response.Fail(c, "租户别名已存在")
-			return
-		}
+	var aliasRow model.Tenant
+	if bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", alias).First(&aliasRow).Error == nil {
+		response.Fail(c, "租户别名已存在")
+		return
 	}
 	sn := httpx.Str(c, "host_name")
 	if sn == "" {
@@ -166,12 +169,10 @@ func TenantEdit(c *gin.Context) {
 		return
 	}
 	alias := stripHost(httpx.Str(c, "domain_alias"))
-	if alias != "" {
-		var aliasRow model.Tenant
-		if bootstrap.DB.Where("domain_alias = ? AND id <> ? AND delete_time IS NULL", alias, id).First(&aliasRow).Error == nil {
-			response.Fail(c, "租户别名已存在")
-			return
-		}
+	var aliasRow model.Tenant
+	if bootstrap.DB.Where("domain_alias = ? AND id <> ? AND delete_time IS NULL", alias, id).First(&aliasRow).Error == nil {
+		response.Fail(c, "租户别名已存在")
+		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
@@ -540,7 +541,7 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	}
 	account := httpx.Str(c, "account")
 	if account == "" {
-		account = tenant.SN
+		account = "admin"
 	}
 	now := util.NowUnix()
 	admin := model.TenantAdmin{

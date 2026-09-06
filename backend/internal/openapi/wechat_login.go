@@ -267,7 +267,7 @@ func handlePayNotify(c *gin.Context) {
 			return
 		}
 	}
-	if n.Paid && (n.Attach == "recharge" || n.Attach == "") {
+	if wechat.ShouldMarkRechargePaid(n) {
 		sn := wechat.RechargeSN(n.OutTradeNo)
 		if sn != "" {
 			var order model.RechargeOrder

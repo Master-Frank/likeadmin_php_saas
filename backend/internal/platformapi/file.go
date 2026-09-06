@@ -47,7 +47,10 @@ func FileMove(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("cid", httpx.Uint(c, "cid"))
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Updates(map[string]any{
+		"cid": httpx.Uint(c, "cid"), "update_time": now,
+	})
 	response.SuccessNotice(c, "移动成功")
 }
 
@@ -57,7 +60,10 @@ func FileRename(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	bootstrap.DB.Model(&model.File{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.File{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+		"name": httpx.Str(c, "name"), "update_time": now,
+	})
 	response.SuccessNotice(c, "重命名成功")
 }
 

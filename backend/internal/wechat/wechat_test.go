@@ -60,6 +60,14 @@ func TestParsePayNotify(t *testing.T) {
 	if !ali.Paid || ali.Attach != "recharge" || ali.OutTradeNo != "SN001" {
 		t.Fatalf("ali %+v", ali)
 	}
+	empty := ParsePayNotify(xmlRaw, nil)
+	empty.Attach = ""
+	if ShouldMarkRechargePaid(empty) {
+		t.Fatal("empty attach should not mark recharge paid")
+	}
+	if !ShouldMarkRechargePaid(n) {
+		t.Fatal("recharge attach should mark paid")
+	}
 }
 
 func TestTextReplyXML(t *testing.T) {

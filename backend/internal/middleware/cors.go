@@ -90,18 +90,18 @@ func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string) bool 
 			meta.Tactics = tenant.Tactics
 			return true
 		}
-		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 1)
+		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 0)
 		return false
 	}
 	sn := ctxutil.SubDomain(host)
 	meta.TenantSN = sn
 	err = bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&tenant).Error
 	if err != nil {
-		response.AbortFail(c, "接口域名错误或租户不存在", response.CodeNotFound, 1)
+		response.AbortFail(c, "接口域名错误或租户不存在", response.CodeNotFound, 0)
 		return false
 	}
 	if tenant.Disable != 0 {
-		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 1)
+		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 0)
 		return false
 	}
 	meta.TenantID = tenant.ID

@@ -130,23 +130,67 @@ func WechatRefund(c *gin.Context, transactionID, refundSN string, refundAmount, 
 	return nil
 }
 
+func WechatQueryRefund(cfg WechatPayCfg, refundSN string) (map[string]any, error) {
+	if cfg.MchID == "" || cfg.APIClientKey == "" || refundSN == "" {
+		return nil, nil
+	}
+	key, err := parseRSAPrivateKey(cfg.APIClientKey)
+	if err != nil {
+		return nil, err
+	}
+	return wechatV3Get(cfg, key, "/v3/refund/domestic/refunds/"+url.PathEscape(refundSN))
+}
+
+func ParseWechatRefundQuery(result map[string]any) (ok bool, msg string, known bool) {
+	if result == nil {
+		return false, "", false
+	}
+	if util.ToString(result["status"]) == "SUCCESS" {
+		return true, "", true
+	}
+	code := util.ToString(result["code"])
+	message := util.ToString(result["message"])
+	if code != "" || message != "" {
+		return false, code + "-" + message, true
+	}
+	return false, "", false
+}
+
+func wechatV3Get(cfg WechatPayCfg, key *rsa.PrivateKey, path string) (map[string]any, error) {
+	return wechatV3Do(cfg, key, http.MethodGet, path, nil)
+}
+
 func wechatV3Post(cfg WechatPayCfg, key *rsa.PrivateKey, path string, body []byte) (map[string]any, error) {
+	return wechatV3Do(cfg, key, http.MethodPost, path, body)
+}
+
+func wechatV3Do(cfg WechatPayCfg, key *rsa.PrivateKey, method, path string, body []byte) (map[string]any, error) {
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	nonce := randomHex(16)
-	msg := "POST\n" + path + "\n" + ts + "\n" + nonce + "\n" + string(body) + "\n"
+	bodyStr := ""
+	if len(body) > 0 {
+		bodyStr = string(body)
+	}
+	msg := method + "\n" + path + "\n" + ts + "\n" + nonce + "\n" + bodyStr + "\n"
 	sig, err := rsaSHA256Base64(key, msg)
 	if err != nil {
 		return nil, err
 	}
 	auth := fmt.Sprintf(`WECHATPAY2-SHA256-RSA2048 mchid="%s",nonce_str="%s",timestamp="%s",serial_no="%s",signature="%s"`,
 		cfg.MchID, nonce, ts, cfg.SerialNo, sig)
-	req, err := http.NewRequest(http.MethodPost, "https://api.mch.weixin.qq.com"+path, bytes.NewReader(body))
+	var reader io.Reader
+	if len(body) > 0 {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, "https://api.mch.weixin.qq.com"+path, reader)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", auth)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
 	if err != nil {
 		return nil, err

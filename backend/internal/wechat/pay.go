@@ -80,6 +80,12 @@ func RechargeSN(outTradeNo string) string {
 	return outTradeNo
 }
 
+// ShouldMarkRechargePaid matches PHP WeChatPayService::notify attach switch:
+// only the recharge scene is handled; empty attach is ignored.
+func ShouldMarkRechargePaid(n PayNotify) bool {
+	return n.Paid && n.Attach == "recharge"
+}
+
 func utilString(v any) string {
 	switch t := v.(type) {
 	case string:
