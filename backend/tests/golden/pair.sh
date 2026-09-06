@@ -1200,8 +1200,8 @@ fi
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   php_jl="$(curl -sS "$PHP/tenantapi/dept.jobs/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_jl="$(curl -sS "$GO/tenantapi/dept.jobs/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  php_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] or {}).get("status_desc",""))' <<<"$php_jl")"
-  go_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] or {}).get("status_desc",""))' <<<"$go_jl")"
+  php_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("status_desc",""))' <<<"$php_jl")"
+  go_js="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("status_desc",""))' <<<"$go_jl")"
   echo "jobs_lists_status_desc php=$php_js go=$go_js"
   if [[ -n "$php_js" && "$php_js" != "$go_js" ]]; then
     fail=$((fail + 1))
@@ -1237,8 +1237,8 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
       echo "  go_gd=${go_gd:0:240}"
       fail=$((fail + 1))
     fi
-    php_pv="$(curl -sS "$PHP/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
-    go_pv="$(curl -sS "$GO/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
+    php_pv="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}")"
+    go_pv="$(curl -sS -X POST "$GO/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}")"
     echo "generator_preview php_code=$(jcode <<<"$php_pv") go_code=$(jcode <<<"$go_pv") php_msg=$(jget msg <<<"$php_pv") go_msg=$(jget msg <<<"$go_pv")"
     if [[ "$(jcode <<<"$php_pv")" != "$(jcode <<<"$go_pv")" ]]; then
       fail=$((fail + 1))
@@ -1254,7 +1254,7 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
   mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
-    mysqlq "UPDATE la_user SET user_money = user_money + 20 WHERE id=$uid"
+    mysqlq "UPDATE la_user SET user_money = user_money + 20, total_recharge_amount = total_recharge_amount + 20 WHERE id=$uid"
     now="$(date +%s)"
     mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('prf$now',$uid,1,1,10,1,0,1,$now),('grf$now',$uid,1,1,10,1,0,1,$now)"
     pid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='prf$now'")"
