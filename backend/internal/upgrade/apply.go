@@ -1,0 +1,281 @@
+package upgrade
+
+import (
+	"archive/zip"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
+
+	"gorm.io/gorm"
+)
+
+// ApplyPackage downloads, extracts, and applies a likeadmin upgrade zip (SQL / menu / files).
+func ApplyPackage(link, zipName string) error {
+	root := serverRoot()
+	localDir := filepath.Join(root, "upgrade")
+	tempDir := filepath.Join(localDir, "temp")
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		return err
+	}
+	savePath, err := downFile(link, localDir)
+	if err != nil {
+		return err
+	}
+	_ = os.RemoveAll(tempDir)
+	if err := unzip(savePath, tempDir); err != nil {
+		return err
+	}
+	db := bootstrap.DB
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := upgradeSQL(tx, filepath.Join(tempDir, "project", "sql", "data")); err != nil {
+			return err
+		}
+		if err := upgradeMenu(tx, filepath.Join(tempDir, "project", "menu")); err != nil {
+			return err
+		}
+		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), filepath.Dir(root)+string(os.PathSeparator)); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := upgradeSQL(db, filepath.Join(tempDir, "project", "sql", "structure")); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(tempDir)
+	return nil
+}
+
+func downFile(remote, saveDir string) (string, error) {
+	resp, err := httpClient.Get(remote)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", errStatus("获取文件错误")
+	}
+	name := filepath.Base(strings.Split(remote, "?")[0])
+	if name == "" || name == "/" || name == "." {
+		name = "package.zip"
+	}
+	path := filepath.Join(saveDir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
+		return "", err
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(f, resp.Body)
+	_ = f.Close()
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+type applyError string
+
+func (e applyError) Error() string { return string(e) }
+
+func errStatus(msg string) error { return applyError(msg) }
+
+func unzip(src, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return applyError("解压文件错误")
+	}
+	defer r.Close()
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return applyError("解压文件错误")
+	}
+	for _, f := range r.File {
+		name := filepath.Clean(f.Name)
+		if strings.HasPrefix(name, "..") {
+			continue
+		}
+		target := filepath.Join(dest, name)
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(target, 0755)
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return applyError("解压文件错误")
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return applyError("解压文件错误")
+		}
+		out, err := os.Create(target)
+		if err != nil {
+			_ = rc.Close()
+			return applyError("解压文件错误")
+		}
+		_, err = io.Copy(out, rc)
+		_ = out.Close()
+		_ = rc.Close()
+		if err != nil {
+			return applyError("解压文件错误")
+		}
+	}
+	return nil
+}
+
+func upgradeSQL(db *gorm.DB, dir string) error {
+	st, err := os.Stat(dir)
+	if err != nil || !st.IsDir() {
+		return nil
+	}
+	prefix := config.Prefix()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return applyError("更新数据库数据失败")
+	}
+	for _, ent := range entries {
+		if ent.IsDir() || !strings.HasSuffix(strings.ToLower(ent.Name()), ".sql") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, ent.Name()))
+		if err != nil || len(raw) == 0 {
+			continue
+		}
+		sql := strings.ReplaceAll(string(raw), "`la_", "`"+prefix)
+		for _, stmt := range strings.Split(sql, ";") {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if err := db.Exec(stmt).Error; err != nil {
+				if strings.Contains(dir, "structure") {
+					return applyError("更新数据库结构失败")
+				}
+				return applyError("更新数据库数据失败")
+			}
+		}
+	}
+	return nil
+}
+
+func upgradeMenu(db *gorm.DB, dir string) error {
+	if _, err := os.Stat(dir); err != nil {
+		return nil
+	}
+	var tenants []model.Tenant
+	db.Where("delete_time IS NULL").Find(&tenants)
+	for _, t := range tenants {
+		if err := db.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
+			return applyError("更新菜单信息失败")
+		}
+		if err := reinitTenantMenus(db, t.ID); err != nil {
+			return applyError("更新菜单信息失败")
+		}
+	}
+	return nil
+}
+
+func reinitTenantMenus(tx *gorm.DB, tenantID uint) error {
+	var tpls []model.TenantSystemMenu
+	tx.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
+	if len(tpls) == 0 {
+		var plat []model.SystemMenu
+		tx.Order("pid, id").Find(&plat)
+		idMap := map[uint]uint{}
+		for _, m := range plat {
+			old := m.ID
+			row := model.TenantSystemMenu{
+				Pid: m.Pid, Type: m.Type, Name: m.Name, Icon: m.Icon, Sort: m.Sort, Perms: m.Perms,
+				Paths: m.Paths, Component: m.Component, Selected: m.Selected, Params: m.Params,
+				IsCache: m.IsCache, IsShow: m.IsShow, IsDisable: m.IsDisable, TenantID: tenantID,
+				CreateTime: util.NowUnix(),
+			}
+			if err := tx.Create(&row).Error; err != nil {
+				return err
+			}
+			idMap[old] = row.ID
+		}
+		var created []model.TenantSystemMenu
+		tx.Where("tenant_id = ?", tenantID).Find(&created)
+		for _, item := range created {
+			if item.Pid != 0 {
+				if nid, ok := idMap[item.Pid]; ok {
+					tx.Model(&item).Update("pid", nid)
+				}
+			}
+		}
+		return nil
+	}
+	idMap := map[uint]uint{}
+	for _, m := range tpls {
+		old := m.ID
+		row := m
+		row.ID = 0
+		row.TenantID = tenantID
+		row.CreateTime = util.NowUnix()
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		idMap[old] = row.ID
+	}
+	var created []model.TenantSystemMenu
+	tx.Where("tenant_id = ?", tenantID).Find(&created)
+	for _, item := range created {
+		if item.Pid != 0 {
+			if nid, ok := idMap[item.Pid]; ok {
+				tx.Model(&item).Update("pid", nid)
+			}
+		}
+	}
+	return nil
+}
+
+func upgradeFile(tempFile, oldFile string) error {
+	tempFile = strings.TrimSpace(tempFile)
+	oldFile = strings.TrimSpace(oldFile)
+	if tempFile == "" || oldFile == "" {
+		return applyError("更新文件失败")
+	}
+	if _, err := os.Stat(tempFile); err != nil {
+		return nil
+	}
+	if err := os.MkdirAll(oldFile, 0777); err != nil {
+		return applyError("更新文件失败")
+	}
+	return filepath.WalkDir(tempFile, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return applyError("更新文件失败")
+		}
+		rel, err := filepath.Rel(tempFile, path)
+		if err != nil {
+			return applyError("更新文件失败")
+		}
+		dest := filepath.Join(oldFile, rel)
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0777)
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return applyError("更新文件失败")
+		}
+		if cur, err := os.ReadFile(dest); err == nil {
+			if string(src) == string(cur) {
+				return nil
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0777); err != nil {
+			return applyError("更新文件失败")
+		}
+		if err := os.WriteFile(dest, src, 0644); err != nil {
+			return applyError("更新文件失败")
+		}
+		return nil
+	})
+}

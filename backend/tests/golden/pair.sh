@@ -175,6 +175,33 @@ PY
   fi
 done
 
+php_uk="$(python3 -c '
+import json
+try:
+    d=json.load(open("/tmp/likeadmin-golden/php_platformapi_upgrade.upgrade_lists.json"))
+    ls=(d.get("data") or {}).get("lists") or []
+    row=ls[0] if ls else {}
+    keys=("version_str","able_update","notice","add","optimize","repair","content_desc","new_version")
+    print(",".join(k for k in keys if k in row))
+except Exception:
+    print("")
+')"
+go_uk="$(python3 -c '
+import json
+try:
+    d=json.load(open("/tmp/likeadmin-golden/go_platformapi_upgrade.upgrade_lists.json"))
+    ls=(d.get("data") or {}).get("lists") or []
+    row=ls[0] if ls else {}
+    keys=("version_str","able_update","notice","add","optimize","repair","content_desc","new_version")
+    print(",".join(k for k in keys if k in row))
+except Exception:
+    print("")
+')"
+echo "upgrade_lists_keys php=$php_uk go=$go_uk"
+if [[ -n "$php_uk" && "$php_uk" != "$go_uk" ]]; then
+  fail=$((fail + 1))
+fi
+
 if [[ -n "$TENANT_HOST" ]]; then
   ts="$(date +%s)"
   acc="u1${ts: -4}"
@@ -853,6 +880,41 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   echo "upgrade_dl_bad php_msg=$(jget msg <<<"$php_ud") go_msg=$(jget msg <<<"$go_ud")"
   if [[ "$(jget msg <<<"$php_ud")" != "$(jget msg <<<"$go_ud")" ]]; then
     fail=$((fail + 1))
+  fi
+  php_um="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":999999001,"update_type":1}')"
+  go_um="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":999999001,"update_type":1}')"
+  echo "upgrade_miss php_msg=$(jget msg <<<"$php_um") go_msg=$(jget msg <<<"$go_um")"
+  if [[ "$(jget msg <<<"$php_um")" != "$(jget msg <<<"$go_um")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_dm="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":999999001,"update_type":1}')"
+  go_dm="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":999999001,"update_type":1}')"
+  echo "upgrade_dl_miss php_msg=$(jget msg <<<"$php_dm") go_msg=$(jget msg <<<"$go_dm")"
+  if [[ "$(jget msg <<<"$php_dm")" != "$(jget msg <<<"$go_dm")" ]]; then
+    fail=$((fail + 1))
+  fi
+  vid="$(python3 -c '
+import json
+try:
+    d=json.load(open("/tmp/likeadmin-golden/php_platformapi_upgrade.upgrade_lists.json"))
+    ls=(d.get("data") or {}).get("lists") or []
+    print(ls[0].get("id") if ls else "")
+except Exception:
+    print("")
+')"
+  if [[ -n "$vid" ]]; then
+    php_ur="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
+    go_ur="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
+    echo "upgrade_real id=$vid php_msg=$(jget msg <<<"$php_ur") go_msg=$(jget msg <<<"$go_ur")"
+    if [[ "$(jcode <<<"$php_ur")" != "$(jcode <<<"$go_ur")" || "$(jget msg <<<"$php_ur")" != "$(jget msg <<<"$go_ur")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_dr="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
+    go_dr="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$vid,\"update_type\":1}")"
+    echo "upgrade_dl_real id=$vid php_msg=$(jget msg <<<"$php_dr") go_msg=$(jget msg <<<"$go_dr")"
+    if [[ "$(jcode <<<"$php_dr")" != "$(jcode <<<"$go_dr")" || "$(jget msg <<<"$php_dr")" != "$(jget msg <<<"$go_dr")" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
   if [[ "$(jcode <<<"$php_gm")" != "$(jcode <<<"$go_gm")" || "$(jget show <<<"$php_gm")" != "$(jget show <<<"$go_gm")" ]]; then
     fail=$((fail + 1))

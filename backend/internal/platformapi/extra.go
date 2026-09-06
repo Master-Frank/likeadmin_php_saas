@@ -2,17 +2,11 @@ package platformapi
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
-	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
-	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/filesvc"
@@ -20,6 +14,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/upgrade"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -461,97 +456,73 @@ func asCfgMap(v any) map[string]any {
 	return map[string]any{}
 }
 
-const upgradeProductCode = "462953db655787cb99deb5893f8d523a"
-
 func UpgradeLists(c *gin.Context) {
 	q := lists.Parse(c)
-	key := fmt.Sprintf("version_lists%d", q.PageNo)
-	var payload map[string]any
-	if raw, ok := cache.Get(key); ok && raw != "" {
-		_ = json.Unmarshal([]byte(raw), &payload)
-	}
-	if payload == nil {
-		url := fmt.Sprintf("https://server.mddai.cn/indexapi/version/lists?type=2&page_no=%d&page_size=%d&page=1&action=lists&product_code=%s",
-			q.PageNo, q.PageSize, upgradeProductCode)
-		client := &http.Client{Timeout: 8 * time.Second}
-		resp, err := client.Get(url)
-		if err == nil {
-			body, _ := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-			var wrap map[string]any
-			if json.Unmarshal(body, &wrap) == nil {
-				if data, ok := wrap["data"].(map[string]any); ok {
-					payload = data
-					if b, err := json.Marshal(data); err == nil {
-						cache.Set(key, string(b), 30*time.Minute)
-					}
-				}
-			}
-		}
-	}
-	if payload == nil {
-		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
-		return
-	}
+	payload := upgrade.GetRemoteVersion(q.PageNo, q.PageSize)
 	rawLists, _ := payload["lists"].([]any)
 	count := int64(util.ToInt(payload["count"]))
-	response.Lists(c, formatUpgradeLists(rawLists), count, q.PageNo, q.PageSize, nil)
+	if len(rawLists) == 0 {
+		response.Lists(c, []any{}, count, q.PageNo, q.PageSize, nil)
+		return
+	}
+	response.Lists(c, upgrade.FormatLists(rawLists, q.PageNo, ""), count, q.PageNo, q.PageSize, nil)
 }
 
-func formatUpgradeLists(rows []any) []map[string]any {
-	local := config.C.Project.Version
-	out := make([]map[string]any, 0, len(rows))
-	for _, item := range rows {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			continue
-		}
-		ver := util.ToString(m["version_no"])
-		m["version_str"] = ""
-		m["able_update"] = 0
-		if local == ver {
-			m["version_str"] = "您的系统当前处于此版本"
-		} else if local < ver {
-			m["version_str"] = "系统可更新至此版本"
-			m["able_update"] = 1
-		}
-		m["new_version"] = 0
-		notice := []any{}
-		if util.ToInt(m["uniapp_publish"]) == 1 {
-			notice = append(notice, "更新至当前版本后需重新发布手机端前端前台")
-		}
-		if util.ToInt(m["pc_admin_publish"]) == 1 {
-			notice = append(notice, "更新至当前版本后需重新发布前端PC后台")
-		}
-		if util.ToInt(m["pc_shop_publish"]) == 1 {
-			notice = append(notice, "更新至当前版本后需重新发布前端PC前台")
-		}
-		if extra := util.ToString(m["publish_content"]); extra != "" {
-			notice = append(notice, extra)
-		}
-		m["notice"] = notice
-		out = append(out, m)
+func upgradeAuthMsg(result map[string]any) string {
+	if msg := util.ToString(result["msg"]); msg != "" {
+		return msg
 	}
-	if len(out) > 0 {
-		out[0]["new_version"] = 1
-	}
-	return out
+	return "请先联系客服获取授权"
 }
 
 func UpgradeDo(c *gin.Context) {
-	if msg := util.UpgradeCheck(httpx.Params(c)); msg != "" {
+	p := httpx.Params(c)
+	if msg := util.UpgradeCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	response.Fail(c, "在线升级面向 PHP 发行包，Go 版请通过发版更新")
+	if msg := upgrade.CheckAbleUpgrade(p["id"]); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	host := ctxutil.Host(c)
+	result := upgrade.Verify(host, p["id"], "package_link")
+	if !upgrade.HasPermission(result) {
+		msg := upgradeAuthMsg(result)
+		upgrade.AddLog(host, p["id"], 1, false, msg)
+		response.Fail(c, "更新失败:"+msg)
+		return
+	}
+	if err := upgrade.ApplyPackage(util.ToString(result["link"]), ""); err != nil {
+		upgrade.AddLog(host, p["id"], 1, false, err.Error())
+		response.Fail(c, "更新失败:"+err.Error())
+		return
+	}
+	upgrade.AddLog(host, p["id"], 1, true, "")
+	response.SuccessNotice(c, "更新成功")
 }
 
 func UpgradeDownloadPkg(c *gin.Context) {
-	if msg := util.UpgradeDownloadCheck(httpx.Params(c)); msg != "" {
+	p := httpx.Params(c)
+	if msg := util.UpgradeDownloadCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	response.Fail(c, "在线升级面向 PHP 发行包，Go 版请通过发版更新")
+	if msg := upgrade.CheckVersionData(p["id"]); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	updateType := util.ToInt(p["update_type"])
+	host := ctxutil.Host(c)
+	result := upgrade.Verify(host, p["id"], upgrade.PkgLinkName(updateType))
+	if !upgrade.HasPermission(result) {
+		msg := upgradeAuthMsg(result)
+		upgrade.AddLog(host, p["id"], updateType, false, msg)
+		response.Fail(c, msg)
+		return
+	}
+	upgrade.AddLog(host, p["id"], updateType, true, "")
+	response.SuccessSilent(c, "", map[string]any{"line": result["link"]})
 }
 
 func UpgradeNotImpl(c *gin.Context) {
