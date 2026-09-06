@@ -139,6 +139,70 @@ func TestUserPasswordCheck(t *testing.T) {
 	}
 }
 
+func TestPlatformWebSettingCheck(t *testing.T) {
+	if PlatformWebSettingCheck(map[string]any{}) != "请填写网站名称" {
+		t.Fatal(PlatformWebSettingCheck(map[string]any{}))
+	}
+	long := "一二三四五六七八九十一二三四五六七八九十12345678901"
+	if PlatformWebSettingCheck(map[string]any{"name": long}) != "网站名称最长为12个字符" {
+		t.Fatal(PlatformWebSettingCheck(map[string]any{"name": long}))
+	}
+}
+
+func TestTransactionSettingCheck(t *testing.T) {
+	if TransactionSettingCheck(map[string]any{}) != "请选择系统取消待付款订单方式" {
+		t.Fatal("empty")
+	}
+	if TransactionSettingCheck(map[string]any{"cancel_unpaid_orders": 0}) != "请选择系统自动核销订单方式" {
+		t.Fatal("verification required")
+	}
+	if TransactionSettingCheck(map[string]any{"cancel_unpaid_orders": 1, "verification_orders": 0}) != "系统取消待付款订单时间未填写" {
+		t.Fatal("times")
+	}
+	if TransactionSettingCheck(map[string]any{"cancel_unpaid_orders": 1, "cancel_unpaid_orders_times": 1.5, "verification_orders": 0}) != "系统取消待付款订单时间须为整型" {
+		t.Fatal("float")
+	}
+}
+
+func TestSmsConfigWriteCheck(t *testing.T) {
+	if SmsConfigWriteCheck(map[string]any{}) != "请选择类型" {
+		t.Fatal(SmsConfigWriteCheck(map[string]any{}))
+	}
+	if SmsConfigWriteCheck(map[string]any{"type": "ali"}) != "请输入签名" {
+		t.Fatal("sign")
+	}
+}
+
+func TestOAMenuCheck(t *testing.T) {
+	if OAMenuCheck(nil) != "请设置正确格式菜单" {
+		t.Fatal("empty")
+	}
+	if OAMenuCheck([]any{map[string]any{"name": "a"}, map[string]any{"name": "b"}, map[string]any{"name": "c"}, map[string]any{"name": "d"}}) != "一级菜单超出限制(最多3个)" {
+		t.Fatal("count")
+	}
+	if OAMenuCheck([]any{map[string]any{"name": "一二三四五"}}) != "一级菜单名称字数不能超过4个汉字或8个字母" {
+		t.Fatal("width")
+	}
+	if OAMenuCheck([]any{map[string]any{"name": "菜单", "has_menu": false}}) != "一级菜单未选择菜单类型" {
+		t.Fatal("type")
+	}
+}
+
+func TestRechargeAPICheck(t *testing.T) {
+	if RechargeAPICheck(map[string]any{}, 1, 0) != "请填写充值金额" {
+		t.Fatal("money")
+	}
+	if RechargeAPICheck(map[string]any{"money": 0}, 1, 0) != "请填写大于0的充值金额" {
+		t.Fatal("gt")
+	}
+	if RechargeAPICheck(map[string]any{"money": 1}, 0, 0) != "充值功能已关闭" {
+		t.Fatal("closed")
+	}
+	if RechargeAPICheck(map[string]any{"money": 1}, 1, 10) != "最低充值金额10.00元" {
+		t.Fatal("min")
+	}
+}
+
 func TestDictTypeWriteCheck(t *testing.T) {
 	if DictTypeWriteCheck(map[string]any{}) != "请填写字典名称" {
 		t.Fatal(DictTypeWriteCheck(map[string]any{}))

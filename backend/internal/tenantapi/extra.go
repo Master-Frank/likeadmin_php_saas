@@ -139,24 +139,30 @@ func DecorateTabbarSave(c *gin.Context) {
 }
 
 func HotSearchSet(c *gin.Context) {
-	cfgsvc.Set(c, "hot_search", "status", httpx.Int(c, "status"))
-	tid := tenantDB(c)
-	q := tdb(c)
-	if tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	status := httpx.Int(c, "status")
+	if status != 1 {
+		status = 0
 	}
-	q.Delete(&model.HotSearch{})
+	cfgsvc.Set(c, "hot_search", "status", status)
 	data := httpx.Any(c, "data")
 	arr, _ := data.([]any)
-	now := util.NowUnix()
-	for _, item := range arr {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			continue
+	if len(arr) > 0 {
+		tid := tenantDB(c)
+		q := tdb(c)
+		if tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
 		}
-		tdb(c).Create(&model.HotSearch{
-			Name: util.ToString(m["name"]), Sort: util.ToInt(m["sort"]), TenantID: tid, CreateTime: now,
-		})
+		q.Where("id > 0").Delete(&model.HotSearch{})
+		now := util.NowUnix()
+		for _, item := range arr {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
+			}
+			tdb(c).Create(&model.HotSearch{
+				Name: util.ToString(m["name"]), Sort: util.ToInt(m["sort"]), TenantID: tid, CreateTime: now,
+			})
+		}
 	}
 	response.SuccessNotice(c, "设置成功")
 }
@@ -316,6 +322,10 @@ func round2(v float64) float64 {
 }
 
 func RechargeRefund(c *gin.Context) {
+	if _, ok := httpx.Params(c)["recharge_id"]; !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	id := httpx.Uint(c, "recharge_id")
 	var order model.RechargeOrder
 	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&order).Error != nil {
@@ -323,11 +333,16 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	if order.PayStatus != 1 {
-		response.Fail(c, "订单未支付")
+		response.Fail(c, "当前订单不可退款")
 		return
 	}
 	if order.RefundStatus == 1 {
-		response.Fail(c, "订单已退款")
+		response.Fail(c, "订单已发起退款,退款失败请到退款记录重新退款")
+		return
+	}
+	var user model.User
+	if tdb(c).First(&user, order.UserID).Error != nil || user.UserMoney < order.OrderAmount {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
 	adminID := ctxutil.Get(c).AdminID
@@ -342,9 +357,8 @@ func RechargeRefund(c *gin.Context) {
 		}).Error; err != nil {
 			return err
 		}
-		var user model.User
 		tx.First(&user, order.UserID)
-		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMDecRechargeRefund, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
+		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncAdmin, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
 		exists := func(sn string) bool {
 			var n int64
 			tx.Model(&model.RefundRecord{}).Where("sn = ?", sn).Count(&n)
@@ -357,7 +371,7 @@ func RechargeRefund(c *gin.Context) {
 		rec = model.RefundRecord{
 			SN: util.GenerateSN(exists, "", 4), UserID: order.UserID, OrderID: order.ID, OrderSN: order.SN,
 			OrderType: "recharge", OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount,
-			RefundType: 1, TransactionID: order.TransactionID, RefundWay: way, RefundStatus: 1,
+			RefundType: 1, TransactionID: order.TransactionID, RefundWay: way, RefundStatus: 0,
 			TenantID: order.TenantID, CreateTime: util.NowUnix(),
 		}
 		if err := tx.Create(&rec).Error; err != nil {
@@ -370,7 +384,7 @@ func RechargeRefund(c *gin.Context) {
 		}
 		return tx.Create(&model.RefundLog{
 			SN: util.GenerateSN(logExists, "", 4), RecordID: rec.ID, UserID: order.UserID, HandleID: adminID,
-			OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount, RefundStatus: 1,
+			OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount, RefundStatus: 0,
 			RefundMsg: "后台退款", CreateTime: util.NowUnix(),
 		}).Error
 	})
@@ -378,11 +392,17 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	if order.PayWay != 2 && order.PayWay != 3 {
+		tdb(c).Model(&model.RefundRecord{}).Where("id = ?", rec.ID).Update("refund_status", 2)
+		tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", rec.ID).Updates(map[string]any{"refund_status": 2, "refund_msg": "支付方式异常"})
+		response.Fail(c, "支付方式异常")
+		return
+	}
 	if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, recID uint) error {
@@ -408,12 +428,26 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 }
 
 func RechargeRefundAgain(c *gin.Context) {
+	if _, ok := httpx.Params(c)["record_id"]; !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var rec model.RefundRecord
 	if tdb(c).First(&rec, httpx.Uint(c, "record_id")).Error != nil {
 		response.Fail(c, "退款记录不存在")
 		return
 	}
-	tdb(c).Model(&rec).Update("refund_status", 1)
+	if rec.RefundStatus == 1 {
+		response.Fail(c, "该退款记录已退款成功")
+		return
+	}
+	var user model.User
+	var againOrder model.RechargeOrder
+	tdb(c).First(&againOrder, rec.OrderID)
+	if tdb(c).First(&user, rec.UserID).Error != nil || user.UserMoney < againOrder.OrderAmount {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
+		return
+	}
 	tdb(c).Create(&model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
@@ -421,18 +455,20 @@ func RechargeRefundAgain(c *gin.Context) {
 			return n > 0
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
-		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 1,
+		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 0,
 		RefundMsg: "重新退款", CreateTime: util.NowUnix(),
 	})
-	var order model.RechargeOrder
-	if tdb(c).First(&order, rec.OrderID).Error == nil {
-		if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
-			response.Fail(c, err.Error())
-			return
-		}
-		tdb(c).Model(&order).Update("refund_status", 1)
+	if againOrder.PayWay != 2 && againOrder.PayWay != 3 {
+		tdb(c).Model(&rec).Update("refund_status", 2)
+		tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", rec.ID).Updates(map[string]any{"refund_status": 2, "refund_msg": "支付方式异常"})
+		response.Fail(c, "支付方式异常")
+		return
 	}
-	response.Success(c, "操作成功", nil)
+	if err := remoteRefund(c, &againOrder, rec.SN, rec.ID); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.SuccessNotice(c, "操作成功")
 }
 
 func OAReplyLists(c *gin.Context) {
@@ -613,12 +649,12 @@ func OAMenuSave(c *gin.Context) {
 		response.Fail(c, "请设置正确格式菜单")
 		return
 	}
-	if err := checkOAMenu(menu); err != nil {
-		response.Fail(c, err.Error())
+	if msg := util.OAMenuCheck(menu); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	cfgsvc.Set(c, "oa_setting", "menu", menu)
-	response.Success(c, "保存成功", nil)
+	response.SuccessNotice(c, "保存成功")
 }
 
 func OAMenuSaveAndPublish(c *gin.Context) {
@@ -634,8 +670,8 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 		response.Fail(c, "请设置正确格式菜单")
 		return
 	}
-	if err := checkOAMenu(menu); err != nil {
-		response.Fail(c, err.Error())
+	if msg := util.OAMenuCheck(menu); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	cfgsvc.Set(c, "oa_setting", "menu", menu)
@@ -649,22 +685,6 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 		return
 	}
 	response.Success(c, "保存并发布成功", nil)
-}
-
-func checkOAMenu(menu []any) error {
-	if len(menu) > 3 {
-		return errString("一级菜单超出限制(最多3个)")
-	}
-	for _, item := range menu {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			return errString("一级菜单项须为数组格式")
-		}
-		if util.ToString(m["name"]) == "" {
-			return errString("请输入一级菜单名称")
-		}
-	}
-	return nil
 }
 
 func TenantNoticeLists(c *gin.Context) {

@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,10 @@ func ChannelOAGet(c *gin.Context) {
 }
 
 func ChannelOASet(c *gin.Context) {
+	if msg := util.ChannelOASetCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "oa_setting", "name", httpx.Str(c, "name"))
 	cfgsvc.Set(c, "oa_setting", "original_id", httpx.Str(c, "original_id"))
 	cfgsvc.Set(c, "oa_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
@@ -69,6 +74,10 @@ func ChannelMnpGet(c *gin.Context) {
 }
 
 func ChannelMnpSet(c *gin.Context) {
+	if msg := util.ChannelMnpSetCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "mnp_setting", "name", httpx.Str(c, "name"))
 	cfgsvc.Set(c, "mnp_setting", "original_id", httpx.Str(c, "original_id"))
 	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
@@ -85,6 +94,10 @@ func ChannelOpenGet(c *gin.Context) {
 }
 
 func ChannelOpenSet(c *gin.Context) {
+	if msg := util.ChannelOpenSetCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "open_platform", "app_id", httpx.Str(c, "app_id"))
 	cfgsvc.Set(c, "open_platform", "app_secret", httpx.Str(c, "app_secret"))
 	response.SuccessNotice(c, "操作成功")
@@ -100,6 +113,10 @@ func ChannelH5Get(c *gin.Context) {
 }
 
 func ChannelH5Set(c *gin.Context) {
+	if msg := util.ChannelH5SetCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "web_page", "status", httpx.Int(c, "status"))
 	cfgsvc.Set(c, "web_page", "page_status", httpx.Int(c, "page_status"))
 	cfgsvc.Set(c, "web_page", "page_url", httpx.Str(c, "page_url"))

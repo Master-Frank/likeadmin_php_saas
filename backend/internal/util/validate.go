@@ -2,6 +2,7 @@ package util
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -295,6 +296,517 @@ func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
 		return "字典数据状态参数错误"
 	}
 	return ""
+}
+
+func phpRequired(p map[string]any, key string) bool {
+	v, ok := p[key]
+	if !ok || v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) != ""
+	case []any:
+		return len(t) > 0
+	case []string:
+		return len(t) > 0
+	case bool:
+		return t
+	default:
+		s := strings.TrimSpace(ToString(v))
+		return s != ""
+	}
+}
+
+func isWholeNumber(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	case float64:
+		return t == float64(int64(t))
+	case float32:
+		return t == float32(int32(t))
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return false
+		}
+		if _, err := strconv.Atoi(s); err == nil {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func inZeroOne(v any) bool {
+	n := ToInt(v)
+	if n != 0 && n != 1 {
+		return false
+	}
+	if s, ok := v.(string); ok && strings.TrimSpace(s) != "0" && strings.TrimSpace(s) != "1" {
+		return false
+	}
+	return true
+}
+
+func isArrayValue(v any) bool {
+	switch v.(type) {
+	case []any, []string, []int, []int64, []float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func PlatformWebSettingCheck(p map[string]any) string {
+	if !phpRequired(p, "name") {
+		return "请填写网站名称"
+	}
+	if n := len([]rune(strings.TrimSpace(ToString(p["name"])))); n > 30 {
+		return "网站名称最长为12个字符"
+	}
+	if !phpRequired(p, "web_favicon") {
+		return "请上传网站图标"
+	}
+	if !phpRequired(p, "web_logo_light") {
+		return "请上传网站亮色主题logo"
+	}
+	if !phpRequired(p, "web_logo_dark") {
+		return "请上传网站暗色主题logo"
+	}
+	if !phpRequired(p, "login_image") {
+		return "请上传登录页广告图"
+	}
+	return ""
+}
+
+func TenantWebSettingCheck(p map[string]any) string {
+	if !phpRequired(p, "name") {
+		return "请填写网站名称"
+	}
+	if n := len([]rune(strings.TrimSpace(ToString(p["name"])))); n > 30 {
+		return "网站名称最长为12个字符"
+	}
+	if !phpRequired(p, "web_favicon") {
+		return "请上传网站图标"
+	}
+	if !phpRequired(p, "web_logo") {
+		return "请上传网站logo"
+	}
+	if !phpRequired(p, "login_image") {
+		return "请上传登录页广告图"
+	}
+	if !phpRequired(p, "shop_name") {
+		return "请填写前台名称"
+	}
+	if !phpRequired(p, "shop_logo") {
+		return "请上传前台logo"
+	}
+	if !phpRequired(p, "pc_logo") {
+		return "请上传PC端logo"
+	}
+	return ""
+}
+
+func UserAvatarCheck(p map[string]any) string {
+	if !phpRequired(p, "default_avatar") {
+		return "请上传用户默认头像"
+	}
+	return ""
+}
+
+func UserRegisterConfigCheck(p map[string]any) string {
+	if _, ok := p["login_way"]; ok && !isArrayValue(p["login_way"]) {
+		return "登录方式值错误"
+	}
+	if v, ok := p["coerce_mobile"]; ok && !inZeroOne(v) {
+		return "注册强制绑定手机值错误"
+	}
+	if v, ok := p["login_agreement"]; ok && !inZeroOne(v) {
+		return "政策协议值错误"
+	}
+	if v, ok := p["third_auth"]; ok && !inZeroOne(v) {
+		return "第三方登录值错误"
+	}
+	if v, ok := p["wechat_auth"]; ok && !inZeroOne(v) {
+		return "公众号微信授权登录值错误"
+	}
+	return ""
+}
+
+func TransactionSettingCheck(p map[string]any) string {
+	if !phpRequired(p, "cancel_unpaid_orders") {
+		return "请选择系统取消待付款订单方式"
+	}
+	if !inZeroOne(p["cancel_unpaid_orders"]) {
+		return "系统取消待付款订单状态值有误"
+	}
+	if ToInt(p["cancel_unpaid_orders"]) == 1 {
+		if _, ok := p["cancel_unpaid_orders_times"]; !ok {
+			return "系统取消待付款订单时间未填写"
+		}
+		if !isWholeNumber(p["cancel_unpaid_orders_times"]) {
+			return "系统取消待付款订单时间须为整型"
+		}
+		if ToInt(p["cancel_unpaid_orders_times"]) <= 0 {
+			return "系统取消待付款订单时间须大于0"
+		}
+	}
+	if !phpRequired(p, "verification_orders") {
+		return "请选择系统自动核销订单方式"
+	}
+	if !inZeroOne(p["verification_orders"]) {
+		return "系统自动核销订单状态值有误"
+	}
+	if ToInt(p["verification_orders"]) == 1 {
+		if _, ok := p["verification_orders_times"]; !ok {
+			return "系统自动核销订单时间未填写"
+		}
+		if !isWholeNumber(p["verification_orders_times"]) {
+			return "系统自动核销订单时间须为整型"
+		}
+		if ToInt(p["verification_orders_times"]) <= 0 {
+			return "系统自动核销订单时间须大于0"
+		}
+	}
+	return ""
+}
+
+func SmsConfigWriteCheck(p map[string]any) string {
+	if !phpRequired(p, "type") {
+		return "请选择类型"
+	}
+	if !phpRequired(p, "sign") {
+		return "请输入签名"
+	}
+	typ := strings.TrimSpace(ToString(p["type"]))
+	if typ == "tencent" && !phpRequired(p, "app_id") {
+		return "请输入app_id"
+	}
+	if typ == "ali" && !phpRequired(p, "app_key") {
+		return "请输入app_key"
+	}
+	if typ == "tencent" && !phpRequired(p, "secret_id") {
+		return "请输入secret_id"
+	}
+	if !phpRequired(p, "secret_key") {
+		return "请输入secret_key"
+	}
+	if !phpRequired(p, "status") {
+		return "请选择状态"
+	}
+	return ""
+}
+
+func TenantAdminEditCheck(p map[string]any) string {
+	if !phpRequired(p, "id") {
+		return "请选择用户"
+	}
+	if !phpRequired(p, "tenant_id") {
+		return "请选择对应的租户"
+	}
+	if !phpRequired(p, "name") {
+		return "请输入用户名"
+	}
+	if _, ok := p["password"]; ok && strings.TrimSpace(ToString(p["password"])) != "" {
+		if _, cok := p["password_confirm"]; !cok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+			return "确认密码不能为空"
+		}
+		if ToString(p["password"]) != ToString(p["password_confirm"]) {
+			return "两次输入的密码不一致"
+		}
+	}
+	return ""
+}
+
+func TenantAdminAddCheck(p map[string]any) string {
+	if !phpRequired(p, "tenant_id") {
+		return "请选择对应的租户"
+	}
+	if !phpRequired(p, "account") {
+		return "请输入账户"
+	}
+	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
+		return "账号长度须在1-32位字符"
+	}
+	if !phpRequired(p, "name") {
+		return "请输入用户名"
+	}
+	if !phpRequired(p, "password") {
+		return "密码不能为空"
+	}
+	if n := len(ToString(p["password"])); n < 6 || n > 32 {
+		return "密码长度须在6-32位字符"
+	}
+	if _, ok := p["password_confirm"]; !ok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+		return "确认密码不能为空"
+	}
+	if ToString(p["password"]) != ToString(p["password_confirm"]) {
+		return "两次输入的密码不一致"
+	}
+	return ""
+}
+
+func ChannelOASetCheck(p map[string]any) string {
+	if !phpRequired(p, "app_id") {
+		return "请填写AppID"
+	}
+	if !phpRequired(p, "app_secret") {
+		return "请填写AppSecret"
+	}
+	if !phpRequired(p, "encryption_type") {
+		return "请选择消息加密方式"
+	}
+	et := ToInt(p["encryption_type"])
+	if et != 1 && et != 2 && et != 3 {
+		return "消息加密方式状态值错误"
+	}
+	return ""
+}
+
+func ChannelMnpSetCheck(p map[string]any) string {
+	if !phpRequired(p, "app_id") {
+		return "请填写AppID"
+	}
+	if !phpRequired(p, "app_secret") {
+		return "请填写AppSecret"
+	}
+	return ""
+}
+
+func ChannelOpenSetCheck(p map[string]any) string {
+	if !phpRequired(p, "app_id") {
+		return "请输入appId"
+	}
+	if !phpRequired(p, "app_secret") {
+		return "请输入appSecret"
+	}
+	return ""
+}
+
+func ChannelH5SetCheck(p map[string]any) string {
+	if !phpRequired(p, "status") {
+		return "请选择启用状态"
+	}
+	if !inZeroOne(p["status"]) {
+		return "启用状态值有误"
+	}
+	return ""
+}
+
+func RechargeAPICheck(p map[string]any, status int, minAmount float64) string {
+	if !phpRequired(p, "money") {
+		return "请填写充值金额"
+	}
+	money := ToFloat(p["money"])
+	if money <= 0 {
+		return "请填写大于0的充值金额"
+	}
+	if status != 1 {
+		return "充值功能已关闭"
+	}
+	if money < minAmount {
+		return "最低充值金额" + MoneyString(minAmount) + "元"
+	}
+	return ""
+}
+
+func GeneratorEditCheck(p map[string]any) string {
+	if !phpRequired(p, "id") {
+		return "表id缺失"
+	}
+	if !phpRequired(p, "table_name") {
+		return "请填写表名称"
+	}
+	if !phpRequired(p, "table_comment") {
+		return "请填写表描述"
+	}
+	if !phpRequired(p, "template_type") {
+		return "请选择模板类型"
+	}
+	if ToInt(p["template_type"]) != 0 && ToInt(p["template_type"]) != 1 {
+		return "模板类型参数错误"
+	}
+	if !phpRequired(p, "generate_type") {
+		return "请选择生成方式"
+	}
+	if ToInt(p["generate_type"]) != 0 && ToInt(p["generate_type"]) != 1 {
+		return "生成方式类型错误"
+	}
+	if !phpRequired(p, "module_name") {
+		return "请填写模块名称"
+	}
+	cols, ok := p["table_column"]
+	if !ok || cols == nil {
+		return "表字段信息缺失"
+	}
+	arr, isArr := cols.([]any)
+	if !isArr {
+		return "表字段信息类型错误"
+	}
+	for _, item := range arr {
+		m, _ := item.(map[string]any)
+		if m == nil {
+			return "表字段id参数缺失"
+		}
+		if _, has := m["id"]; !has {
+			return "表字段id参数缺失"
+		}
+		if _, has := m["query_type"]; !has {
+			return "请选择查询方式"
+		}
+		if _, has := m["view_type"]; !has {
+			return "请选择显示类型"
+		}
+	}
+	return ""
+}
+
+func MBStrWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		if r <= 127 {
+			w++
+		} else {
+			w += 2
+		}
+	}
+	return w
+}
+
+func phpLooseTrue(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		s := strings.TrimSpace(t)
+		return s != "" && s != "0" && s != "false"
+	default:
+		return ToInt(v) != 0
+	}
+}
+
+func OAMenuCheck(menu []any) string {
+	if len(menu) == 0 {
+		return "请设置正确格式菜单"
+	}
+	if len(menu) > 3 {
+		return "一级菜单超出限制(最多3个)"
+	}
+	for _, item := range menu {
+		m, ok := item.(map[string]any)
+		if !ok || m == nil {
+			return "一级菜单项须为数组格式"
+		}
+		name := strings.TrimSpace(ToString(m["name"]))
+		if name == "" {
+			return "请输入一级菜单名称"
+		}
+		if MBStrWidth(name) > 8 {
+			return "一级菜单名称字数不能超过4个汉字或8个字母"
+		}
+		hasMenu := phpLooseTrue(m["has_menu"])
+		if !hasMenu {
+			if !phpRequired(m, "type") {
+				return "一级菜单未选择菜单类型"
+			}
+			if !InFold([]string{"click", "view", "miniprogram"}, ToString(m["type"])) {
+				return "一级菜单类型错误"
+			}
+			if msg := oaMenuTypeCheck(m); msg != "" {
+				return msg
+			}
+		}
+		if hasMenu {
+			sub, _ := m["sub_button"].([]any)
+			if len(sub) == 0 {
+				return "请配置子菜单"
+			}
+		}
+		if sub, ok := m["sub_button"].([]any); ok && len(sub) > 0 {
+			if msg := oaMenuSubCheck(sub); msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+func oaMenuSubCheck(sub []any) string {
+	if len(sub) > 5 {
+		return "二级菜单超出限制(最多5个)"
+	}
+	for _, item := range sub {
+		m, ok := item.(map[string]any)
+		if !ok || m == nil {
+			return "二级菜单项须为数组"
+		}
+		name := strings.TrimSpace(ToString(m["name"]))
+		if name == "" {
+			return "请输入二级菜单名称"
+		}
+		if n := len([]rune(name)); n > 8 {
+			return "二级菜单名称字数不能超过8个字符"
+		}
+		if !phpRequired(m, "type") || !InFold([]string{"click", "view", "miniprogram"}, ToString(m["type"])) {
+			return "二级未选择菜单类型或菜单类型错误"
+		}
+		if msg := oaMenuTypeCheck(m); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
+func oaMenuTypeCheck(item map[string]any) string {
+	switch ToString(item["type"]) {
+	case "click":
+		if !phpRequired(item, "key") {
+			return "请输入关键字"
+		}
+	case "view":
+		if !phpRequired(item, "url") {
+			return "请输入网页链接"
+		}
+	case "miniprogram":
+		if !phpRequired(item, "url") {
+			return "请输入网页链接"
+		}
+		if !phpRequired(item, "appid") {
+			return "请输入appid"
+		}
+		if !phpRequired(item, "pagepath") {
+			return "请输入小程序路径"
+		}
+	}
+	return ""
+}
+
+func PayWayText(way int) string {
+	switch way {
+	case 1:
+		return "余额支付"
+	case 2:
+		return "微信支付"
+	case 3:
+		return "支付宝支付"
+	default:
+		return ""
+	}
+}
+
+func PayStatusText(status int) string {
+	switch status {
+	case 1:
+		return "已支付"
+	default:
+		return "未支付"
+	}
 }
 
 func LoginWayAllows(raw any, scene int) bool {

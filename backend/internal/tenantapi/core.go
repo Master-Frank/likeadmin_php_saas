@@ -660,6 +660,10 @@ func SettingGetWebsite(c *gin.Context) {
 }
 
 func SettingSetWebsite(c *gin.Context) {
+	if msg := util.TenantWebSettingCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "tenant", "name", httpx.Str(c, "name"))
 	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.Str(c, "web_favicon")))
 	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.Str(c, "web_logo")))
@@ -681,8 +685,12 @@ func HotSearchGet(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
-	response.Data(c, gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": rows})
+	db.Order("sort desc, id desc").Find(&rows)
+	data := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})
+	}
+	response.Data(c, gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": data})
 }
 
 func RechargeGetConfig(c *gin.Context) {
@@ -693,22 +701,73 @@ func RechargeGetConfig(c *gin.Context) {
 }
 
 func RechargeSetConfig(c *gin.Context) {
-	cfgsvc.Set(c, "recharge", "status", httpx.Int(c, "status"))
-	cfgsvc.Set(c, "recharge", "min_amount", httpx.Any(c, "min_amount"))
-	response.SuccessNotice(c, "设置成功")
+	p := httpx.Params(c)
+	if _, ok := p["status"]; ok {
+		cfgsvc.Set(c, "recharge", "status", httpx.Int(c, "status"))
+	}
+	if _, ok := p["min_amount"]; ok {
+		cfgsvc.Set(c, "recharge", "min_amount", httpx.Any(c, "min_amount"))
+	}
+	response.SuccessNotice(c, "操作成功")
 }
 
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.RechargeOrder{}).Where("delete_time IS NULL")
+	ro := model.RechargeOrder{}.TableName()
+	u := model.User{}.TableName()
+	db := tdb(c).Table(ro+" AS ro").Joins("JOIN "+u+" AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+		db = db.Where("ro.tenant_id = ?", tid)
+	}
+	if sn := lists.Param(q, "sn"); sn != "" {
+		db = db.Where("ro.sn = ?", sn)
+	}
+	if lists.Param(q, "pay_way") != "" {
+		db = db.Where("ro.pay_way = ?", lists.ParamInt(q, "pay_way"))
+	}
+	if lists.Param(q, "pay_status") != "" {
+		db = db.Where("ro.pay_status = ?", lists.ParamInt(q, "pay_status"))
+	}
+	if info := lists.Param(q, "user_info"); info != "" {
+		like := "%" + info + "%"
+		db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
+	}
+	if q.StartTime != "" && q.EndTime != "" {
+		db = db.Where("ro.create_time BETWEEN ? AND ?", util.ParseDateTime(q.StartTime), util.ParseDateTime(q.EndTime))
 	}
 	var count int64
 	db.Count(&count)
-	var rows []model.RechargeOrder
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	type row struct {
+		ID           uint    `gorm:"column:id"`
+		SN           string  `gorm:"column:sn"`
+		OrderAmount  float64 `gorm:"column:order_amount"`
+		PayWay       int     `gorm:"column:pay_way"`
+		PayTime      *int64  `gorm:"column:pay_time"`
+		PayStatus    int     `gorm:"column:pay_status"`
+		CreateTime   int64   `gorm:"column:create_time"`
+		RefundStatus int     `gorm:"column:refund_status"`
+		Avatar       string  `gorm:"column:avatar"`
+		Nickname     string  `gorm:"column:nickname"`
+		Account      string  `gorm:"column:account"`
+	}
+	var rows []row
+	db.Select("ro.id,ro.sn,ro.order_amount,ro.pay_way,ro.pay_time,ro.pay_status,ro.create_time,ro.refund_status,u.avatar,u.nickname,u.account").
+		Order("ro.id desc").Offset(q.Offset).Limit(q.PageSize).Scan(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		payTime := ""
+		if r.PayTime != nil && *r.PayTime > 0 {
+			payTime = util.FormatDateTime(*r.PayTime)
+		}
+		out = append(out, map[string]any{
+			"id": r.ID, "sn": r.SN, "order_amount": r.OrderAmount, "pay_way": r.PayWay,
+			"pay_time": payTime, "pay_status": r.PayStatus, "refund_status": r.RefundStatus,
+			"create_time": util.FormatDateTime(r.CreateTime),
+			"avatar": filesvc.GetFileURL(c, r.Avatar), "nickname": r.Nickname, "account": r.Account,
+			"pay_status_text": util.PayStatusText(r.PayStatus), "pay_way_text": util.PayWayText(r.PayWay),
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func FinanceAccountLogLists(c *gin.Context) {

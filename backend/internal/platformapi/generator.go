@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
@@ -54,7 +55,10 @@ func GeneratorGenerateTable(c *gin.Context) {
 	q := lists.Parse(c)
 	db := bootstrap.DB.Model(&model.GenerateTable{})
 	if n := lists.Param(q, "table_name"); n != "" {
-		db = db.Where("table_name LIKE ?", "%"+n+"%")
+		db = db.Where("table_name LIKE ? OR table_comment LIKE ?", "%"+n+"%", "%"+n+"%")
+	}
+	if cmt := lists.Param(q, "table_comment"); cmt != "" {
+		db = db.Where("table_comment LIKE ?", "%"+cmt+"%")
 	}
 	var count int64
 	db.Count(&count)
@@ -72,35 +76,59 @@ func GeneratorGenerateTable(c *gin.Context) {
 
 func GeneratorSelectTable(c *gin.Context) {
 	tables := httpx.Any(c, "table")
-	arr, _ := tables.([]any)
-	if arr == nil {
-		if s := httpx.Str(c, "table"); s != "" {
-			arr = []any{s}
-		}
+	if tables == nil {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	arr, ok := tables.([]any)
+	if !ok {
+		response.Fail(c, "参数类型错误")
+		return
+	}
+	if len(arr) == 0 {
+		response.Fail(c, "参数缺失")
+		return
 	}
 	adminID := ctxutil.Get(c).AdminID
 	now := util.NowUnix()
 	for _, item := range arr {
-		name := ""
-		comment := ""
-		if m, ok := item.(map[string]any); ok {
-			name = util.ToString(m["name"])
-			if name == "" {
-				name = util.ToString(m["table_name"])
-			}
-			comment = util.ToString(m["comment"])
-			if comment == "" {
-				comment = util.ToString(m["table_comment"])
-			}
-		} else {
-			name = util.ToString(item)
+		m, _ := item.(map[string]any)
+		if m == nil {
+			response.Fail(c, "参数缺失")
+			return
 		}
+		if _, hasName := m["name"]; !hasName {
+			if _, has := m["table_name"]; !has {
+				response.Fail(c, "参数缺失")
+				return
+			}
+		}
+		if _, hasComment := m["comment"]; !hasComment {
+			if _, has := m["table_comment"]; !has {
+				response.Fail(c, "参数缺失")
+				return
+			}
+		}
+		name := util.ToString(m["name"])
 		if name == "" {
-			continue
+			name = util.ToString(m["table_name"])
+		}
+		comment := util.ToString(m["comment"])
+		if comment == "" {
+			comment = util.ToString(m["table_comment"])
+		}
+		var n int64
+		bootstrap.DB.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", name).Scan(&n)
+		if n == 0 {
+			response.Fail(c, "当前数据库不存在"+name+"表")
+			return
 		}
 		gt := model.GenerateTable{
 			Name: name, TableComment: comment, Author: "likeadmin",
-			ModuleName: "admin", ClassDir: strings.TrimPrefix(name, config.Prefix()),
+			ModuleName: "platform", ClassDir: strings.TrimPrefix(name, config.Prefix()),
+			GenerateType: 1, Menu: util.EncodeJSON(map[string]any{"pid": 0, "type": 1, "name": comment}),
+			Delete: util.EncodeJSON(map[string]any{"type": 1, "name": "delete_time"}),
+			Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
 			AdminID: adminID, CreateTime: now,
 		}
 		if err := bootstrap.DB.Create(&gt).Error; err != nil {
@@ -109,7 +137,7 @@ func GeneratorSelectTable(c *gin.Context) {
 		}
 		syncColumns(gt.ID, name)
 	}
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func GeneratorDetail(c *gin.Context) {
@@ -132,7 +160,7 @@ func GeneratorSyncColumn(c *gin.Context) {
 	}
 	bootstrap.DB.Where("table_id = ?", id).Delete(&model.GenerateColumn{})
 	syncColumns(id, t.Name)
-	response.Success(c, "同步成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func GeneratorDelete(c *gin.Context) {
@@ -143,22 +171,82 @@ func GeneratorDelete(c *gin.Context) {
 	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
 		ids = []uint{id}
 	}
-	if len(ids) > 0 {
-		bootstrap.DB.Where("id IN ?", ids).Delete(&model.GenerateTable{})
-		bootstrap.DB.Where("table_id IN ?", ids).Delete(&model.GenerateColumn{})
+	if len(ids) == 0 {
+		response.Fail(c, "参数缺失")
+		return
 	}
-	response.Success(c, "删除成功", nil)
+	for _, id := range ids {
+		var t model.GenerateTable
+		if bootstrap.DB.First(&t, id).Error != nil {
+			response.Fail(c, "信息不存在")
+			return
+		}
+	}
+	bootstrap.DB.Where("id IN ?", ids).Delete(&model.GenerateTable{})
+	bootstrap.DB.Where("table_id IN ?", ids).Delete(&model.GenerateColumn{})
+	response.SuccessNotice(c, "操作成功")
 }
 
 func GeneratorEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.GeneratorEditCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
-	bootstrap.DB.Model(&model.GenerateTable{}).Where("id = ?", id).Updates(map[string]any{
-		"table_comment": httpx.Str(c, "table_comment"), "author": httpx.Str(c, "author"),
-		"remark": httpx.Str(c, "remark"), "module_name": httpx.Str(c, "module_name"),
-		"class_dir": httpx.Str(c, "class_dir"), "class_comment": httpx.Str(c, "class_comment"),
-		"generate_type": httpx.Int(c, "generate_type"), "update_time": util.NowUnix(),
-	})
-	response.Success(c, "修改成功", nil)
+	var t model.GenerateTable
+	if bootstrap.DB.First(&t, id).Error != nil {
+		response.Fail(c, "信息不存在")
+		return
+	}
+	now := util.NowUnix()
+	data := map[string]any{
+		"table_name": httpx.Str(c, "table_name"), "table_comment": httpx.Str(c, "table_comment"),
+		"template_type": httpx.Int(c, "template_type"), "author": httpx.Str(c, "author"),
+		"remark": httpx.Str(c, "remark"), "generate_type": httpx.Int(c, "generate_type"),
+		"module_name": httpx.Str(c, "module_name"), "class_dir": httpx.Str(c, "class_dir"),
+		"class_comment": httpx.Str(c, "class_comment"), "update_time": now,
+	}
+	if v := httpx.Any(c, "menu"); v != nil {
+		data["menu"] = util.EncodeJSON(v)
+	}
+	if v := httpx.Any(c, "delete"); v != nil {
+		data["delete"] = util.EncodeJSON(v)
+	}
+	if v := httpx.Any(c, "tree"); v != nil {
+		data["tree"] = util.EncodeJSON(v)
+	}
+	if v := httpx.Any(c, "relations"); v != nil {
+		data["relations"] = util.EncodeJSON(v)
+	}
+	if err := bootstrap.DB.Model(&model.GenerateTable{}).Where("id = ?", id).Updates(data).Error; err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	cols, _ := httpx.Any(c, "table_column").([]any)
+	for _, item := range cols {
+		m, _ := item.(map[string]any)
+		if m == nil {
+			continue
+		}
+		colID := uint(util.ToInt(m["id"]))
+		if colID == 0 {
+			continue
+		}
+		bootstrap.DB.Model(&model.GenerateColumn{}).Where("id = ?", colID).Updates(map[string]any{
+			"column_comment": util.ToString(m["column_comment"]),
+			"is_required":    util.ToInt(m["is_required"]),
+			"is_insert":      util.ToInt(m["is_insert"]),
+			"is_update":      util.ToInt(m["is_update"]),
+			"is_lists":       util.ToInt(m["is_lists"]),
+			"is_query":       util.ToInt(m["is_query"]),
+			"query_type":     util.ToString(m["query_type"]),
+			"view_type":      util.ToString(m["view_type"]),
+			"dict_type":      util.ToString(m["dict_type"]),
+			"update_time":    now,
+		})
+	}
+	response.SuccessNotice(c, "操作成功")
 }
 
 func GeneratorPreview(c *gin.Context) {
@@ -181,41 +269,21 @@ func GeneratorGenerate(c *gin.Context) {
 	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
 		ids = []uint{id}
 	}
-	root := generatorRoot()
-	_ = os.MkdirAll(root, 0755)
+	if len(ids) == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	for _, id := range ids {
 		var t model.GenerateTable
 		if bootstrap.DB.First(&t, id).Error != nil {
-			continue
-		}
-		var cols []model.GenerateColumn
-		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-		for _, f := range generateBundle(t, cols) {
-			name := util.ToString(f["name"])
-			content := util.ToString(f["content"])
-			path := filepath.Join(root, t.ClassDir, name)
-			_ = os.MkdirAll(filepath.Dir(path), 0755)
-			_ = os.WriteFile(path, []byte(content), 0644)
+			response.Fail(c, "信息不存在")
+			return
 		}
 	}
-	response.Success(c, "生成成功", nil)
-}
-
-func GeneratorDownload(c *gin.Context) {
-	ids := httpx.Uints(c, "id")
-	if len(ids) == 0 {
-		ids = httpx.Uints(c, "ids")
-	}
-	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
-		ids = []uint{id}
-	}
-	if len(ids) == 0 {
-		response.Fail(c, "请选择要下载的表")
-		return
-	}
-	root := generatorRoot()
+	root := generatorRuntime()
 	_ = os.MkdirAll(root, 0755)
-	zipPath := filepath.Join(root, fmt.Sprintf("generate-%d.zip", time.Now().Unix()))
+	fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
+	zipPath := filepath.Join(root, fileName)
 	zf, err := os.Create(zipPath)
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -240,23 +308,63 @@ func GeneratorDownload(c *gin.Context) {
 	}
 	_ = zw.Close()
 	_ = zf.Close()
-	c.FileAttachment(zipPath, "likeadmin-generate.zip")
+	cache.Set("curd_file_name"+fileName, fileName, time.Hour)
+	fileURL := ctxutil.Domain(c) + "/platformapi/tools.generator/download?file=" + fileName
+	response.Result(c, 1, 1, "操作成功", gin.H{"file": fileURL})
+}
+
+func GeneratorDownload(c *gin.Context) {
+	fileName := httpx.Str(c, "file")
+	if fileName == "" {
+		response.Fail(c, "下载失败")
+		return
+	}
+	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
+		response.Fail(c, "请重新生成代码")
+		return
+	}
+	zipPath := filepath.Join(generatorRuntime(), fileName)
+	if _, err := os.Stat(zipPath); err != nil {
+		response.Fail(c, "下载失败")
+		return
+	}
+	cache.Del("curd_file_name" + fileName)
+	c.FileAttachment(zipPath, "likeadmin-curd.zip")
 }
 
 func generatorRoot() string {
-	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "..", "backend", "internal", "generated")
-	if wd, err := os.Getwd(); err == nil {
-		if strings.HasSuffix(wd, "backend") {
-			root = filepath.Join(wd, "internal", "generated")
-		}
+	return generatorRuntime()
+}
+
+func generatorRuntime() string {
+	pub := config.C.App.PublicDir
+	if pub == "" {
+		pub = "server/public"
 	}
-	return root
+	return filepath.Join(filepath.Dir(pub), "runtime", "generate")
 }
 
 func GeneratorGetModels(c *gin.Context) {
-	response.Data(c, []string{
-		"Admin", "User", "Tenant", "Article", "ArticleCate", "File", "Dept", "Jobs",
+	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", "common", "model")
+	out := []string{}
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() || !strings.HasSuffix(path, ".php") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		rel = strings.TrimSuffix(rel, ".php")
+		parts := strings.Split(rel, string(os.PathSeparator))
+		name := `\app\common\model`
+		for _, p := range parts {
+			name += `\` + p
+		}
+		out = append(out, name)
+		return nil
 	})
+	response.Data(c, out)
 }
 
 func syncColumns(tableID uint, tableName string) {
@@ -270,18 +378,24 @@ func syncColumns(tableID uint, tableName string) {
 	var cols []col
 	bootstrap.DB.Raw("SELECT COLUMN_NAME, COLUMN_COMMENT, COLUMN_TYPE, COLUMN_KEY, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName).Scan(&cols)
 	now := util.NowUnix()
+	skip := map[string]bool{"id": true, "create_time": true, "update_time": true, "delete_time": true}
 	for _, col := range cols {
 		pk, req := 0, 0
 		if col.ColumnKey == "PRI" {
 			pk = 1
 		}
-		if col.IsNullable == "NO" && pk == 0 {
+		if col.IsNullable == "NO" && pk == 0 && !skip[col.ColumnName] {
 			req = 1
+		}
+		ins, upd, lists, query := 0, 0, 0, 0
+		if !skip[col.ColumnName] {
+			ins, upd, lists, query = 1, 1, 1, 1
 		}
 		bootstrap.DB.Create(&model.GenerateColumn{
 			TableID: tableID, ColumnName: col.ColumnName, ColumnComment: col.ColumnComment,
-			ColumnType: col.ColumnType, IsPk: pk, IsRequired: req, IsInsert: 1, IsUpdate: 1,
-			IsLists: 1, QueryType: "=", ViewType: "input", CreateTime: now,
+			ColumnType: col.ColumnType, IsPk: pk, IsRequired: req,
+			IsInsert: ins, IsUpdate: upd, IsLists: lists, IsQuery: query,
+			QueryType: "=", ViewType: "input", CreateTime: now,
 		})
 	}
 }

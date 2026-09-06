@@ -385,13 +385,11 @@ func SmsConfigGet(c *gin.Context) {
 
 func SmsConfigSet(c *gin.Context) {
 	p := httpx.Params(c)
+	if msg := util.SmsConfigWriteCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	typ := util.ToString(p["type"])
-	if typ == "" {
-		typ = httpx.Str(c, "type")
-	}
-	if typ == "" {
-		typ = "ali"
-	}
 	p["type"] = typ
 	if util.ToString(p["name"]) == "" {
 		if typ == "tencent" {
@@ -415,7 +413,7 @@ func SmsConfigSet(c *gin.Context) {
 		}
 		cfgsvc.Set(c, "sms", "engine", engine)
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func SmsConfigDetail(c *gin.Context) {

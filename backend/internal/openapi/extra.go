@@ -113,20 +113,16 @@ func ArticleDetail(c *gin.Context) {
 
 func RechargeCreate(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
-	money := httpx.Float(c, "money")
 	if uid == 0 {
-		response.Fail(c, "请先登录")
-		return
-	}
-	if cfgsvc.GetInt(c, "recharge", "status", 0) != 1 {
-		response.Fail(c, "充值功能未开启")
+		response.FailSilent(c, "请求参数缺token")
 		return
 	}
 	minAmt := util.ToFloat(cfgsvc.Get(c, "recharge", "min_amount", 0))
-	if money <= 0 || (minAmt > 0 && money < minAmt) {
-		response.Fail(c, "充值金额不能少于最低金额")
+	if msg := util.RechargeAPICheck(httpx.Params(c), cfgsvc.GetInt(c, "recharge", "status", 0), minAmt); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
+	money := httpx.Float(c, "money")
 	terminal := httpx.Int(c, "terminal")
 	if terminal == 0 {
 		if info := ctxutil.Get(c).UserInfo; info != nil {

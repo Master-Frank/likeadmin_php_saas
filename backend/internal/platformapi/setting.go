@@ -31,6 +31,10 @@ func WebGetWebsite(c *gin.Context) {
 }
 
 func WebSetWebsite(c *gin.Context) {
+	if msg := util.PlatformWebSettingCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "platform", "name", httpx.Str(c, "name"))
 	cfgsvc.Set(c, "platform", "web_favicon", filesvc.SetFileURL(c, httpx.Str(c, "web_favicon")))
 	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.Str(c, "web_logo_light")))
@@ -70,8 +74,12 @@ func UserGetConfig(c *gin.Context) {
 }
 
 func UserSetConfig(c *gin.Context) {
+	if msg := util.UserAvatarCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.Str(c, "default_avatar")))
-	response.SuccessNotice(c, "设置成功")
+	response.SuccessNotice(c, "操作成功")
 }
 
 func UserGetRegisterConfig(c *gin.Context) {
@@ -86,39 +94,67 @@ func UserGetRegisterConfig(c *gin.Context) {
 }
 
 func UserSetRegisterConfig(c *gin.Context) {
+	if msg := util.UserRegisterConfigCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	for _, k := range []string{"login_way", "coerce_mobile", "login_agreement", "third_auth", "wechat_auth", "qq_auth"} {
 		if v, ok := httpx.Params(c)[k]; ok {
 			cfgsvc.Set(c, "login", k, v)
 		}
 	}
-	response.SuccessNotice(c, "设置成功")
+	response.SuccessNotice(c, "操作成功")
 }
 
 func TransactionGet(c *gin.Context) {
 	response.Data(c, gin.H{
-		"cancel_unpaid_orders":       cfgsvc.GetInt(c, "transaction", "cancel_unpaid_orders", 0),
+		"cancel_unpaid_orders":       cfgsvc.GetInt(c, "transaction", "cancel_unpaid_orders", 1),
 		"cancel_unpaid_orders_times": cfgsvc.GetInt(c, "transaction", "cancel_unpaid_orders_times", 30),
+		"verification_orders":        cfgsvc.GetInt(c, "transaction", "verification_orders", 1),
+		"verification_orders_times":  cfgsvc.GetInt(c, "transaction", "verification_orders_times", 24),
 	})
 }
 
 func TransactionSet(c *gin.Context) {
+	if msg := util.TransactionSettingCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders", httpx.Int(c, "cancel_unpaid_orders"))
-	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.Int(c, "cancel_unpaid_orders_times"))
-	response.SuccessNotice(c, "设置成功")
+	cfgsvc.Set(c, "transaction", "verification_orders", httpx.Int(c, "verification_orders"))
+	if _, ok := httpx.Params(c)["cancel_unpaid_orders_times"]; ok {
+		cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.Int(c, "cancel_unpaid_orders_times"))
+	}
+	if _, ok := httpx.Params(c)["verification_orders_times"]; ok {
+		cfgsvc.Set(c, "transaction", "verification_orders_times", httpx.Int(c, "verification_orders_times"))
+	}
+	response.SuccessNotice(c, "操作成功")
 }
 
 func CustomerGet(c *gin.Context) {
+	qr := cfgsvc.GetString(c, "customer_service", "qr_code", "")
+	if qr != "" {
+		qr = filesvc.GetFileURL(c, qr)
+	}
 	response.Data(c, gin.H{
-		"way":               cfgsvc.GetInt(c, "customer_service", "way", 1),
-		"phone":             cfgsvc.GetString(c, "customer_service", "phone", ""),
-		"service_qr":        filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "qr_code", "")),
-		"wechat_qr":         filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "wechat_qr", "")),
-		"enterprise_wechat": cfgsvc.GetString(c, "customer_service", "enterprise_wechat", ""),
+		"qr_code":      qr,
+		"wechat":       cfgsvc.GetString(c, "customer_service", "wechat", ""),
+		"phone":        cfgsvc.GetString(c, "customer_service", "phone", ""),
+		"service_time": cfgsvc.GetString(c, "customer_service", "service_time", ""),
 	})
 }
 
 func CustomerSet(c *gin.Context) {
-	for k, v := range httpx.Params(c) {
+	p := httpx.Params(c)
+	for _, k := range []string{"qr_code", "wechat", "phone", "service_time"} {
+		v, ok := p[k]
+		if !ok {
+			continue
+		}
+		if k == "qr_code" {
+			cfgsvc.Set(c, "customer_service", k, filesvc.SetFileURL(c, util.ToString(v)))
+			continue
+		}
 		cfgsvc.Set(c, "customer_service", k, v)
 	}
 	response.SuccessNotice(c, "设置成功")

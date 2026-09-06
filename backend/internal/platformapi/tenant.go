@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -217,9 +218,23 @@ func TenantAdminLists(c *gin.Context) {
 }
 
 func TenantAdminDetail(c *gin.Context) {
+	p := httpx.Params(c)
+	if !phpRequiredParam(p, "id") {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	if !phpRequiredParam(p, "tenant_id") {
+		response.Fail(c, "请选择对应的租户")
+		return
+	}
+	var tenant model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "tenant_id")).First(&tenant).Error != nil {
+		response.Fail(c, "对应租户账号不存在")
+		return
+	}
 	var a model.TenantAdmin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
-		response.Fail(c, "管理员不存在")
+		response.Fail(c, "租户管理员不存在")
 		return
 	}
 	response.Success(c, "获取成功", gin.H{
@@ -229,47 +244,194 @@ func TenantAdminDetail(c *gin.Context) {
 }
 
 func TenantAdminAdd(c *gin.Context) {
-	tid := httpx.Uint(c, "tenant_id")
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
-	password := httpx.Str(c, "password")
-	if tid == 0 || account == "" || name == "" || password == "" {
-		response.Fail(c, "参数缺失")
+	p := httpx.Params(c)
+	if msg := util.TenantAdminAddCheck(p); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
+	tid := httpx.Uint(c, "tenant_id")
+	var tenant model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
+		response.Fail(c, "对应租户账号不存在")
+		return
+	}
+	account := httpx.Str(c, "account")
 	var exist model.TenantAdmin
 	if bootstrap.DB.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
-	admin := model.TenantAdmin{
-		TenantID: tid, Account: account, Name: name,
-		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
-		Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")), CreateTime: util.NowUnix(),
+	avatar := filesvc.SetFileURL(c, httpx.Str(c, "avatar"))
+	if avatar == "" {
+		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
-	if err := bootstrap.DB.Create(&admin).Error; err != nil {
+	admin := model.TenantAdmin{
+		TenantID: tid, Account: account, Name: httpx.Str(c, "name"),
+		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
+		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
+		Avatar: avatar, CreateTime: util.NowUnix(),
+	}
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&admin).Error; err != nil {
+			return err
+		}
+		return saveTenantAdminLinks(tx, admin.ID, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+	})
+	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func TenantAdminEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.TenantAdminEditCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	id := httpx.Uint(c, "id")
+	var a model.TenantAdmin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+		response.Fail(c, "租户管理员不存在")
+		return
+	}
+	var tenant model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "tenant_id")).First(&tenant).Error != nil {
+		response.Fail(c, "对应租户账号不存在")
+		return
+	}
 	now := util.NowUnix()
-	data := map[string]any{"name": httpx.Str(c, "name"), "disable": httpx.Int(c, "disable"), "multipoint_login": httpx.Int(c, "multipoint_login"), "update_time": now}
+	data := map[string]any{
+		"name":             httpx.Str(c, "name"),
+		"disable":          httpx.Int(c, "disable"),
+		"multipoint_login": httpx.Int(c, "multipoint_login"),
+		"update_time":      now,
+	}
+	if _, ok := p["account"]; ok {
+		data["account"] = httpx.Str(c, "account")
+	}
+	if avatar := httpx.Str(c, "avatar"); avatar != "" {
+		data["avatar"] = filesvc.SetFileURL(c, avatar)
+	} else if _, ok := p["avatar"]; ok {
+		data["avatar"] = ""
+	}
 	if pwd := httpx.Str(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
-	bootstrap.DB.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data)
-	response.Success(c, "修改成功", nil)
+	var oldRoles []uint
+	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
+	newRoles := httpx.Uints(c, "role_id")
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
+			return err
+		}
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
+		return saveTenantAdminLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	if httpx.Int(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
+		expireTenantAdminTokens(id)
+	}
+	response.SuccessNotice(c, "操作成功")
 }
 
 func TenantAdminDelete(c *gin.Context) {
+	if !phpRequiredParam(httpx.Params(c), "id") {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	id := httpx.Uint(c, "id")
+	var a model.TenantAdmin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+		response.Fail(c, "租户管理员不存在")
+		return
+	}
+	if a.Root == 1 {
+		response.Fail(c, "超级管理员不允许被删除")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantAdmin{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+			return err
+		}
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
+		return nil
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	expireTenantAdminTokens(id)
+	response.SuccessNotice(c, "删除成功")
+}
+
+func phpRequiredParam(p map[string]any, key string) bool {
+	v, ok := p[key]
+	if !ok || v == nil {
+		return false
+	}
+	s := strings.TrimSpace(util.ToString(v))
+	return s != ""
+}
+
+func saveTenantAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {
+	for _, id := range roles {
+		if err := tx.Create(&model.TenantAdminRole{AdminID: adminID, RoleID: id}).Error; err != nil {
+			return err
+		}
+	}
+	for _, id := range depts {
+		if err := tx.Create(&model.TenantAdminDept{AdminID: adminID, DeptID: id}).Error; err != nil {
+			return err
+		}
+	}
+	for _, id := range jobs {
+		if err := tx.Create(&model.TenantAdminJobs{AdminID: adminID, JobsID: id}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func expireTenantAdminTokens(adminID uint) {
+	var sess []model.TenantAdminSession
+	bootstrap.DB.Where("admin_id = ?", adminID).Find(&sess)
+	now := util.NowUnix()
+	for _, s := range sess {
+		bootstrap.DB.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
+		cache.DeleteTenantAdminInfo(s.Token)
+	}
+}
+
+func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
+	if len(oldRoles) != len(newRoles) {
+		return true
+	}
+	seen := map[uint]int{}
+	for _, id := range oldRoles {
+		seen[id]++
+	}
+	for _, id := range newRoles {
+		seen[id]--
+		if seen[id] < 0 {
+			return true
+		}
+	}
+	for _, n := range seen {
+		if n != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func TenantUserLists(c *gin.Context) {
