@@ -302,7 +302,11 @@ func GetUmChangeType(c *gin.Context) {
 func FinanceRefundLog(c *gin.Context) {
 	recordID := httpx.Uint(c, "record_id")
 	var rows []model.RefundLog
-	tdb(c).Where("record_id = ?", recordID).Order("id desc").Find(&rows)
+	q := tdb(c).Where("record_id = ?", recordID)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Order("id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		statusText := map[int]string{0: "退款中", 1: "退款成功", 2: "退款失败"}[r.RefundStatus]
@@ -356,7 +360,11 @@ func RechargeRefund(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "recharge_id")
 	var order model.RechargeOrder
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&order).Error != nil {
+	oq := tdb(c).Where("id = ? AND delete_time IS NULL", id)
+	if tid := tenantDB(c); tid > 0 {
+		oq = oq.Where("tenant_id = ?", tid)
+	}
+	if oq.First(&order).Error != nil {
 		response.Fail(c, "充值订单不存在")
 		return
 	}
@@ -503,7 +511,11 @@ func RechargeRefundAgain(c *gin.Context) {
 		return
 	}
 	var rec model.RefundRecord
-	if tdb(c).First(&rec, httpx.Uint(c, "record_id")).Error != nil {
+	rq := tdb(c).Where("id = ?", httpx.Uint(c, "record_id"))
+	if tid := tenantDB(c); tid > 0 {
+		rq = rq.Where("tenant_id = ?", tid)
+	}
+	if rq.First(&rec).Error != nil {
 		response.Fail(c, "退款记录不存在")
 		return
 	}

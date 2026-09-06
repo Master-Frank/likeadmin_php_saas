@@ -74,3 +74,13 @@ func TestPcArticleMissingShape(t *testing.T) {
 		t.Fatalf("new %+v", out["new"])
 	}
 }
+
+func TestUserCollectsArticleEmpty(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	if userCollectsArticle(c, 0, 1) || userCollectsArticle(c, 1, 0) {
+		t.Fatal("empty ids should not collect")
+	}
+}

@@ -417,7 +417,8 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.TenantAdmin{}).Error; err != nil {
+		now := util.NowUnix()
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -657,6 +658,9 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if err := sdb.Create(&admin).Error; err != nil {
 		return err
 	}
+	if err := copyTenantNotice(sdb, tenant.ID); err != nil {
+		return err
+	}
 	return sdb.Create(&model.TenantAdminDept{AdminID: 1, DeptID: 1}).Error
 }
 
@@ -736,13 +740,19 @@ func remapTenantPayConfigID(payConfigID uint, oldToNew map[uint]uint, wayToID ma
 	return payConfigID
 }
 
-func copyTenantNotice(tx *gorm.DB, tenantID uint) error {
+func copyTenantNotice(dest *gorm.DB, tenantID uint) error {
+	src := bootstrap.DB
+	if src == nil {
+		src = dest
+	}
 	var tpls []model.TenantNoticeSetting
-	tx.Where("tenant_id = 0").Find(&tpls)
+	if err := src.Where("tenant_id = 0").Find(&tpls).Error; err != nil {
+		return err
+	}
 	for _, n := range tpls {
 		n.ID = 0
 		n.TenantID = tenantID
-		if err := tx.Create(&n).Error; err != nil {
+		if err := dest.Create(&n).Error; err != nil {
 			return err
 		}
 	}

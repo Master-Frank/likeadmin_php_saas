@@ -24,6 +24,26 @@ func tdb(c *gin.Context) *gorm.DB {
 	return tenantdb.Use(c)
 }
 
+func scopeTenant(db *gorm.DB, c *gin.Context) *gorm.DB {
+	if tid := ctxutil.Get(c).TenantID; tid > 0 {
+		return db.Where("tenant_id = ?", tid)
+	}
+	return db
+}
+
+func articleCollectDB(c *gin.Context) *gorm.DB {
+	return scopeTenant(tdb(c).Model(&model.ArticleCollect{}).Where("delete_time IS NULL"), c)
+}
+
+func userCollectsArticle(c *gin.Context, uid, articleID uint) bool {
+	if uid == 0 || articleID == 0 {
+		return false
+	}
+	var n int64
+	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, articleID).Count(&n)
+	return n > 0
+}
+
 func IndexConfig(c *gin.Context) {
 	websiteLogo := cfgsvc.GetString(c, "website", "shop_logo", config.C.Project.Website["shop_logo"])
 	websiteIcon := cfgsvc.GetString(c, "website", "h5_favicon", config.C.Project.Website["h5_favicon"])
@@ -337,7 +357,7 @@ func ArticleLists(c *gin.Context) {
 			ids = append(ids, a.ID)
 		}
 		var marks []model.ArticleCollect
-		tdb(c).Where("user_id = ? AND status = 1 AND article_id IN ?", uid, ids).Find(&marks)
+		articleCollectDB(c).Where("user_id = ? AND status = 1 AND article_id IN ?", uid, ids).Find(&marks)
 		for _, m := range marks {
 			collects[m.ArticleID] = true
 		}
@@ -385,7 +405,7 @@ func SearchHot(c *gin.Context) {
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid)
+	db := scopeTenant(tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid), c)
 	var count int64
 	db.Count(&count)
 	var rows []model.RechargeOrder

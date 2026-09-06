@@ -6,8 +6,10 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -144,7 +146,13 @@ func attachRelations(c *gin.Context, sp *spec, rows []map[string]any) {
 			continue
 		}
 		var related []map[string]any
-		if db.Table(rel.Table).Where(rel.ForeignKey+" IN ?", ids).Find(&related).Error != nil {
+		q := db.Table(rel.Table).Where(rel.ForeignKey+" IN ?", ids)
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			if tableHasColumn(db, tenantdb.Table(c, rel.Table), "tenant_id") {
+				q = q.Where("tenant_id = ?", tid)
+			}
+		}
+		if q.Find(&related).Error != nil {
 			continue
 		}
 		for _, item := range related {
@@ -189,6 +197,17 @@ func attachHasMany(rows, related []map[string]any, rel relSpec) {
 		}
 		row[rel.Name] = []map[string]any{}
 	}
+}
+
+func tableHasColumn(db *gorm.DB, table, col string) bool {
+	if db == nil || table == "" || col == "" {
+		return false
+	}
+	var n int64
+	if db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", table, col).Scan(&n).Error != nil {
+		return false
+	}
+	return n > 0
 }
 
 func uniqueIDs(rows []map[string]any, key string) []any {

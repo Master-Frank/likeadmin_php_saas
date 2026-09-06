@@ -196,6 +196,7 @@ func AdminEdit(c *gin.Context) {
 	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireAdminTokens(id)
 	}
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -220,6 +221,7 @@ func AdminDelete(c *gin.Context) {
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminRole{})
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminDept{})
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminJobs{})
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 

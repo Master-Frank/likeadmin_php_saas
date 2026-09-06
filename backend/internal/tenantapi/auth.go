@@ -230,7 +230,8 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.TenantAdmin{}).Error; err != nil {
+		now := util.NowUnix()
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})

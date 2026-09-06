@@ -385,6 +385,28 @@ print((ls[0] if ls else {}).get("id") or 0)
     if [[ "$go_mk" != "1 1" ]]; then
       fail=$((fail + 1))
     fi
+    if [[ -n "${uid:-}" ]] && command -v mysql >/dev/null; then
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      now="$(date +%s)"
+      mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,1,$now)"
+      mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,999,$now)"
+      go_addc="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"id\":${aid:-1}}")"
+      ctid="$(mysqlq "SELECT tenant_id FROM la_article_collect WHERE user_id=$uid AND article_id=${aid:-1} AND status=1 AND delete_time IS NULL ORDER BY id DESC LIMIT 1")"
+      echo "collect_add go_code=$(jcode <<<"$go_addc") tenant_id=$ctid"
+      if [[ "$(jcode <<<"$go_addc")" != "1" || "$ctid" != "1" ]]; then
+        echo "  go_addc=${go_addc:0:200}"
+        fail=$((fail + 1))
+      fi
+      go_cl="$(curl -sS "$GO/api/article/collect" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      go_cln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_cl")"
+      expect_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect c JOIN la_article a ON a.id=c.article_id WHERE c.user_id=$uid AND c.status=1 AND c.delete_time IS NULL AND c.tenant_id=1 AND a.is_show=1 AND a.delete_time IS NULL")"
+      echo "collect_tenant_scope n=$go_cln expect=$expect_cl"
+      if [[ "$go_cln" != "$expect_cl" ]]; then
+        echo "  go_cl=${go_cl:0:240}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND tenant_id=999 AND create_time=$now"
+    fi
     php_xt="$(curl -sS "$PHP/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     go_xt="$(curl -sS "$GO/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     echo "cross_tenant_optional php_code=$(jcode <<<"$php_xt") go_code=$(jcode <<<"$go_xt")"
@@ -2045,6 +2067,11 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     aid1="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT id FROM la_tenant_admin_$ssn WHERE root=1 LIMIT 1" 2>/dev/null)"
     echo "shard_tenant_admin_id=$aid1"
     if [[ "$aid1" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+    nset="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_notice_setting_$ssn" 2>/dev/null)"
+    echo "shard_notice_setting n=$nset"
+    if [[ -z "$nset" || "$nset" == "0" ]]; then
       fail=$((fail + 1))
     fi
   fi

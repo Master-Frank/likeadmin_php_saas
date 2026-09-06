@@ -92,6 +92,12 @@ func TestImageCol(t *testing.T) {
 	}
 }
 
+func TestTableHasColumnNilDB(t *testing.T) {
+	if tableHasColumn(nil, "la_user", "tenant_id") {
+		t.Fatal("nil db should not claim column")
+	}
+}
+
 func TestNewSpecSoftDeleteAndPk(t *testing.T) {
 	sp := newSpec(model.GenerateTable{
 		Name:   "la_pair_gencrud",

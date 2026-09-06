@@ -32,13 +32,13 @@ func ArticleAddCollect(c *gin.Context) {
 		return
 	}
 	var row model.ArticleCollect
-	err := tdb(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
+	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
 		tdb(c).Create(&model.ArticleCollect{
 			UserID: uid, ArticleID: aid, Status: 1, TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
 		})
 	} else {
-		tdb(c).Model(&row).Updates(map[string]any{"status": 1, "update_time": util.NowUnix()})
+		articleCollectDB(c).Where("id = ?", row.ID).Updates(map[string]any{"status": 1, "update_time": util.NowUnix()})
 	}
 	response.Success(c, "操作成功", nil)
 }
@@ -46,8 +46,7 @@ func ArticleAddCollect(c *gin.Context) {
 func ArticleCancelCollect(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
 	aid := httpx.Uint(c, "id")
-	tdb(c).Model(&model.ArticleCollect{}).
-		Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
+	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
 		Updates(map[string]any{"status": 0, "update_time": util.NowUnix()})
 	response.Success(c, "操作成功", nil)
 }
@@ -58,7 +57,10 @@ func ArticleCollect(c *gin.Context) {
 	at := tenantdb.Table(c, model.Article{}.TableName())
 	ct := tenantdb.Table(c, model.ArticleCollect{}.TableName())
 	db := tdb(c).Table(at+" AS a").Joins("JOIN "+ct+" AS c ON c.article_id = a.id").
-		Where("c.user_id = ? AND c.status = 1 AND a.is_show = 1", uid)
+		Where("c.user_id = ? AND c.status = 1 AND a.is_show = 1 AND c.delete_time IS NULL AND a.delete_time IS NULL", uid)
+	if tid := ctxutil.Get(c).TenantID; tid > 0 {
+		db = db.Where("c.tenant_id = ?", tid)
+	}
 	var count int64
 	db.Count(&count)
 	type row struct {
@@ -90,12 +92,7 @@ func ArticleCollect(c *gin.Context) {
 
 func ArticleDetail(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	collect := false
-	if uid := ctxutil.Get(c).UserID; uid > 0 && id > 0 {
-		var n int64
-		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, id).Count(&n)
-		collect = n > 0
-	}
+	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, id)
 	var a model.Article
 	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
 		response.Data(c, gin.H{"collect": collect})
@@ -162,7 +159,7 @@ func PayWay(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if tdb(c).First(&order, orderID).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
@@ -248,7 +245,7 @@ func PayPrepay(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if tdb(c).First(&order, orderID).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
@@ -316,7 +313,7 @@ func PayStatus(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if tdb(c).Where("id = ? AND user_id = ?", orderID, uid).First(&order).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND user_id = ? AND delete_time IS NULL", orderID, uid), c).First(&order).Error != nil {
 		response.Fail(c, "订单不存在")
 		return
 	}
@@ -551,12 +548,7 @@ func PcArticleDetail(c *gin.Context) {
 	} else {
 		next = map[string]any{}
 	}
-	collect := false
-	if uid := ctxutil.Get(c).UserID; uid > 0 {
-		var n int64
-		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
-		collect = n > 0
-	}
+	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, a.ID)
 	var cate model.ArticleCate
 	tdb(c).First(&cate, a.Cid)
 	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
@@ -569,12 +561,7 @@ func PcArticleDetail(c *gin.Context) {
 }
 
 func pcArticleMissing(c *gin.Context, id uint) gin.H {
-	collect := false
-	if uid := ctxutil.Get(c).UserID; uid > 0 && id > 0 {
-		var n int64
-		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, id).Count(&n)
-		collect = n > 0
-	}
+	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, id)
 	return gin.H{
 		"last": map[string]any{}, "next": map[string]any{},
 		"new":     limitArticles(c, "new", 8, 0, 0),
