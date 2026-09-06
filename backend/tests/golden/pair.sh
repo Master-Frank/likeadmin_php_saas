@@ -1024,7 +1024,7 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jget msg <<<"$php_cs2")" != "$(jget msg <<<"$go_cs2")" ]]; then
     fail=$((fail + 1))
   fi
-  rname="pairrole$(date +%s)"
+  rname="pr${ts: -6}"
   php_role="$(curl -sS -X POST "$PHP/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$rname\",\"sort\":0}")"
   echo "admin_role_add php_code=$(jcode <<<"$php_role")"
   rlist="$(curl -sS "$GO/tenantapi/auth.role/lists?name=$rname" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -1034,7 +1034,7 @@ d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
 print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
 ' "$rname" <<<"$rlist")"
   if [[ "$rid" != "0" && -n "$rid" ]]; then
-    aname="pairadm$(date +%s)"
+    aname="pa${ts: -6}"
     php_add="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"account\":\"$aname\",\"name\":\"$aname\",\"password\":\"likeadmin\",\"password_confirm\":\"likeadmin\",\"role_id\":[$rid],\"multipoint_login\":1,\"disable\":0}")"
     echo "admin_add php_code=$(jcode <<<"$php_add")"
     if [[ "$(jcode <<<"$php_add")" != "1" ]]; then
