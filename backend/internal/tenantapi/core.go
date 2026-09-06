@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -16,12 +15,18 @@ import (
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 	"likeadmin/backend/internal/workbench"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+func tdb(c *gin.Context) *gorm.DB {
+	return tenantdb.Use(c)
+}
 
 const tenantLockTag = `app\common\cache\AdminAccountSafeCache`
 
@@ -47,7 +52,7 @@ func LoginAccount(c *gin.Context) {
 		}
 	}
 	meta := ctxutil.Get(c)
-	q := bootstrap.DB.Where("account = ? AND delete_time IS NULL", account)
+	q := tdb(c).Where("account = ? AND delete_time IS NULL", account)
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
@@ -71,7 +76,7 @@ func LoginAccount(c *gin.Context) {
 		authsvc.RelieveLoginFail(c, tenantLockTag)
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
+	tdb(c).Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
 	info := authsvc.SetTenantToken(c, admin.ID, terminal, admin.MultipointLogin)
 	avatar := admin.Avatar
 	if avatar == "" {
@@ -87,7 +92,7 @@ func LoginLogout(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	if meta.AdminInfo != nil {
 		if token := util.ToString(meta.AdminInfo["token"]); token != "" {
-			authsvc.ExpireTenantToken(token)
+			authsvc.ExpireTenantToken(c, token)
 		}
 	}
 	response.Success(c, "success", nil)
@@ -112,7 +117,7 @@ func ConfigDict(c *gin.Context) {
 	}
 	types := strings.Split(typ, ",")
 	var rows []model.DictData
-	bootstrap.DB.Where("type_value IN ? AND delete_time IS NULL", types).Find(&rows)
+	tdb(c).Where("type_value IN ? AND delete_time IS NULL", types).Find(&rows)
 	result := map[string]any{}
 	for _, t := range types {
 		list := []model.DictData{}
@@ -131,12 +136,12 @@ func WorkbenchIndex(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	var todayNew, totalNew int64
-	uq := bootstrap.DB.Model(&model.User{}).Where("delete_time IS NULL")
+	uq := tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
 	if meta.TenantID > 0 {
 		uq = uq.Where("tenant_id = ?", meta.TenantID)
 	}
 	uq.Where("create_time >= ?", todayStart).Count(&todayNew)
-	uq = bootstrap.DB.Model(&model.User{}).Where("delete_time IS NULL")
+	uq = tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
 	if meta.TenantID > 0 {
 		uq = uq.Where("tenant_id = ?", meta.TenantID)
 	}
@@ -156,23 +161,23 @@ func WorkbenchIndex(c *gin.Context) {
 func AdminMySelf(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	var admin model.TenantAdmin
-	if bootstrap.DB.Where("id = ?", meta.AdminID).First(&admin).Error != nil {
+	if tdb(c).Where("id = ?", meta.AdminID).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
 	var menus []model.TenantSystemMenu
-	q := bootstrap.DB.Where("is_disable = 0 AND type IN ?", []string{"M", "C"})
+	q := tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"})
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
 	roleIDs, deptIDs, jobIDs := []uint{}, []uint{}, []uint{}
-	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
-	bootstrap.DB.Model(&model.TenantAdminDept{}).Where("admin_id = ?", admin.ID).Pluck("dept_id", &deptIDs)
-	bootstrap.DB.Model(&model.TenantAdminJobs{}).Where("admin_id = ?", admin.ID).Pluck("jobs_id", &jobIDs)
+	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
+	tdb(c).Model(&model.TenantAdminDept{}).Where("admin_id = ?", admin.ID).Pluck("dept_id", &deptIDs)
+	tdb(c).Model(&model.TenantAdminJobs{}).Where("admin_id = ?", admin.ID).Pluck("jobs_id", &jobIDs)
 	if admin.Root != 1 {
 		var menuIDs []uint
 		if len(roleIDs) > 0 {
-			bootstrap.DB.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
+			tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 		}
 		if len(menuIDs) == 0 {
 			response.Data(c, gin.H{"user": tenantSelfUser(c, admin, roleIDs, deptIDs, jobIDs), "menu": []any{}, "permissions": []string{}})
@@ -237,7 +242,7 @@ func firstNonEmpty(a, b string) string {
 
 func UserLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.User{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -261,7 +266,7 @@ func UserLists(c *gin.Context) {
 
 func UserDetail(c *gin.Context) {
 	var u model.User
-	db := bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
+	db := tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -285,29 +290,44 @@ func UserEdit(c *gin.Context) {
 		response.Fail(c, "不允许修改该字段")
 		return
 	}
-	bootstrap.DB.Model(&model.User{}).Where("id = ?", id).Update(field, value)
+	tdb(c).Model(&model.User{}).Where("id = ?", id).Update(field, value)
 	response.Success(c, "修改成功", nil)
 }
 
 func ArticleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.Article{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if title := lists.Param(q, "title"); title != "" {
 		db = db.Where("title LIKE ?", "%"+title+"%")
 	}
+	if cid := lists.ParamInt(q, "cid"); cid > 0 {
+		db = db.Where("cid = ?", cid)
+	}
+	if lists.Param(q, "is_show") != "" {
+		db = db.Where("is_show = ?", lists.ParamInt(q, "is_show"))
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.Article
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	cates := map[uint]string{}
+	var cateRows []model.ArticleCate
+	tdb(c).Find(&cateRows)
+	for _, cate := range cateRows {
+		cates[cate.ID] = cate.Name
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, map[string]any{
-			"id": a.ID, "cid": a.Cid, "title": a.Title, "image": filesvc.GetFileURL(c, a.Image),
-			"author": a.Author, "is_show": a.IsShow, "sort": a.Sort, "click_actual": a.ClickActual,
+			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
+			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
+			"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
+			"click": a.ClickActual + a.ClickVirtual, "cate_name": cates[a.Cid],
 			"create_time": util.FormatDateTime(a.CreateTime),
+			"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -321,13 +341,13 @@ func ArticleAdd(c *gin.Context) {
 		IsShow: httpx.Int(c, "is_show"), Sort: httpx.Int(c, "sort"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
-	bootstrap.DB.Create(&a)
+	tdb(c).Create(&a)
 	response.Success(c, "添加成功", nil)
 }
 
 func ArticleEdit(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
 		"abstract": httpx.Str(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.Str(c, "image")),
 		"author": httpx.Str(c, "author"), "content": httpx.Str(c, "content"),
@@ -338,13 +358,13 @@ func ArticleEdit(c *gin.Context) {
 
 func ArticleDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func ArticleDetail(c *gin.Context) {
 	var a model.Article
-	if bootstrap.DB.First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "文章不存在")
 		return
 	}
@@ -353,7 +373,7 @@ func ArticleDetail(c *gin.Context) {
 
 func ArticleCateLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.ArticleCate{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.ArticleCate{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -365,12 +385,12 @@ func ArticleCateLists(c *gin.Context) {
 }
 
 func ArticleCateAdd(c *gin.Context) {
-	bootstrap.DB.Create(&model.ArticleCate{Name: httpx.Str(c, "name"), Sort: httpx.Int(c, "sort"), IsShow: httpx.Int(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
+	tdb(c).Create(&model.ArticleCate{Name: httpx.Str(c, "name"), Sort: httpx.Int(c, "sort"), IsShow: httpx.Int(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
 	response.Success(c, "添加成功", nil)
 }
 
 func ArticleCateEdit(c *gin.Context) {
-	bootstrap.DB.Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "sort": httpx.Int(c, "sort"), "is_show": httpx.Int(c, "is_show"),
 	})
 	response.Success(c, "修改成功", nil)
@@ -378,13 +398,13 @@ func ArticleCateEdit(c *gin.Context) {
 
 func ArticleCateDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func ArticleCateAll(c *gin.Context) {
 	var rows []model.ArticleCate
-	db := bootstrap.DB.Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -394,7 +414,7 @@ func ArticleCateAll(c *gin.Context) {
 
 func DecoratePageDetail(c *gin.Context) {
 	var p model.DecoratePage
-	db := bootstrap.DB.Where("type = ?", httpx.Int(c, "type"))
+	db := tdb(c).Where("type = ?", httpx.Int(c, "type"))
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -409,9 +429,9 @@ func DecoratePageSave(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	now := util.NowUnix()
 	if id > 0 {
-		bootstrap.DB.Model(&model.DecoratePage{}).Where("id = ?", id).Updates(map[string]any{"data": httpx.Str(c, "data"), "update_time": now})
+		tdb(c).Model(&model.DecoratePage{}).Where("id = ?", id).Updates(map[string]any{"data": httpx.Str(c, "data"), "update_time": now})
 	} else {
-		bootstrap.DB.Create(&model.DecoratePage{Type: httpx.Int(c, "type"), Data: httpx.Str(c, "data"), TenantID: tenantDB(c), CreateTime: now})
+		tdb(c).Create(&model.DecoratePage{Type: httpx.Int(c, "type"), Data: httpx.Str(c, "data"), TenantID: tenantDB(c), CreateTime: now})
 	}
 	response.Success(c, "保存成功", nil)
 }
@@ -442,7 +462,7 @@ func SettingSetWebsite(c *gin.Context) {
 
 func HotSearchGet(c *gin.Context) {
 	var rows []model.HotSearch
-	db := bootstrap.DB
+	db := tdb(c)
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -465,7 +485,7 @@ func RechargeSetConfig(c *gin.Context) {
 
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.RechargeOrder{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.RechargeOrder{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -478,7 +498,7 @@ func RechargeLists(c *gin.Context) {
 
 func FinanceAccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.UserAccountLog{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.UserAccountLog{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -491,7 +511,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 
 func FinanceRefundRecord(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.RefundRecord{})
+	db := tdb(c).Model(&model.RefundRecord{})
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -521,7 +541,7 @@ func OAReplyIndex(c *gin.Context) {
 		c.String(200, "success")
 		return
 	}
-	q := bootstrap.DB.Where("delete_time IS NULL AND status = 1")
+	q := tdb(c).Where("delete_time IS NULL AND status = 1")
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}

@@ -78,13 +78,14 @@ func SetTenantToken(c *gin.Context, adminID uint, terminal, multipoint int) map[
 	return cache.SetTenantAdminInfo(sess.Token, ctxutil.ClientIP(c), db)
 }
 
-func ExpireTenantToken(token string) bool {
+func ExpireTenantToken(c *gin.Context, token string) bool {
+	db := tenantdb.Use(c)
 	var sess model.TenantAdminSession
-	if err := bootstrap.DB.Where("token = ?", token).First(&sess).Error; err != nil {
+	if err := db.Where("token = ?", token).First(&sess).Error; err != nil {
 		return false
 	}
 	var admin model.TenantAdmin
-	if err := bootstrap.DB.Where("id = ?", sess.AdminID).First(&admin).Error; err != nil {
+	if err := db.Where("id = ?", sess.AdminID).First(&admin).Error; err != nil {
 		return false
 	}
 	if admin.MultipointLogin == 1 {
@@ -93,7 +94,7 @@ func ExpireTenantToken(token string) bool {
 	now := util.NowUnix()
 	sess.ExpireTime = now
 	sess.UpdateTime = &now
-	bootstrap.DB.Save(&sess)
+	db.Save(&sess)
 	cache.DeleteTenantAdminInfo(token)
 	return true
 }
@@ -120,9 +121,9 @@ func SetUserToken(c *gin.Context, userID uint, terminal int) map[string]any {
 	return cache.SetUserInfo(sess.Token, db)
 }
 
-func ExpireUserToken(token string) {
+func ExpireUserToken(c *gin.Context, token string) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": now, "update_time": now})
+	tenantdb.Use(c).Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": now, "update_time": now})
 	cache.DeleteUserInfo(token)
 }
 

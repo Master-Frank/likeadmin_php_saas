@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -21,7 +20,7 @@ import (
 
 func FileLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantFile{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantFile{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -56,13 +55,13 @@ func FileMove(c *gin.Context) {
 	ids := httpx.Uints(c, "ids")
 	cid := httpx.Uint(c, "cid")
 	if len(ids) > 0 {
-		bootstrap.DB.Model(&model.TenantFile{}).Where("id IN ?", ids).Update("cid", cid)
+		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("cid", cid)
 	}
 	response.Success(c, "移动成功", nil)
 }
 
 func FileRename(c *gin.Context) {
-	bootstrap.DB.Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
+	tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
 	response.Success(c, "修改成功", nil)
 }
 
@@ -70,14 +69,14 @@ func FileDelete(c *gin.Context) {
 	ids := httpx.Uints(c, "ids")
 	now := util.NowUnix()
 	if len(ids) > 0 {
-		bootstrap.DB.Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
+		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
 	}
 	response.Success(c, "删除成功", nil)
 }
 
 func FileListCate(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantFileCate{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantFileCate{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -99,20 +98,20 @@ func FileAddCate(c *gin.Context) {
 		Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
-	bootstrap.DB.Create(&row)
+	tdb(c).Create(&row)
 	response.Success(c, "添加成功", nil)
 }
 
 func FileEditCate(c *gin.Context) {
-	bootstrap.DB.Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
+	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
 	response.Success(c, "修改成功", nil)
 }
 
 func FileDelCate(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantFileCate{}).Where("id = ?", id).Update("delete_time", now)
-	bootstrap.DB.Model(&model.TenantFile{}).Where("cid = ?", id).Update("delete_time", now)
+	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", id).Update("delete_time", now)
+	tdb(c).Model(&model.TenantFile{}).Where("cid = ?", id).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
@@ -160,7 +159,7 @@ func tenantUpload(c *gin.Context, typ int, dir string, allow []string) {
 		Cid: cid, Type: typ, Name: fh.Filename, URI: rel, Source: 2,
 		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
 	}
-	bootstrap.DB.Create(&row)
+	tdb(c).Create(&row)
 	response.Success(c, "上传成功", gin.H{
 		"id": row.ID, "cid": row.Cid, "type": row.Type, "name": row.Name,
 		"uri": filesvc.GetFileURL(c, rel), "url": rel,

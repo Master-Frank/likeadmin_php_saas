@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -124,7 +123,7 @@ func LoginUpdateUser(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&u).Updates(map[string]any{
+	tdb(c).Model(&u).Updates(map[string]any{
 		"nickname":    httpx.Str(c, "nickname"),
 		"avatar":      filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
 		"is_new_user": 0,
@@ -161,17 +160,17 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 		return
 	}
 	var exist model.UserAuth
-	if bootstrap.DB.Where("openid = ?", sess.Openid).First(&exist).Error == nil {
+	if tdb(c).Where("openid = ?", sess.Openid).First(&exist).Error == nil {
 		response.Fail(c, "该微信已被绑定")
 		return
 	}
 	if sess.Unionid != "" {
-		if bootstrap.DB.Where("unionid = ? AND user_id <> ?", sess.Unionid, uid).First(&exist).Error == nil {
+		if tdb(c).Where("unionid = ? AND user_id <> ?", sess.Unionid, uid).First(&exist).Error == nil {
 			response.Fail(c, "该微信已被绑定")
 			return
 		}
 	}
-	if err := bootstrap.DB.Create(&model.UserAuth{
+	if err := tdb(c).Create(&model.UserAuth{
 		UserID: uid, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
 	}).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -186,7 +185,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	}
 	tid := ctxutil.Get(c).TenantID
 	var user model.User
-	q := bootstrap.DB.Table(model.User{}.TableName()+" u").
+	q := tdb(c).Table(model.User{}.TableName()+" u").
 		Select("u.*").
 		Joins("JOIN "+model.UserAuth{}.TableName()+" au ON au.user_id = u.id").
 		Where("u.delete_time IS NULL AND (au.openid = ? OR (au.unionid <> '' AND au.unionid = ?))", sess.Openid, sess.Unionid)
@@ -201,7 +200,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		if !create {
 			return map[string]any{}, nil
 		}
-		if err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tdb(c).Transaction(func(tx *gorm.DB) error {
 			var maxSN int
 			tx.Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
 			now := util.NowUnix()
@@ -228,16 +227,16 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			return nil, fmt.Errorf("您的账号异常，请联系客服。")
 		}
 		var auth model.UserAuth
-		if bootstrap.DB.Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
-			bootstrap.DB.Create(&model.UserAuth{
+		if tdb(c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
+			tdb(c).Create(&model.UserAuth{
 				UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
 			})
 		} else if auth.Unionid == "" && sess.Unionid != "" {
-			bootstrap.DB.Model(&auth).Update("unionid", sess.Unionid)
+			tdb(c).Model(&auth).Update("unionid", sess.Unionid)
 		}
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
+	tdb(c).Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
 	info := authsvc.SetUserToken(c, user.ID, terminal)
 	avatar := filesvc.GetFileURL(c, firstNonEmpty(user.Avatar, config.C.Project.DefaultImage["user_avatar"]))
 	return gin.H{
@@ -264,7 +263,7 @@ func handlePayNotify(c *gin.Context) {
 		sn := wechat.RechargeSN(n.OutTradeNo)
 		if sn != "" {
 			var order model.RechargeOrder
-			if bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&order).Error == nil && order.PayStatus != 1 {
+			if tdb(c).Where("sn = ? AND delete_time IS NULL", sn).First(&order).Error == nil && order.PayStatus != 1 {
 				_ = markRechargePaid(&order, n.TransactionID)
 			}
 		}
@@ -302,7 +301,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
-	q := bootstrap.DB.Where("mobile = ? AND delete_time IS NULL AND id <> ?", phone, u.ID)
+	q := tdb(c).Where("mobile = ? AND delete_time IS NULL AND id <> ?", phone, u.ID)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -311,7 +310,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		response.Fail(c, "手机号已被其他账号绑定")
 		return
 	}
-	bootstrap.DB.Model(&u).Update("mobile", phone)
+	tdb(c).Model(&u).Update("mobile", phone)
 	response.Success(c, "操作成功", nil)
 }
 

@@ -3,7 +3,6 @@ package tenantapi
 import (
 	"encoding/json"
 
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -16,7 +15,7 @@ import (
 
 func PayConfigLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantPayConfig{})
+	db := tdb(c).Model(&model.TenantPayConfig{})
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -35,7 +34,7 @@ func PayConfigLists(c *gin.Context) {
 
 func PayConfigGet(c *gin.Context) {
 	var r model.TenantPayConfig
-	if bootstrap.DB.First(&r, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&r, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "配置不存在")
 		return
 	}
@@ -50,7 +49,7 @@ func PayConfigGet(c *gin.Context) {
 func PayConfigSet(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	cfg, _ := json.Marshal(httpx.Any(c, "config"))
-	bootstrap.DB.Model(&model.TenantPayConfig{}).Where("id = ?", id).Updates(map[string]any{
+	tdb(c).Model(&model.TenantPayConfig{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "icon": filesvc.SetFileURL(c, httpx.Str(c, "icon")),
 		"sort": httpx.Int(c, "sort"), "config": string(cfg),
 	})
@@ -59,7 +58,7 @@ func PayConfigSet(c *gin.Context) {
 
 func PayWayGet(c *gin.Context) {
 	var rows []model.TenantPayWay
-	db := bootstrap.DB
+	db := tdb(c)
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -80,7 +79,7 @@ func PayWayGet(c *gin.Context) {
 	}
 	for _, r := range rows {
 		var cfg model.TenantPayConfig
-		bootstrap.DB.First(&cfg, r.PayConfigID)
+		tdb(c).First(&cfg, r.PayConfigID)
 		lists[r.Scene] = append(lists[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,
@@ -106,7 +105,7 @@ func PayWaySet(c *gin.Context) {
 			if id == 0 {
 				continue
 			}
-			bootstrap.DB.Model(&model.TenantPayWay{}).Where("id = ?", id).Updates(map[string]any{
+			tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", id).Updates(map[string]any{
 				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
 			})
 		}

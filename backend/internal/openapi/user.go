@@ -2,7 +2,6 @@ package openapi
 
 import (
 	"likeadmin/backend/internal/authsvc"
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -12,10 +11,16 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+func tdb(c *gin.Context) *gorm.DB {
+	return tenantdb.Use(c)
+}
 
 func IndexConfig(c *gin.Context) {
 	websiteLogo := cfgsvc.GetString(c, "website", "shop_logo", config.C.Project.Website["shop_logo"])
@@ -59,7 +64,7 @@ func IndexPolicy(c *gin.Context) {
 
 func IndexDecorate(c *gin.Context) {
 	var p model.DecoratePage
-	db := bootstrap.DB.Where("type = ?", httpx.Int(c, "type"))
+	db := tdb(c).Where("type = ?", httpx.Int(c, "type"))
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -87,20 +92,20 @@ func LoginRegister(c *gin.Context) {
 	}
 	tid := ctxutil.Get(c).TenantID
 	var exist model.User
-	if bootstrap.DB.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
+	if tdb(c).Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
 	now := util.NowUnix()
 	var maxSN int
-	bootstrap.DB.Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
+	tdb(c).Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
 	u := model.User{
 		Account: account, Nickname: "用户" + util.ToString(maxSN+1),
 		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
 		Channel:  httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
 		Avatar: config.C.Project.DefaultImage["user_avatar"], SN: maxSN + 1,
 	}
-	if err := bootstrap.DB.Create(&u).Error; err != nil {
+	if err := tdb(c).Create(&u).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
@@ -117,7 +122,7 @@ func LoginAccount(c *gin.Context) {
 	}
 	tid := ctxutil.Get(c).TenantID
 	var u model.User
-	q := bootstrap.DB.Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account)
+	q := tdb(c).Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account)
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -139,7 +144,7 @@ func LoginAccount(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
+	tdb(c).Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
 	info := authsvc.SetUserToken(c, u.ID, terminal)
 	response.Data(c, gin.H{
 		"nickname": u.Nickname, "sn": u.SN, "mobile": u.Mobile,
@@ -151,7 +156,7 @@ func LoginAccount(c *gin.Context) {
 func LoginLogout(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	if meta.UserInfo != nil {
-		authsvc.ExpireUserToken(util.ToString(meta.UserInfo["token"]))
+		authsvc.ExpireUserToken(c, util.ToString(meta.UserInfo["token"]))
 	}
 	response.Success(c, "success", nil)
 }
@@ -176,7 +181,7 @@ func UserCenter(c *gin.Context) {
 		term := util.ToInt(info["terminal"])
 		if term == 1 || term == 2 {
 			var n int64
-			bootstrap.DB.Model(&model.UserAuth{}).Where("user_id = ? AND terminal = ?", u.ID, term).Count(&n)
+			tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal = ?", u.ID, term).Count(&n)
 			if n > 0 {
 				out["is_auth"] = 1
 			} else {
@@ -190,9 +195,9 @@ func UserCenter(c *gin.Context) {
 func UserInfo(c *gin.Context) {
 	u := currentUser(c)
 	hasAuth := 0
-	if bootstrap.DB != nil && u.ID > 0 {
+	if tdb(c) != nil && u.ID > 0 {
 		var n int64
-		bootstrap.DB.Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}).Count(&n)
+		tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}).Count(&n)
 		if n > 0 {
 			hasAuth = 1
 		}
@@ -222,13 +227,13 @@ func UserSetInfo(c *gin.Context) {
 	if field == "avatar" {
 		value = filesvc.SetFileURL(c, util.ToString(value))
 	}
-	bootstrap.DB.Model(&u).Update(field, value)
+	tdb(c).Model(&u).Update(field, value)
 	response.Success(c, "修改成功", nil)
 }
 
 func ArticleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -246,7 +251,7 @@ func ArticleLists(c *gin.Context) {
 			ids = append(ids, a.ID)
 		}
 		var marks []model.ArticleCollect
-		bootstrap.DB.Where("user_id = ? AND status = 1 AND article_id IN ?", uid, ids).Find(&marks)
+		tdb(c).Where("user_id = ? AND status = 1 AND article_id IN ?", uid, ids).Find(&marks)
 		for _, m := range marks {
 			collects[m.ArticleID] = true
 		}
@@ -265,7 +270,7 @@ func ArticleLists(c *gin.Context) {
 
 func ArticleCate(c *gin.Context) {
 	var rows []model.ArticleCate
-	db := bootstrap.DB.Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -279,7 +284,7 @@ func ArticleCate(c *gin.Context) {
 
 func SearchHot(c *gin.Context) {
 	var rows []model.HotSearch
-	db := bootstrap.DB
+	db := tdb(c)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -294,7 +299,7 @@ func SearchHot(c *gin.Context) {
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := bootstrap.DB.Model(&model.RechargeOrder{}).Where("user_id = ? AND delete_time IS NULL", uid)
+	db := tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND delete_time IS NULL", uid)
 	var count int64
 	db.Count(&count)
 	var rows []model.RechargeOrder
@@ -305,7 +310,7 @@ func RechargeLists(c *gin.Context) {
 func AccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := bootstrap.DB.Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid)
+	db := tdb(c).Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid)
 	var count int64
 	db.Count(&count)
 	var rows []model.UserAccountLog
@@ -328,7 +333,7 @@ func currentUser(c *gin.Context) model.User {
 	if id == 0 {
 		return u
 	}
-	bootstrap.DB.First(&u, id)
+	tdb(c).First(&u, id)
 	return u
 }
 

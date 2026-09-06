@@ -1,7 +1,6 @@
 package tenantapi
 
 import (
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
@@ -12,7 +11,7 @@ import (
 )
 
 func DeptLists(c *gin.Context) {
-	db := bootstrap.DB.Model(&model.TenantDept{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantDept{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -44,7 +43,7 @@ func DeptLists(c *gin.Context) {
 
 func DeptLeader(c *gin.Context) {
 	var rows []model.TenantDept
-	db := bootstrap.DB.Where("delete_time IS NULL AND status = 1")
+	db := tdb(c).Where("delete_time IS NULL AND status = 1")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -53,7 +52,7 @@ func DeptLeader(c *gin.Context) {
 }
 
 func DeptAdd(c *gin.Context) {
-	bootstrap.DB.Create(&model.TenantDept{
+	tdb(c).Create(&model.TenantDept{
 		Name: httpx.Str(c, "name"), Pid: httpx.Uint(c, "pid"), Sort: httpx.Int(c, "sort"),
 		Leader: httpx.Str(c, "leader"), Mobile: httpx.Str(c, "mobile"), Status: httpx.Int(c, "status"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
@@ -62,7 +61,7 @@ func DeptAdd(c *gin.Context) {
 }
 
 func DeptEdit(c *gin.Context) {
-	bootstrap.DB.Model(&model.TenantDept{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.TenantDept{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "pid": httpx.Uint(c, "pid"), "sort": httpx.Int(c, "sort"),
 		"leader": httpx.Str(c, "leader"), "mobile": httpx.Str(c, "mobile"), "status": httpx.Int(c, "status"),
 	})
@@ -71,19 +70,19 @@ func DeptEdit(c *gin.Context) {
 
 func DeptDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantDept{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.TenantDept{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func DeptDetail(c *gin.Context) {
 	var d model.TenantDept
-	bootstrap.DB.First(&d, httpx.Uint(c, "id"))
+	tdb(c).First(&d, httpx.Uint(c, "id"))
 	response.Data(c, d)
 }
 
 func DeptAll(c *gin.Context) {
 	var rows []model.TenantDept
-	db := bootstrap.DB.Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -97,7 +96,7 @@ func DeptAll(c *gin.Context) {
 
 func JobsLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantJobs{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantJobs{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -109,7 +108,7 @@ func JobsLists(c *gin.Context) {
 }
 
 func JobsAdd(c *gin.Context) {
-	bootstrap.DB.Create(&model.TenantJobs{
+	tdb(c).Create(&model.TenantJobs{
 		Name: httpx.Str(c, "name"), Code: httpx.Str(c, "code"), Sort: httpx.Int(c, "sort"),
 		Status: httpx.Int(c, "status"), Remark: httpx.Str(c, "remark"), TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	})
@@ -117,7 +116,7 @@ func JobsAdd(c *gin.Context) {
 }
 
 func JobsEdit(c *gin.Context) {
-	bootstrap.DB.Model(&model.TenantJobs{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.TenantJobs{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "code": httpx.Str(c, "code"), "sort": httpx.Int(c, "sort"),
 		"status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"),
 	})
@@ -126,19 +125,19 @@ func JobsEdit(c *gin.Context) {
 
 func JobsDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantJobs{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.TenantJobs{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func JobsDetail(c *gin.Context) {
 	var j model.TenantJobs
-	bootstrap.DB.First(&j, httpx.Uint(c, "id"))
+	tdb(c).First(&j, httpx.Uint(c, "id"))
 	response.Data(c, j)
 }
 
 func JobsAll(c *gin.Context) {
 	var rows []model.TenantJobs
-	db := bootstrap.DB.Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}

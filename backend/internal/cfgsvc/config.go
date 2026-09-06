@@ -8,20 +8,28 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+func db(c *gin.Context) *gorm.DB {
+	if c != nil {
+		return tenantdb.Use(c)
+	}
+	return bootstrap.DB
+}
+
 func Get(c *gin.Context, typ, name string, defaultValue any) any {
-	query := bootstrap.DB.Where("type = ? AND name = ?", typ, name)
+	query := db(c).Where("type = ? AND name = ?", typ, name)
 	meta := ctxutil.Get(c)
 	usePlatform := meta.Source == ctxutil.SourcePlatform || typ == "storage"
 	var value string
 	var err error
 	if usePlatform {
-		err = query.Model(&model.ConfigRow{}).Select("value").Scan(&value).Error
+		err = bootstrap.DB.Where("type = ? AND name = ?", typ, name).Model(&model.ConfigRow{}).Select("value").Scan(&value).Error
 	} else {
 		if meta.TenantID > 0 {
 			query = query.Where("tenant_id = ?", meta.TenantID)
@@ -89,15 +97,15 @@ func Set(c *gin.Context, typ, name string, value any) any {
 		return raw
 	}
 	var row model.TenantConfig
-	q := bootstrap.DB.Where("type = ? AND name = ?", typ, name)
+	q := db(c).Where("type = ? AND name = ?", typ, name)
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
 	err := q.First(&row).Error
 	if err != nil {
-		bootstrap.DB.Create(&model.TenantConfig{Type: typ, Name: name, Value: s, TenantID: meta.TenantID, CreateTime: now})
+		db(c).Create(&model.TenantConfig{Type: typ, Name: name, Value: s, TenantID: meta.TenantID, CreateTime: now})
 	} else {
-		bootstrap.DB.Model(&row).Updates(map[string]any{"value": s, "update_time": now})
+		db(c).Model(&row).Updates(map[string]any{"value": s, "update_time": now})
 	}
 	return raw
 }

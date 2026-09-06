@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"likeadmin/backend/internal/biz"
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -23,7 +22,7 @@ import (
 
 func AdminAll(c *gin.Context) {
 	var rows []model.TenantAdmin
-	db := bootstrap.DB.Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -37,7 +36,7 @@ func AdminAll(c *gin.Context) {
 
 func ArticleCateDetail(c *gin.Context) {
 	var row model.ArticleCate
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
 		response.Fail(c, "分类不存在")
 		return
 	}
@@ -45,18 +44,18 @@ func ArticleCateDetail(c *gin.Context) {
 }
 
 func ArticleCateUpdateStatus(c *gin.Context) {
-	bootstrap.DB.Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
+	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
 	response.Success(c, "修改成功", nil)
 }
 
 func ArticleUpdateStatus(c *gin.Context) {
-	bootstrap.DB.Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
+	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
 	response.Success(c, "修改成功", nil)
 }
 
 func ArticleAll(c *gin.Context) {
 	var rows []model.Article
-	db := bootstrap.DB.Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -76,7 +75,7 @@ func DecorateDataArticle(c *gin.Context) {
 		limit = 10
 	}
 	var rows []model.Article
-	bootstrap.DB.Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0").
+	tdb(c).Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0").
 		Order("id desc").Limit(limit).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
@@ -91,7 +90,7 @@ func DecorateDataArticle(c *gin.Context) {
 
 func DecorateDataPC(c *gin.Context) {
 	var p model.DecoratePage
-	db := bootstrap.DB.Where("type = 4")
+	db := tdb(c).Where("type = 4")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -114,7 +113,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		arr = httpx.List(c)
 	}
 	now := util.NowUnix()
-	q := bootstrap.DB
+	q := tdb(c)
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -124,7 +123,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		if m == nil {
 			continue
 		}
-		bootstrap.DB.Create(&model.DecorateTabbar{
+		tdb(c).Create(&model.DecorateTabbar{
 			Name: util.ToString(m["name"]), Selected: filesvc.SetFileURL(c, util.ToString(m["selected"])),
 			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])), Link: util.EncodeJSON(m["link"]),
 			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now,
@@ -136,7 +135,7 @@ func DecorateTabbarSave(c *gin.Context) {
 func HotSearchSet(c *gin.Context) {
 	cfgsvc.Set(c, "hot_search", "status", httpx.Int(c, "status"))
 	tid := tenantDB(c)
-	q := bootstrap.DB
+	q := tdb(c)
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -149,7 +148,7 @@ func HotSearchSet(c *gin.Context) {
 		if m == nil {
 			continue
 		}
-		bootstrap.DB.Create(&model.HotSearch{
+		tdb(c).Create(&model.HotSearch{
 			Name: util.ToString(m["name"]), Sort: util.ToInt(m["sort"]), TenantID: tid, CreateTime: now,
 		})
 	}
@@ -200,11 +199,11 @@ func UserAdjustMoney(c *gin.Context) {
 		return
 	}
 	var user model.User
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", uid).First(&user).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", uid).First(&user).Error != nil {
 		response.Fail(c, "用户不存在")
 		return
 	}
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if action == biz.INC {
 			if err := tx.Model(&user).Update("user_money", gorm.Expr("user_money + ?", num)).Error; err != nil {
 				return err
@@ -247,7 +246,7 @@ func GetUmChangeType(c *gin.Context) {
 func FinanceRefundLog(c *gin.Context) {
 	recordID := httpx.Uint(c, "record_id")
 	var rows []model.RefundLog
-	bootstrap.DB.Where("record_id = ?", recordID).Order("id desc").Find(&rows)
+	tdb(c).Where("record_id = ?", recordID).Order("id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		statusText := map[int]string{0: "退款中", 1: "退款成功", 2: "退款失败"}[r.RefundStatus]
@@ -262,7 +261,7 @@ func FinanceRefundLog(c *gin.Context) {
 }
 
 func FinanceRefundStat(c *gin.Context) {
-	db := bootstrap.DB.Model(&model.RefundRecord{})
+	db := tdb(c).Model(&model.RefundRecord{})
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -292,7 +291,7 @@ func round2(v float64) float64 {
 func RechargeRefund(c *gin.Context) {
 	id := httpx.Uint(c, "recharge_id")
 	var order model.RechargeOrder
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&order).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&order).Error != nil {
 		response.Fail(c, "充值订单不存在")
 		return
 	}
@@ -306,7 +305,7 @@ func RechargeRefund(c *gin.Context) {
 	}
 	adminID := ctxutil.Get(c).AdminID
 	var rec model.RefundRecord
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Update("refund_status", 1).Error; err != nil {
 			return err
 		}
@@ -372,10 +371,10 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 	}
 	if err != nil {
 		if recID > 0 {
-			bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
-			bootstrap.DB.Model(&model.RefundLog{}).Where("record_id = ?", recID).Update("refund_status", 2)
+			tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
+			tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", recID).Update("refund_status", 2)
 		}
-		bootstrap.DB.Model(order).Update("refund_status", 2)
+		tdb(c).Model(order).Update("refund_status", 2)
 		return err
 	}
 	return nil
@@ -383,15 +382,15 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 
 func RechargeRefundAgain(c *gin.Context) {
 	var rec model.RefundRecord
-	if bootstrap.DB.First(&rec, httpx.Uint(c, "record_id")).Error != nil {
+	if tdb(c).First(&rec, httpx.Uint(c, "record_id")).Error != nil {
 		response.Fail(c, "退款记录不存在")
 		return
 	}
-	bootstrap.DB.Model(&rec).Update("refund_status", 1)
-	bootstrap.DB.Create(&model.RefundLog{
+	tdb(c).Model(&rec).Update("refund_status", 1)
+	tdb(c).Create(&model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
-			bootstrap.DB.Model(&model.RefundLog{}).Where("sn = ?", sn).Count(&n)
+			tdb(c).Model(&model.RefundLog{}).Where("sn = ?", sn).Count(&n)
 			return n > 0
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
@@ -399,19 +398,19 @@ func RechargeRefundAgain(c *gin.Context) {
 		RefundMsg: "重新退款", CreateTime: util.NowUnix(),
 	})
 	var order model.RechargeOrder
-	if bootstrap.DB.First(&order, rec.OrderID).Error == nil {
+	if tdb(c).First(&order, rec.OrderID).Error == nil {
 		if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
 			response.Fail(c, err.Error())
 			return
 		}
-		bootstrap.DB.Model(&order).Update("refund_status", 1)
+		tdb(c).Model(&order).Update("refund_status", 1)
 	}
 	response.Success(c, "操作成功", nil)
 }
 
 func OAReplyLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.OfficialAccountReply{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -439,13 +438,13 @@ func OAReplyAdd(c *gin.Context) {
 		row.ContentType = 1
 	}
 	if row.ReplyType != 2 && row.Status == 1 {
-		q := bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND delete_time IS NULL", row.ReplyType)
+		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND delete_time IS NULL", row.ReplyType)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
 		}
 		q.Update("status", 0)
 	}
-	bootstrap.DB.Create(&row)
+	tdb(c).Create(&row)
 	response.Success(c, "操作成功", nil)
 }
 
@@ -453,13 +452,13 @@ func OAReplyEdit(c *gin.Context) {
 	replyType := httpx.Int(c, "reply_type")
 	status := httpx.Int(c, "status")
 	if replyType != 2 && status == 1 {
-		q := bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"))
+		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"))
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
 		}
 		q.Update("status", 0)
 	}
-	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "keyword": httpx.Str(c, "keyword"),
 		"reply_type": replyType, "matching_type": httpx.Int(c, "matching_type"),
 		"content_type": httpx.Int(c, "content_type"), "content": httpx.Str(c, "content"),
@@ -470,13 +469,13 @@ func OAReplyEdit(c *gin.Context) {
 
 func OAReplyDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "操作成功", nil)
 }
 
 func OAReplyDetail(c *gin.Context) {
 	var row model.OfficialAccountReply
-	if bootstrap.DB.First(&row, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&row, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "记录不存在")
 		return
 	}
@@ -484,7 +483,7 @@ func OAReplyDetail(c *gin.Context) {
 }
 
 func OAReplyStatus(c *gin.Context) {
-	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("status", httpx.Int(c, "status"))
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("status", httpx.Int(c, "status"))
 	response.Success(c, "操作成功", nil)
 }
 
@@ -493,7 +492,7 @@ func OAReplySort(c *gin.Context) {
 	if sort == 0 {
 		sort = httpx.Int(c, "sort")
 	}
-	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"sort": sort, "update_time": util.NowUnix(),
 	})
 	response.Success(c, "操作成功", nil)
@@ -573,7 +572,7 @@ func checkOAMenu(menu []any) error {
 
 func TenantNoticeLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantNoticeSetting{})
+	db := tdb(c).Model(&model.TenantNoticeSetting{})
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -608,7 +607,7 @@ func TenantNoticeLists(c *gin.Context) {
 
 func TenantNoticeDetail(c *gin.Context) {
 	var r model.TenantNoticeSetting
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
+	tdb(c).First(&r, httpx.Uint(c, "id"))
 	response.Data(c, r)
 }
 
@@ -625,7 +624,7 @@ func TenantNoticeSet(c *gin.Context) {
 		updates["system_notice"] = string(raw)
 	}
 	if len(updates) > 0 {
-		bootstrap.DB.Model(&model.TenantNoticeSetting{}).Where("id = ?", id).Updates(updates)
+		tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id).Updates(updates)
 	}
 	response.Success(c, "设置成功", nil)
 }

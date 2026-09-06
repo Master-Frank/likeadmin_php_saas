@@ -1,12 +1,12 @@
 package decorate
 
 import (
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +37,7 @@ func Style(c *gin.Context) any {
 
 func Lists(c *gin.Context) []map[string]any {
 	var bars []model.DecorateTabbar
-	db := bootstrap.DB
+	db := tenantdb.Use(c)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}

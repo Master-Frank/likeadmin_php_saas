@@ -17,6 +17,7 @@ import (
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
 	"likeadmin/backend/internal/tenantapi"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -31,13 +32,13 @@ func ArticleAddCollect(c *gin.Context) {
 		return
 	}
 	var row model.ArticleCollect
-	err := bootstrap.DB.Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
+	err := tdb(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
-		bootstrap.DB.Create(&model.ArticleCollect{
+		tdb(c).Create(&model.ArticleCollect{
 			UserID: uid, ArticleID: aid, Status: 1, TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
 		})
 	} else {
-		bootstrap.DB.Model(&row).Updates(map[string]any{"status": 1, "update_time": util.NowUnix()})
+		tdb(c).Model(&row).Updates(map[string]any{"status": 1, "update_time": util.NowUnix()})
 	}
 	response.Success(c, "操作成功", nil)
 }
@@ -45,7 +46,7 @@ func ArticleAddCollect(c *gin.Context) {
 func ArticleCancelCollect(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
 	aid := httpx.Uint(c, "id")
-	bootstrap.DB.Model(&model.ArticleCollect{}).
+	tdb(c).Model(&model.ArticleCollect{}).
 		Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
 		Updates(map[string]any{"status": 0, "update_time": util.NowUnix()})
 	response.Success(c, "操作成功", nil)
@@ -54,7 +55,7 @@ func ArticleCancelCollect(c *gin.Context) {
 func ArticleCollect(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := bootstrap.DB.Model(&model.ArticleCollect{}).Where("user_id = ? AND status = 1 AND delete_time IS NULL", uid)
+	db := tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND status = 1 AND delete_time IS NULL", uid)
 	var count int64
 	db.Count(&count)
 	var cols []model.ArticleCollect
@@ -65,7 +66,7 @@ func ArticleCollect(c *gin.Context) {
 	}
 	var arts []model.Article
 	if len(ids) > 0 {
-		bootstrap.DB.Where("id IN ? AND delete_time IS NULL", ids).Find(&arts)
+		tdb(c).Where("id IN ? AND delete_time IS NULL", ids).Find(&arts)
 	}
 	byID := map[uint]model.Article{}
 	for _, a := range arts {
@@ -89,15 +90,15 @@ func ArticleCollect(c *gin.Context) {
 
 func ArticleDetail(c *gin.Context) {
 	var a model.Article
-	if bootstrap.DB.First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "文章不存在")
 		return
 	}
-	bootstrap.DB.Model(&a).Update("click_actual", a.ClickActual+1)
+	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
 	collect := 0
 	if uid := ctxutil.Get(c).UserID; uid > 0 {
 		var n int64
-		bootstrap.DB.Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
+		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
 		if n > 0 {
 			collect = 1
 		}
@@ -134,14 +135,14 @@ func RechargeCreate(c *gin.Context) {
 	}
 	exists := func(sn string) bool {
 		var n int64
-		bootstrap.DB.Model(&model.RechargeOrder{}).Where("sn = ?", sn).Count(&n)
+		tdb(c).Model(&model.RechargeOrder{}).Where("sn = ?", sn).Count(&n)
 		return n > 0
 	}
 	order := model.RechargeOrder{
 		SN: util.GenerateSN(exists, "", 4), UserID: uid, TenantID: ctxutil.Get(c).TenantID,
 		PayStatus: 0, OrderAmount: money, OrderTerminal: terminal, CreateTime: util.NowUnix(),
 	}
-	if err := bootstrap.DB.Create(&order).Error; err != nil {
+	if err := tdb(c).Create(&order).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
@@ -165,7 +166,7 @@ func PayWay(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if bootstrap.DB.First(&order, orderID).Error != nil {
+	if tdb(c).First(&order, orderID).Error != nil {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
@@ -177,7 +178,7 @@ func PayWay(c *gin.Context) {
 	}
 	tid := ctxutil.Get(c).TenantID
 	var ways []model.TenantPayWay
-	q := bootstrap.DB.Where("scene = ? AND status = 1", terminal)
+	q := tdb(c).Where("scene = ? AND status = 1", terminal)
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -186,7 +187,7 @@ func PayWay(c *gin.Context) {
 	out := make([]map[string]any, 0)
 	for _, w := range ways {
 		var cfg model.TenantPayConfig
-		if bootstrap.DB.First(&cfg, w.PayConfigID).Error != nil {
+		if tdb(c).First(&cfg, w.PayConfigID).Error != nil {
 			continue
 		}
 		if from == "recharge" && cfg.PayWay == 1 {
@@ -219,7 +220,7 @@ func PayPrepay(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if bootstrap.DB.First(&order, orderID).Error != nil {
+	if tdb(c).First(&order, orderID).Error != nil {
 		response.Fail(c, "充值订单不存在")
 		return
 	}
@@ -235,7 +236,7 @@ func PayPrepay(c *gin.Context) {
 	if payWay == 2 {
 		paySN = fmt.Sprintf("%s%d%s", order.SN, terminal, fmt.Sprintf("%04d", util.NowUnix()%10000))
 	}
-	bootstrap.DB.Model(&order).Updates(map[string]any{"pay_way": payWay, "pay_sn": paySN})
+	tdb(c).Model(&order).Updates(map[string]any{"pay_way": payWay, "pay_sn": paySN})
 	order.PayWay = payWay
 	order.PaySN = paySN
 	if order.OrderAmount == 0 {
@@ -283,7 +284,7 @@ func PayStatus(c *gin.Context) {
 		return
 	}
 	var order model.RechargeOrder
-	if bootstrap.DB.Where("id = ? AND user_id = ?", orderID, uid).First(&order).Error != nil {
+	if tdb(c).Where("id = ? AND user_id = ?", orderID, uid).First(&order).Error != nil {
 		response.Fail(c, "订单不存在")
 		return
 	}
@@ -300,7 +301,14 @@ func PayStatus(c *gin.Context) {
 }
 
 func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
-	return bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	db := bootstrap.DB
+	if order != nil && order.TenantID > 0 {
+		var t model.Tenant
+		if bootstrap.DB.First(&t, order.TenantID).Error == nil && t.Tactics == 1 && t.SN != "" {
+			db = tenantdb.UseSN(t.SN)
+		}
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
 		if err := tx.Model(order).Updates(map[string]any{
 			"pay_status": 1, "pay_time": now, "transaction_id": transactionID, "update_time": now,
@@ -343,7 +351,7 @@ func UserChangePassword(c *gin.Context) {
 		response.Fail(c, "请输入新密码")
 		return
 	}
-	bootstrap.DB.Model(&u).Update("password", util.CreatePassword(pwd, salt))
+	tdb(c).Model(&u).Update("password", util.CreatePassword(pwd, salt))
 	response.Success(c, "操作成功", nil)
 }
 
@@ -360,7 +368,7 @@ func UserResetPassword(c *gin.Context) {
 		return
 	}
 	hashed := util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
-	q := bootstrap.DB.Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
+	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -385,7 +393,7 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "验证码错误")
 		return
 	}
-	q := bootstrap.DB.Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
+	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
 	if typ == "bind" {
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
@@ -398,7 +406,7 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "该手机号已被使用")
 		return
 	}
-	bootstrap.DB.Model(&u).Update("mobile", mobile)
+	tdb(c).Model(&u).Update("mobile", mobile)
 	response.Success(c, "绑定成功", nil)
 }
 
@@ -412,7 +420,7 @@ func verifySms(c *gin.Context, mobile, code, scene string) bool {
 
 func PcIndex(c *gin.Context) {
 	var page model.DecoratePage
-	db := bootstrap.DB.Where("type = 4")
+	db := tdb(c).Where("type = 4")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -458,7 +466,7 @@ func PcConfig(c *gin.Context) {
 
 func PcInfoCenter(c *gin.Context) {
 	var cates []model.ArticleCate
-	db := bootstrap.DB.Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -480,11 +488,11 @@ func PcArticleDetail(c *gin.Context) {
 		source = "default"
 	}
 	var a model.Article
-	if bootstrap.DB.First(&a, id).Error != nil {
+	if tdb(c).First(&a, id).Error != nil {
 		response.Fail(c, "文章不存在")
 		return
 	}
-	bootstrap.DB.Model(&a).Update("click_actual", a.ClickActual+1)
+	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
 	list := limitArticles(c, source, 0, int(a.Cid), 0)
 	nowIndex := 0
 	for i, item := range list {
@@ -506,13 +514,13 @@ func PcArticleDetail(c *gin.Context) {
 	collect := 0
 	if uid := ctxutil.Get(c).UserID; uid > 0 {
 		var n int64
-		bootstrap.DB.Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
+		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
 		if n > 0 {
 			collect = 1
 		}
 	}
 	var cate model.ArticleCate
-	bootstrap.DB.First(&cate, a.Cid)
+	tdb(c).First(&cate, a.Cid)
 	response.Data(c, gin.H{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
 		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
@@ -523,7 +531,7 @@ func PcArticleDetail(c *gin.Context) {
 }
 
 func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []map[string]any {
-	db := bootstrap.DB.Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -559,7 +567,7 @@ func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []
 
 func IndexIndex(c *gin.Context) {
 	var page model.DecoratePage
-	db := bootstrap.DB.Where("type = 1")
+	db := tdb(c).Where("type = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}

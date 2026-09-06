@@ -14,6 +14,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -306,9 +307,11 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 }
 
 func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
+	_ = tx
 	if err := runTenantDataSQL(tenant.ID, tenant.SN); err != nil {
 		return err
 	}
+	sdb := tenantdb.UseSN(tenant.SN)
 	pwd := httpx.Str(c, "password")
 	if pwd == "" {
 		pwd = config.C.Project.DefaultPassword
@@ -317,19 +320,23 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if account == "" {
 		account = tenant.SN
 	}
+	now := util.NowUnix()
 	admin := model.TenantAdmin{
 		TenantID: tenant.ID, Account: account, Name: "超级管理员",
 		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
-		Root:     1, MultipointLogin: 1, CreateTime: util.NowUnix(),
+		Root: 1, MultipointLogin: 1, CreateTime: now,
 	}
-	if err := tx.Create(&admin).Error; err != nil {
+	if err := sdb.Create(&admin).Error; err != nil {
 		return err
 	}
-	dept := model.TenantDept{Name: "公司", Pid: 0, Sort: 0, Status: 1, TenantID: tenant.ID, CreateTime: util.NowUnix()}
-	if err := tx.Create(&dept).Error; err != nil {
-		return err
+	var dept model.TenantDept
+	if sdb.Where("delete_time IS NULL").Order("id asc").First(&dept).Error != nil {
+		dept = model.TenantDept{Name: "公司", Pid: 0, Sort: 0, Status: 1, TenantID: tenant.ID, CreateTime: now}
+		if err := sdb.Create(&dept).Error; err != nil {
+			return err
+		}
 	}
-	return tx.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
+	return sdb.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
 }
 
 func copyTenantArticles(tx *gorm.DB, tenantID uint) error {

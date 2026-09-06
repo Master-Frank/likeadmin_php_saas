@@ -1,7 +1,6 @@
 package tenantapi
 
 import (
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -17,7 +16,7 @@ import (
 
 func AdminLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantAdmin{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantAdmin{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -34,7 +33,7 @@ func AdminLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		var roleIDs []uint
-		bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
+		tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
 		out = append(out, map[string]any{
 			"id": a.ID, "name": a.Name, "account": a.Account, "root": a.Root, "disable": a.Disable,
 			"avatar": filesvc.GetFileURL(c, a.Avatar), "multipoint_login": a.MultipointLogin,
@@ -52,7 +51,7 @@ func AdminAdd(c *gin.Context) {
 		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
 		Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")), CreateTime: util.NowUnix(),
 	}
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
@@ -80,10 +79,10 @@ func AdminEdit(c *gin.Context) {
 	if pwd := httpx.Str(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
-	bootstrap.DB.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data)
-	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
+	tdb(c).Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data)
+	tdb(c).Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
 	for _, rid := range httpx.Uints(c, "role_id") {
-		bootstrap.DB.Create(&model.TenantAdminRole{AdminID: id, RoleID: rid})
+		tdb(c).Create(&model.TenantAdminRole{AdminID: id, RoleID: rid})
 	}
 	response.Success(c, "修改成功", nil)
 }
@@ -91,7 +90,7 @@ func AdminEdit(c *gin.Context) {
 func AdminEditSelf(c *gin.Context) {
 	id := ctxutil.Get(c).AdminID
 	var admin model.TenantAdmin
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -106,13 +105,13 @@ func AdminEditSelf(c *gin.Context) {
 		}
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
-	bootstrap.DB.Model(&admin).Updates(data)
+	tdb(c).Model(&admin).Updates(data)
 	response.Success(c, "修改成功", nil)
 }
 
 func AdminDelete(c *gin.Context) {
 	var a model.TenantAdmin
-	if bootstrap.DB.First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -121,18 +120,18 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&a).Update("delete_time", now)
+	tdb(c).Model(&a).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func AdminDetail(c *gin.Context) {
 	var a model.TenantAdmin
-	if bootstrap.DB.First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
 	var roleIDs []uint
-	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
+	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
 	response.Data(c, gin.H{
 		"id": a.ID, "name": a.Name, "account": a.Account, "disable": a.Disable, "root": a.Root,
 		"multipoint_login": a.MultipointLogin, "avatar": filesvc.GetFileURL(c, a.Avatar), "role_id": roleIDs,
@@ -146,7 +145,7 @@ func MenuRoute(c *gin.Context) {
 func MenuLists(c *gin.Context) {
 	q := lists.Parse(c)
 	var rows []model.TenantSystemMenu
-	db := bootstrap.DB.Order("sort desc, id asc")
+	db := tdb(c).Order("sort desc, id asc")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -160,7 +159,7 @@ func MenuLists(c *gin.Context) {
 
 func MenuAll(c *gin.Context) {
 	var rows []model.TenantSystemMenu
-	db := bootstrap.DB.Select("id,pid,name")
+	db := tdb(c).Select("id,pid,name")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -176,7 +175,7 @@ func MenuAdd(c *gin.Context) {
 	m := tenantMenuFromReq(c)
 	m.TenantID = tenantDB(c)
 	m.CreateTime = util.NowUnix()
-	bootstrap.DB.Create(&m)
+	tdb(c).Create(&m)
 	response.Success(c, "添加成功", nil)
 }
 
@@ -184,7 +183,7 @@ func MenuEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	m := tenantMenuFromReq(c)
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantSystemMenu{}).Where("id = ?", id).Updates(map[string]any{
+	tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id).Updates(map[string]any{
 		"pid": m.Pid, "type": m.Type, "name": m.Name, "icon": m.Icon, "sort": m.Sort, "perms": m.Perms,
 		"paths": m.Paths, "component": m.Component, "selected": m.Selected, "params": m.Params,
 		"is_cache": m.IsCache, "is_show": m.IsShow, "is_disable": m.IsDisable, "update_time": now,
@@ -193,24 +192,24 @@ func MenuEdit(c *gin.Context) {
 }
 
 func MenuDelete(c *gin.Context) {
-	bootstrap.DB.Delete(&model.TenantSystemMenu{}, httpx.Uint(c, "id"))
+	tdb(c).Delete(&model.TenantSystemMenu{}, httpx.Uint(c, "id"))
 	response.Success(c, "删除成功", nil)
 }
 
 func MenuDetail(c *gin.Context) {
 	var m model.TenantSystemMenu
-	bootstrap.DB.First(&m, httpx.Uint(c, "id"))
+	tdb(c).First(&m, httpx.Uint(c, "id"))
 	response.Data(c, tenantMenuMap(m))
 }
 
 func MenuUpdateStatus(c *gin.Context) {
-	bootstrap.DB.Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_disable", httpx.Int(c, "is_disable"))
+	tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_disable", httpx.Int(c, "is_disable"))
 	response.Success(c, "修改成功", nil)
 }
 
 func RoleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := bootstrap.DB.Model(&model.TenantSystemRole{}).Where("delete_time IS NULL")
+	db := tdb(c).Model(&model.TenantSystemRole{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -221,7 +220,7 @@ func RoleLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		var menuIDs []uint
-		bootstrap.DB.Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
+		tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort,
 			"create_time": util.FormatDateTime(r.CreateTime), "menu_id": menuIDs,
@@ -232,42 +231,42 @@ func RoleLists(c *gin.Context) {
 
 func RoleAdd(c *gin.Context) {
 	r := model.TenantSystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), TenantID: tenantDB(c), CreateTime: util.NowUnix()}
-	bootstrap.DB.Create(&r)
+	tdb(c).Create(&r)
 	for _, id := range httpx.Uints(c, "menu_id") {
-		bootstrap.DB.Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
+		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
 	response.Success(c, "添加成功", nil)
 }
 
 func RoleEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	bootstrap.DB.Model(&model.TenantSystemRole{}).Where("id = ?", id).Updates(map[string]any{
+	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"),
 	})
-	bootstrap.DB.Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
+	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	for _, mid := range httpx.Uints(c, "menu_id") {
-		bootstrap.DB.Create(&model.TenantSystemRoleMenu{RoleID: id, MenuID: mid})
+		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: id, MenuID: mid})
 	}
 	response.Success(c, "修改成功", nil)
 }
 
 func RoleDelete(c *gin.Context) {
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.TenantSystemRole{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
 	response.Success(c, "删除成功", nil)
 }
 
 func RoleDetail(c *gin.Context) {
 	var r model.TenantSystemRole
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
+	tdb(c).First(&r, httpx.Uint(c, "id"))
 	var menuIDs []uint
-	bootstrap.DB.Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
+	tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
 	response.Data(c, gin.H{"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort, "menu_id": menuIDs})
 }
 
 func RoleAll(c *gin.Context) {
 	var rows []model.TenantSystemRole
-	db := bootstrap.DB.Where("delete_time IS NULL")
+	db := tdb(c).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
