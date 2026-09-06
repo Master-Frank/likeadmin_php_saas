@@ -12,6 +12,7 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
@@ -127,7 +128,7 @@ func GeneratorSelectTable(c *gin.Context) {
 		}
 		gt := model.GenerateTable{
 			Name: name, TableComment: comment, Author: "likeadmin",
-			ModuleName: "platform", ClassDir: strings.TrimPrefix(name, config.Prefix()),
+			ModuleName: "platform", ClassDir: "",
 			TemplateType: 0, GenerateType: 0,
 			Menu:      util.EncodeJSON(map[string]any{"pid": 0, "type": 0, "name": comment}),
 			Delete:    util.EncodeJSON(map[string]any{"type": 0, "name": "delete_time"}),
@@ -269,7 +270,7 @@ func GeneratorPreview(c *gin.Context) {
 	}
 	var cols []model.GenerateColumn
 	bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-	response.Data(c, generateBundle(t, cols))
+	response.Data(c, generator.Preview(t, cols))
 }
 
 func GeneratorGenerate(c *gin.Context) {
@@ -291,16 +292,9 @@ func GeneratorGenerate(c *gin.Context) {
 			return
 		}
 	}
-	root := generatorRuntime()
-	_ = os.MkdirAll(root, 0755)
-	fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
-	zipPath := filepath.Join(root, fileName)
-	zf, err := os.Create(zipPath)
-	if err != nil {
-		response.Fail(c, err.Error())
-		return
-	}
-	zw := zip.NewWriter(zf)
+	_ = generator.ClearRuntime()
+	needZip := false
+	var zipFiles []generator.File
 	for _, id := range ids {
 		var t model.GenerateTable
 		if bootstrap.DB.First(&t, id).Error != nil {
@@ -308,19 +302,50 @@ func GeneratorGenerate(c *gin.Context) {
 		}
 		var cols []model.GenerateColumn
 		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
-		for _, f := range generateBundle(t, cols) {
-			name := util.ToString(f["name"])
-			w, err := zw.Create(name)
+		files := generator.Build(t, cols)
+		if generator.IsZip(t) {
+			needZip = true
+			if err := generator.WriteRuntime(files); err != nil {
+				response.Fail(c, err.Error())
+				return
+			}
+			zipFiles = append(zipFiles, files...)
+		} else if err := generator.WriteModule(t, files); err != nil {
+			response.Fail(c, err.Error())
+			return
+		}
+		if generator.IsAutoMenu(t) {
+			for _, f := range files {
+				if f.Name == "menu.sql" {
+					_ = generator.ApplyMenuSQL(bootstrap.DB, f.Content)
+				}
+			}
+		}
+	}
+	fileURL := ""
+	if needZip {
+		root := generator.RuntimeDir()
+		_ = os.MkdirAll(root, 0755)
+		fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
+		zipPath := filepath.Join(root, fileName)
+		zf, err := os.Create(zipPath)
+		if err != nil {
+			response.Fail(c, err.Error())
+			return
+		}
+		zw := zip.NewWriter(zf)
+		for _, f := range zipFiles {
+			w, err := zw.Create(f.ZipName())
 			if err != nil {
 				continue
 			}
-			_, _ = w.Write([]byte(util.ToString(f["content"])))
+			_, _ = w.Write([]byte(f.Content))
 		}
+		_ = zw.Close()
+		_ = zf.Close()
+		cache.Set("curd_file_name"+fileName, fileName, time.Hour)
+		fileURL = ctxutil.Domain(c) + "/platformapi/tools.generator/download?file=" + fileName
 	}
-	_ = zw.Close()
-	_ = zf.Close()
-	cache.Set("curd_file_name"+fileName, fileName, time.Hour)
-	fileURL := ctxutil.Domain(c) + "/platformapi/tools.generator/download?file=" + fileName
 	response.Result(c, 1, 1, "操作成功", gin.H{"file": fileURL})
 }
 
@@ -334,25 +359,13 @@ func GeneratorDownload(c *gin.Context) {
 		response.Fail(c, "请重新生成代码")
 		return
 	}
-	zipPath := filepath.Join(generatorRuntime(), fileName)
+	zipPath := filepath.Join(generator.RuntimeDir(), fileName)
 	if _, err := os.Stat(zipPath); err != nil {
 		response.Fail(c, "下载失败")
 		return
 	}
 	cache.Del("curd_file_name" + fileName)
 	c.FileAttachment(zipPath, "likeadmin-curd.zip")
-}
-
-func generatorRoot() string {
-	return generatorRuntime()
-}
-
-func generatorRuntime() string {
-	pub := config.C.App.PublicDir
-	if pub == "" {
-		pub = "server/public"
-	}
-	return filepath.Join(filepath.Dir(pub), "runtime", "generate")
 }
 
 func GeneratorGetModels(c *gin.Context) {
@@ -416,69 +429,6 @@ func syncColumns(tableID uint, tableName string) {
 			IsInsert: ins, IsUpdate: upd, IsLists: lists, IsQuery: query,
 			QueryType: "=", ViewType: "input", CreateTime: now,
 		})
-	}
-}
-
-func generateBundle(t model.GenerateTable, cols []model.GenerateColumn) []map[string]any {
-	name := toExported(t.ClassDir)
-	if name == "" {
-		name = toExported(strings.TrimPrefix(t.Name, config.Prefix()))
-	}
-	mod := t.ModuleName
-	if mod == "" {
-		mod = "admin"
-	}
-	author := t.Author
-	if author == "" {
-		author = "likeadmin"
-	}
-	comment := t.TableComment
-	if comment == "" {
-		comment = name
-	}
-	var fields strings.Builder
-	var vueCols strings.Builder
-	pk := "id"
-	for _, col := range cols {
-		fields.WriteString(fmt.Sprintf("    public $%s;\n", col.ColumnName))
-		if col.IsPk == 1 {
-			pk = col.ColumnName
-		}
-		if col.IsLists == 1 {
-			vueCols.WriteString(fmt.Sprintf("      { label: '%s', field: '%s' },\n", firstNonEmpty(col.ColumnComment, col.ColumnName), col.ColumnName))
-		}
-	}
-	snake := strings.TrimPrefix(t.Name, config.Prefix())
-	if snake == "" {
-		snake = t.ClassDir
-	}
-	phpNS := "app\\" + mod
-	ctrl := fmt.Sprintf("<?php\nnamespace %s\\controller%s;\n\nuse %s\\controller\\BaseAdminController;\nuse %s\\lists%s\\%sLists;\nuse %s\\logic%s\\%sLogic;\nuse %s\\validate%s\\%sValidate;\n\n/** %s */\nclass %sController extends BaseAdminController\n{\n    public function lists()\n    {\n        return $this->dataLists(new %sLists());\n    }\n    public function add()\n    {\n        $params = (new %sValidate())->post()->goCheck('add');\n        %sLogic::add($params);\n        return $this->success('添加成功', [], 1, 1);\n    }\n    public function edit()\n    {\n        $params = (new %sValidate())->post()->goCheck('edit');\n        %sLogic::edit($params);\n        return $this->success('编辑成功', [], 1, 1);\n    }\n    public function delete()\n    {\n        $params = (new %sValidate())->post()->goCheck('delete');\n        %sLogic::delete($params);\n        return $this->success('删除成功', [], 1, 1);\n    }\n    public function detail()\n    {\n        $params = (new %sValidate())->goCheck('detail');\n        return $this->data(%sLogic::detail($params));\n    }\n}\n",
-		phpNS, classDirNS(t.ClassDir), phpNS, phpNS, classDirNS(t.ClassDir), name, phpNS, classDirNS(t.ClassDir), name, phpNS, classDirNS(t.ClassDir), name, comment, name, name, name, name, name, name, name, name, name, name)
-	lists := fmt.Sprintf("<?php\nnamespace %s\\lists%s;\n\nuse %s\\lists\\BaseAdminDataLists;\nuse app\\common\\model%s\\%s;\n\n/** %s列表 */\nclass %sLists extends BaseAdminDataLists\n{\n    public function lists(): array\n    {\n        return %s::limit($this->limitOffset, $this->limitLength)->order('%s desc')->select()->toArray();\n    }\n    public function count(): int\n    {\n        return %s::count();\n    }\n}\n", phpNS, classDirNS(t.ClassDir), phpNS, classDirNS(t.ClassDir), name, comment, name, name, pk, name)
-	modelPHP := fmt.Sprintf("<?php\nnamespace app\\common\\model%s;\n\nuse app\\common\\model\\BaseModel;\nuse think\\model\\concern\\SoftDelete;\n\n/** %s */\nclass %s extends BaseModel\n{\n    use SoftDelete;\n    protected $name = '%s';\n    protected $deleteTime = 'delete_time';\n%s}\n", classDirNS(t.ClassDir), comment, name, snake, fields.String())
-	validate := fmt.Sprintf("<?php\nnamespace %s\\validate%s;\n\nuse app\\common\\validate\\BaseValidate;\n\nclass %sValidate extends BaseValidate\n{\n    protected $rule = ['id' => 'require'];\n    public function sceneAdd() { return $this->remove('id', true); }\n    public function sceneEdit() { return $this; }\n    public function sceneDelete() { return $this->only(['id']); }\n    public function sceneDetail() { return $this->only(['id']); }\n}\n", phpNS, classDirNS(t.ClassDir), name)
-	logic := fmt.Sprintf("<?php\nnamespace %s\\logic%s;\n\nuse app\\common\\logic\\BaseLogic;\nuse app\\common\\model%s\\%s;\n\nclass %sLogic extends BaseLogic\n{\n    public static function add(array $params) { %s::create($params); return true; }\n    public static function edit(array $params) { %s::update($params); return true; }\n    public static function delete(array $params) { %s::destroy($params['id']); return true; }\n    public static function detail(array $params) { return %s::findOrEmpty($params['id'])->toArray(); }\n}\n", phpNS, classDirNS(t.ClassDir), classDirNS(t.ClassDir), name, name, name, name, name, name)
-	vueAPI := fmt.Sprintf("import request from '@/utils/request'\n\nexport function api%sLists(params: any) {\n  return request.get({ url: '/%s/%s/lists', params })\n}\nexport function api%sAdd(params: any) {\n  return request.post({ url: '/%s/%s/add', params })\n}\nexport function api%sEdit(params: any) {\n  return request.post({ url: '/%s/%s/edit', params })\n}\nexport function api%sDelete(params: any) {\n  return request.post({ url: '/%s/%s/delete', params })\n}\nexport function api%sDetail(params: any) {\n  return request.get({ url: '/%s/%s/detail', params })\n}\n", name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake, name, mod+"api", snake)
-	vueIndex := fmt.Sprintf("<template>\n  <div class=\"%s-lists\">\n    <el-table :data=\"lists\">\n%s    </el-table>\n  </div>\n</template>\n<script lang=\"ts\" setup>\nimport { api%sLists } from '@/api/%s'\nconst lists = ref([])\n</script>\n", snake, vueCols.String(), name, snake)
-	vueEdit := fmt.Sprintf("<template>\n  <el-form :model=\"form\">\n    <el-form-item label=\"%s\"><el-input v-model=\"form.%s\" /></el-form-item>\n  </el-form>\n</template>\n<script lang=\"ts\" setup>\nconst form = reactive({ %s: '' })\n</script>\n", comment, pk, pk)
-	sql := fmt.Sprintf("-- menu for %s\n-- author: %s\n", comment, author)
-	modAPI := mod + "api"
-	relDir := strings.Trim(strings.ReplaceAll(t.ClassDir, "\\", "/"), "/")
-	phpSub := ""
-	if relDir != "" {
-		phpSub = "/" + relDir
-	}
-	return []map[string]any{
-		{"name": fmt.Sprintf("%s/controller%s/%sController.php", modAPI, phpSub, name), "type": "php", "content": ctrl},
-		{"name": fmt.Sprintf("%s/lists%s/%sLists.php", modAPI, phpSub, name), "type": "php", "content": lists},
-		{"name": fmt.Sprintf("common/model%s/%s.php", phpSub, name), "type": "php", "content": modelPHP},
-		{"name": fmt.Sprintf("%s/validate%s/%sValidate.php", modAPI, phpSub, name), "type": "php", "content": validate},
-		{"name": fmt.Sprintf("%s/logic%s/%sLogic.php", modAPI, phpSub, name), "type": "php", "content": logic},
-		{"name": fmt.Sprintf("vue/api/%s.ts", snake), "type": "typescript", "content": vueAPI},
-		{"name": fmt.Sprintf("vue/views/%s/index.vue", snake), "type": "vue", "content": vueIndex},
-		{"name": fmt.Sprintf("vue/views/%s/edit.vue", snake), "type": "vue", "content": vueEdit},
-		{"name": fmt.Sprintf("sql/%s.sql", snake), "type": "sql", "content": sql},
 	}
 }
 
@@ -560,27 +510,4 @@ func formatGeneratorDetail(t model.GenerateTable, cols []model.GenerateColumn) m
 		"create_time":  util.FormatDateTime(t.CreateTime),
 		"update_time":  util.FormatDateTimeOrNil(t.UpdateTime),
 	}
-}
-
-func classDirNS(dir string) string {
-	dir = strings.Trim(dir, "\\/")
-	if dir == "" {
-		return ""
-	}
-	return "\\" + strings.ReplaceAll(dir, "/", "\\")
-}
-
-func toExported(s string) string {
-	parts := strings.FieldsFunc(s, func(r rune) bool { return r == '_' || r == '-' })
-	var b strings.Builder
-	for _, p := range parts {
-		if p == "" {
-			continue
-		}
-		b.WriteString(strings.ToUpper(p[:1]))
-		if len(p) > 1 {
-			b.WriteString(p[1:])
-		}
-	}
-	return b.String()
 }

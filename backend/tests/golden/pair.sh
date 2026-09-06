@@ -1322,6 +1322,63 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
     if [[ "$(jcode <<<"$php_pv")" != "$(jcode <<<"$go_pv")" ]]; then
       fail=$((fail + 1))
     fi
+    php_pv_shape="$(python3 -c '
+import json,sys
+ls=json.load(sys.stdin).get("data") or []
+print("|".join(f"{x.get(\"name\")}:{x.get(\"type\")}" for x in ls))
+' <<<"$php_pv")"
+    go_pv_shape="$(python3 -c '
+import json,sys
+ls=json.load(sys.stdin).get("data") or []
+print("|".join(f"{x.get(\"name\")}:{x.get(\"type\")}" for x in ls))
+' <<<"$go_pv")"
+    echo "generator_preview_shape php=$php_pv_shape"
+    echo "generator_preview_shape go=$go_pv_shape"
+    if [[ "$php_pv_shape" != "$go_pv_shape" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_gn="$(curl -sS -X POST "$PHP/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
+    echo "generator_generate php_code=$(jcode <<<"$php_gn") php_msg=$(jget msg <<<"$php_gn")"
+    php_file="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("file") or "")' <<<"$php_gn")"
+    php_zip="$OUT/php-curd.zip"
+    if [[ -n "$php_file" ]]; then
+      curl -sS -o "$php_zip" "$php_file" -H "token: $TOKEN" || true
+    fi
+    go_gn="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
+    echo "generator_generate go_code=$(jcode <<<"$go_gn") go_msg=$(jget msg <<<"$go_gn")"
+    if [[ "$(jcode <<<"$php_gn")" != "1" || "$(jcode <<<"$go_gn")" != "1" ]]; then
+      echo "  php_gn=${php_gn:0:240}"
+      echo "  go_gn=${go_gn:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_file="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("file") or "")' <<<"$go_gn")"
+    go_zip="$OUT/go-curd.zip"
+    if [[ -n "$go_file" ]]; then
+      curl -sS -o "$go_zip" "$go_file" -H "token: $TOKEN" || true
+    fi
+    if [[ -n "$php_file" && -n "$go_file" ]]; then
+      php_ents="$(python3 -c '
+import zipfile,sys
+try:
+    z=zipfile.ZipFile(sys.argv[1])
+    print("|".join(sorted(n for n in z.namelist() if not n.endswith(".zip"))))
+except Exception as e:
+    print("err:"+str(e))
+' "$php_zip")"
+      go_ents="$(python3 -c '
+import zipfile,sys
+try:
+    z=zipfile.ZipFile(sys.argv[1])
+    print("|".join(sorted(n for n in z.namelist() if not n.endswith(".zip"))))
+except Exception as e:
+    print("err:"+str(e))
+' "$go_zip")"
+      echo "generator_zip php=$php_ents"
+      echo "generator_zip go=$go_ents"
+      if [[ "$php_ents" != "$go_ents" ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
     curl -sS -X POST "$PHP/platformapi/tools.generator/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}" >/dev/null
   else
     echo "generator_select could not resolve id"
