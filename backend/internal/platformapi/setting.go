@@ -220,27 +220,83 @@ func DictTypeLists(c *gin.Context) {
 }
 
 func DictTypeAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.DictTypeWriteCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	var n int64
+	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND delete_time IS NULL", httpx.Str(c, "type")).Count(&n)
+	if n > 0 {
+		response.Fail(c, "字典类型已存在")
+		return
+	}
 	bootstrap.DB.Create(&model.DictType{Name: httpx.Str(c, "name"), Type: httpx.Str(c, "type"), Status: httpx.Int(c, "status"), Remark: httpx.Str(c, "remark"), CreateTime: util.NowUnix()})
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func DictTypeEdit(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	var r model.DictType
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典类型不存在")
+		return
+	}
+	p := httpx.Params(c)
+	if msg := util.DictTypeWriteCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	var n int64
+	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND id <> ? AND delete_time IS NULL", httpx.Str(c, "type"), id).Count(&n)
+	if n > 0 {
+		response.Fail(c, "字典类型已存在")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "type": httpx.Str(c, "type"), "status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"), "update_time": now,
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func DictTypeDelete(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	var r model.DictType
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典类型不存在")
+		return
+	}
+	var used int64
+	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ? AND delete_time IS NULL", id).Count(&used)
+	if used > 0 {
+		response.Fail(c, "字典类型已被使用，请先删除绑定该字典类型的数据")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Update("delete_time", now)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func DictTypeDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var r model.DictType
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典类型不存在")
+		return
+	}
 	response.Data(c, r)
 }
 
@@ -285,33 +341,80 @@ func DictDataLists(c *gin.Context) {
 }
 
 func DictDataAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.DictDataWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	var typ model.DictType
+	if bootstrap.DB.Where("delete_time IS NULL").First(&typ, httpx.Uint(c, "type_id")).Error != nil {
+		response.Fail(c, "字典类型不存在")
+		return
+	}
+	typeVal := httpx.Str(c, "type_value")
+	if typeVal == "" {
+		typeVal = typ.Type
+	}
 	bootstrap.DB.Create(&model.DictData{
-		Name: httpx.Str(c, "name"), Value: httpx.Str(c, "value"), TypeID: httpx.Uint(c, "type_id"),
-		TypeValue: httpx.Str(c, "type_value"), Sort: httpx.Int(c, "sort"), Status: httpx.Int(c, "status"),
+		Name: httpx.Str(c, "name"), Value: httpx.Str(c, "value"), TypeID: typ.ID,
+		TypeValue: typeVal, Sort: httpx.Int(c, "sort"), Status: httpx.Int(c, "status"),
 		Remark: httpx.Str(c, "remark"), CreateTime: util.NowUnix(),
 	})
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func DictDataEdit(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	var r model.DictData
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典数据不存在")
+		return
+	}
+	p := httpx.Params(c)
+	if msg := util.DictDataWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "value": httpx.Str(c, "value"), "type_id": httpx.Uint(c, "type_id"),
-		"type_value": httpx.Str(c, "type_value"), "sort": httpx.Int(c, "sort"), "status": httpx.Int(c, "status"),
+	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Updates(map[string]any{
+		"name": httpx.Str(c, "name"), "value": httpx.Str(c, "value"),
+		"sort": httpx.Int(c, "sort"), "status": httpx.Int(c, "status"),
 		"remark": httpx.Str(c, "remark"), "update_time": now,
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func DictDataDelete(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	var r model.DictData
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典数据不存在")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Update("delete_time", now)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func DictDataDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var r model.DictData
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "字典数据不存在")
+		return
+	}
 	response.Data(c, r)
 }
 

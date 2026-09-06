@@ -590,7 +590,87 @@ print(json.dumps(data, ensure_ascii=False))
 ' "$old_remark" <<<"$php_pg")"
     curl -sS -X POST "$PHP/tenantapi/setting.pay.pay_config/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$restore_pay" >/dev/null
   fi
+
+  php_oa="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"reply_type":2}')"
+  go_oa="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"reply_type":2}')"
+  echo "oa_reply_bad php_msg=$(jget msg <<<"$php_oa") go_msg=$(jget msg <<<"$go_oa")"
+  if [[ "$(jget msg <<<"$php_oa")" != "$(jget msg <<<"$go_oa")" ]]; then
+    echo "  php_oa=${php_oa:0:200}"
+    echo "  go_oa=${go_oa:0:200}"
+    fail=$((fail + 1))
+  fi
+  oaname="pairoa$(date +%s)"
+  oa_body="{\"reply_type\":2,\"name\":\"$oaname\",\"content_type\":1,\"content\":\"hi\",\"status\":0,\"keyword\":\"$oaname\",\"matching_type\":1,\"sort\":0,\"reply_num\":1}"
+  php_oa2="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$oa_body")"
+  echo "oa_reply_add php_code=$(jcode <<<"$php_oa2")"
+  if [[ "$(jcode <<<"$php_oa2")" != "1" ]]; then
+    echo "  php_oa2=${php_oa2:0:300}"
+    fail=$((fail + 1))
+  fi
+  oalist="$(curl -sS "$GO/tenantapi/channel.official_account_reply/lists?reply_type=2" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  oaid="$(python3 -c '
+import json,sys
+name=sys.argv[1]
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==name), 0))
+' "$oaname" <<<"$oalist")"
+  if [[ "$oaid" != "0" && -n "$oaid" ]]; then
+    go_od="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=$oaid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_od="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=$oaid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "oa_reply_detail php_code=$(jcode <<<"$php_od") go_code=$(jcode <<<"$go_od")"
+    if [[ "$(jcode <<<"$php_od")" != "$(jcode <<<"$go_od")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_odel="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$oaid}")"
+    echo "oa_reply_delete php_code=$(jcode <<<"$php_odel")"
+    if [[ "$(jcode <<<"$php_odel")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "oa_reply_add could not resolve id"
+    fail=$((fail + 1))
+  fi
 fi
+
+  dname="pairdict$(date +%s)"
+  php_dbad="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_type/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":"x","status":1}')"
+  go_dbad="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_type/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":"x","status":1}')"
+  echo "dict_type_bad php_msg=$(jget msg <<<"$php_dbad") go_msg=$(jget msg <<<"$go_dbad")"
+  if [[ "$(jget msg <<<"$php_dbad")" != "$(jget msg <<<"$go_dbad")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_dt="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_type/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$dname\",\"type\":\"$dname\",\"status\":1,\"remark\":\"pair\"}")"
+  echo "dict_type_add php_code=$(jcode <<<"$php_dt")"
+  if [[ "$(jcode <<<"$php_dt")" != "1" ]]; then
+    echo "  php_dt=${php_dt:0:300}"
+    fail=$((fail + 1))
+  fi
+  dlist="$(curl -sS "$GO/platformapi/setting.dict.dict_type/lists?name=$dname" -H "token: $TOKEN")"
+  did="$(python3 -c '
+import json,sys
+name=sys.argv[1]
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==name), 0))
+' "$dname" <<<"$dlist")"
+  if [[ "$did" != "0" && -n "$did" ]]; then
+    go_de="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_type/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$did,\"name\":\"${dname}e\",\"type\":\"$dname\",\"status\":0,\"remark\":\"pair\"}")"
+    php_dd="$(curl -sS "$PHP/platformapi/setting.dict.dict_type/detail?id=$did" -H "token: $TOKEN")"
+    echo "dict_type_edit go_code=$(jcode <<<"$go_de") php_name=$(jget data.name <<<"$php_dd")"
+    if [[ "$(jcode <<<"$go_de")" != "1" || "$(jget data.name <<<"$php_dd")" != "${dname}e" ]]; then
+      echo "  go_de=${go_de:0:300}"
+      fail=$((fail + 1))
+    fi
+    php_ddel="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_type/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$did}")"
+    echo "dict_type_delete php_code=$(jcode <<<"$php_ddel")"
+    if [[ "$(jcode <<<"$php_ddel")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "dict_type_add could not resolve id"
+    fail=$((fail + 1))
+  fi
 
 echo "failed=$fail"
 exit "$fail"

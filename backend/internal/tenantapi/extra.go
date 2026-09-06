@@ -452,6 +452,11 @@ func OAReplyLists(c *gin.Context) {
 }
 
 func OAReplyAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.OAReplyWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	if httpx.Int(c, "reply_type") == 2 && httpx.Int(c, "sort") < 0 {
 		response.Fail(c, "排序值须大于或等于0")
 		return
@@ -480,6 +485,11 @@ func OAReplyAdd(c *gin.Context) {
 }
 
 func OAReplyEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.OAReplyWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	replyType := httpx.Int(c, "reply_type")
 	status := httpx.Int(c, "status")
 	if replyType != 2 && status == 1 {
@@ -489,24 +499,56 @@ func OAReplyEdit(c *gin.Context) {
 		}
 		q.Update("status", 0)
 	}
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "keyword": httpx.Str(c, "keyword"),
 		"reply_type": replyType, "matching_type": httpx.Int(c, "matching_type"),
 		"content_type": httpx.Int(c, "content_type"), "content": httpx.Str(c, "content"),
 		"status": status, "sort": httpx.Int(c, "sort"), "update_time": util.NowUnix(),
 	})
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
+}
+
+func oaReplyByID(c *gin.Context, id uint) (model.OfficialAccountReply, bool) {
+	var row model.OfficialAccountReply
+	q := tdb(c).Where("id = ? AND delete_time IS NULL", id)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&row).Error != nil || row.ID == 0 {
+		return row, false
+	}
+	return row, true
 }
 
 func OAReplyDelete(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
+		response.Fail(c, "记录不存在")
+		return
+	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "操作成功", nil)
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Update("delete_time", now)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func OAReplyDetail(c *gin.Context) {
-	var row model.OfficialAccountReply
-	if tdb(c).First(&row, httpx.Uint(c, "id")).Error != nil {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	row, ok := oaReplyByID(c, httpx.Uint(c, "id"))
+	if !ok {
 		response.Fail(c, "记录不存在")
 		return
 	}
@@ -514,19 +556,43 @@ func OAReplyDetail(c *gin.Context) {
 }
 
 func OAReplyStatus(c *gin.Context) {
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Update("status", httpx.Int(c, "status"))
-	response.Success(c, "操作成功", nil)
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Update("status", httpx.Int(c, "status"))
+	response.SuccessNotice(c, "操作成功")
 }
 
 func OAReplySort(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	if _, ok := httpx.Params(c)["new_sort"]; !ok && httpx.Int(c, "sort") == 0 && httpx.Int(c, "new_sort") == 0 {
+		response.Fail(c, "请输入新排序值")
+		return
+	}
 	sort := httpx.Int(c, "new_sort")
-	if sort == 0 {
+	if _, ok := httpx.Params(c)["new_sort"]; !ok {
 		sort = httpx.Int(c, "sort")
 	}
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	if sort < 0 {
+		response.Fail(c, "新排序值须大于或等于0")
+		return
+	}
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	q.Updates(map[string]any{
 		"sort": sort, "update_time": util.NowUnix(),
 	})
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func OAMenuDetail(c *gin.Context) {

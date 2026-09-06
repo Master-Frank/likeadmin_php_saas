@@ -160,6 +160,112 @@ func FileRenameCheck(p map[string]any) string {
 	return FileEditCateCheck(p)
 }
 
+func OAReplyWriteCheck(p map[string]any, needID bool) string {
+	if needID {
+		if _, ok := p["id"]; !ok || ToInt(p["id"]) == 0 {
+			return "参数缺失"
+		}
+	}
+	if _, ok := p["reply_type"]; !ok {
+		return "请输入回复类型"
+	}
+	rt := ToInt(p["reply_type"])
+	if rt != 1 && rt != 2 && rt != 3 {
+		return "回复类型状态值错误"
+	}
+	if strings.TrimSpace(ToString(p["name"])) == "" {
+		return "请输入规则名称"
+	}
+	if _, ok := p["content_type"]; !ok {
+		return "请选择内容类型"
+	}
+	if ToInt(p["content_type"]) != 1 {
+		return "内容类型状态值有误"
+	}
+	if strings.TrimSpace(ToString(p["content"])) == "" {
+		return "请输入回复内容"
+	}
+	if _, ok := p["status"]; !ok {
+		return "请选择启用状态"
+	}
+	st := ToInt(p["status"])
+	if st != 0 && st != 1 {
+		return "启用状态值错误"
+	}
+	if rt == 2 {
+		if strings.TrimSpace(ToString(p["keyword"])) == "" {
+			return "请输入关键词"
+		}
+		if _, ok := p["matching_type"]; !ok {
+			return "请选择匹配类型"
+		}
+		mt := ToInt(p["matching_type"])
+		if mt != 1 && mt != 2 {
+			return "匹配类型状态值错误"
+		}
+		if _, ok := p["sort"]; !ok {
+			return "请输入排序值"
+		}
+		if _, ok := p["reply_num"]; !ok {
+			return "请选择回复数量"
+		}
+		if ToInt(p["reply_num"]) != 1 {
+			return "回复数量状态值错误"
+		}
+	}
+	return ""
+}
+
+func DictTypeWriteCheck(p map[string]any) string {
+	name := strings.TrimSpace(ToString(p["name"]))
+	if name == "" {
+		return "请填写字典名称"
+	}
+	if n := len([]rune(name)); n > 255 {
+		return "字典名称长度须在1~255位字符"
+	}
+	if strings.TrimSpace(ToString(p["type"])) == "" {
+		return "请填写字典类型"
+	}
+	if _, ok := p["status"]; !ok {
+		return "请选择状态"
+	}
+	st := ToInt(p["status"])
+	if st != 0 && st != 1 {
+		return "请选择状态"
+	}
+	if n := len([]rune(ToString(p["remark"]))); n > 200 {
+		return "备注长度不能超过200"
+	}
+	return ""
+}
+
+func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
+	name := strings.TrimSpace(ToString(p["name"]))
+	if name == "" {
+		return "请填写字典数据名称"
+	}
+	if n := len([]rune(name)); n > 255 {
+		return "字典数据名称长度须在1-255位字符"
+	}
+	if strings.TrimSpace(ToString(p["value"])) == "" {
+		return "请填写字典数据值"
+	}
+	if needTypeID {
+		if _, ok := p["type_id"]; !ok || ToInt(p["type_id"]) == 0 {
+			return "字典类型缺失"
+		}
+	}
+	if _, ok := p["status"]; !ok {
+		return "请选择字典数据状态"
+	}
+	st := ToInt(p["status"])
+	if st != 0 && st != 1 {
+		return "字典数据状态参数错误"
+	}
+	return ""
+}
+
 func LoginWayAllows(raw any, scene int) bool {
 	if scene == 0 {
 		return false

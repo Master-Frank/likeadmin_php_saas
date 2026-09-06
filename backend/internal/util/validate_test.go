@@ -108,6 +108,25 @@ func TestFileMoveCheck(t *testing.T) {
 	}
 }
 
+func TestOAReplyWriteCheck(t *testing.T) {
+	if OAReplyWriteCheck(map[string]any{}, false) != "请输入回复类型" {
+		t.Fatal(OAReplyWriteCheck(map[string]any{}, false))
+	}
+	p := map[string]any{"reply_type": 2, "name": "r", "content_type": 1, "content": "hi", "status": 0}
+	if OAReplyWriteCheck(p, false) != "请输入关键词" {
+		t.Fatal(OAReplyWriteCheck(p, false))
+	}
+}
+
+func TestDictTypeWriteCheck(t *testing.T) {
+	if DictTypeWriteCheck(map[string]any{}) != "请填写字典名称" {
+		t.Fatal(DictTypeWriteCheck(map[string]any{}))
+	}
+	if DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 1}) != "" {
+		t.Fatal("expected ok")
+	}
+}
+
 func TestParseDateTime(t *testing.T) {
 	if ParseDateTime("2024-01-02 03:04:05") == 0 {
 		t.Fatal("expected unix ts")
