@@ -1,0 +1,398 @@
+package platformapi
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/filesvc"
+	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/lists"
+	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/util"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+func TenantLists(c *gin.Context) {
+	q := lists.Parse(c)
+	db := bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL")
+	if kw := lists.Param(q, "keyword"); kw != "" {
+		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+	}
+	var count int64
+	db.Count(&count)
+	var rows []model.Tenant
+	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	root := rootDomain(c)
+	httpPrefix := "http://"
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		httpPrefix = "https://"
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, t := range rows {
+		var users int64
+		bootstrap.DB.Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
+		def := httpPrefix + t.SN + "." + root + "/admin/"
+		domain := def
+		if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
+			domain = httpPrefix + t.DomainAlias + "/admin/"
+		}
+		out = append(out, map[string]any{
+			"id": t.ID, "sn": t.SN, "name": t.Name,
+			"avatar": filesvc.GetFileURL(c, t.Avatar), "disable": t.Disable,
+			"create_time": util.FormatDateTime(t.CreateTime),
+			"domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
+			"notes": t.Notes, "tel": t.Tel, "users_count": users,
+			"default_domain": def, "domain": domain,
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
+}
+
+func TenantDetail(c *gin.Context) {
+	var t model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&t).Error != nil {
+		response.Fail(c, "租户不存在")
+		return
+	}
+	var users int64
+	bootstrap.DB.Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
+	root := rootDomain(c)
+	httpPrefix := "http://"
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		httpPrefix = "https://"
+	}
+	def := httpPrefix + t.SN + "." + root + "/admin/"
+	domain := def
+	if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
+		domain = httpPrefix + t.DomainAlias + "/admin/"
+	}
+	response.Success(c, "获取成功", gin.H{
+		"id": t.ID, "sn": t.SN, "name": t.Name, "avatar": filesvc.GetFileURL(c, t.Avatar),
+		"tel": t.Tel, "domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
+		"disable": t.Disable, "create_time": util.FormatDateTime(t.CreateTime), "notes": t.Notes,
+		"user_total": users, "default_domain": def, "domain": domain,
+	})
+}
+
+func TenantAdd(c *gin.Context) {
+	name := httpx.Str(c, "name")
+	if name == "" {
+		response.Fail(c, "请输入租户名称")
+		return
+	}
+	alias := stripHost(httpx.Str(c, "domain_alias"))
+	sn := httpx.Str(c, "host_name")
+	if sn == "" {
+		sn = randomSN()
+	}
+	var exist model.Tenant
+	if bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&exist).Error == nil {
+		response.Fail(c, "主机名已被占用，请更换")
+		return
+	}
+	tactics := httpx.Int(c, "tactics")
+	now := util.NowUnix()
+	tenant := model.Tenant{
+		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
+		Tel: httpx.Str(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.Int(c, "domain_alias_enable"),
+		Disable: httpx.Int(c, "disable"), Notes: httpx.Str(c, "notes"), Tactics: tactics, CreateTime: now,
+	}
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&tenant).Error; err != nil {
+			return err
+		}
+		if tactics == 1 {
+			if err := runTenantSQL(tenant.SN); err != nil {
+				return err
+			}
+			return initShardedTenant(tx, tenant, c)
+		}
+		return initSharedTenant(tx, tenant, c)
+	})
+	if err != nil {
+		response.Fail(c, "新增失败："+err.Error())
+		return
+	}
+	response.Result(c, 1, 1, "新增成功", []any{})
+}
+
+func TenantEdit(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
+		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
+		"disable": httpx.Int(c, "disable"), "tel": httpx.Str(c, "tel"),
+		"domain_alias": stripHost(httpx.Str(c, "domain_alias")),
+		"domain_alias_enable": httpx.Int(c, "domain_alias_enable"),
+		"notes": httpx.Str(c, "notes"), "update_time": now,
+	})
+	response.Result(c, 1, 1, "操作成功", []any{})
+}
+
+func TenantDelete(c *gin.Context) {
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	response.Result(c, 1, 1, "删除成功", []any{})
+}
+
+func TenantAdminLists(c *gin.Context) {
+	q := lists.Parse(c)
+	tid := lists.ParamInt(q, "tenant_id")
+	if tid == 0 {
+		response.Fail(c, "缺少租户id")
+		return
+	}
+	db := bootstrap.DB.Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
+	if kw := lists.Param(q, "keyword"); kw != "" {
+		db = db.Where("name LIKE ? OR account LIKE ?", "%"+kw+"%", "%"+kw+"%")
+	}
+	var count int64
+	db.Count(&count)
+	var rows []model.TenantAdmin
+	db.Order("create_time desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, a := range rows {
+		out = append(out, map[string]any{
+			"id": a.ID, "root": a.Root, "name": a.Name,
+			"avatar": filesvc.GetFileURL(c, a.Avatar), "account": a.Account,
+			"multipoint_login": a.MultipointLogin, "disable": a.Disable,
+			"create_time": util.FormatDateTime(a.CreateTime),
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
+}
+
+func TenantAdminDetail(c *gin.Context) {
+	var a model.TenantAdmin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+		response.Fail(c, "管理员不存在")
+		return
+	}
+	response.Success(c, "获取成功", gin.H{
+		"id": a.ID, "root": a.Root, "name": a.Name, "avatar": filesvc.GetFileURL(c, a.Avatar),
+		"account": a.Account, "multipoint_login": a.MultipointLogin, "disable": a.Disable,
+	})
+}
+
+func TenantAdminEdit(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	now := util.NowUnix()
+	data := map[string]any{"name": httpx.Str(c, "name"), "disable": httpx.Int(c, "disable"), "multipoint_login": httpx.Int(c, "multipoint_login"), "update_time": now}
+	if pwd := httpx.Str(c, "password"); pwd != "" {
+		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
+	}
+	bootstrap.DB.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data)
+	response.Success(c, "修改成功", nil)
+}
+
+func TenantAdminDelete(c *gin.Context) {
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.TenantAdmin{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	response.Success(c, "删除成功", nil)
+}
+
+func TenantUserLists(c *gin.Context) {
+	q := lists.Parse(c)
+	tid := lists.ParamInt(q, "tenant_id")
+	db := bootstrap.DB.Model(&model.User{}).Where("delete_time IS NULL")
+	if tid > 0 {
+		db = db.Where("tenant_id = ?", tid)
+	}
+	if kw := lists.Param(q, "keyword"); kw != "" {
+		db = db.Where("nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+	}
+	var count int64
+	db.Count(&count)
+	var rows []model.User
+	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, u := range rows {
+		out = append(out, map[string]any{
+			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+			"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
+			"sex": u.Sex, "channel": u.Channel, "is_disable": u.IsDisable, "user_money": u.UserMoney,
+			"create_time": util.FormatDateTime(u.CreateTime),
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
+}
+
+func TenantUserDetail(c *gin.Context) {
+	var u model.User
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&u).Error != nil {
+		response.Fail(c, "用户不存在")
+		return
+	}
+	response.Success(c, "获取成功", userMap(c, u))
+}
+
+func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
+	pwd := httpx.Str(c, "password")
+	if pwd == "" {
+		pwd = config.C.Project.DefaultPassword
+	}
+	account := httpx.Str(c, "account")
+	if account == "" {
+		account = tenant.SN
+	}
+	admin := model.TenantAdmin{
+		TenantID: tenant.ID, Account: account, Name: "超级管理员",
+		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
+		Root: 1, MultipointLogin: 1, CreateTime: util.NowUnix(),
+	}
+	if err := tx.Create(&admin).Error; err != nil {
+		return err
+	}
+	dept := model.TenantDept{Name: "公司", Pid: 0, Sort: 0, Status: 1, TenantID: tenant.ID, CreateTime: util.NowUnix()}
+	if err := tx.Create(&dept).Error; err != nil {
+		return err
+	}
+	_ = tx.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
+	return copyTenantMenus(tx, tenant.ID)
+}
+
+func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
+	return initSharedTenant(tx, tenant, c)
+}
+
+func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
+	var tpls []model.TenantSystemMenu
+	tx.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
+	if len(tpls) == 0 {
+		var plat []model.SystemMenu
+		tx.Order("pid, id").Find(&plat)
+		idMap := map[uint]uint{}
+		for _, m := range plat {
+			old := m.ID
+			row := model.TenantSystemMenu{
+				Pid: m.Pid, Type: m.Type, Name: m.Name, Icon: m.Icon, Sort: m.Sort, Perms: m.Perms,
+				Paths: m.Paths, Component: m.Component, Selected: m.Selected, Params: m.Params,
+				IsCache: m.IsCache, IsShow: m.IsShow, IsDisable: m.IsDisable, TenantID: tenantID,
+				CreateTime: util.NowUnix(),
+			}
+			if err := tx.Create(&row).Error; err != nil {
+				return err
+			}
+			idMap[old] = row.ID
+		}
+		var created []model.TenantSystemMenu
+		tx.Where("tenant_id = ?", tenantID).Find(&created)
+		for _, item := range created {
+			if item.Pid != 0 {
+				if nid, ok := idMap[item.Pid]; ok {
+					tx.Model(&item).Update("pid", nid)
+				}
+			}
+		}
+		return nil
+	}
+	idMap := map[uint]uint{}
+	for _, m := range tpls {
+		old := m.ID
+		row := m
+		row.ID = 0
+		row.TenantID = tenantID
+		row.CreateTime = util.NowUnix()
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		idMap[old] = row.ID
+	}
+	var created []model.TenantSystemMenu
+	tx.Where("tenant_id = ?", tenantID).Find(&created)
+	for _, item := range created {
+		if item.Pid != 0 {
+			if nid, ok := idMap[item.Pid]; ok {
+				tx.Model(&item).Update("pid", nid)
+			}
+		}
+	}
+	return nil
+}
+
+func runTenantSQL(sn string) error {
+	candidates := []string{
+		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db/tenant.sql"),
+		"/workspace/server/app/platformapi/db/tenant.sql",
+	}
+	var raw []byte
+	var err error
+	for _, p := range candidates {
+		raw, err = os.ReadFile(p)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	content = strings.ReplaceAll(content, "{tenantSn}", sn)
+	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
+	parts := strings.Split(content, ";\n")
+	for _, sql := range parts {
+		sql = strings.TrimSpace(sql)
+		if sql == "" || strings.HasPrefix(sql, "--") {
+			continue
+		}
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func randomSN() string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	for {
+		b := make([]byte, 8)
+		n := util.NowUnix()
+		for i := 0; i < 8; i++ {
+			b[i] = chars[int(n+int64(i*17))%len(chars)]
+			n = n*1103515245 + 12345
+		}
+		sn := string(b)
+		var t model.Tenant
+		if bootstrap.DB.Where("sn = ?", sn).First(&t).Error != nil {
+			return sn
+		}
+	}
+}
+
+func stripHost(s string) string {
+	re := regexp.MustCompile(`^https?://|/$`)
+	return re.ReplaceAllString(s, "")
+}
+
+func rootDomain(c *gin.Context) string {
+	host := ctxutil.Host(c)
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	if i := strings.Index(host, ":"); i >= 0 {
+		host = host[:i]
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) >= 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
+	return host
+}
+
+func userMap(c *gin.Context, u model.User) map[string]any {
+	return map[string]any{
+		"id": u.ID, "sn": u.SN,
+		"avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
+		"sex": u.Sex, "channel": u.Channel, "is_disable": u.IsDisable, "login_ip": u.LoginIP,
+		"login_time": util.FormatDateTimePtr(u.LoginTime), "user_money": u.UserMoney,
+		"create_time": util.FormatDateTime(u.CreateTime),
+	}
+}

@@ -1,0 +1,61 @@
+app:
+  debug: true
+  timezone: Asia/Shanghai
+  public_dir: ../server/public
+  install_lock: ../server/config/install.lock
+  listen: ":8080"
+
+database:
+  hostname: 127.0.0.1
+  hostport: 3306
+  database: localhost_likeadmin
+  username: root
+  password: root
+  charset: utf8mb4
+  prefix: la_
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+  prefix: "la:"
+
+project:
+  unique_identification: likeadmin
+  default_password: "123456"
+  demo_env: false
+  http_host: ""
+  version: "1.0.5"
+  project_name: Likeadmin-SaaS版
+  admin_token:
+    expire_duration: 28800
+    be_expire_duration: 3600
+  tenant_token:
+    expire_duration: 28800
+    be_expire_duration: 3600
+  user_token:
+    expire_duration: 28800
+    be_expire_duration: 3600
+  lists:
+    page_size_max: 25000
+    page_size: 25
+  default_image:
+    admin_avatar: resource/image/common/avatar.png
+    user_avatar: resource/image/common/default_avatar.png
+  file_image: [jpg, png, gif, jpeg, webp, ico]
+  file_video: [wmv, avi, mpg, mpeg, 3gp, mov, mp4, flv, f4v, rmvb, mkv]
+  file_file: [zip, rar, txt, pdf, doc, docx, xls, xlsx, ppt, pptx, csv, ftr, 7z, gz]
+  platform:
+    name: SaaS平台端
+    admin_avatar: resource/image/common/avatar.png
+    login_image: resource/image/platformapi/default/login_image.png
+    web_logo_light: resource/image/platformapi/default/web_logo_light.png
+    web_logo_dark: resource/image/platformapi/default/web_logo_dark.png
+    web_favicon: resource/image/platformapi/default/web_favicon.ico
+  tenant:
+    name: SaaS租户端
+    admin_avatar: resource/image/common/shop_logo.png
+    login_image: resource/image/tenantapi/default/login_image.png
+    web_logo: resource/image/tenantapi/default/web_logo.jpg
+    web_favicon: resource/image/tenantapi/default/web_favicon.ico
