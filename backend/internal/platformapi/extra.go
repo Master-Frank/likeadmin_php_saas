@@ -385,12 +385,12 @@ func NoticeSet(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Model(&model.NoticeSetting{}).Where("id = ?", id).Updates(updates)
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func SmsConfigGet(c *gin.Context) {
 	response.Data(c, []any{
-		smsEngineRow(c, "ali", "阿里云短信", 0),
+		smsEngineRow(c, "ali", "阿里云短信", 1),
 		smsEngineRow(c, "tencent", "腾讯云短信", 0),
 	})
 }
@@ -433,7 +433,7 @@ func SmsConfigDetail(c *gin.Context) {
 	def := map[string]any{"type": typ, "status": 0}
 	switch typ {
 	case "ali":
-		def = map[string]any{"type": "ali", "name": "阿里云短信", "sign": "", "app_key": "", "secret_key": "", "status": 0}
+		def = map[string]any{"type": "ali", "name": "阿里云短信", "sign": "", "app_key": "", "secret_key": "", "status": 1}
 	case "tencent":
 		def = map[string]any{"type": "tencent", "name": "腾讯云短信", "sign": "", "app_id": "", "secret_id": "", "secret_key": "", "status": 0}
 	}

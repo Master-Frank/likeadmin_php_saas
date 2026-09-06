@@ -300,6 +300,7 @@ func UserLists(c *gin.Context) {
 			"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 			"avatar": filesvc.GetFileURL(c, u.Avatar), "sex": util.SexDesc(u.Sex),
 			"channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
+			"login_time":  util.FormatDateTimePtr(u.LoginTime),
 			"create_time": util.FormatDateTime(u.CreateTime),
 		})
 	}
@@ -535,19 +536,7 @@ func ArticleCateLists(c *gin.Context) {
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		var n int64
-		tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
-		showDesc := "停用"
-		if r.IsShow == 1 {
-			showDesc = "启用"
-		}
-		out = append(out, map[string]any{
-			"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
-			"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
-			"create_time": util.FormatDateTime(r.CreateTime),
-			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
-			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
-		})
+		out = append(out, articleCateMap(c, r))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
@@ -623,8 +612,28 @@ func ArticleCateAll(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
-	response.Data(c, rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, articleCateMap(c, r))
+	}
+	response.Data(c, out)
+}
+
+func articleCateMap(c *gin.Context, r model.ArticleCate) map[string]any {
+	var n int64
+	tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
+	showDesc := "停用"
+	if r.IsShow == 1 {
+		showDesc = "启用"
+	}
+	return map[string]any{
+		"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
+		"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
+		"create_time": util.FormatDateTime(r.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
+	}
 }
 
 func decoratePayload(c *gin.Context, key string) string {
@@ -648,7 +657,12 @@ func DecoratePageDetail(c *gin.Context) {
 		response.Success(c, "获取成功", gin.H{})
 		return
 	}
-	response.Success(c, "获取成功", p)
+	response.Success(c, "获取成功", gin.H{
+		"id": p.ID, "type": p.Type, "name": p.Name,
+		"data": p.Data, "meta": p.Meta, "tenant_id": p.TenantID,
+		"create_time": util.FormatDateTime(p.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(p.UpdateTime),
+	})
 }
 
 func DecoratePageSave(c *gin.Context) {

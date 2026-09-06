@@ -240,17 +240,7 @@ func DictTypeLists(c *gin.Context) {
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		desc := "正常"
-		if r.Status != 1 {
-			desc = "停用"
-		}
-		out = append(out, map[string]any{
-			"id": r.ID, "name": r.Name, "type": r.Type, "status": r.Status, "remark": r.Remark,
-			"create_time": util.FormatDateTime(r.CreateTime),
-			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
-			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
-			"status_desc": desc,
-		})
+		out = append(out, dictTypeMap(r))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
@@ -294,9 +284,11 @@ func DictTypeEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
+	typ := httpx.Str(c, "type")
 	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "type": httpx.Str(c, "type"), "status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"), "update_time": now,
+		"name": httpx.Str(c, "name"), "type": typ, "status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"), "update_time": now,
 	})
+	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ?", id).Update("type_value", typ)
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -333,13 +325,17 @@ func DictTypeDetail(c *gin.Context) {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	response.Data(c, r)
+	response.Data(c, dictTypeMap(r))
 }
 
 func DictTypeAll(c *gin.Context) {
 	var rows []model.DictType
 	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Find(&rows)
-	response.Data(c, rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dictTypeMap(r))
+	}
+	response.Data(c, out)
 }
 
 func DictDataLists(c *gin.Context) {
@@ -363,15 +359,7 @@ func DictDataLists(c *gin.Context) {
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		desc := "正常"
-		if r.Status != 1 {
-			desc = "停用"
-		}
-		item := map[string]any{
-			"id": r.ID, "name": r.Name, "value": r.Value, "type_id": r.TypeID, "type_value": r.TypeValue,
-			"sort": r.Sort, "status": r.Status, "remark": r.Remark, "create_time": util.FormatDateTime(r.CreateTime), "status_desc": desc,
-		}
-		out = append(out, item)
+		out = append(out, dictDataMap(r))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
@@ -451,7 +439,35 @@ func DictDataDetail(c *gin.Context) {
 		response.Fail(c, "字典数据不存在")
 		return
 	}
-	response.Data(c, r)
+	response.Data(c, dictDataMap(r))
+}
+
+func dictTypeMap(r model.DictType) map[string]any {
+	desc := "正常"
+	if r.Status != 1 {
+		desc = "停用"
+	}
+	return map[string]any{
+		"id": r.ID, "name": r.Name, "type": r.Type, "status": r.Status, "remark": r.Remark,
+		"create_time": util.FormatDateTime(r.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
+		"status_desc": desc,
+	}
+}
+
+func dictDataMap(r model.DictData) map[string]any {
+	desc := "正常"
+	if r.Status != 1 {
+		desc = "停用"
+	}
+	return map[string]any{
+		"id": r.ID, "name": r.Name, "value": r.Value, "type_id": r.TypeID, "type_value": r.TypeValue,
+		"sort": r.Sort, "status": r.Status, "remark": r.Remark,
+		"create_time": util.FormatDateTime(r.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+		"status_desc": desc,
+	}
 }
 
 func StorageLists(c *gin.Context) {

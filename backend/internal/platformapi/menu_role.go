@@ -250,7 +250,14 @@ func RoleDetail(c *gin.Context) {
 func RoleAll(c *gin.Context) {
 	var rows []model.SystemRole
 	bootstrap.DB.Where("delete_time IS NULL").Order("sort desc, id desc").Find(&rows)
-	response.Data(c, rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, map[string]any{
+			"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort,
+			"create_time": util.FormatDateTime(r.CreateTime),
+		})
+	}
+	response.Data(c, out)
 }
 
 func menuFromReq(c *gin.Context) model.SystemMenu {

@@ -392,9 +392,14 @@ func RoleLists(c *gin.Context) {
 	for _, r := range rows {
 		var menuIDs []uint
 		tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
+		var num int64
+		tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ?", r.ID).Count(&num)
+		if menuIDs == nil {
+			menuIDs = []uint{}
+		}
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort,
-			"create_time": util.FormatDateTime(r.CreateTime), "menu_id": menuIDs,
+			"create_time": util.FormatDateTime(r.CreateTime), "num": num, "menu_id": menuIDs,
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -471,7 +476,13 @@ func RoleDetail(c *gin.Context) {
 	tdb(c).First(&r, httpx.Uint(c, "id"))
 	var menuIDs []uint
 	tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
-	response.Data(c, gin.H{"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort, "menu_id": menuIDs})
+	if menuIDs == nil {
+		menuIDs = []uint{}
+	}
+	response.Data(c, gin.H{
+		"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort, "menu_id": menuIDs,
+		"create_time": util.FormatDateTime(r.CreateTime),
+	})
 }
 
 func RoleAll(c *gin.Context) {
@@ -480,8 +491,15 @@ func RoleAll(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Find(&rows)
-	response.Data(c, rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, map[string]any{
+			"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort,
+			"create_time": util.FormatDateTime(r.CreateTime),
+		})
+	}
+	response.Data(c, out)
 }
 
 func authAdminIDPresent(p map[string]any) bool {

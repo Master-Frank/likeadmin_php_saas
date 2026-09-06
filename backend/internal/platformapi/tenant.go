@@ -202,14 +202,24 @@ func TenantDelete(c *gin.Context) {
 
 func TenantAdminLists(c *gin.Context) {
 	q := lists.Parse(c)
-	tid := lists.ParamInt(q, "tenant_id")
-	if tid == 0 {
-		response.Fail(c, "缺少租户id")
+	if lists.Param(q, "tenant_id") == "" {
+		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
 		return
 	}
+	tid := lists.ParamInt(q, "tenant_id")
 	db := bootstrap.DB.Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		db = db.Where("name LIKE ? OR account LIKE ?", "%"+kw+"%", "%"+kw+"%")
+	}
+	if start := lists.Param(q, "create_time_start"); start != "" {
+		if ts := util.ParseDateTime(start); ts > 0 {
+			db = db.Where("create_time >= ?", ts)
+		}
+	}
+	if end := lists.Param(q, "create_time_end"); end != "" {
+		if ts := util.ParseDateTime(end); ts > 0 {
+			db = db.Where("create_time <= ?", ts)
+		}
 	}
 	var count int64
 	db.Count(&count)
@@ -250,6 +260,7 @@ func TenantAdminDetail(c *gin.Context) {
 	response.Success(c, "获取成功", gin.H{
 		"id": a.ID, "root": a.Root, "name": a.Name, "avatar": filesvc.GetFileURL(c, a.Avatar),
 		"account": a.Account, "multipoint_login": a.MultipointLogin, "disable": a.Disable,
+		"create_time": util.FormatDateTime(a.CreateTime),
 	})
 }
 

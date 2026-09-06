@@ -38,7 +38,7 @@ func ArticleCateDetail(c *gin.Context) {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
-	response.Data(c, row)
+	response.Data(c, articleCateMap(c, row))
 }
 
 func ArticleCateUpdateStatus(c *gin.Context) {
@@ -535,7 +535,11 @@ func OAReplyLists(c *gin.Context) {
 	db.Count(&count)
 	var rows []model.OfficialAccountReply
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, oaReplyListMap(row))
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func OAReplyAdd(c *gin.Context) {
@@ -639,7 +643,27 @@ func OAReplyDetail(c *gin.Context) {
 		response.Fail(c, "记录不存在")
 		return
 	}
-	response.Data(c, row)
+	response.Data(c, oaReplyDetailMap(row))
+}
+
+func oaReplyListMap(row model.OfficialAccountReply) map[string]any {
+	return map[string]any{
+		"id": row.ID, "name": row.Name, "keyword": row.Keyword,
+		"matching_type": row.MatchingType, "content": row.Content, "content_type": row.ContentType,
+		"status": row.Status, "sort": row.Sort,
+		"matching_type_desc": row.MatchingType, "content_type_desc": row.ContentType, "status_desc": row.Status,
+	}
+}
+
+func oaReplyDetailMap(row model.OfficialAccountReply) map[string]any {
+	return map[string]any{
+		"id": row.ID, "name": row.Name, "keyword": row.Keyword,
+		"reply_type": row.ReplyType, "matching_type": row.MatchingType,
+		"content_type": row.ContentType, "content": row.Content,
+		"status": row.Status, "sort": row.Sort,
+		"reply_type_desc": row.ReplyType, "matching_type_desc": row.MatchingType,
+		"content_type_desc": row.ContentType, "status_desc": row.Status,
+	}
 }
 
 func OAReplyStatus(c *gin.Context) {
@@ -820,7 +844,7 @@ func TenantNoticeSet(c *gin.Context) {
 		q = q.Where("tenant_id = ?", tid)
 	}
 	q.Updates(updates)
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func SettingUserGetConfig(c *gin.Context)   { platformapi.UserGetConfig(c) }

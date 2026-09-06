@@ -638,7 +638,10 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
     go_od="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=$oaid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     php_od="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=$oaid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     echo "oa_reply_detail php_code=$(jcode <<<"$php_od") go_code=$(jcode <<<"$go_od")"
-    if [[ "$(jcode <<<"$php_od")" != "$(jcode <<<"$go_od")" ]]; then
+    php_ok="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(int("reply_type_desc" in d and "status_desc" in d))' <<<"$php_od")"
+    go_ok="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(int("reply_type_desc" in d and "status_desc" in d))' <<<"$go_od")"
+    echo "oa_reply_detail_shape php=$php_ok go=$go_ok"
+    if [[ "$(jcode <<<"$php_od")" != "$(jcode <<<"$go_od")" || "$php_ok" != "1" || "$go_ok" != "1" ]]; then
       fail=$((fail + 1))
     fi
     php_odel="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$oaid}")"
@@ -1196,6 +1199,58 @@ echo "dict_data_add_bad php_msg=$(jget msg <<<"$php_dd") go_msg=$(jget msg <<<"$
 if [[ "$(jget msg <<<"$php_dd")" != "$(jget msg <<<"$go_dd")" ]]; then
   fail=$((fail + 1))
 fi
+php_tal="$(curl -sS "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
+go_tal="$(curl -sS "$GO/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
+php_taln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$php_tal")"
+go_taln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_tal")"
+echo "tenant_admin_lists_noid php_code=$(jcode <<<"$php_tal") go_code=$(jcode <<<"$go_tal") php_n=$php_taln go_n=$go_taln"
+if [[ "$(jcode <<<"$php_tal")" != "$(jcode <<<"$go_tal")" || "$php_taln" != "0" || "$go_taln" != "0" ]]; then
+  fail=$((fail + 1))
+fi
+php_tad="$(curl -sS "$PHP/platformapi/tenant.tenant_admin/detail?id=1&tenant_id=1" -H "token: $TOKEN")"
+go_tad="$(curl -sS "$GO/platformapi/tenant.tenant_admin/detail?id=1&tenant_id=1" -H "token: $TOKEN")"
+php_tct="$(jget data.create_time <<<"$php_tad")"
+go_tct="$(jget data.create_time <<<"$go_tad")"
+echo "tenant_admin_detail_time php=$php_tct go=$go_tct"
+if [[ -n "$php_tct" && "$php_tct" != "$go_tct" ]]; then
+  fail=$((fail + 1))
+fi
+php_smsg="$(curl -sS "$PHP/platformapi/notice.sms_config/getConfig" -H "token: $TOKEN")"
+go_smsg="$(curl -sS "$GO/platformapi/notice.sms_config/getConfig" -H "token: $TOKEN")"
+php_ss="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(ls[0].get("status") if ls else "")' <<<"$php_smsg")"
+go_ss="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(ls[0].get("status") if ls else "")' <<<"$go_smsg")"
+echo "sms_config_ali_status php=$php_ss go=$go_ss"
+if [[ "$php_ss" != "$go_ss" ]]; then
+  fail=$((fail + 1))
+fi
+cas="paircas${ts:-$RANDOM}"
+php_cas="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_type/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cas\",\"type\":\"$cas\",\"status\":1,\"remark\":\"pair\"}")"
+if [[ "$(jcode <<<"$php_cas")" == "1" ]]; then
+  clist="$(curl -sS "$GO/platformapi/setting.dict.dict_type/lists?name=$cas" -H "token: $TOKEN")"
+  cid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
+' "$cas" <<<"$clist")"
+  if [[ "$cid" != "0" && -n "$cid" ]]; then
+    php_da2="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cas\",\"value\":\"1\",\"type_id\":$cid,\"status\":1}")"
+    echo "dict_data_add php_code=$(jcode <<<"$php_da2")"
+    curl -sS -X POST "$GO/platformapi/setting.dict.dict_type/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid,\"name\":\"$cas\",\"type\":\"${cas}x\",\"status\":1,\"remark\":\"pair\"}" >/dev/null
+    php_dv="$(curl -sS "$PHP/platformapi/setting.dict.dict_data/lists?type_id=$cid" -H "token: $TOKEN")"
+    go_dv="$(curl -sS "$GO/platformapi/setting.dict.dict_data/lists?type_id=$cid" -H "token: $TOKEN")"
+    php_tv="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("type_value",""))' <<<"$php_dv")"
+    go_tv="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("type_value",""))' <<<"$go_dv")"
+    echo "dict_type_cascade php=$php_tv go=$go_tv"
+    if [[ "$php_tv" != "${cas}x" || "$go_tv" != "${cas}x" ]]; then
+      fail=$((fail + 1))
+    fi
+    did2="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("id",0))' <<<"$go_dv")"
+    if [[ "$did2" != "0" && -n "$did2" ]]; then
+      curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$did2}" >/dev/null
+    fi
+    curl -sS -X POST "$PHP/platformapi/setting.dict.dict_type/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid}" >/dev/null
+  fi
+fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   php_jl="$(curl -sS "$PHP/tenantapi/dept.jobs/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -1212,6 +1267,30 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   go_dl="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("level" in ls[0]))' <<<"$go_da")"
   echo "dept_all_shape php=$php_dl go=$go_dl"
   if [[ "$php_dl" != "$go_dl" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_rl="$(curl -sS "$PHP/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rl="$(curl -sS "$GO/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_rn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print("" if not ls else ls[0].get("num"))' <<<"$php_rl")"
+  go_rn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print("" if not ls else ls[0].get("num"))' <<<"$go_rl")"
+  echo "role_lists_num php=$php_rn go=$go_rn"
+  if [[ -n "$php_rn" && "$php_rn" != "$go_rn" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ca="$(curl -sS "$PHP/tenantapi/article.article_cate/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ca="$(curl -sS "$GO/tenantapi/article.article_cate/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_cd="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("name" in ls[0]))' <<<"$php_ca")"
+  go_cd="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("name" in ls[0]))' <<<"$go_ca")"
+  echo "article_cate_all_shape php=$php_cd go=$go_cd"
+  if [[ "$php_cd" != "$go_cd" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_pd="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_pd="$(curl -sS "$GO/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_pt="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(type(d.get("create_time")).__name__)' <<<"$php_pd")"
+  go_pt="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(type(d.get("create_time")).__name__)' <<<"$go_pd")"
+  echo "decorate_page_time php=$php_pt go=$go_pt"
+  if [[ "$php_pt" != "$go_pt" ]]; then
     fail=$((fail + 1))
   fi
 fi
