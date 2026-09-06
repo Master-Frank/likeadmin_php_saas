@@ -858,7 +858,32 @@ func FinanceRefundRecord(c *gin.Context) {
 	if q.EndTime != "" {
 		base = base.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
-	extendDB := base.Session(&gorm.Session{})
+	extendWhere := func(db *gorm.DB) *gorm.DB {
+		db = db.Table(rt+" AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
+		if tid := tenantDB(c); tid > 0 {
+			db = db.Where("r.tenant_id = ?", tid)
+		}
+		if sn := lists.Param(q, "sn"); sn != "" {
+			db = db.Where("r.sn = ?", sn)
+		}
+		if osn := lists.Param(q, "order_sn"); osn != "" {
+			db = db.Where("r.order_sn = ?", osn)
+		}
+		if lists.Param(q, "refund_type") != "" {
+			db = db.Where("r.refund_type = ?", lists.ParamInt(q, "refund_type"))
+		}
+		if info := lists.Param(q, "user_info"); info != "" {
+			like := "%" + info + "%"
+			db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
+		}
+		if q.StartTime != "" {
+			db = db.Where("r.create_time >= ?", util.ParseDateTime(q.StartTime))
+		}
+		if q.EndTime != "" {
+			db = db.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
+		}
+		return db
+	}
 	if lists.Param(q, "refund_status") != "" {
 		base = base.Where("r.refund_status = ?", lists.ParamInt(q, "refund_status"))
 	}
@@ -891,7 +916,7 @@ func FinanceRefundRecord(c *gin.Context) {
 		Error   int64 `gorm:"column:error"`
 	}
 	var ext extRow
-	extendDB.Select("count(r.id) as total, count(IF(r.refund_status=0,1,null)) as ing, count(IF(r.refund_status=1,1,null)) as success, count(IF(r.refund_status=2,1,null)) as error").Scan(&ext)
+	extendWhere(tdb(c)).Select("count(r.id) as total, count(IF(r.refund_status=0,1,null)) as ing, count(IF(r.refund_status=1,1,null)) as success, count(IF(r.refund_status=2,1,null)) as error").Scan(&ext)
 	response.Lists(c, out, count, q.PageNo, q.PageSize, gin.H{
 		"total": ext.Total, "ing": ext.Ing, "success": ext.Success, "error": ext.Error,
 	})
