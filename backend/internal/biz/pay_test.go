@@ -60,6 +60,49 @@ func TestCheckPayConfigMessages(t *testing.T) {
 	}
 }
 
+func TestCheckPayConfigAlipayCertificate(t *testing.T) {
+	in := PayConfigInput{
+		ID: 3, Name: "支付宝", Icon: "/i.png", Sort: 3, SortPresent: true,
+		PayWay: PayAlipay, Exists: true, ConfigPresent: true,
+		Config: map[string]any{
+			"mode": "certificate", "merchant_type": "ordinary_merchant",
+			"app_id": "a", "private_key": "k",
+		},
+	}
+	if msg := CheckPayConfig(in); msg != "应用公钥证书不能为空" {
+		t.Fatal(msg)
+	}
+	in.Config = map[string]any{
+		"mode": "certificate", "merchant_type": "ordinary_merchant",
+		"app_id": "a", "private_key": "k", "public_cert": "c",
+	}
+	if msg := CheckPayConfig(in); msg != "支付宝公钥证书不能为空" {
+		t.Fatal(msg)
+	}
+	in.Config = map[string]any{
+		"mode": "certificate", "merchant_type": "ordinary_merchant",
+		"app_id": "a", "private_key": "k", "public_cert": "c", "ali_public_cert": "p",
+	}
+	if msg := CheckPayConfig(in); msg != "支付宝根证书不能为空" {
+		t.Fatal(msg)
+	}
+	in.Config = map[string]any{
+		"mode": "certificate", "merchant_type": "ordinary_merchant",
+		"app_id": "a", "private_key": "k", "public_cert": "c",
+		"ali_public_cert": "p", "ali_root_cert": "r",
+	}
+	if msg := CheckPayConfig(in); msg != "" {
+		t.Fatal(msg)
+	}
+	in.Config = map[string]any{
+		"mode": "normal_mode", "merchant_type": "ordinary_merchant",
+		"app_id": "a", "private_key": "k",
+	}
+	if msg := CheckPayConfig(in); msg != "支付宝公钥不能为空" {
+		t.Fatal(msg)
+	}
+}
+
 func TestBuildPayConfigJSON(t *testing.T) {
 	if BuildPayConfigJSON(PayBalance, map[string]any{"x": 1}) != "" {
 		t.Fatal("balance config should be empty string")

@@ -217,6 +217,13 @@ func LogLists(c *gin.Context) {
 	if ip := lists.Param(q, "ip"); ip != "" {
 		db = db.Where("ip LIKE ?", "%"+ip+"%")
 	}
+	if typ := lists.Param(q, "type"); typ != "" {
+		db = db.Where("type LIKE ?", "%"+typ+"%")
+	}
+	startTS, endTS := util.ParseDateTime(q.StartTime), util.ParseDateTime(q.EndTime)
+	if startTS > 0 && endTS > 0 {
+		db = db.Where("create_time BETWEEN ? AND ?", startTS, endTS)
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.OperationLog

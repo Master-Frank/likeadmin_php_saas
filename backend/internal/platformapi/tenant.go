@@ -198,7 +198,40 @@ func TenantDelete(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Update("delete_time", now)
+	if cur.Tactics == 1 && cur.SN != "" {
+		dropShardedTenantTables(cur.SN)
+	}
 	response.Result(c, 1, 1, "删除成功", []any{})
+}
+
+func tenantAdminDB(tenant model.Tenant) *gorm.DB {
+	if tenant.Tactics == 1 && tenant.SN != "" {
+		return tenantdb.UseSN(tenant.SN)
+	}
+	return bootstrap.DB
+}
+
+func dropShardedTenantTables(sn string) {
+	if !validTenantSN(sn) {
+		return
+	}
+	prefix := config.Prefix()
+	for _, name := range tenantdb.ShardableNames() {
+		table := prefix + name + "_" + sn
+		_ = bootstrap.DB.Exec("DROP TABLE IF EXISTS `" + table + "`").Error
+	}
+}
+
+func validTenantSN(sn string) bool {
+	if sn == "" || len(sn) > 32 {
+		return false
+	}
+	for _, r := range sn {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func TenantAdminLists(c *gin.Context) {
@@ -208,7 +241,12 @@ func TenantAdminLists(c *gin.Context) {
 		return
 	}
 	tid := lists.ParamInt(q, "tenant_id")
-	db := bootstrap.DB.Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
+	var tenant model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
+		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
+		return
+	}
+	db := tenantAdminDB(tenant).Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		db = db.Where("name LIKE ? OR account LIKE ?", "%"+kw+"%", "%"+kw+"%")
 	}
@@ -253,8 +291,9 @@ func TenantAdminDetail(c *gin.Context) {
 		response.Fail(c, "对应租户账号不存在")
 		return
 	}
+	adb := tenantAdminDB(tenant)
 	var a model.TenantAdmin
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+	if adb.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -277,9 +316,10 @@ func TenantAdminAdd(c *gin.Context) {
 		response.Fail(c, "对应租户账号不存在")
 		return
 	}
+	adb := tenantAdminDB(tenant)
 	account := httpx.Str(c, "account")
 	var exist model.TenantAdmin
-	if bootstrap.DB.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
+	if adb.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
@@ -293,7 +333,7 @@ func TenantAdminAdd(c *gin.Context) {
 		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := adb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
@@ -313,14 +353,15 @@ func TenantAdminEdit(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	var a model.TenantAdmin
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
-		response.Fail(c, "租户管理员不存在")
-		return
-	}
 	var tenant model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "tenant_id")).First(&tenant).Error != nil {
 		response.Fail(c, "对应租户账号不存在")
+		return
+	}
+	adb := tenantAdminDB(tenant)
+	var a model.TenantAdmin
+	if adb.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+		response.Fail(c, "租户管理员不存在")
 		return
 	}
 	now := util.NowUnix()
@@ -340,9 +381,9 @@ func TenantAdminEdit(c *gin.Context) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
-	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
+	adb.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
 	newRoles := httpx.Uints(c, "role_id")
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := adb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
 			return err
 		}
@@ -356,7 +397,7 @@ func TenantAdminEdit(c *gin.Context) {
 		return
 	}
 	if httpx.Int(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
-		expireTenantAdminTokens(id)
+		expireTenantAdminTokens(adb, id)
 	}
 	cache.Del("tenant_auth_url_" + util.ToString(id))
 	response.SuccessNotice(c, "操作成功")
@@ -368,8 +409,15 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
+	adb := bootstrap.DB
+	if tid := httpx.Uint(c, "tenant_id"); tid > 0 {
+		var tenant model.Tenant
+		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error == nil {
+			adb = tenantAdminDB(tenant)
+		}
+	}
 	var a model.TenantAdmin
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+	if adb.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -378,7 +426,7 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+	err := adb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
 			return err
 		}
@@ -391,7 +439,7 @@ func TenantAdminDelete(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	expireTenantAdminTokens(id)
+	expireTenantAdminTokens(adb, id)
 	cache.Del("tenant_auth_url_" + util.ToString(id))
 	response.SuccessNotice(c, "删除成功")
 }
@@ -424,12 +472,15 @@ func saveTenantAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) 
 	return nil
 }
 
-func expireTenantAdminTokens(adminID uint) {
+func expireTenantAdminTokens(db *gorm.DB, adminID uint) {
+	if db == nil {
+		db = bootstrap.DB
+	}
 	var sess []model.TenantAdminSession
-	bootstrap.DB.Where("admin_id = ?", adminID).Find(&sess)
+	db.Where("admin_id = ?", adminID).Find(&sess)
 	now := util.NowUnix()
 	for _, s := range sess {
-		bootstrap.DB.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
+		db.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
 		cache.DeleteTenantAdminInfo(s.Token)
 	}
 }

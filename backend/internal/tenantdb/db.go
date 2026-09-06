@@ -23,6 +23,15 @@ var shardable = map[string]struct{}{
 	"user_session": {}, "article": {}, "article_cate": {}, "decorate_page": {}, "decorate_tabbar": {},
 }
 
+// ShardableNames returns table bases that get a _{sn} suffix when tactics=1.
+func ShardableNames() []string {
+	out := make([]string, 0, len(shardable))
+	for name := range shardable {
+		out = append(out, name)
+	}
+	return out
+}
+
 var callbacksOnce bool
 
 func Register(db *gorm.DB) {

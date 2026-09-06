@@ -1661,6 +1661,71 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   fi
 fi
 
+php_ll="$(curl -sS "$PHP/platformapi/setting.system.log/lists?type=GET&page_size=5" -H "token: $TOKEN")"
+go_ll="$(curl -sS "$GO/platformapi/setting.system.log/lists?type=GET&page_size=5" -H "token: $TOKEN")"
+echo "log_lists_type php_code=$(jcode <<<"$php_ll") go_code=$(jcode <<<"$go_ll")"
+if [[ "$(jcode <<<"$php_ll")" != "$(jcode <<<"$go_ll")" ]]; then
+  fail=$((fail + 1))
+fi
+php_lex="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=1" -H "token: $TOKEN")"
+go_lex="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=1" -H "token: $TOKEN")"
+php_lfn="$(jget data.file_name <<<"$php_lex")"
+go_lfn="$(jget data.file_name <<<"$go_lex")"
+echo "log_export_info php_file=$php_lfn go_file=$go_lfn"
+if [[ "$php_lfn" != "$go_lfn" || "$go_lfn" != "系统日志" ]]; then
+  fail=$((fail + 1))
+fi
+
+if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  if [[ -n "$uid" ]]; then
+    now="$(date +%s)"
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('sig$now',$uid,2,0,9,1,0,1,$now)"
+    go_nsig="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>sig$now</out_trade_no><transaction_id>wxsig</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code><sign>BADSIGN</sign></xml>")"
+    go_pssig="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='sig$now'")"
+    echo "pay_notify_bad_sign go_pay=$go_pssig go_body=${go_nsig:0:80}"
+    if [[ "$go_pssig" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+  fi
+fi
+
+ts="${ts:-$(date +%s)}"
+ssn="sh${ts: -6}"
+go_sa="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$ssn\",\"host_name\":\"$ssn\",\"account\":\"$ssn\",\"password\":\"likeadmin\",\"avatar\":\"\",\"tel\":\"13800000000\",\"domain_alias\":\"$ssn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":1,\"disable\":0,\"notes\":\"\"}")"
+echo "shard_tenant_add go_code=$(jcode <<<"$go_sa") go_msg=$(jget msg <<<"$go_sa")"
+if [[ "$(jcode <<<"$go_sa")" == "1" ]]; then
+  slist="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$ssn" -H "token: $TOKEN")"
+  sid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
+' "$ssn" <<<"$slist")"
+  go_sal="$(curl -sS "$GO/platformapi/tenant.tenant_admin/lists?tenant_id=$sid" -H "token: $TOKEN")"
+  go_saln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_sal")"
+  echo "shard_tenant_admin_lists id=$sid n=$go_saln"
+  if [[ "$sid" == "0" || "$go_saln" == "0" ]]; then
+    echo "  go_sal=${go_sal:0:240}"
+    fail=$((fail + 1))
+  fi
+  go_sdel="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$sid}")"
+  echo "shard_tenant_delete go_code=$(jcode <<<"$go_sdel")"
+  if [[ "$(jcode <<<"$go_sdel")" != "1" ]]; then
+    fail=$((fail + 1))
+  fi
+  if command -v mysql >/dev/null; then
+    left="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SHOW TABLES LIKE 'la\\_%\\_$ssn'" 2>/dev/null | wc -l | tr -d ' ')"
+    echo "shard_tenant_tables_left=$left"
+    if [[ "$left" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+  fi
+else
+  echo "  go_sa=${go_sa:0:300}"
+  fail=$((fail + 1))
+fi
+
 go_ie="$(curl -sS "$GO/install/env")"
 echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie")"
 if [[ "$(jcode <<<"$go_ie")" != "1" ]]; then

@@ -26,10 +26,13 @@ type WechatPayCfg struct {
 }
 
 type AliPayCfg struct {
-	AppID        string
-	PrivateKey   string
-	AliPublicKey string
-	Mode         string
+	AppID         string
+	PrivateKey    string
+	AliPublicKey  string
+	Mode          string
+	PublicCert    string
+	AliPublicCert string
+	AliRootCert   string
 }
 
 func loadPayConfig(c *gin.Context, payWay int) map[string]any {
@@ -98,10 +101,13 @@ func AliCfg(c *gin.Context) AliPayCfg {
 		return AliPayCfg{}
 	}
 	return AliPayCfg{
-		AppID:        util.ToString(m["app_id"]),
-		PrivateKey:   util.ToString(m["private_key"]),
-		AliPublicKey: util.ToString(m["ali_public_key"]),
-		Mode:         util.ToString(m["mode"]),
+		AppID:         util.ToString(m["app_id"]),
+		PrivateKey:    util.ToString(m["private_key"]),
+		AliPublicKey:  util.ToString(m["ali_public_key"]),
+		Mode:          util.ToString(m["mode"]),
+		PublicCert:    util.ToString(m["public_cert"]),
+		AliPublicCert: util.ToString(m["ali_public_cert"]),
+		AliRootCert:   util.ToString(m["ali_root_cert"]),
 	}
 }
 

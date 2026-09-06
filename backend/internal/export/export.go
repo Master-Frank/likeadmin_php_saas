@@ -26,6 +26,10 @@ type fileInfo struct {
 }
 
 func Maybe(c *gin.Context, fileName string, rows any) bool {
+	spec := Lookup(ctxutil.Get(c).Controller, ctxutil.Get(c).Action)
+	if spec.FileName != "" {
+		fileName = spec.FileName
+	}
 	exp := httpx.Int(c, "export")
 	if exp == 1 {
 		n := rowCount(rows)
@@ -62,7 +66,7 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 	if exp != 2 {
 		return false
 	}
-	key, err := SaveCSV(fileName, rows)
+	key, err := SaveCSV(fileName, rows, spec.Fields)
 	if err != nil {
 		response.Fail(c, err.Error())
 		return true
@@ -76,7 +80,7 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 	return true
 }
 
-func SaveCSV(fileName string, rows any) (string, error) {
+func SaveCSV(fileName string, rows any, fields []Field) (string, error) {
 	if fileName == "" {
 		fileName = "export.csv"
 	}
@@ -94,7 +98,7 @@ func SaveCSV(fileName string, rows any) (string, error) {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	records := toRecords(rows)
+	records := toRecords(rows, fields)
 	for _, rec := range records {
 		_ = w.Write(rec)
 	}
@@ -118,7 +122,7 @@ func Serve(c *gin.Context) {
 	c.FileAttachment(filepath.Join(info.Src, info.Name), info.Name)
 }
 
-func toRecords(rows any) [][]string {
+func toRecords(rows any, fields []Field) [][]string {
 	if rows == nil {
 		return [][]string{}
 	}
@@ -128,6 +132,21 @@ func toRecords(rows any) [][]string {
 	}
 	var arr []map[string]any
 	if json.Unmarshal(b, &arr) == nil && len(arr) > 0 {
+		if len(fields) > 0 {
+			headers := make([]string, len(fields))
+			for i, f := range fields {
+				headers[i] = f.Title
+			}
+			out := [][]string{headers}
+			for _, m := range arr {
+				rec := make([]string, len(fields))
+				for i, f := range fields {
+					rec[i] = util.ToString(m[f.Key])
+				}
+				out = append(out, rec)
+			}
+			return out
+		}
 		keys := make([]string, 0)
 		seen := map[string]bool{}
 		for _, m := range arr {

@@ -1,9 +1,13 @@
 package wechat
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -70,6 +74,77 @@ func ParsePayNotify(raw []byte, form map[string][]string) PayNotify {
 		}
 	}
 	return n
+}
+
+// XMLFields flattens a WeChat V2 notify payload into tag -> text.
+func XMLFields(raw []byte) map[string]string {
+	out := map[string]string{}
+	if len(raw) == 0 {
+		return out
+	}
+	dec := xml.NewDecoder(bytes.NewReader(raw))
+	var stack []string
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			stack = append(stack, t.Name.Local)
+		case xml.EndElement:
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+		case xml.CharData:
+			if len(stack) == 2 && strings.EqualFold(stack[0], "xml") {
+				s := strings.TrimSpace(string(t))
+				if s != "" {
+					out[stack[1]] = s
+				}
+			}
+		}
+	}
+	return out
+}
+
+// WechatV2Sign is the official MD5 sign: sorted k=v (skip sign/empty) + &key=APIKEY, uppercase hex.
+func WechatV2Sign(fields map[string]string, apiKey string) string {
+	keys := make([]string, 0, len(fields))
+	for k, v := range fields {
+		if k == "sign" || v == "" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+fields[k])
+	}
+	s := strings.Join(parts, "&")
+	if apiKey != "" {
+		s += "&key=" + apiKey
+	}
+	sum := md5.Sum([]byte(s))
+	return strings.ToUpper(hex.EncodeToString(sum[:]))
+}
+
+// VerifyWechatV2XML returns true when the XML has no <sign> (pair/unsigned still accepted)
+// or when a present sign matches pay_sign_key. A present sign with empty/wrong key fails.
+func VerifyWechatV2XML(raw []byte, apiKey string) bool {
+	if !bytes.Contains(raw, []byte("<sign>")) && !bytes.Contains(raw, []byte("<sign ")) {
+		return true
+	}
+	fields := XMLFields(raw)
+	sign := fields["sign"]
+	if sign == "" {
+		return true
+	}
+	if apiKey == "" {
+		return false
+	}
+	return strings.EqualFold(WechatV2Sign(fields, apiKey), sign)
 }
 
 func RechargeSN(outTradeNo string) string {

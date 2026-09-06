@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -268,6 +269,12 @@ func handlePayNotify(c *gin.Context) {
 	_ = c.Request.ParseForm()
 	form := c.Request.PostForm
 	n := wechat.ParsePayNotify(raw, form)
+	if bytes.Contains(raw, []byte("<xml")) || bytes.Contains(raw, []byte("<xml>")) {
+		if !wechat.VerifyWechatV2XML(raw, pay.WechatCfg(c).SignKey) {
+			c.String(200, "fail")
+			return
+		}
+	}
 	if strings.Contains(string(raw), "ciphertext") {
 		dec, ok := pay.DecryptWechatV3OK(raw, pay.WechatCfg(c).SignKey)
 		if !ok {

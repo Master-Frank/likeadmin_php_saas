@@ -91,7 +91,17 @@ func CheckPayConfig(in PayConfigInput) string {
 		if emptyPay(cfg, "private_key") {
 			return "应用私钥不能为空"
 		}
-		if emptyPay(cfg, "ali_public_key") {
+		if util.ToString(cfg["mode"]) == "certificate" {
+			if emptyPay(cfg, "public_cert") {
+				return "应用公钥证书不能为空"
+			}
+			if emptyPay(cfg, "ali_public_cert") {
+				return "支付宝公钥证书不能为空"
+			}
+			if emptyPay(cfg, "ali_root_cert") {
+				return "支付宝根证书不能为空"
+			}
+		} else if emptyPay(cfg, "ali_public_key") {
 			return "支付宝公钥不能为空"
 		}
 	}

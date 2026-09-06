@@ -81,11 +81,12 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 
 func AliVerifyNotify(c *gin.Context, form map[string][]string) bool {
 	cfg := AliCfg(c)
-	if cfg.AliPublicKey == "" {
+	pub := resolveAliPublicKey(cfg)
+	if pub == nil {
 		return true
 	}
-	pub, err := parseRSAPublicKey(cfg.AliPublicKey)
-	if err != nil {
+	sign := firstForm(form, "sign")
+	if sign == "" {
 		return false
 	}
 	params := map[string]string{}
@@ -95,7 +96,23 @@ func AliVerifyNotify(c *gin.Context, form map[string][]string) bool {
 		}
 		params[k] = vs[0]
 	}
-	return verifyRSA2(pub, aliSignContent(params), firstForm(form, "sign"))
+	return verifyRSA2(pub, aliSignContent(params), sign)
+}
+
+func resolveAliPublicKey(cfg AliPayCfg) *rsa.PublicKey {
+	if cfg.AliPublicKey != "" {
+		if pub, err := parseRSAPublicKey(cfg.AliPublicKey); err == nil {
+			return pub
+		}
+	}
+	if cfg.Mode == "certificate" || cfg.AliPublicCert != "" {
+		if cert, err := parseCertificate(cfg.AliPublicCert); err == nil {
+			if pub, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+				return pub
+			}
+		}
+	}
+	return nil
 }
 
 func aliSignContent(params map[string]string) string {

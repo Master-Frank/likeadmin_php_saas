@@ -57,7 +57,7 @@ func OperationLog() gin.HandlerFunc {
 			}
 		}
 		raw, _ := json.Marshal(safe)
-		action := meta.Controller + "/" + meta.Action
+		action := ActionNotes(meta.Controller, meta.Action)
 		if util.ToInt(params["export"]) == 2 {
 			action += "-数据导出"
 		}

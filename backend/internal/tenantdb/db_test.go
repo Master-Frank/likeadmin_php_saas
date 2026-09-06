@@ -12,4 +12,8 @@ func TestShardableTables(t *testing.T) {
 	if _, ok := shardable["tenant"]; ok {
 		t.Fatal("la_tenant itself should not be sharded")
 	}
+	names := ShardableNames()
+	if len(names) != len(shardable) {
+		t.Fatalf("names %d shardable %d", len(names), len(shardable))
+	}
 }

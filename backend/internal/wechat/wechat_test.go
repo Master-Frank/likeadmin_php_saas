@@ -46,6 +46,32 @@ func TestMatchReply(t *testing.T) {
 	}
 }
 
+func TestWechatV2Sign(t *testing.T) {
+	fields := map[string]string{
+		"out_trade_no":   "SN1",
+		"transaction_id": "wx1",
+		"attach":         "recharge",
+		"result_code":    "SUCCESS",
+		"sign":           "OLD",
+		"empty":          "",
+	}
+	sig := WechatV2Sign(fields, "apikey")
+	if sig == "" || sig == "OLD" {
+		t.Fatal(sig)
+	}
+	xmlRaw := []byte(`<xml><out_trade_no>SN1</out_trade_no><transaction_id>wx1</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code><sign>` + sig + `</sign></xml>`)
+	if !VerifyWechatV2XML(xmlRaw, "apikey") {
+		t.Fatal("valid sign rejected")
+	}
+	if VerifyWechatV2XML(xmlRaw, "wrong") {
+		t.Fatal("bad key accepted")
+	}
+	unsigned := []byte(`<xml><out_trade_no>SN1</out_trade_no><result_code>SUCCESS</result_code></xml>`)
+	if !VerifyWechatV2XML(unsigned, "apikey") {
+		t.Fatal("unsigned xml should pass")
+	}
+}
+
 func TestParsePayNotify(t *testing.T) {
 	xmlRaw := []byte(`<xml><out_trade_no>20240101120000123456</out_trade_no><transaction_id>wx123</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>`)
 	n := ParsePayNotify(xmlRaw, nil)

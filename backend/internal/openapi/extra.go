@@ -465,7 +465,7 @@ func PcIndex(c *gin.Context) {
 	}
 	_ = db.First(&page)
 	response.Data(c, gin.H{
-		"page": decoratePageMap(page),
+		"page": decoratePageValue(page),
 		"all":  limitArticles(c, "all", 5, 0, 0),
 		"new":  limitArticles(c, "new", 7, 0, 0),
 		"hot":  limitArticles(c, "hot", 8, 0, 0),
@@ -612,9 +612,17 @@ func IndexIndex(c *gin.Context) {
 	}
 	_ = db.First(&page)
 	response.Data(c, gin.H{
-		"page":    decoratePageMap(page),
+		"page":    decoratePageValue(page),
 		"article": limitArticles(c, "new", 20, 0, 0),
 	})
+}
+
+// decoratePageValue matches ThinkPHP findOrEmpty(): missing page becomes [].
+func decoratePageValue(page model.DecoratePage) any {
+	if page.ID == 0 {
+		return []any{}
+	}
+	return decoratePageMap(page)
 }
 
 func decoratePageMap(page model.DecoratePage) gin.H {
