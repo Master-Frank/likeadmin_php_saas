@@ -81,8 +81,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	now := util.NowUnix()
-	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("delete_time", now)
+	bootstrap.DB.Unscoped().Where("id IN ?", ids).Delete(&model.File{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -119,7 +118,9 @@ func FileEditCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
+	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+		"name": httpx.Str(c, "name"), "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -131,8 +132,6 @@ func FileDelCate(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "id")
 	ids := filesvc.CateIDsInclusive(bootstrap.DB, &model.FileCate{}, id)
-	now := util.NowUnix()
-	bootstrap.DB.Model(&model.FileCate{}).Where("id IN ?", ids).Update("delete_time", now)
 	var files []model.File
 	bootstrap.DB.Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
 	fileIDs := make([]uint, 0, len(files))
@@ -143,8 +142,9 @@ func FileDelCate(c *gin.Context) {
 	}
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		bootstrap.DB.Model(&model.File{}).Where("id IN ?", fileIDs).Update("delete_time", now)
+		bootstrap.DB.Unscoped().Where("id IN ?", fileIDs).Delete(&model.File{})
 	}
+	bootstrap.DB.Unscoped().Where("id IN ?", ids).Delete(&model.FileCate{})
 	response.SuccessNotice(c, "删除成功")
 }
 

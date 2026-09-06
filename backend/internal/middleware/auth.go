@@ -217,15 +217,11 @@ func isNotNeed(table map[string][]string, meta *ctxutil.RequestMeta) bool {
 }
 
 func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
-	adminID := meta.AdminID
+	// PHP AuthLogic uses menu.perms (API URIs), not frontend paths.
 	if meta.App == "platformapi" {
 		var menus []model.SystemMenu
-		bootstrap.DB.Where("paths <> ''").Find(&menus)
-		for _, m := range menus {
-			if m.Paths != "" {
-				all = append(all, formatURI(m.Paths))
-			}
-		}
+		bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus)
+		all = collectPerms(menus)
 		if util.ToInt(meta.AdminInfo["root"]) == 1 {
 			return all, all
 		}
@@ -237,31 +233,21 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		bootstrap.DB.Model(&model.SystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 		var allowed []model.SystemMenu
 		if len(menuIDs) > 0 {
-			bootstrap.DB.Where("id IN ?", menuIDs).Find(&allowed)
+			bootstrap.DB.Where("id IN ? AND is_disable = 0 AND perms <> ''", menuIDs).Find(&allowed)
 		}
-		for _, m := range allowed {
-			if m.Paths != "" {
-				mine = append(mine, formatURI(m.Paths))
-			}
-		}
-		_ = adminID
-		return all, mine
+		return all, collectPerms(allowed)
 	}
 	db := tenantdb.Use(c)
 	if db == nil {
 		db = bootstrap.DB
 	}
 	var menus []model.TenantSystemMenu
-	q := db.Where("paths <> ''")
+	q := db.Where("is_disable = 0 AND perms <> ''")
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
 	q.Find(&menus)
-	for _, m := range menus {
-		if m.Paths != "" {
-			all = append(all, formatURI(m.Paths))
-		}
-	}
+	all = collectTenantPerms(menus)
 	roleIDs := toUintSlice(meta.AdminInfo["role_id"])
 	if len(roleIDs) == 0 {
 		return all, mine
@@ -270,14 +256,33 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 	db.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 	var allowed []model.TenantSystemMenu
 	if len(menuIDs) > 0 {
-		db.Where("id IN ?", menuIDs).Find(&allowed)
+		aq := db.Where("id IN ? AND is_disable = 0 AND perms <> ''", menuIDs)
+		if meta.TenantID > 0 {
+			aq = aq.Where("tenant_id = ?", meta.TenantID)
+		}
+		aq.Find(&allowed)
 	}
-	for _, m := range allowed {
-		if m.Paths != "" {
-			mine = append(mine, formatURI(m.Paths))
+	return all, collectTenantPerms(allowed)
+}
+
+func collectPerms(menus []model.SystemMenu) []string {
+	out := make([]string, 0, len(menus))
+	for _, m := range menus {
+		if m.Perms != "" {
+			out = append(out, formatURI(m.Perms))
 		}
 	}
-	return all, mine
+	return out
+}
+
+func collectTenantPerms(menus []model.TenantSystemMenu) []string {
+	out := make([]string, 0, len(menus))
+	for _, m := range menus {
+		if m.Perms != "" {
+			out = append(out, formatURI(m.Perms))
+		}
+	}
+	return out
 }
 
 func formatURI(path string) string {

@@ -1397,6 +1397,16 @@ d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
 print(next((x.get("id") for x in ls if x.get("account")==sys.argv[1]), 0))
 ' "$aname" <<<"$alist")"
     if [[ "$aid" != "0" && -n "$aid" ]]; then
+      noperm="$(curl -sS -X POST "$GO/tenantapi/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"account\":\"$aname\",\"password\":\"likeadmin\",\"terminal\":1}")"
+      noperm_tok="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$noperm")"
+      php_rbac="$(curl -sS "$PHP/tenantapi/auth.admin/lists" -H "Host: $TENANT_HOST" -H "token: $noperm_tok")"
+      go_rbac="$(curl -sS "$GO/tenantapi/auth.admin/lists" -H "Host: $TENANT_HOST" -H "token: $noperm_tok")"
+      echo "rbac_noperm php_msg=$(jget msg <<<"$php_rbac") go_msg=$(jget msg <<<"$go_rbac")"
+      if [[ "$(jget msg <<<"$php_rbac")" != "$(jget msg <<<"$go_rbac")" || "$(jget msg <<<"$go_rbac")" != *权限不足* ]]; then
+        echo "  php_rbac=${php_rbac:0:200}"
+        echo "  go_rbac=${go_rbac:0:200}"
+        fail=$((fail + 1))
+      fi
       go_ed="$(curl -sS -X POST "$GO/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$aid,\"account\":\"$aname\",\"name\":\"${aname}e\",\"disable\":0,\"multipoint_login\":1,\"role_id\":[$rid]}")"
       php_dt="$(curl -sS "$PHP/tenantapi/auth.admin/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
       echo "admin_edit go_code=$(jcode <<<"$go_ed") php_name=$(jget data.name <<<"$php_dt") php_jobs=$(jget data.jobs_id <<<"$php_dt")"
@@ -1434,6 +1444,13 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
 ' "$cname" <<<"$clist")"
   echo "role_cascade_add go_code=$(jcode <<<"$go_cr") id=$cidr menu=$mid"
   if [[ "$cidr" != "0" && -n "$cidr" ]]; then
+    before_rm="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_system_role_menu WHERE role_id=$cidr" 2>/dev/null || echo 0)"
+    go_rename="$(curl -sS -X POST "$GO/tenantapi/auth.role/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cidr,\"name\":\"${cname}e\",\"sort\":0}")"
+    after_rm="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_system_role_menu WHERE role_id=$cidr" 2>/dev/null || echo 0)"
+    echo "role_edit_keep_menus go_code=$(jcode <<<"$go_rename") before=$before_rm after=$after_rm"
+    if [[ "$(jcode <<<"$go_rename")" != "1" || "$before_rm" != "$after_rm" || "$after_rm" == "0" ]]; then
+      fail=$((fail + 1))
+    fi
     go_cdel="$(curl -sS -X POST "$GO/tenantapi/auth.role/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cidr}")"
     left_rm="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_system_role_menu WHERE role_id=$cidr" 2>/dev/null || echo "?")"
     echo "role_cascade_delete go_code=$(jcode <<<"$go_cdel") role_menu=$left_rm"
@@ -1610,6 +1627,16 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   go_dl="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(0 if not ls else int("level" in ls[0]))' <<<"$go_da")"
   echo "dept_all_shape php=$php_dl go=$go_dl"
   if [[ "$php_dl" != "$go_dl" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_pda="$(curl -sS "$PHP/platformapi/dept.dept/all?tenant_id=1" -H "token: $TOKEN")"
+  go_pda="$(curl -sS "$GO/platformapi/dept.dept/all?tenant_id=1" -H "token: $TOKEN")"
+  php_pdn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$php_pda")"
+  go_pdn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$go_pda")"
+  echo "platform_dept_all_tenant php_code=$(jcode <<<"$php_pda") go_code=$(jcode <<<"$go_pda") php_n=$php_pdn go_n=$go_pdn"
+  if [[ "$(jcode <<<"$php_pda")" != "$(jcode <<<"$go_pda")" || "$php_pdn" != "$go_pdn" ]]; then
+    echo "  php_pda=${php_pda:0:200}"
+    echo "  go_pda=${go_pda:0:200}"
     fail=$((fail + 1))
   fi
   php_rl="$(curl -sS "$PHP/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"

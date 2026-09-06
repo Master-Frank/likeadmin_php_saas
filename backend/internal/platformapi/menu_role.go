@@ -3,6 +3,7 @@ package platformapi
 import (
 	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -205,10 +206,13 @@ func RoleEdit(c *gin.Context) {
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"), "update_time": now,
 	})
-	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
-	for _, mid := range httpx.Uints(c, "menu_id") {
-		bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: id, MenuID: mid})
+	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+		bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
+		for _, mid := range menuIDs {
+			bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: id, MenuID: mid})
+		}
 	}
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -232,6 +236,7 @@ func RoleDelete(c *gin.Context) {
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Update("delete_time", now)
 	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")
 }
 

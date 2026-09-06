@@ -397,7 +397,7 @@ func TenantAdminEdit(c *gin.Context) {
 	if httpx.Int(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
 		expireTenantAdminTokens(adb, id)
 	}
-	cache.Del("tenant_auth_url_" + util.ToString(id))
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -407,15 +407,8 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	adb := bootstrap.DB
-	if tid := httpx.Uint(c, "tenant_id"); tid > 0 {
-		var tenant model.Tenant
-		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error == nil {
-			adb = tenantAdminDB(tenant)
-		}
-	}
-	var a model.TenantAdmin
-	if adb.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+	adb, a, ok := resolveTenantAdmin(httpx.Uint(c, "tenant_id"), id)
+	if !ok {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -423,9 +416,8 @@ func TenantAdminDelete(c *gin.Context) {
 		response.Fail(c, "超级管理员不允许被删除")
 		return
 	}
-	now := util.NowUnix()
 	err := adb.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.TenantAdmin{}).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -438,8 +430,43 @@ func TenantAdminDelete(c *gin.Context) {
 		return
 	}
 	expireTenantAdminTokens(adb, id)
-	cache.Del("tenant_auth_url_" + util.ToString(id))
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "删除成功")
+}
+
+func resolveTenantAdmin(tid, adminID uint) (*gorm.DB, model.TenantAdmin, bool) {
+	if tid > 0 {
+		var tenant model.Tenant
+		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
+			return bootstrap.DB, model.TenantAdmin{}, false
+		}
+		adb := tenantAdminDB(tenant)
+		var a model.TenantAdmin
+		if adb.Where("id = ? AND delete_time IS NULL", adminID).First(&a).Error != nil {
+			return adb, a, false
+		}
+		return adb, a, true
+	}
+	var a model.TenantAdmin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", adminID).First(&a).Error == nil {
+		if a.TenantID > 0 {
+			var tenant model.Tenant
+			if bootstrap.DB.Where("id = ? AND delete_time IS NULL", a.TenantID).First(&tenant).Error == nil {
+				return tenantAdminDB(tenant), a, true
+			}
+		}
+		return bootstrap.DB, a, true
+	}
+	var tenants []model.Tenant
+	bootstrap.DB.Where("tactics = 1 AND delete_time IS NULL AND sn <> ''").Find(&tenants)
+	for _, t := range tenants {
+		adb := tenantAdminDB(t)
+		var row model.TenantAdmin
+		if adb.Where("id = ? AND delete_time IS NULL", adminID).First(&row).Error == nil {
+			return adb, row, true
+		}
+	}
+	return bootstrap.DB, a, false
 }
 
 func phpRequiredParam(p map[string]any, key string) bool {

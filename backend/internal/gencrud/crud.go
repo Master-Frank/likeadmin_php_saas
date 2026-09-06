@@ -230,6 +230,12 @@ func doEdit(c *gin.Context, sp *spec) {
 		return
 	}
 	data := writeData(c, sp, p, true)
+	if sp.tree && validIdent(sp.treePID) && validIdent(sp.pk) {
+		cur := map[string]any{}
+		if scoped(c, sp).Select(sp.treePID).Where(sp.pk+" = ?", id).Take(&cur).Error == nil && util.ToInt(cur[sp.treePID]) == 0 {
+			data[sp.treePID] = 0
+		}
+	}
 	if msg := treeCycleMsg(c, sp, id, data); msg != "" {
 		response.Fail(c, msg)
 		return

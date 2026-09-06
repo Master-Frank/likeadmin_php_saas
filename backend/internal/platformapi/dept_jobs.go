@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -81,7 +82,9 @@ func DeptEdit(c *gin.Context) {
 		return
 	}
 	pid := httpx.Uint(c, "pid")
-	if cur.Pid != 0 {
+	if cur.Pid == 0 {
+		pid = 0
+	} else {
 		if id == pid {
 			response.Fail(c, "上级部门不可是当前部门")
 			return
@@ -131,8 +134,7 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Unscoped().Where("id = ?", id).Delete(&model.Dept{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -146,6 +148,31 @@ func DeptDetail(c *gin.Context) {
 }
 
 func DeptAll(c *gin.Context) {
+	if _, ok := httpx.Params(c)["tenant_id"]; ok {
+		tid := httpx.Uint(c, "tenant_id")
+		db := tenantdb.ForTenant(tid)
+		if db == nil {
+			db = bootstrap.DB
+		}
+		var rows []model.TenantDept
+		q := db.Where("delete_time IS NULL AND status = 1")
+		q = q.Where("tenant_id = ?", tid)
+		q.Order("sort desc, id desc").Find(&rows)
+		if len(rows) == 0 {
+			response.Data(c, []any{})
+			return
+		}
+		maps := make([]map[string]any, 0, len(rows))
+		root := int(rows[0].Pid)
+		for _, d := range rows {
+			maps = append(maps, tenantDeptAsMap(d))
+			if int(d.Pid) < root {
+				root = int(d.Pid)
+			}
+		}
+		response.Data(c, util.DeptTree(maps, root))
+		return
+	}
 	var rows []model.Dept
 	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
 	if len(rows) == 0 {
@@ -256,8 +283,7 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Unscoped().Where("id = ?", id).Delete(&model.Jobs{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -314,6 +340,21 @@ func jobsCodeTaken(id uint, code string) bool {
 	}
 	q.Count(&n)
 	return n > 0
+}
+
+func tenantDeptAsMap(d model.TenantDept) map[string]any {
+	statusDesc := "停用"
+	if d.Status == 1 {
+		statusDesc = "正常"
+	}
+	return map[string]any{
+		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
+		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
+		"tenant_id":   d.TenantID,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
+	}
 }
 
 func deptMap(d model.Dept) map[string]any {

@@ -84,8 +84,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	now := util.NowUnix()
-	tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids).Update("delete_time", now)
+	tdb(c).Unscoped().Where("id IN ?", ids).Delete(&model.TenantFile{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -128,7 +127,9 @@ func FileEditCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("name", httpx.Str(c, "name"))
+	tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+		"name": httpx.Str(c, "name"), "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -140,8 +141,6 @@ func FileDelCate(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "id")
 	ids := filesvc.CateIDsInclusive(tdb(c), &model.TenantFileCate{}, id)
-	now := util.NowUnix()
-	tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids).Update("delete_time", now)
 	var files []model.TenantFile
 	tdb(c).Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
 	fileIDs := make([]uint, 0, len(files))
@@ -152,8 +151,9 @@ func FileDelCate(c *gin.Context) {
 	}
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs).Update("delete_time", now)
+		tdb(c).Unscoped().Where("id IN ?", fileIDs).Delete(&model.TenantFile{})
 	}
+	tdb(c).Unscoped().Where("id IN ?", ids).Delete(&model.TenantFileCate{})
 	response.SuccessNotice(c, "删除成功")
 }
 

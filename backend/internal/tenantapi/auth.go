@@ -182,6 +182,7 @@ func AdminEdit(c *gin.Context) {
 	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireTenantAuthTokens(c, id)
 	}
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -228,9 +229,8 @@ func AdminDelete(c *gin.Context) {
 		response.Fail(c, "超级管理员不允许被删除")
 		return
 	}
-	now := util.NowUnix()
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.TenantAdmin{}).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -243,6 +243,7 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	expireTenantAuthTokens(c, id)
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -449,10 +450,13 @@ func RoleEdit(c *gin.Context) {
 	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"),
 	})
-	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
-	for _, mid := range httpx.Uints(c, "menu_id") {
-		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: id, MenuID: mid})
+	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+		tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
+		for _, mid := range menuIDs {
+			tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: id, MenuID: mid})
+		}
 	}
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -476,6 +480,7 @@ func RoleDelete(c *gin.Context) {
 	now := util.NowUnix()
 	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Update("delete_time", now)
 	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")
 }
 

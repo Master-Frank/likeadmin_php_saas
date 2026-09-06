@@ -83,7 +83,9 @@ func DeptEdit(c *gin.Context) {
 		return
 	}
 	pid := httpx.Uint(c, "pid")
-	if cur.Pid != 0 {
+	if cur.Pid == 0 {
+		pid = 0
+	} else {
 		if id == pid {
 			response.Fail(c, "上级部门不可是当前部门")
 			return
@@ -131,8 +133,7 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	now := util.NowUnix()
-	tdb(c).Model(&model.TenantDept{}).Where("id = ?", id).Update("delete_time", now)
+	tdb(c).Unscoped().Where("id = ?", id).Delete(&model.TenantDept{})
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -258,8 +259,7 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	now := util.NowUnix()
-	tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id).Update("delete_time", now)
+	tdb(c).Unscoped().Where("id = ?", id).Delete(&model.TenantJobs{})
 	response.SuccessNotice(c, "删除成功")
 }
 

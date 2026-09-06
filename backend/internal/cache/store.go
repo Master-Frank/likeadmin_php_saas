@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +104,45 @@ func Del(key string) {
 		_ = bootstrap.RDB.Del(ctx(), bootstrap.RedisKey(key)).Err()
 	}
 	mem.Delete(key)
+}
+
+func DelPrefix(prefix string) {
+	if prefix == "" {
+		return
+	}
+	if bootstrap.RDB != nil {
+		match := bootstrap.RedisKey(prefix) + "*"
+		var cursor uint64
+		for {
+			keys, next, err := bootstrap.RDB.Scan(ctx(), cursor, match, 100).Result()
+			if err != nil {
+				break
+			}
+			if len(keys) > 0 {
+				_ = bootstrap.RDB.Del(ctx(), keys...).Err()
+			}
+			cursor = next
+			if cursor == 0 {
+				break
+			}
+		}
+	}
+	mem.Range(func(k, _ any) bool {
+		if s, ok := k.(string); ok && strings.HasPrefix(s, prefix) {
+			mem.Delete(k)
+		}
+		return true
+	})
+}
+
+func ClearAdminAuthCache(adminID uint) {
+	if adminID > 0 {
+		id := strconv.FormatUint(uint64(adminID), 10)
+		Del("admin_auth_url_" + id)
+		Del("tenant_auth_url_" + id)
+	}
+	DelPrefix("admin_auth_")
+	DelPrefix("tenant_auth_")
 }
 
 func Incr(key string) int64 {
