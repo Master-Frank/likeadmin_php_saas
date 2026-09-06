@@ -257,8 +257,9 @@ func UserLists(c *gin.Context) {
 	for _, u := range rows {
 		out = append(out, map[string]any{
 			"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-			"avatar": filesvc.GetFileURL(c, u.Avatar), "sex": u.Sex, "is_disable": u.IsDisable,
-			"user_money": u.UserMoney, "create_time": util.FormatDateTime(u.CreateTime),
+			"avatar": filesvc.GetFileURL(c, u.Avatar), "sex": util.SexDesc(u.Sex),
+			"channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
+			"create_time": util.FormatDateTime(u.CreateTime),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -386,13 +387,9 @@ func ArticleCateLists(c *gin.Context) {
 	for _, r := range rows {
 		var n int64
 		tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
-		showDesc := "停用"
-		if r.IsShow == 1 {
-			showDesc = "启用"
-		}
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
-			"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
+			"article_count": n, "tenant_id": r.TenantID,
 			"create_time": util.FormatDateTime(r.CreateTime),
 			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),

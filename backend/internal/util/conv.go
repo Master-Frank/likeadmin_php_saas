@@ -108,6 +108,40 @@ func ToCamelLower(s string) string {
 	return strings.ToLower(b.String())
 }
 
+func SexDesc(sex int) string {
+	switch sex {
+	case 1:
+		return "男"
+	case 2:
+		return "女"
+	default:
+		return "未知"
+	}
+}
+
+func ChannelDesc(channel int) string {
+	switch channel {
+	case 1:
+		return "微信小程序"
+	case 2:
+		return "微信公众号"
+	case 3:
+		return "手机H5"
+	case 4:
+		return "电脑PC"
+	case 5:
+		return "苹果APP"
+	case 6:
+		return "安卓APP"
+	default:
+		return ""
+	}
+}
+
+func MoneyString(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
 func InFold(list []string, v string) bool {
 	v = strings.TrimSpace(v)
 	for _, item := range list {

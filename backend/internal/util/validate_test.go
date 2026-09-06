@@ -55,3 +55,15 @@ func TestLoginWayAllows(t *testing.T) {
 		t.Fatal("scene 0 should be rejected")
 	}
 }
+
+func TestSexChannelMoney(t *testing.T) {
+	if SexDesc(0) != "未知" || SexDesc(1) != "男" || SexDesc(2) != "女" {
+		t.Fatal(SexDesc(0), SexDesc(1), SexDesc(2))
+	}
+	if ChannelDesc(1) != "微信小程序" || ChannelDesc(4) != "电脑PC" {
+		t.Fatal(ChannelDesc(1), ChannelDesc(4))
+	}
+	if MoneyString(0) != "0.00" || MoneyString(1.5) != "1.50" {
+		t.Fatal(MoneyString(0), MoneyString(1.5))
+	}
+}

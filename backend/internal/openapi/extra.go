@@ -154,7 +154,7 @@ func RechargeConfig(c *gin.Context) {
 	response.Data(c, gin.H{
 		"status":     cfgsvc.GetInt(c, "recharge", "status", 0),
 		"min_amount": cfgsvc.Get(c, "recharge", "min_amount", 0),
-		"user_money": u.UserMoney,
+		"user_money": util.MoneyString(u.UserMoney),
 	})
 }
 
