@@ -287,6 +287,65 @@ func TestParseDateTime(t *testing.T) {
 	}
 }
 
+func TestLoginTerminalCheck(t *testing.T) {
+	if LoginTerminalCheck(map[string]any{}) != "terminal不能为空" {
+		t.Fatal(LoginTerminalCheck(map[string]any{}))
+	}
+	if LoginTerminalCheck(map[string]any{"terminal": 99}) != "terminal必须在 1,2 范围内" {
+		t.Fatal(LoginTerminalCheck(map[string]any{"terminal": 99}))
+	}
+	if LoginTerminalCheck(map[string]any{"terminal": 1}) != "" {
+		t.Fatal("terminal 1 should pass")
+	}
+}
+
+func TestAuthAdminAddCheck(t *testing.T) {
+	if AuthAdminAddCheck(map[string]any{}) != "账号不能为空" {
+		t.Fatal(AuthAdminAddCheck(map[string]any{}))
+	}
+	base := map[string]any{"account": "tmp1", "name": "临时员", "password": "likeadmin", "password_confirm": "likeadmin", "multipoint_login": 1}
+	if AuthAdminAddCheck(base) != "请选择角色" {
+		t.Fatal(AuthAdminAddCheck(base))
+	}
+	base["role_id"] = []any{1.0}
+	delete(base, "multipoint_login")
+	if AuthAdminAddCheck(base) != "请选择是否支持多处登录" {
+		t.Fatal(AuthAdminAddCheck(base))
+	}
+	base["multipoint_login"] = 1
+	delete(base, "password_confirm")
+	if AuthAdminAddCheck(base) != "确认密码不能为空" {
+		t.Fatal(AuthAdminAddCheck(base))
+	}
+}
+
+func TestAuthAdminEditCheck(t *testing.T) {
+	p := map[string]any{"account": "pair1", "name": "超级管理员", "multipoint_login": 1}
+	if AuthAdminEditCheck(p, true) != "请选择状态" {
+		t.Fatal(AuthAdminEditCheck(p, true))
+	}
+	p["disable"] = 1
+	if AuthAdminEditCheck(p, true) != "超级管理员不允许被禁用" {
+		t.Fatal(AuthAdminEditCheck(p, true))
+	}
+	p["disable"] = 0
+	if AuthAdminEditCheck(p, false) != "请选择角色" {
+		t.Fatal(AuthAdminEditCheck(p, false))
+	}
+}
+
+func TestArticleCateShowCheck(t *testing.T) {
+	if ArticleCateShowCheck(map[string]any{}) != "is_show不能为空" {
+		t.Fatal(ArticleCateShowCheck(map[string]any{}))
+	}
+	if ArticleCateShowCheck(map[string]any{"is_show": 2}) != "is_show必须在 0,1 范围内" {
+		t.Fatal(ArticleCateShowCheck(map[string]any{"is_show": 2}))
+	}
+	if ArticleCateShowCheck(map[string]any{"is_show": 0}) != "" {
+		t.Fatal("is_show 0 should pass")
+	}
+}
+
 func TestSexChannelMoney(t *testing.T) {
 	if SexDesc(0) != "未知" || SexDesc(1) != "男" || SexDesc(2) != "女" {
 		t.Fatal(SexDesc(0), SexDesc(1), SexDesc(2))

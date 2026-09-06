@@ -46,6 +46,15 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
+	var row model.ArticleCate
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+		response.Fail(c, "资讯分类不存在")
+		return
+	}
+	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }

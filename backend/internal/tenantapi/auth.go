@@ -1,6 +1,9 @@
 package tenantapi
 
 import (
+	"strings"
+
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -26,54 +29,90 @@ func AdminLists(c *gin.Context) {
 	if account := lists.Param(q, "account"); account != "" {
 		db = db.Where("account LIKE ?", "%"+account+"%")
 	}
+	if rid := lists.Param(q, "role_id"); rid != "" {
+		var ids []uint
+		tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ?", lists.ParamInt(q, "role_id")).Pluck("admin_id", &ids)
+		if len(ids) > 0 {
+			db = db.Where("id IN ?", ids)
+		}
+	}
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantAdmin
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
-		var roleIDs []uint
-		tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
-		out = append(out, map[string]any{
-			"id": a.ID, "name": a.Name, "account": a.Account, "root": a.Root, "disable": a.Disable,
-			"avatar": filesvc.GetFileURL(c, a.Avatar), "multipoint_login": a.MultipointLogin,
-			"create_time": util.FormatDateTime(a.CreateTime), "role_id": roleIDs,
-			"login_time": util.FormatDateTimePtr(a.LoginTime), "login_ip": a.LoginIP,
-		})
+		out = append(out, tenantAdminListItem(c, a))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
+func tenantAdminListItem(c *gin.Context, a model.TenantAdmin) map[string]any {
+	roleIDs, deptIDs, jobIDs := tenantAdminRelations(c, a.ID)
+	roleName := joinNames(tenantRoleNames(c, roleIDs))
+	if a.Root == 1 {
+		roleName = "系统管理员"
+	}
+	disableDesc := "正常"
+	if a.Disable == 1 {
+		disableDesc = "禁用"
+	}
+	return map[string]any{
+		"id":               a.ID,
+		"name":             a.Name,
+		"account":          a.Account,
+		"create_time":      util.FormatDateTime(a.CreateTime),
+		"disable":          a.Disable,
+		"root":             a.Root,
+		"login_time":       util.FormatDateTimePtr(a.LoginTime),
+		"login_ip":         a.LoginIP,
+		"multipoint_login": a.MultipointLogin,
+		"avatar":           filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"role_id":          roleIDs,
+		"dept_id":          deptIDs,
+		"jobs_id":          jobIDs,
+		"disable_desc":     disableDesc,
+		"role_name":        roleName,
+		"dept_name":        joinNames(tenantDeptNames(c, deptIDs)),
+		"jobs_name":        joinNames(tenantJobNames(c, jobIDs)),
+	}
+}
+
 func AdminAdd(c *gin.Context) {
-	if msg := util.AdminWriteCheck(httpx.Str(c, "account"), httpx.Str(c, "name"), httpx.Str(c, "password"), true); msg != "" {
+	p := httpx.Params(c)
+	if msg := util.AuthAdminAddCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	var exist model.TenantAdmin
-	q := tdb(c).Where("account = ? AND delete_time IS NULL", httpx.Str(c, "account"))
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	if q.First(&exist).Error == nil {
+	account := httpx.Str(c, "account")
+	name := httpx.Str(c, "name")
+	if tenantAdminAccountTaken(c, account, 0) {
 		response.Fail(c, "账号已存在")
 		return
 	}
+	if tenantAdminNameTaken(c, name, 0) {
+		response.Fail(c, "名称已存在")
+		return
+	}
+	avatar := filesvc.SetFileURL(c, httpx.Str(c, "avatar"))
+	if avatar == "" {
+		avatar = config.C.Project.DefaultImage["admin_avatar"]
+	}
+	disable := 0
+	if _, ok := p["disable"]; ok {
+		disable = httpx.Int(c, "disable")
+	}
 	admin := model.TenantAdmin{
-		TenantID: tenantDB(c), Name: httpx.Str(c, "name"), Account: httpx.Str(c, "account"),
+		TenantID: tenantDB(c), Name: name, Account: account,
 		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
-		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
-		Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")), CreateTime: util.NowUnix(),
+		Disable:  disable, MultipointLogin: httpx.Int(c, "multipoint_login"),
+		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
-		for _, id := range httpx.Uints(c, "role_id") {
-			if err := tx.Create(&model.TenantAdminRole{AdminID: admin.ID, RoleID: id}).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return saveTenantAuthLinks(tx, admin.ID, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -83,19 +122,64 @@ func AdminAdd(c *gin.Context) {
 }
 
 func AdminEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if !authAdminIDPresent(p) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
 	id := httpx.Uint(c, "id")
+	var admin model.TenantAdmin
+	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
+		response.Fail(c, "管理员不存在")
+		return
+	}
+	if msg := util.AuthAdminEditCheck(p, admin.Root == 1); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	account := httpx.Str(c, "account")
+	name := httpx.Str(c, "name")
+	if tenantAdminAccountTaken(c, account, id) {
+		response.Fail(c, "账号已存在")
+		return
+	}
+	if tenantAdminNameTaken(c, name, id) {
+		response.Fail(c, "名称已存在")
+		return
+	}
+	avatar := ""
+	if v := httpx.Str(c, "avatar"); v != "" {
+		avatar = filesvc.SetFileURL(c, v)
+	}
 	data := map[string]any{
-		"name": httpx.Str(c, "name"), "account": httpx.Str(c, "account"),
-		"disable": httpx.Int(c, "disable"), "multipoint_login": httpx.Int(c, "multipoint_login"),
-		"avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")), "update_time": util.NowUnix(),
+		"name":             name,
+		"account":          account,
+		"disable":          httpx.Int(c, "disable"),
+		"multipoint_login": httpx.Int(c, "multipoint_login"),
+		"avatar":           avatar,
+		"update_time":      util.NowUnix(),
 	}
 	if pwd := httpx.Str(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
-	tdb(c).Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data)
-	tdb(c).Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
-	for _, rid := range httpx.Uints(c, "role_id") {
-		tdb(c).Create(&model.TenantAdminRole{AdminID: id, RoleID: rid})
+	var oldRoles []uint
+	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
+	newRoles := httpx.Uints(c, "role_id")
+	err := tdb(c).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
+			return err
+		}
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
+		return saveTenantAuthLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
+		expireTenantAuthTokens(c, id)
 	}
 	response.SuccessNotice(c, "操作成功")
 }
@@ -128,8 +212,14 @@ func AdminEditSelf(c *gin.Context) {
 }
 
 func AdminDelete(c *gin.Context) {
+	p := httpx.Params(c)
+	if !authAdminIDPresent(p) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
+	id := httpx.Uint(c, "id")
 	var a model.TenantAdmin
-	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -138,21 +228,41 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&a).Update("delete_time", now)
+	err := tdb(c).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+			return err
+		}
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
+		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
+		return nil
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	expireTenantAuthTokens(c, id)
 	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminDetail(c *gin.Context) {
+	p := httpx.Params(c)
+	if !authAdminIDPresent(p) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
+	id := httpx.Uint(c, "id")
 	var a model.TenantAdmin
-	if tdb(c).First(&a, httpx.Uint(c, "id")).Error != nil {
+	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
-	var roleIDs []uint
-	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", a.ID).Pluck("role_id", &roleIDs)
+	roleIDs, deptIDs, jobIDs := tenantAdminRelations(c, a.ID)
 	response.Data(c, gin.H{
-		"id": a.ID, "name": a.Name, "account": a.Account, "disable": a.Disable, "root": a.Root,
-		"multipoint_login": a.MultipointLogin, "avatar": filesvc.GetFileURL(c, a.Avatar), "role_id": roleIDs,
+		"id": a.ID, "account": a.Account, "name": a.Name, "disable": a.Disable, "root": a.Root,
+		"multipoint_login": a.MultipointLogin,
+		"avatar":           filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"role_id":          roleIDs, "dept_id": deptIDs, "jobs_id": jobIDs,
 	})
 }
 
@@ -372,6 +482,129 @@ func RoleAll(c *gin.Context) {
 	}
 	db.Find(&rows)
 	response.Data(c, rows)
+}
+
+func authAdminIDPresent(p map[string]any) bool {
+	v, ok := p["id"]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
+func tenantAdminAccountTaken(c *gin.Context, account string, excludeID uint) bool {
+	q := tdb(c).Model(&model.TenantAdmin{}).Where("account = ? AND delete_time IS NULL", account)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	var n int64
+	q.Count(&n)
+	return n > 0
+}
+
+func tenantAdminNameTaken(c *gin.Context, name string, excludeID uint) bool {
+	q := tdb(c).Model(&model.TenantAdmin{}).Where("name = ? AND delete_time IS NULL", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	var n int64
+	q.Count(&n)
+	return n > 0
+}
+
+func tenantAdminRelations(c *gin.Context, id uint) (roles, depts, jobs []uint) {
+	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &roles)
+	tdb(c).Model(&model.TenantAdminDept{}).Where("admin_id = ?", id).Pluck("dept_id", &depts)
+	tdb(c).Model(&model.TenantAdminJobs{}).Where("admin_id = ?", id).Pluck("jobs_id", &jobs)
+	if roles == nil {
+		roles = []uint{}
+	}
+	if depts == nil {
+		depts = []uint{}
+	}
+	if jobs == nil {
+		jobs = []uint{}
+	}
+	return
+}
+
+func saveTenantAuthLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {
+	for _, id := range roles {
+		if err := tx.Create(&model.TenantAdminRole{AdminID: adminID, RoleID: id}).Error; err != nil {
+			return err
+		}
+	}
+	for _, id := range depts {
+		if err := tx.Create(&model.TenantAdminDept{AdminID: adminID, DeptID: id}).Error; err != nil {
+			return err
+		}
+	}
+	for _, id := range jobs {
+		if err := tx.Create(&model.TenantAdminJobs{AdminID: adminID, JobsID: id}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func expireTenantAuthTokens(c *gin.Context, adminID uint) {
+	var sess []model.TenantAdminSession
+	tdb(c).Where("admin_id = ?", adminID).Find(&sess)
+	now := util.NowUnix()
+	for _, s := range sess {
+		tdb(c).Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
+		cache.DeleteTenantAdminInfo(s.Token)
+	}
+}
+
+func tenantRoleNames(c *gin.Context, ids []uint) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []model.TenantSystemRole
+	tdb(c).Where("id IN ?", ids).Find(&rows)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+func tenantDeptNames(c *gin.Context, ids []uint) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []model.TenantDept
+	tdb(c).Where("id IN ?", ids).Find(&rows)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+func tenantJobNames(c *gin.Context, ids []uint) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []model.TenantJobs
+	tdb(c).Where("id IN ?", ids).Find(&rows)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+func joinNames(names []string) string {
+	s := ""
+	for i, n := range names {
+		if i > 0 {
+			s += "/"
+		}
+		s += n
+	}
+	return s
 }
 
 func tenantMenuUniqueName(c *gin.Context, id uint, typ, name string) string {

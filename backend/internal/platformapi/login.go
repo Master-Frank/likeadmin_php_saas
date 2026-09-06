@@ -18,6 +18,10 @@ import (
 const platformLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
+	if msg := util.LoginTerminalCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	account := httpx.Str(c, "account")
 	password := httpx.Str(c, "password")
 	terminal := httpx.Int(c, "terminal")
@@ -27,10 +31,6 @@ func LoginAccount(c *gin.Context) {
 	}
 	if password == "" {
 		response.Fail(c, "请输入密码")
-		return
-	}
-	if terminal != 1 && terminal != 2 {
-		response.Fail(c, "终端参数错误")
 		return
 	}
 	restrict := cfgsvc.GetInt(c, "admin_login", "login_restrictions", 1)

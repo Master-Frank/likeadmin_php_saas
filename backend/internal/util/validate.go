@@ -1090,3 +1090,158 @@ func DbFieldType(typ string) string {
 		return "string"
 	}
 }
+
+// LoginTerminalCheck mirrors PHP LoginValidate terminal require|in:1,2 default messages.
+func LoginTerminalCheck(p map[string]any) string {
+	if !phpRequired(p, "terminal") {
+		return "terminal不能为空"
+	}
+	t := ToInt(p["terminal"])
+	if t != 1 && t != 2 {
+		return "terminal必须在 1,2 范围内"
+	}
+	return ""
+}
+
+// AuthAdminAddCheck mirrors PHP tenant/platform AdminValidate sceneAdd.
+func AuthAdminAddCheck(p map[string]any) string {
+	if !phpRequired(p, "account") {
+		return "账号不能为空"
+	}
+	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
+		return "账号长度须在1-32位字符"
+	}
+	if !phpRequired(p, "name") {
+		return "名称不能为空"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 16 {
+		return "名称须在1-16位字符"
+	}
+	if !phpRequired(p, "password") {
+		return "密码不能为空"
+	}
+	if n := len(ToString(p["password"])); n < 6 || n > 32 {
+		return "密码长度须在6-32位字符"
+	}
+	if !phpRequired(p, "password_confirm") {
+		return "确认密码不能为空"
+	}
+	if ToString(p["password"]) != ToString(p["password_confirm"]) {
+		return "两次输入的密码不一致"
+	}
+	if !phpRequired(p, "role_id") {
+		return "请选择角色"
+	}
+	if !phpRequired(p, "multipoint_login") {
+		return "请选择是否支持多处登录"
+	}
+	mp := ToInt(p["multipoint_login"])
+	if mp != 0 && mp != 1 {
+		return "多处登录状态值为误"
+	}
+	return ""
+}
+
+// AuthAdminEditCheck mirrors PHP tenant/platform AdminValidate sceneEdit.
+// Caller must already reject missing/unknown id (管理员id不能为空 / 管理员不存在).
+func AuthAdminEditCheck(p map[string]any, isRoot bool) string {
+	if !phpRequired(p, "account") {
+		return "账号不能为空"
+	}
+	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
+		return "账号长度须在1-32位字符"
+	}
+	if !phpRequired(p, "name") {
+		return "名称不能为空"
+	}
+	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 16 {
+		return "名称须在1-16位字符"
+	}
+	pwd := ToString(p["password"])
+	confirm := ToString(p["password_confirm"])
+	if pwd != "" || confirm != "" {
+		if n := len(pwd); n < 6 || n > 32 {
+			return "密码长度须在6-32位字符"
+		}
+	}
+	if phpRequired(p, "password") {
+		if !phpRequired(p, "password_confirm") {
+			return "确认密码不能为空"
+		}
+		if pwd != confirm {
+			return "两次输入的密码不一致"
+		}
+	}
+	if !isRoot && phpEmptyRole(p) {
+		return "请选择角色"
+	}
+	if !phpRequired(p, "disable") {
+		return "请选择状态"
+	}
+	d := ToInt(p["disable"])
+	if d != 0 && d != 1 {
+		return "状态值错误"
+	}
+	if d == 1 && isRoot {
+		return "超级管理员不允许被禁用"
+	}
+	if !phpRequired(p, "multipoint_login") {
+		return "请选择是否支持多处登录"
+	}
+	mp := ToInt(p["multipoint_login"])
+	if mp != 0 && mp != 1 {
+		return "多处登录状态值为误"
+	}
+	return ""
+}
+
+func phpEmptyRole(p map[string]any) bool {
+	v, ok := p["role_id"]
+	if !ok || v == nil {
+		return true
+	}
+	switch t := v.(type) {
+	case []any:
+		return len(t) == 0
+	case []string:
+		return len(t) == 0
+	case []uint:
+		return len(t) == 0
+	default:
+		s := strings.TrimSpace(ToString(v))
+		return s == "" || s == "0"
+	}
+}
+
+func ArticleCateShowCheck(p map[string]any) string {
+	if !phpRequired(p, "is_show") {
+		return "is_show不能为空"
+	}
+	v := ToInt(p["is_show"])
+	if v != 0 && v != 1 {
+		return "is_show必须在 0,1 范围内"
+	}
+	return ""
+}
+
+func UintSlicesChanged(oldIDs, newIDs []uint) bool {
+	if len(oldIDs) != len(newIDs) {
+		return true
+	}
+	seen := map[uint]int{}
+	for _, id := range oldIDs {
+		seen[id]++
+	}
+	for _, id := range newIDs {
+		seen[id]--
+		if seen[id] < 0 {
+			return true
+		}
+	}
+	for _, n := range seen {
+		if n != 0 {
+			return true
+		}
+	}
+	return false
+}

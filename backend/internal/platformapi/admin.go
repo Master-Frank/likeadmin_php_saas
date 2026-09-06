@@ -1,6 +1,8 @@
 package platformapi
 
 import (
+	"strings"
+
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
@@ -57,7 +59,7 @@ func adminListItem(c *gin.Context, a model.Admin) map[string]any {
 	}
 	disableDesc := "正常"
 	if a.Disable == 1 {
-		disableDesc = "停用"
+		disableDesc = "禁用"
 	}
 	return map[string]any{
 		"id":               a.ID,
@@ -91,20 +93,21 @@ func AdminAll(c *gin.Context) {
 }
 
 func AdminAdd(c *gin.Context) {
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
-	password := httpx.Str(c, "password")
-	if msg := util.AdminWriteCheck(account, name, password, true); msg != "" {
+	p := httpx.Params(c)
+	if msg := util.AuthAdminAddCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if len(httpx.Uints(c, "role_id")) == 0 && httpx.Int(c, "root") != 1 {
-		response.Fail(c, "请选择角色")
-		return
-	}
+	account := httpx.Str(c, "account")
+	name := httpx.Str(c, "name")
+	password := httpx.Str(c, "password")
 	var exist model.Admin
 	if bootstrap.DB.Where("account = ? AND delete_time IS NULL", account).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
+		return
+	}
+	if bootstrap.DB.Where("name = ? AND delete_time IS NULL", name).First(&exist).Error == nil {
+		response.Fail(c, "名称已存在")
 		return
 	}
 	now := util.NowUnix()
@@ -118,7 +121,7 @@ func AdminAdd(c *gin.Context) {
 		Avatar:          avatar,
 		Password:        util.CreatePassword(password, config.C.Project.UniqueIdentification),
 		CreateTime:      now,
-		Disable:         httpx.Int(c, "disable"),
+		Disable:         adminAddDisable(p),
 		MultipointLogin: httpx.Int(c, "multipoint_login"),
 	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
@@ -135,24 +138,51 @@ func AdminAdd(c *gin.Context) {
 }
 
 func AdminEdit(c *gin.Context) {
+	p := httpx.Params(c)
+	if !authAdminIDPresent(p) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
+	if msg := util.AuthAdminEditCheck(p, admin.Root == 1); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	account := httpx.Str(c, "account")
+	name := httpx.Str(c, "name")
+	var exist model.Admin
+	if bootstrap.DB.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id).First(&exist).Error == nil {
+		response.Fail(c, "账号已存在")
+		return
+	}
+	if bootstrap.DB.Where("name = ? AND delete_time IS NULL AND id <> ?", name, id).First(&exist).Error == nil {
+		response.Fail(c, "名称已存在")
+		return
+	}
 	now := util.NowUnix()
+	avatar := ""
+	if v := httpx.Str(c, "avatar"); v != "" {
+		avatar = filesvc.SetFileURL(c, v)
+	}
 	data := map[string]any{
-		"name":             httpx.Str(c, "name"),
-		"account":          httpx.Str(c, "account"),
+		"name":             name,
+		"account":          account,
 		"disable":          httpx.Int(c, "disable"),
 		"multipoint_login": httpx.Int(c, "multipoint_login"),
-		"avatar":           filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
+		"avatar":           avatar,
 		"update_time":      now,
 	}
 	if pwd := httpx.Str(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
+	var oldRoles []uint
+	bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
+	newRoles := httpx.Uints(c, "role_id")
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&admin).Updates(data).Error; err != nil {
 			return err
@@ -160,19 +190,23 @@ func AdminEdit(c *gin.Context) {
 		tx.Where("admin_id = ?", id).Delete(&model.AdminRole{})
 		tx.Where("admin_id = ?", id).Delete(&model.AdminDept{})
 		tx.Where("admin_id = ?", id).Delete(&model.AdminJobs{})
-		return saveAdminLinks(tx, id, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveAdminLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	if httpx.Int(c, "disable") == 1 {
+	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireAdminTokens(id)
 	}
 	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminDelete(c *gin.Context) {
+	if !authAdminIDPresent(httpx.Params(c)) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
@@ -193,6 +227,10 @@ func AdminDelete(c *gin.Context) {
 }
 
 func AdminDetail(c *gin.Context) {
+	if !authAdminIDPresent(httpx.Params(c)) {
+		response.Fail(c, "管理员id不能为空")
+		return
+	}
 	id := httpx.Uint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
@@ -269,6 +307,21 @@ func AdminEditSelf(c *gin.Context) {
 	}
 	bootstrap.DB.Model(&admin).Updates(data)
 	response.SuccessNotice(c, "操作成功")
+}
+
+func authAdminIDPresent(p map[string]any) bool {
+	v, ok := p["id"]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
+func adminAddDisable(p map[string]any) int {
+	if _, ok := p["disable"]; !ok {
+		return 0
+	}
+	return util.ToInt(p["disable"])
 }
 
 func saveAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {

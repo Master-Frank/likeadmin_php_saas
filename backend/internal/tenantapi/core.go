@@ -32,6 +32,10 @@ func tdb(c *gin.Context) *gorm.DB {
 const tenantLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
+	if msg := util.LoginTerminalCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	account := httpx.Str(c, "account")
 	password := httpx.Str(c, "password")
 	terminal := httpx.Int(c, "terminal")
@@ -64,6 +68,13 @@ func LoginAccount(c *gin.Context) {
 	}
 	if admin.Disable == 1 {
 		response.Fail(c, "账号已禁用")
+		return
+	}
+	if admin.Password == "" {
+		if restrict == 1 {
+			authsvc.RecordLoginFail(c, tenantLockTag, limit)
+		}
+		response.Fail(c, "账号不存在")
 		return
 	}
 	if admin.Password != util.CreatePassword(password, config.C.Project.UniqueIdentification) {
@@ -500,9 +511,9 @@ func ArticleCateLists(c *gin.Context) {
 	for _, r := range rows {
 		var n int64
 		tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
-		showDesc := "隐藏"
+		showDesc := "停用"
 		if r.IsShow == 1 {
-			showDesc = "显示"
+			showDesc = "启用"
 		}
 		out = append(out, map[string]any{
 			"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
@@ -529,6 +540,9 @@ func articleCateWriteCheck(c *gin.Context, needID bool) string {
 		return "资讯分类不能为空"
 	} else if n := len([]rune(name)); n < 1 || n > 90 {
 		return "资讯分类长度须在1-90位字符"
+	}
+	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+		return msg
 	}
 	if sort := httpx.Int(c, "sort"); sort < 0 {
 		return "排序值不正确"
@@ -716,7 +730,7 @@ func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
 	ro := model.RechargeOrder{}.TableName()
 	u := model.User{}.TableName()
-	db := tdb(c).Table(ro+" AS ro").Joins("JOIN "+u+" AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
+	db := tdb(c).Table(ro + " AS ro").Joins("JOIN " + u + " AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("ro.tenant_id = ?", tid)
 	}
@@ -764,7 +778,7 @@ func RechargeLists(c *gin.Context) {
 			"id": r.ID, "sn": r.SN, "order_amount": r.OrderAmount, "pay_way": r.PayWay,
 			"pay_time": payTime, "pay_status": r.PayStatus, "refund_status": r.RefundStatus,
 			"create_time": util.FormatDateTime(r.CreateTime),
-			"avatar": filesvc.GetFileURL(c, r.Avatar), "nickname": r.Nickname, "account": r.Account,
+			"avatar":      filesvc.GetFileURL(c, r.Avatar), "nickname": r.Nickname, "account": r.Account,
 			"pay_status_text": util.PayStatusText(r.PayStatus), "pay_way_text": util.PayWayText(r.PayWay),
 		})
 	}
@@ -775,7 +789,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
 	al := model.UserAccountLog{}.TableName()
 	u := model.User{}.TableName()
-	db := tdb(c).Table(al+" AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
+	db := tdb(c).Table(al + " AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("al.tenant_id = ?", tid)
 	}
@@ -824,7 +838,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 			"avatar": filesvc.GetFileURL(c, r.Avatar), "mobile": r.Mobile,
 			"action": r.Action, "change_amount": sym + util.ToString(r.ChangeAmount),
 			"left_amount": r.LeftAmount, "change_type": r.ChangeType, "source_sn": r.SourceSN,
-			"create_time": util.FormatDateTime(r.CreateTime),
+			"create_time":      util.FormatDateTime(r.CreateTime),
 			"change_type_desc": biz.UMChangeTypeDesc[util.ToString(r.ChangeType)],
 		})
 	}
@@ -835,7 +849,7 @@ func FinanceRefundRecord(c *gin.Context) {
 	q := lists.Parse(c)
 	rt := model.RefundRecord{}.TableName()
 	u := model.User{}.TableName()
-	base := tdb(c).Table(rt+" AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
+	base := tdb(c).Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 	if tid := tenantDB(c); tid > 0 {
 		base = base.Where("r.tenant_id = ?", tid)
 	}
@@ -859,7 +873,7 @@ func FinanceRefundRecord(c *gin.Context) {
 		base = base.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
 	extendWhere := func(db *gorm.DB) *gorm.DB {
-		db = db.Table(rt+" AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
+		db = db.Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 		if tid := tenantDB(c); tid > 0 {
 			db = db.Where("r.tenant_id = ?", tid)
 		}

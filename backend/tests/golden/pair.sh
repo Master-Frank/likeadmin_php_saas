@@ -121,6 +121,7 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/decorate.tabbar/detail
     /tenantapi/decorate.page/detail?type=1
     /tenantapi/auth.admin/mySelf
+    /tenantapi/auth.admin/lists
     /tenantapi/auth.menu/lists
     /tenantapi/auth.role/lists
     /tenantapi/dept.dept/lists
@@ -957,6 +958,119 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jget msg <<<"$php_ja")" != "$(jget msg <<<"$go_ja")" ]]; then
     fail=$((fail + 1))
   fi
+  php_tl="$(curl -sS -X POST "$PHP/tenantapi/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"account":"pair1","password":"likeadmin"}')"
+  go_tl="$(curl -sS -X POST "$GO/tenantapi/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"account":"pair1","password":"likeadmin"}')"
+  echo "tenant_login_noterm php_msg=$(jget msg <<<"$php_tl") go_msg=$(jget msg <<<"$go_tl")"
+  if [[ "$(jget msg <<<"$php_tl")" != "$(jget msg <<<"$go_tl")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_tl2="$(curl -sS -X POST "$PHP/tenantapi/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"account":"pair1","password":"likeadmin","terminal":99}')"
+  go_tl2="$(curl -sS -X POST "$GO/tenantapi/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"account":"pair1","password":"likeadmin","terminal":99}')"
+  echo "tenant_login_badterm php_msg=$(jget msg <<<"$php_tl2") go_msg=$(jget msg <<<"$go_tl2")"
+  if [[ "$(jget msg <<<"$php_tl2")" != "$(jget msg <<<"$go_tl2")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_aa="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_aa="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "admin_add_bad php_msg=$(jget msg <<<"$php_aa") go_msg=$(jget msg <<<"$go_aa")"
+  if [[ "$(jget msg <<<"$php_aa")" != "$(jget msg <<<"$go_aa")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ar="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","password_confirm":"likeadmin","multipoint_login":1}')"
+  go_ar="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","password_confirm":"likeadmin","multipoint_login":1}')"
+  echo "admin_add_norole php_msg=$(jget msg <<<"$php_ar") go_msg=$(jget msg <<<"$go_ar")"
+  if [[ "$(jget msg <<<"$php_ar")" != "$(jget msg <<<"$go_ar")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_am="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","password_confirm":"likeadmin","role_id":[1]}')"
+  go_am="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","password_confirm":"likeadmin","role_id":[1]}')"
+  echo "admin_add_nomulti php_msg=$(jget msg <<<"$php_am") go_msg=$(jget msg <<<"$go_am")"
+  if [[ "$(jget msg <<<"$php_am")" != "$(jget msg <<<"$go_am")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ac="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","role_id":[1],"multipoint_login":1}')"
+  go_ac="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmp1","name":"临时员","password":"likeadmin","role_id":[1],"multipoint_login":1}')"
+  echo "admin_add_noconfirm php_msg=$(jget msg <<<"$php_ac") go_msg=$(jget msg <<<"$go_ac")"
+  if [[ "$(jget msg <<<"$php_ac")" != "$(jget msg <<<"$go_ac")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_an="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmpx","name":"超级管理员","password":"likeadmin","password_confirm":"likeadmin","role_id":[1],"multipoint_login":1,"disable":0}')"
+  go_an="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"account":"pairtmpx","name":"超级管理员","password":"likeadmin","password_confirm":"likeadmin","role_id":[1],"multipoint_login":1,"disable":0}')"
+  echo "admin_add_name php_msg=$(jget msg <<<"$php_an") go_msg=$(jget msg <<<"$go_an")"
+  if [[ "$(jget msg <<<"$php_an")" != "$(jget msg <<<"$go_an")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ae="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_ae="$(curl -sS -X POST "$GO/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "admin_edit_bad php_msg=$(jget msg <<<"$php_ae") go_msg=$(jget msg <<<"$go_ae")"
+  if [[ "$(jget msg <<<"$php_ae")" != "$(jget msg <<<"$go_ae")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ad="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"account":"pair1","name":"超级管理员","disable":1,"multipoint_login":1}')"
+  go_ad="$(curl -sS -X POST "$GO/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"account":"pair1","name":"超级管理员","disable":1,"multipoint_login":1}')"
+  echo "admin_disable_root php_msg=$(jget msg <<<"$php_ad") go_msg=$(jget msg <<<"$go_ad")"
+  if [[ "$(jget msg <<<"$php_ad")" != "$(jget msg <<<"$go_ad")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_cs="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","sort":0}')"
+  go_cs="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","sort":0}')"
+  echo "cate_no_show php_msg=$(jget msg <<<"$php_cs") go_msg=$(jget msg <<<"$go_cs")"
+  if [[ "$(jget msg <<<"$php_cs")" != "$(jget msg <<<"$go_cs")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_cs2="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","sort":0,"is_show":2}')"
+  go_cs2="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","sort":0,"is_show":2}')"
+  echo "cate_bad_show php_msg=$(jget msg <<<"$php_cs2") go_msg=$(jget msg <<<"$go_cs2")"
+  if [[ "$(jget msg <<<"$php_cs2")" != "$(jget msg <<<"$go_cs2")" ]]; then
+    fail=$((fail + 1))
+  fi
+  rname="pairrole$(date +%s)"
+  php_role="$(curl -sS -X POST "$PHP/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$rname\",\"sort\":0}")"
+  echo "admin_role_add php_code=$(jcode <<<"$php_role")"
+  rlist="$(curl -sS "$GO/tenantapi/auth.role/lists?name=$rname" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  rid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
+' "$rname" <<<"$rlist")"
+  if [[ "$rid" != "0" && -n "$rid" ]]; then
+    aname="pairadm$(date +%s)"
+    php_add="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"account\":\"$aname\",\"name\":\"$aname\",\"password\":\"likeadmin\",\"password_confirm\":\"likeadmin\",\"role_id\":[$rid],\"multipoint_login\":1,\"disable\":0}")"
+    echo "admin_add php_code=$(jcode <<<"$php_add")"
+    if [[ "$(jcode <<<"$php_add")" != "1" ]]; then
+      echo "  php_add=${php_add:0:300}"
+      fail=$((fail + 1))
+    fi
+    alist="$(curl -sS "$GO/tenantapi/auth.admin/lists?account=$aname" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    aid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("account")==sys.argv[1]), 0))
+' "$aname" <<<"$alist")"
+    if [[ "$aid" != "0" && -n "$aid" ]]; then
+      go_ed="$(curl -sS -X POST "$GO/tenantapi/auth.admin/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$aid,\"account\":\"$aname\",\"name\":\"${aname}e\",\"disable\":0,\"multipoint_login\":1,\"role_id\":[$rid]}")"
+      php_dt="$(curl -sS "$PHP/tenantapi/auth.admin/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      echo "admin_edit go_code=$(jcode <<<"$go_ed") php_name=$(jget data.name <<<"$php_dt") php_jobs=$(jget data.jobs_id <<<"$php_dt")"
+      if [[ "$(jcode <<<"$go_ed")" != "1" || "$(jget data.name <<<"$php_dt")" != "${aname}e" ]]; then
+        echo "  go_ed=${go_ed:0:300}"
+        echo "  php_dt=${php_dt:0:300}"
+        fail=$((fail + 1))
+      fi
+      php_del="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$aid}")"
+      go_gone="$(curl -sS "$GO/tenantapi/auth.admin/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      echo "admin_delete php_code=$(jcode <<<"$php_del") go_detail=$(jcode <<<"$go_gone")"
+      if [[ "$(jcode <<<"$php_del")" != "1" || "$(jcode <<<"$go_gone")" == "1" ]]; then
+        fail=$((fail + 1))
+      fi
+    else
+      echo "admin_add could not resolve id"
+      fail=$((fail + 1))
+    fi
+    curl -sS -X POST "$PHP/tenantapi/auth.role/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$rid}" >/dev/null
+  else
+    echo "admin_role_add could not resolve id php=${php_role:0:200}"
+    fail=$((fail + 1))
+  fi
   php_dec="$(curl -sS "$PHP/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
   go_dec="$(curl -sS "$GO/api/index/decorate?type=999" -H "Host: $TENANT_HOST")"
   echo "decorate_miss php_code=$(jcode <<<"$php_dec") go_code=$(jcode <<<"$go_dec") php_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$php_dec") go_data=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data"),ensure_ascii=False))' <<<"$go_dec")"
@@ -983,6 +1097,37 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jcode <<<"$php_rr")" != "$(jcode <<<"$go_rr")" ]]; then
     fail=$((fail + 1))
   fi
+fi
+
+php_pl="$(curl -sS -X POST "$PHP/platformapi/login/account" -H 'Content-Type: application/json' -d '{"account":"admin","password":"likeadmin"}')"
+go_pl="$(curl -sS -X POST "$GO/platformapi/login/account" -H 'Content-Type: application/json' -d '{"account":"admin","password":"likeadmin"}')"
+echo "platform_login_noterm php_msg=$(jget msg <<<"$php_pl") go_msg=$(jget msg <<<"$go_pl")"
+if [[ "$(jget msg <<<"$php_pl")" != "$(jget msg <<<"$go_pl")" ]]; then
+  fail=$((fail + 1))
+fi
+php_pl2="$(curl -sS -X POST "$PHP/platformapi/login/account" -H 'Content-Type: application/json' -d '{"account":"admin","password":"likeadmin","terminal":99}')"
+go_pl2="$(curl -sS -X POST "$GO/platformapi/login/account" -H 'Content-Type: application/json' -d '{"account":"admin","password":"likeadmin","terminal":99}')"
+echo "platform_login_badterm php_msg=$(jget msg <<<"$php_pl2") go_msg=$(jget msg <<<"$go_pl2")"
+if [[ "$(jget msg <<<"$php_pl2")" != "$(jget msg <<<"$go_pl2")" ]]; then
+  fail=$((fail + 1))
+fi
+php_pa="$(curl -sS -X POST "$PHP/platformapi/auth.admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+go_pa="$(curl -sS -X POST "$GO/platformapi/auth.admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+echo "platform_admin_add_bad php_msg=$(jget msg <<<"$php_pa") go_msg=$(jget msg <<<"$go_pa")"
+if [[ "$(jget msg <<<"$php_pa")" != "$(jget msg <<<"$go_pa")" ]]; then
+  fail=$((fail + 1))
+fi
+php_pe="$(curl -sS -X POST "$PHP/platformapi/auth.admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+go_pe="$(curl -sS -X POST "$GO/platformapi/auth.admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+echo "platform_admin_edit_bad php_msg=$(jget msg <<<"$php_pe") go_msg=$(jget msg <<<"$go_pe")"
+if [[ "$(jget msg <<<"$php_pe")" != "$(jget msg <<<"$go_pe")" ]]; then
+  fail=$((fail + 1))
+fi
+php_dd="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+go_dd="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_data/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+echo "dict_data_add_bad php_msg=$(jget msg <<<"$php_dd") go_msg=$(jget msg <<<"$go_dd")"
+if [[ "$(jget msg <<<"$php_dd")" != "$(jget msg <<<"$go_dd")" ]]; then
+  fail=$((fail + 1))
 fi
 
 echo "failed=$fail"
