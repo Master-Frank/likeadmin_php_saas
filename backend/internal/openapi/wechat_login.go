@@ -146,7 +146,7 @@ func LoginUpdateUser(c *gin.Context) {
 		"is_new_user": 0,
 		"update_time": now,
 	})
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func bindWechatAuth(c *gin.Context, terminal int) {
@@ -193,7 +193,7 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "绑定成功", nil)
+	response.SuccessNotice(c, "绑定成功")
 }
 
 func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bool) (map[string]any, error) {
@@ -374,7 +374,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		return
 	}
 	tdb(c).Model(&u).Update("mobile", phone)
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "绑定成功")
 }
 
 func SmsSendCodeReal(c *gin.Context) {

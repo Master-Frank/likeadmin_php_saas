@@ -102,13 +102,9 @@ func ArticleDetail(c *gin.Context) {
 		return
 	}
 	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
-	response.Data(c, gin.H{
-		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
-		"content": filesvc.RewriteContentDomains(c, a.Content),
-		"click":   a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
-		"collect": collect,
-	})
+	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
+	out["collect"] = collect
+	response.Data(c, out)
 }
 
 func RechargeCreate(c *gin.Context) {
@@ -248,16 +244,16 @@ func PayPrepay(c *gin.Context) {
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
 	if from != "recharge" {
-		response.Fail(c, "充值订单不存在")
+		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
 	var order model.RechargeOrder
 	if tdb(c).First(&order, orderID).Error != nil {
-		response.Fail(c, "充值订单不存在")
+		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
 	if order.PayStatus == 1 {
-		response.Fail(c, "订单已支付")
+		response.FailWithData(c, "订单已支付", p)
 		return
 	}
 	terminal := 0
@@ -273,14 +269,14 @@ func PayPrepay(c *gin.Context) {
 	order.PaySN = paySN
 	if order.OrderAmount == 0 {
 		if err := markRechargePaid(&order, ""); err != nil {
-			response.Fail(c, err.Error())
+			response.FailWithData(c, err.Error(), p)
 			return
 		}
 		response.Success(c, "", gin.H{"pay_way": 1})
 		return
 	}
 	if payWay == 1 {
-		response.Fail(c, "充值不支持余额支付")
+		response.FailWithData(c, "充值不支持余额支付", p)
 		return
 	}
 	redirect := httpx.Str(c, "redirect")
@@ -297,11 +293,11 @@ func PayPrepay(c *gin.Context) {
 	case 3:
 		data, err = pay.AliPrepay(c, order, from, redirect, terminal)
 	default:
-		response.Fail(c, "订单异常")
+		response.FailWithData(c, "订单异常", p)
 		return
 	}
 	if err != nil {
-		response.Fail(c, err.Error())
+		response.FailWithData(c, err.Error(), p)
 		return
 	}
 	response.Success(c, "", data)
@@ -533,7 +529,7 @@ func PcArticleDetail(c *gin.Context) {
 	}
 	var a model.Article
 	if tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id).First(&a).Error != nil {
-		response.Fail(c, "文章不存在")
+		response.Data(c, pcArticleMissing(c, id))
 		return
 	}
 	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
@@ -563,16 +559,45 @@ func PcArticleDetail(c *gin.Context) {
 	}
 	var cate model.ArticleCate
 	tdb(c).First(&cate, a.Cid)
-	response.Data(c, gin.H{
+	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
+	out["last"] = last
+	out["next"] = next
+	out["new"] = limitArticles(c, "new", 8, int(a.Cid), int(a.ID))
+	out["collect"] = collect
+	out["cate_name"] = cate.Name
+	response.Data(c, out)
+}
+
+func pcArticleMissing(c *gin.Context, id uint) gin.H {
+	collect := false
+	if uid := ctxutil.Get(c).UserID; uid > 0 && id > 0 {
+		var n int64
+		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, id).Count(&n)
+		collect = n > 0
+	}
+	return gin.H{
+		"last": map[string]any{}, "next": map[string]any{},
+		"new":     limitArticles(c, "new", 8, 0, 0),
+		"collect": collect, "cate_name": nil,
+	}
+}
+
+func articleDetailMap(c *gin.Context, a model.Article, click int) gin.H {
+	return gin.H{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
-		"click": a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
-		"last": last, "next": next, "new": limitArticles(c, "new", 8, int(a.Cid), int(a.ID)),
-		"collect": collect, "cate_name": cate.Name,
-	})
+		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+		"content": filesvc.RewriteContentDomains(c, a.Content),
+		"is_show": a.IsShow, "sort": a.Sort, "tenant_id": a.TenantID,
+		"click": click, "create_time": util.FormatDateTime(a.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
+	}
 }
 
 func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []map[string]any {
+	if tdb(c) == nil {
+		return []map[string]any{}
+	}
 	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)

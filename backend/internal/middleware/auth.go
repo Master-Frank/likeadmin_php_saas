@@ -129,7 +129,7 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 		return
 	}
 	if info != nil && len(info) > 0 {
-		if meta.TenantID > 0 && uint(util.ToInt(info["tenant_id"])) != meta.TenantID {
+		if rejectWrongTenant(need, uint(util.ToInt(info["tenant_id"])), meta.TenantID) {
 			authsvc.ExpireTenantToken(c, token)
 			response.AbortFail(c, "非该站点成员禁止访问", response.CodeLoginExpire, 1)
 			return
@@ -155,7 +155,8 @@ func handleUserLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, ne
 		return
 	}
 	if info != nil && len(info) > 0 {
-		if meta.TenantID > 0 && uint(util.ToInt(info["tenant_id"])) != meta.TenantID {
+		if rejectWrongTenant(need, uint(util.ToInt(info["tenant_id"])), meta.TenantID) {
+			authsvc.ExpireUserToken(c, token)
 			response.AbortFail(c, "非该站点用户禁止访问", response.CodeLoginExpire, 1)
 			return
 		}
@@ -187,6 +188,15 @@ func renewIfNeed(c *gin.Context, kind, token string, info map[string]any, cfg co
 		tenantdb.Use(c).Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
 		cache.SetUserInfo(token, tenantdb.Use(c))
 	}
+}
+
+// rejectWrongTenant matches PHP LoginMiddleware: only required-login
+// routes abort on a stale cross-tenant token. Optional routes still run.
+func rejectWrongTenant(need bool, tokenTenant, hostTenant uint) bool {
+	if !need || hostTenant == 0 || tokenTenant == hostTenant {
+		return false
+	}
+	return true
 }
 
 func isNotNeed(table map[string][]string, meta *ctxutil.RequestMeta) bool {

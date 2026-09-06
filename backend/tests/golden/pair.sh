@@ -370,6 +370,40 @@ print((ls[0] if ls else {}).get("id") or 0)
         echo "  go_pd=${go_pd:0:200}"
         fail=$((fail + 1))
       fi
+      php_ad="$(curl -sS "$PHP/api/article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      go_ad="$(curl -sS "$GO/api/article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      php_adk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d.keys())))' <<<"$php_ad")"
+      go_adk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d.keys())))' <<<"$go_ad")"
+      echo "article_detail_keys php=$php_adk go=$go_adk"
+      if [[ -n "$php_adk" && "$php_adk" != "$go_adk" ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
+    go_miss="$(curl -sS "$GO/api/pc/articleDetail?id=999999999" -H "Host: $TENANT_HOST" -H "token: $UT")"
+    go_mk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(d.get("code"), int(isinstance(data,dict) and {"last","next","new","collect","cate_name"} <= set(data)))' <<<"$go_miss")"
+    echo "pc_article_missing go=$go_mk"
+    if [[ "$go_mk" != "1 1" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_xt="$(curl -sS "$PHP/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
+    go_xt="$(curl -sS "$GO/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
+    echo "cross_tenant_optional php_code=$(jcode <<<"$php_xt") go_code=$(jcode <<<"$go_xt")"
+    if [[ "$(jcode <<<"$php_xt")" != "$(jcode <<<"$go_xt")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_xr="$(curl -sS "$PHP/api/user/center" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
+    go_xr="$(curl -sS "$GO/api/user/center" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
+    echo "cross_tenant_required php_code=$(jcode <<<"$php_xr") go_code=$(jcode <<<"$go_xr") php_msg=$(jget msg <<<"$php_xr") go_msg=$(jget msg <<<"$go_xr")"
+    if [[ "$(jcode <<<"$php_xr")" != "$(jcode <<<"$go_xr")" || "$(jget msg <<<"$php_xr")" != "$(jget msg <<<"$go_xr")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_pp="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","pay_way":2,"order_id":999999999}')"
+    go_pp="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","pay_way":2,"order_id":999999999}')"
+    php_ppk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data"); print(d.get("code"), ",".join(sorted(data.keys()) if isinstance(data,dict) else []))' <<<"$php_pp")"
+    go_ppk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data"); print(d.get("code"), ",".join(sorted(data.keys()) if isinstance(data,dict) else []))' <<<"$go_pp")"
+    echo "pay_prepay_fail php=$php_ppk go=$go_ppk"
+    if [[ "$php_ppk" != "$go_ppk" ]]; then
+      fail=$((fail + 1))
     fi
   fi
 fi
@@ -1849,6 +1883,25 @@ echo "log_export_info php_file=$php_lfn go_file=$go_lfn"
 if [[ "$php_lfn" != "$go_lfn" || "$go_lfn" != "系统日志" ]]; then
   fail=$((fail + 1))
 fi
+php_lex2="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=2&page_start=1&page_end=1" -H "token: $TOKEN")"
+go_lex2="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=2&page_start=1&page_end=1" -H "token: $TOKEN")"
+php_exu="$(jget data.url <<<"$php_lex2")"
+go_exu="$(jget data.url <<<"$go_lex2")"
+echo "log_export_file php_code=$(jcode <<<"$php_lex2") go_code=$(jcode <<<"$go_lex2")"
+if [[ "$(jcode <<<"$php_lex2")" != "$(jcode <<<"$go_lex2")" ]]; then
+  fail=$((fail + 1))
+fi
+if [[ -n "$go_exu" ]]; then
+  go_exf="$(curl -sS -D - -o /tmp/likeadmin-golden/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"
+  go_disp="$(printf '%s\n' "$go_exf" | awk -F': ' 'tolower($1)=="content-disposition"{print $2}')"
+  echo "log_export_xlsx php_url=${php_exu:0:80} disposition=$go_disp magic=$(head -c 2 /tmp/likeadmin-golden/go_export.bin | od -An -tx1)"
+  if [[ "$go_disp" != *.xlsx* ]]; then
+    fail=$((fail + 1))
+  fi
+  if ! cmp -s <(printf 'PK') <(head -c 2 /tmp/likeadmin-golden/go_export.bin); then
+    fail=$((fail + 1))
+  fi
+fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
@@ -2102,6 +2155,15 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   sms_st="$(mysqlq "SELECT send_status FROM la_tenant_sms_log WHERE mobile='$mobile' ORDER BY id DESC LIMIT 1")"
   echo "sms_send_status=$sms_st"
   if [[ "$(jcode <<<"$go_sms")" == "1" && "$sms_st" != "1" ]]; then
+    fail=$((fail + 1))
+  fi
+fi
+
+if [[ -n "$GO" ]]; then
+  go_html="$(curl -sS "$GO/admin" -H "Host: missing.likeadmin.test")"
+  echo "tenant_page_404 html=$(python3 -c 'import sys; s=sys.stdin.read(); print(int("<html" in s.lower() or "租户" in s or "404" in s))' <<<"$go_html")"
+  if [[ "$go_html" == *'"code":4'* || "$go_html" == *接口域名错误* ]]; then
+    echo "  go_html=${go_html:0:160}"
     fail=$((fail + 1))
   fi
 fi

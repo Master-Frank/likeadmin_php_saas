@@ -74,6 +74,17 @@ func Fail(c *gin.Context, msg string) {
 	Result(c, CodeFail, 1, msg, emptyArray())
 }
 
+// FailWithData matches PHP fail($msg, $data) used by pay/prepay retries.
+func FailWithData(c *gin.Context, msg string, data any) {
+	if msg == "" {
+		msg = "fail"
+	}
+	if data == nil {
+		data = emptyArray()
+	}
+	Result(c, CodeFail, 1, msg, data)
+}
+
 func FailSilent(c *gin.Context, msg string) {
 	Result(c, CodeFail, 0, msg, emptyArray())
 }

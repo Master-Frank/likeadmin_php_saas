@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -56,7 +57,7 @@ func InstallAndTenant() gin.HandlerFunc {
 				c.Next()
 				return
 			}
-			if !resolveTenant(c, meta, host) {
+			if !resolveTenant(c, meta, host, false) {
 				return
 			}
 			c.Next()
@@ -64,7 +65,7 @@ func InstallAndTenant() gin.HandlerFunc {
 		}
 		if first == "platform" {
 			if config.C.Project.HTTPHost != "" && host != config.C.Project.HTTPHost {
-				c.File(config.C.App.PublicDir + "/error/platform/404.html")
+				c.File(filepath.Join(config.C.App.PublicDir, "error", "platform", "404.html"))
 				c.Abort()
 				return
 			}
@@ -72,14 +73,14 @@ func InstallAndTenant() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if !resolveTenant(c, meta, host) {
+		if !resolveTenant(c, meta, host, true) {
 			return
 		}
 		c.Next()
 	}
 }
 
-func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string) bool {
+func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string, isPage bool) bool {
 	var tenant model.Tenant
 	err := bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", host).First(&tenant).Error
 	if err == nil {
@@ -89,23 +90,45 @@ func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string) bool 
 			meta.Tactics = tenant.Tactics
 			return true
 		}
-		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 0)
-		return false
+		return tenantDisabled(c, isPage)
 	}
 	sn := ctxutil.SubDomain(host)
 	meta.TenantSN = sn
 	err = bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&tenant).Error
 	if err != nil {
-		response.AbortFail(c, "接口域名错误或租户不存在", response.CodeNotFound, 0)
-		return false
+		return tenantMissing(c, isPage)
 	}
 	if tenant.Disable != 0 {
-		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 0)
-		return false
+		return tenantDisabled(c, isPage)
 	}
 	meta.TenantID = tenant.ID
 	meta.TenantSN = tenant.SN
 	meta.Tactics = tenant.Tactics
+	return true
+}
+
+func tenantDisabled(c *gin.Context, isPage bool) bool {
+	if serveTenantError(c, isPage, "403.html") {
+		return false
+	}
+	response.AbortFail(c, "该租户已停用", response.CodeForbidden, 0)
+	return false
+}
+
+func tenantMissing(c *gin.Context, isPage bool) bool {
+	if serveTenantError(c, isPage, "404.html") {
+		return false
+	}
+	response.AbortFail(c, "接口域名错误或租户不存在", response.CodeNotFound, 0)
+	return false
+}
+
+func serveTenantError(c *gin.Context, isPage bool, name string) bool {
+	if !isPage {
+		return false
+	}
+	c.File(filepath.Join(config.C.App.PublicDir, "error", "tenant", name))
+	c.Abort()
 	return true
 }
 

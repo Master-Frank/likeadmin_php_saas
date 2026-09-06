@@ -22,8 +22,9 @@ import (
 )
 
 type fileInfo struct {
-	Src  string `json:"src"`
-	Name string `json:"name"`
+	Src      string `json:"src"`
+	Name     string `json:"name"`
+	Download string `json:"download"`
 }
 
 func Maybe(c *gin.Context, fileName string, rows any) bool {
@@ -67,7 +68,7 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 	if exp != 2 {
 		return false
 	}
-	key, err := SaveCSV(fileName, rows, spec.Fields)
+	key, err := SaveXLSX(fileName, rows, spec.Fields)
 	if err != nil {
 		response.Fail(c, err.Error())
 		return true
@@ -82,30 +83,50 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 }
 
 func SaveCSV(fileName string, rows any, fields []Field) (string, error) {
-	if fileName == "" {
-		fileName = "export.csv"
+	return saveExport(fileName, rows, fields, false)
+}
+
+func SaveXLSX(fileName string, rows any, fields []Field) (string, error) {
+	return saveExport(fileName, rows, fields, true)
+}
+
+func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, error) {
+	base := strings.TrimSuffix(strings.TrimSuffix(fileName, ".csv"), ".xlsx")
+	if base == "" {
+		base = "export"
 	}
-	if filepath.Ext(fileName) == "" {
-		fileName += ".csv"
+	ext := ".csv"
+	if xlsx {
+		ext = ".xlsx"
 	}
+	download := base + "-" + time.Now().Format("2006-01-02-150405") + ext
 	dir := filepath.Join(os.TempDir(), "likeadmin-export")
 	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(fileName)))
-	f, err := os.Create(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	w := csv.NewWriter(f)
+	path := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(download)))
 	records := toRecords(rows, fields)
-	for _, rec := range records {
-		_ = w.Write(rec)
+	if xlsx {
+		records = applyExcelLongNumbers(records)
+		if err := writeXLSX(path, records); err != nil {
+			return "", err
+		}
+	} else {
+		f, err := os.Create(path)
+		if err != nil {
+			return "", err
+		}
+		w := csv.NewWriter(f)
+		for _, rec := range records {
+			_ = w.Write(rec)
+		}
+		w.Flush()
+		_ = f.Close()
 	}
-	w.Flush()
 	key := util.MD5(path + fmt.Sprintf("%d", time.Now().UnixNano()))
-	cache.Set("export_file_"+key, fileInfo{Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path)}, 30*time.Minute)
+	cache.Set("export_file_"+key, fileInfo{
+		Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path), Download: download,
+	}, 30*time.Minute)
 	return key, nil
 }
 
@@ -120,7 +141,11 @@ func Serve(c *gin.Context) {
 		return
 	}
 	cache.Del("export_file_" + key)
-	c.FileAttachment(filepath.Join(info.Src, info.Name), info.Name)
+	attach := info.Download
+	if attach == "" {
+		attach = info.Name
+	}
+	c.FileAttachment(filepath.Join(info.Src, info.Name), attach)
 }
 
 func toRecords(rows any, fields []Field) [][]string {
@@ -226,6 +251,42 @@ func formatCell(key string, v any) string {
 		}
 	}
 	return util.ToString(v)
+}
+
+func applyExcelLongNumbers(records [][]string) [][]string {
+	for i, rec := range records {
+		if i == 0 {
+			continue
+		}
+		for j, cell := range rec {
+			if isLongNumeric(cell) {
+				rec[j] = cell + "\t"
+			}
+		}
+		records[i] = rec
+	}
+	return records
+}
+
+func isLongNumeric(s string) bool {
+	if len(s) < 12 {
+		return false
+	}
+	dot := 0
+	for i, r := range s {
+		if r >= '0' && r <= '9' {
+			continue
+		}
+		if r == '.' && dot == 0 {
+			dot++
+			continue
+		}
+		if r == '-' && i == 0 {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func asInt(v any) (int, bool) {

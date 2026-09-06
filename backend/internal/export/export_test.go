@@ -1,6 +1,11 @@
 package export
 
-import "testing"
+import (
+	"archive/zip"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestLookupLogFields(t *testing.T) {
 	spec := Lookup("setting.system.log", "lists")
@@ -48,5 +53,56 @@ func TestFormatCellEnums(t *testing.T) {
 	rec := toRecords([]map[string]any{{"channel": 2, "disable": 1}}, []Field{{Key: "channel", Title: "注册来源"}, {Key: "disable", Title: "是否禁用"}})
 	if len(rec) != 2 || rec[1][0] != "微信公众号" || rec[1][1] != "禁用" {
 		t.Fatalf("%v", rec)
+	}
+}
+
+func TestExcelLongNumericTab(t *testing.T) {
+	if !isLongNumeric("123456789012") {
+		t.Fatal("12-digit should be long")
+	}
+	if isLongNumeric("12345678901") {
+		t.Fatal("11-digit should not be long")
+	}
+	out := applyExcelLongNumbers([][]string{{"id"}, {"123456789012"}, {"abc"}})
+	if out[1][0] != "123456789012\t" {
+		t.Fatalf("tab suffix %q", out[1][0])
+	}
+	if out[2][0] != "abc" {
+		t.Fatalf("text %q", out[2][0])
+	}
+}
+
+func TestWriteXLSXZip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out.xlsx")
+	if err := writeXLSX(path, [][]string{{"记录ID", "操作"}, {"1", "查看"}}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	seen := map[string]bool{}
+	var sheet string
+	for _, f := range r.File {
+		seen[f.Name] = true
+		if f.Name == "xl/worksheets/sheet1.xml" {
+			rc, err := f.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			buf := make([]byte, 4096)
+			n, _ := rc.Read(buf)
+			_ = rc.Close()
+			sheet = string(buf[:n])
+		}
+	}
+	for _, name := range []string{"[Content_Types].xml", "xl/workbook.xml", "xl/worksheets/sheet1.xml"} {
+		if !seen[name] {
+			t.Fatalf("missing %s", name)
+		}
+	}
+	if !strings.Contains(sheet, "记录ID") || !strings.Contains(sheet, "查看") {
+		t.Fatalf("sheet %s", sheet)
 	}
 }
