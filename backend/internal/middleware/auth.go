@@ -61,7 +61,7 @@ func Auth() gin.HandlerFunc {
 			return
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
-		all, mine := adminURIs(meta)
+		all, mine := adminURIs(c, meta)
 		if !containsURI(all, accessURI) {
 			c.Next()
 			return
@@ -204,7 +204,7 @@ func isNotNeed(table map[string][]string, meta *ctxutil.RequestMeta) bool {
 	return false
 }
 
-func adminURIs(meta *ctxutil.RequestMeta) (all, mine []string) {
+func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 	adminID := meta.AdminID
 	if meta.App == "platformapi" {
 		var menus []model.SystemMenu
@@ -235,8 +235,12 @@ func adminURIs(meta *ctxutil.RequestMeta) (all, mine []string) {
 		_ = adminID
 		return all, mine
 	}
+	db := tenantdb.Use(c)
+	if db == nil {
+		db = bootstrap.DB
+	}
 	var menus []model.TenantSystemMenu
-	q := bootstrap.DB.Where("paths <> ''")
+	q := db.Where("paths <> ''")
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
@@ -251,10 +255,10 @@ func adminURIs(meta *ctxutil.RequestMeta) (all, mine []string) {
 		return all, mine
 	}
 	var menuIDs []uint
-	bootstrap.DB.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
+	db.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 	var allowed []model.TenantSystemMenu
 	if len(menuIDs) > 0 {
-		bootstrap.DB.Where("id IN ?", menuIDs).Find(&allowed)
+		db.Where("id IN ?", menuIDs).Find(&allowed)
 	}
 	for _, m := range allowed {
 		if m.Paths != "" {

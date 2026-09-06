@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,6 +26,24 @@ func CreateToken(extra string, salt string) string {
 	}
 	encryptSalt := MD5(salt + fmt.Sprintf("%d", time.Now().UnixNano()))
 	return MD5(salt + extra + strconv.FormatInt(time.Now().Unix(), 10) + encryptSalt)
+}
+
+func ParseDateTime(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	for _, layout := range []string{
+		"2006-01-02 15:04:05", "2006-01-02", time.RFC3339,
+	} {
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+			return t.Unix()
+		}
+	}
+	if n := ParseInt(s); n > 0 {
+		return int64(n)
+	}
+	return 0
 }
 
 func FormatDateTime(ts int64) string {

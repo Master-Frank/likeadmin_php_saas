@@ -13,6 +13,30 @@ if [[ -n "$TENANT_HOST" ]]; then
   host_args=(-H "Host: $TENANT_HOST")
 fi
 
+jget() {
+  python3 -c '
+import json,sys
+raw=sys.stdin.read()
+key=sys.argv[1]
+default=sys.argv[2] if len(sys.argv)>2 else ""
+try:
+    d=json.loads(raw)
+except Exception:
+    print(default)
+    raise SystemExit(0)
+cur=d
+for part in key.split("."):
+    if isinstance(cur, dict):
+        cur=cur.get(part)
+    else:
+        cur=None
+        break
+print("" if cur is None else cur)
+' "$@"
+}
+
+jcode() { jget code ""; }
+
 login() {
   local base="$1"
   curl -sS -X POST "$base/platformapi/login/account" \
@@ -98,8 +122,14 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/dept.jobs/lists
     /tenantapi/article.article/lists
     /tenantapi/article.article_cate/lists
+    /tenantapi/article.article_cate/all
     /tenantapi/user.user/lists
     /tenantapi/setting.web.web_setting/getWebsite
+    /tenantapi/setting.hot_search/getConfig
+    /tenantapi/notice.notice/settingLists
+    /tenantapi/finance.account_log/getUmChangeType
+    /tenantapi/recharge.recharge/getConfig
+    /tenantapi/channel.official_account_setting/getConfig
     /api/pc/config
   )
 fi
@@ -221,47 +251,126 @@ fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   cate_json="$(curl -sS "$GO/tenantapi/article.article_cate/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  cid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("data") or {}).get("lists") or [{}])[0].get("id") or 0)' <<<"$cate_json")"
+  cid="$(python3 -c 'import json,sys
+try:
+  d=json.loads(sys.stdin.read()); print(((d.get("data") or {}).get("lists") or [{}])[0].get("id") or 0)
+except Exception:
+  print(0)
+' <<<"$cate_json")"
   title="pairwrite$(date +%s)"
-  add_body="{\"cid\":$cid,\"title\":\"$title\",\"is_show\":1,\"content\":\"go-php-pair\",\"abstract\":\"pair\"}"
+  add_body="{\"cid\":$cid,\"title\":\"$title\",\"is_show\":1,\"content\":\"go-php-pair\",\"abstract\":\"pair\",\"image\":\"\"}"
   php_add="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$add_body")"
-  php_ac="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_add")"
+  php_ac="$(jcode <<<"$php_add")"
   echo "article_add php_code=$php_ac cid=$cid"
   if [[ "$php_ac" != "1" ]]; then
-    echo "  php_add=$php_add"
+    echo "  php_add=${php_add:0:400}"
     fail=$((fail + 1))
   fi
   list_json="$(curl -sS "$PHP/tenantapi/article.article/lists?title=$title" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  aid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(ls[0]["id"] if ls else 0)' <<<"$list_json")"
+  aid="$(python3 -c 'import json,sys
+try:
+  d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []; print(ls[0]["id"] if ls else 0)
+except Exception:
+  print(0)
+' <<<"$list_json")"
   if [[ "$aid" != "0" && -n "$aid" ]]; then
     php_d="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     go_d="$(curl -sS "$GO/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-    php_dc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_d")"
-    go_dc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_d")"
+    php_dc="$(jcode <<<"$php_d")"
+    go_dc="$(jcode <<<"$go_d")"
     echo "article_detail id=$aid php_code=$php_dc go_code=$go_dc"
     if [[ "$php_dc" != "$go_dc" ]]; then
       fail=$((fail + 1))
     fi
-    edit_body="{\"id\":$aid,\"cid\":$cid,\"title\":\"${title}e\",\"is_show\":0,\"content\":\"edited\"}"
+    edit_body="{\"id\":$aid,\"cid\":$cid,\"title\":\"${title}e\",\"is_show\":0,\"content\":\"edited\",\"abstract\":\"pair\",\"image\":\"\"}"
     go_ed="$(curl -sS -X POST "$GO/tenantapi/article.article/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$edit_body")"
     php_ed="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-    go_edc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_ed")"
-    php_title="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("title") or "")' <<<"$php_ed")"
+    go_edc="$(jcode <<<"$go_ed")"
+    php_title="$(jget data.title <<<"$php_ed")"
     echo "article_edit go_code=$go_edc php_title=$php_title"
     if [[ "$go_edc" != "1" || "$php_title" != "${title}e" ]]; then
+      echo "  go_ed=${go_ed:0:300}"
       fail=$((fail + 1))
     fi
     php_del="$(curl -sS -X POST "$PHP/tenantapi/article.article/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$aid}")"
     go_gone="$(curl -sS "$GO/tenantapi/article.article/detail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-    php_delc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_del")"
-    go_gc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_gone")"
+    php_delc="$(jcode <<<"$php_del")"
+    go_gc="$(jcode <<<"$go_gone")"
     echo "article_delete php_code=$php_delc go_detail=$go_gc"
-    if [[ "$php_delc" != "1" ]]; then
+    if [[ "$php_delc" != "1" || "$go_gc" == "1" ]]; then
       fail=$((fail + 1))
     fi
   else
-    echo "article_add could not resolve id"
+    echo "article_add could not resolve id list=${list_json:0:300}"
     fail=$((fail + 1))
+  fi
+
+  cname="paircate$(date +%s)"
+  php_cate="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cname\",\"is_show\":1,\"sort\":0}")"
+  php_cc="$(jcode <<<"$php_cate")"
+  echo "article_cate_add php_code=$php_cc"
+  if [[ "$php_cc" != "1" ]]; then
+    echo "  php_cate=${php_cate:0:300}"
+    fail=$((fail + 1))
+  fi
+  clist="$(curl -sS "$GO/tenantapi/article.article_cate/lists?name=$cname" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  newcid="$(python3 -c 'import json,sys
+try:
+  d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+  print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
+except Exception:
+  print(0)
+' "$cname" <<<"$clist")"
+  if [[ "$newcid" != "0" && -n "$newcid" ]]; then
+    go_ced="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$newcid,\"name\":\"${cname}e\",\"is_show\":0,\"sort\":1}")"
+    php_cd="$(curl -sS "$PHP/tenantapi/article.article_cate/detail?id=$newcid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_cedc="$(jcode <<<"$go_ced")"
+    php_cn="$(jget data.name <<<"$php_cd")"
+    echo "article_cate_edit go_code=$go_cedc php_name=$php_cn"
+    if [[ "$go_cedc" != "1" || "$php_cn" != "${cname}e" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_cdel="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$newcid}")"
+    go_cgone="$(curl -sS "$GO/tenantapi/article.article_cate/detail?id=$newcid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "article_cate_delete php_code=$(jcode <<<"$php_cdel") go_detail=$(jcode <<<"$go_cgone")"
+    if [[ "$(jcode <<<"$php_cdel")" != "1" || "$(jcode <<<"$go_cgone")" == "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "article_cate_add could not resolve id"
+    fail=$((fail + 1))
+  fi
+
+  ulist="$(curl -sS "$GO/tenantapi/user.user/lists?keyword=${acc:-}" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  uid="$(python3 -c 'import json,sys
+try:
+  d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
+  print(ls[0]["id"] if ls else 0)
+except Exception:
+  print(0)
+' <<<"$ulist")"
+  if [[ "$uid" != "0" && -n "$uid" ]]; then
+    php_ud="$(curl -sS "$PHP/tenantapi/user.user/detail?id=$uid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_ud="$(curl -sS "$GO/tenantapi/user.user/detail?id=$uid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "user_detail php_code=$(jcode <<<"$php_ud") go_code=$(jcode <<<"$go_ud")"
+    if [[ "$(jcode <<<"$php_ud")" != "$(jcode <<<"$go_ud")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_ue="$(curl -sS -X POST "$PHP/tenantapi/user.user/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$uid,\"field\":\"real_name\",\"value\":\"pairname\"}")"
+    go_ue="$(curl -sS "$GO/tenantapi/user.user/detail?id=$uid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "user_edit php_code=$(jcode <<<"$php_ue") go_real=$(jget data.real_name <<<"$go_ue")"
+    if [[ "$(jcode <<<"$php_ue")" != "1" || "$(jget data.real_name <<<"$go_ue")" != "pairname" ]]; then
+      echo "  php_ue=${php_ue:0:300}"
+      fail=$((fail + 1))
+    fi
+    php_um="$(curl -sS -X POST "$PHP/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$uid,\"action\":1,\"num\":1.5,\"remark\":\"pair\"}")"
+    go_um="$(curl -sS "$GO/tenantapi/user.user/detail?id=$uid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "user_adjust php_code=$(jcode <<<"$php_um") go_money=$(jget data.user_money <<<"$go_um")"
+    if [[ "$(jcode <<<"$php_um")" != "1" ]]; then
+      echo "  php_um=${php_um:0:300}"
+      fail=$((fail + 1))
+    fi
+    curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$uid,\"action\":2,\"num\":1.5,\"remark\":\"pair-restore\"}" >/dev/null
   fi
 fi
 

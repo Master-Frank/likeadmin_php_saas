@@ -247,7 +247,21 @@ func UserLists(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if kw := lists.Param(q, "keyword"); kw != "" {
-		db = db.Where("nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+		like := "%" + kw + "%"
+		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
+	}
+	if ch := lists.Param(q, "channel"); ch != "" {
+		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
+	}
+	if start := lists.Param(q, "create_time_start"); start != "" {
+		if ts := util.ParseDateTime(start); ts > 0 {
+			db = db.Where("create_time >= ?", ts)
+		}
+	}
+	if end := lists.Param(q, "create_time_end"); end != "" {
+		if ts := util.ParseDateTime(end); ts > 0 {
+			db = db.Where("create_time <= ?", ts)
+		}
 	}
 	var count int64
 	db.Count(&count)
@@ -277,8 +291,10 @@ func UserDetail(c *gin.Context) {
 	}
 	response.Data(c, gin.H{
 		"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-		"avatar": filesvc.GetFileURL(c, u.Avatar), "real_name": u.RealName, "sex": u.Sex,
-		"is_disable": u.IsDisable, "user_money": u.UserMoney, "create_time": util.FormatDateTime(u.CreateTime),
+		"avatar": filesvc.GetFileURL(c, u.Avatar), "real_name": u.RealName,
+		"sex": util.SexDesc(u.Sex), "sexCode": u.Sex, "channel": util.ChannelDesc(u.Channel),
+		"is_disable": u.IsDisable, "user_money": util.MoneyString(u.UserMoney),
+		"login_time": util.FormatDateTimePtr(u.LoginTime), "create_time": util.FormatDateTime(u.CreateTime),
 	})
 }
 
@@ -286,13 +302,61 @@ func UserEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	field := httpx.Str(c, "field")
 	value := httpx.Any(c, "value")
-	allow := map[string]bool{"account": true, "sex": true, "mobile": true, "real_name": true}
-	if !allow[field] {
-		response.Fail(c, "不允许修改该字段")
+	if id == 0 {
+		response.Fail(c, "请选择用户")
 		return
 	}
+	if field == "" {
+		response.Fail(c, "请选择操作")
+		return
+	}
+	if strings.TrimSpace(util.ToString(value)) == "" {
+		response.Fail(c, "请输入内容")
+		return
+	}
+	allow := map[string]bool{"account": true, "sex": true, "mobile": true, "real_name": true}
+	if !allow[field] {
+		response.Fail(c, "用户信息不允许更新")
+		return
+	}
+	var user model.User
+	db := tdb(c).Where("id = ? AND delete_time IS NULL", id)
+	if tid := tenantDB(c); tid > 0 {
+		db = db.Where("tenant_id = ?", tid)
+	}
+	if db.First(&user).Error != nil {
+		response.Fail(c, "用户不存在！")
+		return
+	}
+	switch field {
+	case "account":
+		var exist model.User
+		q := tdb(c).Where("id <> ? AND account = ? AND delete_time IS NULL", id, util.ToString(value))
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if q.First(&exist).Error == nil {
+			response.Fail(c, "账号已被使用")
+			return
+		}
+	case "mobile":
+		mobile := util.ToString(value)
+		if msg := util.ValidChinaMobile(mobile); msg != "" && msg != "请输入内容" {
+			response.Fail(c, msg)
+			return
+		}
+		var exist model.User
+		q := tdb(c).Where("id <> ? AND mobile = ? AND delete_time IS NULL", id, mobile)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if q.First(&exist).Error == nil {
+			response.Fail(c, "手机号码已存在")
+			return
+		}
+	}
 	tdb(c).Model(&model.User{}).Where("id = ?", id).Update(field, value)
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ArticleLists(c *gin.Context) {
@@ -348,7 +412,7 @@ func ArticleAdd(c *gin.Context) {
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&a)
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func articleWriteCheck(c *gin.Context, needID bool) string {
@@ -370,6 +434,12 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if httpx.Uint(c, "cid") == 0 {
 		return "所属栏目必须存在"
 	}
+	if raw := httpx.Any(c, "is_show"); raw == nil || util.ToString(raw) == "" {
+		return "是否显示必须存在"
+	}
+	if show := httpx.Int(c, "is_show"); show != 0 && show != 1 {
+		return "是否显示取值异常"
+	}
 	return ""
 }
 
@@ -385,7 +455,7 @@ func ArticleEdit(c *gin.Context) {
 		"author": httpx.Str(c, "author"), "content": httpx.Str(c, "content"),
 		"is_show": httpx.Int(c, "is_show"), "sort": httpx.Int(c, "sort"), "update_time": now,
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func ArticleDelete(c *gin.Context) {
@@ -400,7 +470,7 @@ func ArticleDelete(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func ArticleDetail(c *gin.Context) {
@@ -417,6 +487,9 @@ func ArticleCateLists(c *gin.Context) {
 	db := tdb(c).Model(&model.ArticleCate{}).Where("delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
+	}
+	if name := lists.Param(q, "name"); name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
 	var count int64
 	db.Count(&count)
@@ -437,22 +510,66 @@ func ArticleCateLists(c *gin.Context) {
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
+func articleCateWriteCheck(c *gin.Context, needID bool) string {
+	if needID {
+		if httpx.Uint(c, "id") == 0 {
+			return "资讯分类id不能为空"
+		}
+		var row model.ArticleCate
+		if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+			return "资讯分类不存在"
+		}
+	}
+	if name := httpx.Str(c, "name"); name == "" {
+		return "资讯分类不能为空"
+	} else if n := len([]rune(name)); n < 1 || n > 90 {
+		return "资讯分类长度须在1-90位字符"
+	}
+	if sort := httpx.Int(c, "sort"); sort < 0 {
+		return "排序值不正确"
+	}
+	return ""
+}
+
 func ArticleCateAdd(c *gin.Context) {
+	if msg := articleCateWriteCheck(c, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Create(&model.ArticleCate{Name: httpx.Str(c, "name"), Sort: httpx.Int(c, "sort"), IsShow: httpx.Int(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func ArticleCateEdit(c *gin.Context) {
+	if msg := articleCateWriteCheck(c, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "sort": httpx.Int(c, "sort"), "is_show": httpx.Int(c, "is_show"),
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func ArticleCateDelete(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯分类id不能为空")
+		return
+	}
+	var row model.ArticleCate
+	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+		response.Fail(c, "资讯分类不存在")
+		return
+	}
+	var n int64
+	tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", httpx.Uint(c, "id")).Count(&n)
+	if n > 0 {
+		response.Fail(c, "资讯分类已使用，请先删除绑定该资讯分类的资讯")
+		return
+	}
 	now := util.NowUnix()
 	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
-	response.Success(c, "删除成功", nil)
+	response.SuccessNotice(c, "删除成功")
 }
 
 func ArticleCateAll(c *gin.Context) {

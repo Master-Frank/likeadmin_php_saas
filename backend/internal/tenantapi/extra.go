@@ -37,20 +37,28 @@ func AdminAll(c *gin.Context) {
 func ArticleCateDetail(c *gin.Context) {
 	var row model.ArticleCate
 	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
-		response.Fail(c, "分类不存在")
+		response.Fail(c, "资讯分类不存在")
 		return
 	}
 	response.Data(c, row)
 }
 
 func ArticleCateUpdateStatus(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯分类id不能为空")
+		return
+	}
 	tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "修改成功")
 }
 
 func ArticleUpdateStatus(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯id不能为空")
+		return
+	}
 	tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_show", httpx.Int(c, "is_show"))
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "修改成功")
 }
 
 func ArticleAll(c *gin.Context) {
@@ -194,8 +202,29 @@ func UserAdjustMoney(c *gin.Context) {
 	uid := httpx.Uint(c, "user_id")
 	action := httpx.Int(c, "action")
 	num := httpx.Float(c, "num")
-	if uid == 0 || num <= 0 {
-		response.Fail(c, "参数错误")
+	remark := httpx.Str(c, "remark")
+	if uid == 0 {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	if action != biz.INC && action != biz.DEC {
+		if httpx.Str(c, "action") == "" {
+			response.Fail(c, "请选择调整类型")
+			return
+		}
+		response.Fail(c, "调整类型错误")
+		return
+	}
+	if httpx.Str(c, "num") == "" && num == 0 {
+		response.Fail(c, "请输入调整数量")
+		return
+	}
+	if num <= 0 {
+		response.Fail(c, "调整余额必须大于零")
+		return
+	}
+	if len([]rune(remark)) > 128 {
+		response.Fail(c, "备注不可超过128个符号")
 		return
 	}
 	var user model.User
@@ -209,7 +238,7 @@ func UserAdjustMoney(c *gin.Context) {
 				return err
 			}
 			user.UserMoney += num
-			biz.AddAccountLog(user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, "", httpx.Str(c, "remark"))
+			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", httpx.Str(c, "remark"))
 			return nil
 		}
 		if user.UserMoney < num {
@@ -219,18 +248,18 @@ func UserAdjustMoney(c *gin.Context) {
 			return err
 		}
 		user.UserMoney -= num
-		biz.AddAccountLog(user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, "", httpx.Str(c, "remark"))
+		biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, user.UserMoney, "", httpx.Str(c, "remark"))
 		return nil
 	})
 	if err != nil {
 		if err == errInsufficient {
-			response.Fail(c, "用户余额不足")
+			response.Fail(c, "用户可用余额仅剩"+util.MoneyString(user.UserMoney))
 			return
 		}
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 var errInsufficient = errString("insufficient")
@@ -317,7 +346,7 @@ func RechargeRefund(c *gin.Context) {
 		}
 		var user model.User
 		tx.First(&user, order.UserID)
-		biz.AddAccountLog(order.UserID, order.TenantID, biz.UMDecRechargeRefund, biz.DEC, order.OrderAmount, order.SN, "充值订单退款")
+		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMDecRechargeRefund, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
 		exists := func(sn string) bool {
 			var n int64
 			tx.Model(&model.RefundRecord{}).Where("sn = ?", sn).Count(&n)

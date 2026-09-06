@@ -228,6 +228,7 @@ func platformRoutes() map[string]Handler {
 		"tools.generator/download": platformapi.GeneratorDownload,
 		"download/export":       platformapi.DownloadExport,
 		"upgrade.upgrade/lists": platformapi.UpgradeNotImpl, "upgrade.upgrade/upgrade": platformapi.UpgradeNotImpl,
+		"upgrade.upgrade/downloadpkg": platformapi.UpgradeNotImpl,
 		"setting.hot_search/getconfig": tenantapi.HotSearchGet, "setting.hot_search/setconfig": tenantapi.HotSearchSet,
 		"decorate.page/detail": tenantapi.DecoratePageDetail, "decorate.page/save": tenantapi.DecoratePageSave,
 		"decorate.tabbar/detail": tenantapi.DecorateTabbarDetail, "decorate.tabbar/save": tenantapi.DecorateTabbarSave,

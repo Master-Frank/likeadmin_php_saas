@@ -61,6 +61,19 @@ func ValidRegisterPassword(password string) string {
 	return ""
 }
 
+var chinaMobile = regexp.MustCompile(`^1[3-9]\d{9}$`)
+
+// ValidChinaMobile mirrors ThinkPHP mobile rule used by UserValidate.
+func ValidChinaMobile(mobile string) string {
+	if mobile == "" {
+		return "请输入内容"
+	}
+	if !chinaMobile.MatchString(mobile) {
+		return "手机号码格式错误"
+	}
+	return ""
+}
+
 func LoginWayAllows(raw any, scene int) bool {
 	if scene == 0 {
 		return false

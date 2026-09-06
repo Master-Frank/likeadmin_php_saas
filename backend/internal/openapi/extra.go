@@ -323,7 +323,7 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 		}
 		var user model.User
 		tx.First(&user, order.UserID)
-		biz.AddAccountLog(order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, order.SN, "用户充值")
+		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, user.UserMoney, order.SN, "用户充值")
 		return nil
 	})
 }

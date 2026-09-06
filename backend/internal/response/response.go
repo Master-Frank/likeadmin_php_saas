@@ -45,6 +45,14 @@ func Success(c *gin.Context, msg string, data any) {
 	Result(c, CodeOK, 0, msg, data)
 }
 
+// SuccessNotice matches PHP success($msg, [], 1, 1) used by most write actions.
+func SuccessNotice(c *gin.Context, msg string) {
+	if msg == "" {
+		msg = "success"
+	}
+	Result(c, CodeOK, 1, msg, emptyArray())
+}
+
 func SuccessSilent(c *gin.Context, msg string, data any) {
 	if data == nil {
 		data = emptyArray()

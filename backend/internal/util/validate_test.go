@@ -44,6 +44,18 @@ func TestValidRegisterPassword(t *testing.T) {
 	}
 }
 
+func TestValidChinaMobile(t *testing.T) {
+	if ValidChinaMobile("") != "请输入内容" {
+		t.Fatal(ValidChinaMobile(""))
+	}
+	if ValidChinaMobile("123") != "手机号码格式错误" {
+		t.Fatal(ValidChinaMobile("123"))
+	}
+	if ValidChinaMobile("13800138000") != "" {
+		t.Fatal(ValidChinaMobile("13800138000"))
+	}
+}
+
 func TestLoginWayAllows(t *testing.T) {
 	if !LoginWayAllows([]any{"1", "2"}, 1) {
 		t.Fatal("scene 1 should be allowed")
@@ -53,6 +65,18 @@ func TestLoginWayAllows(t *testing.T) {
 	}
 	if LoginWayAllows([]any{"1", "2"}, 0) {
 		t.Fatal("scene 0 should be rejected")
+	}
+}
+
+func TestParseDateTime(t *testing.T) {
+	if ParseDateTime("2024-01-02 03:04:05") == 0 {
+		t.Fatal("expected unix ts")
+	}
+	if ParseDateTime("2024-01-02") == 0 {
+		t.Fatal("expected date ts")
+	}
+	if ParseDateTime("") != 0 {
+		t.Fatal("empty should be 0")
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/util"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -25,14 +27,16 @@ var UMChangeTypeDesc = map[string]string{
 	"201": "充值增加余额",
 }
 
-func AddAccountLog(userID uint, tenantID uint, changeType, action int, amount float64, sourceSN, remark string) {
-	var user model.User
-	if bootstrap.DB.First(&user, userID).Error != nil {
+func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action int, amount, left float64, sourceSN, remark string) {
+	if db == nil {
+		db = bootstrap.DB
+	}
+	if db == nil {
 		return
 	}
 	exists := func(sn string) bool {
 		var n int64
-		bootstrap.DB.Model(&model.UserAccountLog{}).Where("sn = ?", sn).Count(&n)
+		db.Model(&model.UserAccountLog{}).Where("sn = ?", sn).Count(&n)
 		return n > 0
 	}
 	row := model.UserAccountLog{
@@ -42,13 +46,13 @@ func AddAccountLog(userID uint, tenantID uint, changeType, action int, amount fl
 		ChangeType:   changeType,
 		Action:       action,
 		ChangeAmount: amount,
-		LeftAmount:   user.UserMoney,
+		LeftAmount:   left,
 		SourceSN:     sourceSN,
 		Remark:       remark,
 		TenantID:     tenantID,
 		CreateTime:   util.NowUnix(),
 	}
-	bootstrap.DB.Create(&row)
+	db.Create(&row)
 }
 
 func ExtraJSON(v any) string {
