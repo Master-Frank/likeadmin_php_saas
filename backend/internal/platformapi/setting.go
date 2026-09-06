@@ -164,7 +164,17 @@ func CacheClear(c *gin.Context) {
 	if bootstrap.RDB != nil {
 		_ = bootstrap.RDB.FlushDB(context.Background()).Err()
 	}
+	clearRuntimeFileCache()
 	response.Success(c, "清除成功", nil)
+}
+
+func clearRuntimeFileCache() {
+	root := filepath.Join(config.C.App.PublicDir, "..", "runtime", "file")
+	if config.C.App.PublicDir == "" {
+		root = filepath.Join("runtime", "file")
+	}
+	_ = os.RemoveAll(root)
+	_ = os.MkdirAll(root, 0o755)
 }
 
 func SystemInfo(c *gin.Context) {

@@ -2,6 +2,7 @@ package wechat
 
 import (
 	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"sort"
 	"strings"
@@ -84,6 +85,35 @@ func containsAll(s string, parts ...string) bool {
 		}
 	}
 	return true
+}
+
+func TestOACryptoRoundtrip(t *testing.T) {
+	rawKey := make([]byte, 32)
+	for i := range rawKey {
+		rawKey[i] = byte(i + 3)
+	}
+	aesKey := strings.TrimRight(base64.StdEncoding.EncodeToString(rawKey), "=")
+	xmlBody := `<xml><ToUserName><![CDATA[oa]]></ToUserName><FromUserName><![CDATA[user]]></FromUserName><CreateTime>1</CreateTime><MsgType><![CDATA[text]]></MsgType><Content><![CDATA[你好]]></Content></xml>`
+	enc, err := EncryptOA(aesKey, "wxappid", xmlBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := DecryptOA(aesKey, enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.appID != "wxappid" {
+		t.Fatalf("appid %s", plain.appID)
+	}
+	msg, err := ParseOAXML(plain.xml)
+	if err != nil || msg.Content != "你好" {
+		t.Fatalf("msg %+v err=%v", msg, err)
+	}
+	wrapped := "<xml><Encrypt><![CDATA[" + enc + "]]></Encrypt></xml>"
+	got, err := DecodeOABody([]byte(wrapped), "token", aesKey, "wxappid", 3, "", "1", "n")
+	if err != nil || got.Content != "你好" {
+		t.Fatalf("decode %+v err=%v", got, err)
+	}
 }
 
 func contains(s, sub string) bool {

@@ -44,11 +44,12 @@ func Delete(c *gin.Context, uri string) error {
 	}
 	cfg := asMap(cfgsvc.Get(c, "storage", engine, map[string]any{}))
 	switch engine {
-	case "qiniu", "aliyun", "qcloud":
-		if str(cfg, "access_key") == "" || str(cfg, "secret_key") == "" || str(cfg, "bucket") == "" {
-			return nil
-		}
-		return nil
+	case "qiniu":
+		return deleteQiniu(cfg, key)
+	case "aliyun":
+		return deleteAliyun(cfg, key)
+	case "qcloud":
+		return deleteQcloud(cfg, key)
 	default:
 		return nil
 	}
@@ -201,6 +202,89 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", auth)
 	return do(req)
+}
+
+func deleteQiniu(cfg map[string]any, key string) error {
+	ak, sk, bucket := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket")
+	if ak == "" || sk == "" || bucket == "" {
+		return nil
+	}
+	entry := base64.URLEncoding.EncodeToString([]byte(bucket + ":" + key))
+	path := "/delete/" + entry
+	mac := hmac.New(sha1.New, []byte(sk))
+	mac.Write([]byte(path + "\n"))
+	auth := ak + ":" + base64.URLEncoding.EncodeToString(mac.Sum(nil))
+	req, err := http.NewRequest(http.MethodPost, "https://rs.qiniu.com"+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "QBox "+auth)
+	return doDelete(req)
+}
+
+func deleteAliyun(cfg map[string]any, key string) error {
+	ak, sk, bucket, domain := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket"), str(cfg, "domain")
+	if ak == "" || sk == "" || bucket == "" {
+		return nil
+	}
+	host := strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
+	if host == "" {
+		host = bucket + ".oss-cn-hangzhou.aliyuncs.com"
+	}
+	date := time.Now().UTC().Format(http.TimeFormat)
+	canon := "DELETE\n\n\n" + date + "\n/" + bucket + "/" + key
+	mac := hmac.New(sha1.New, []byte(sk))
+	mac.Write([]byte(canon))
+	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	req, err := http.NewRequest(http.MethodDelete, "https://"+host+"/"+key, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Date", date)
+	req.Header.Set("Authorization", "OSS "+ak+":"+sig)
+	return doDelete(req)
+}
+
+func deleteQcloud(cfg map[string]any, key string) error {
+	ak, sk, bucket, region := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket"), str(cfg, "region")
+	if ak == "" || sk == "" || bucket == "" {
+		return nil
+	}
+	host := bucket + ".cos." + region + ".myqcloud.com"
+	if region == "" {
+		host = strings.TrimPrefix(strings.TrimPrefix(str(cfg, "domain"), "https://"), "http://")
+	}
+	date := time.Now().UTC().Format(http.TimeFormat)
+	canon := "delete\n/" + key + "\n\nhost=" + host + "\n"
+	stringToSign := "sha1\n" + date + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(canon))) + "\n"
+	signKey := hmacSHA1Hex(sk, date)
+	sig := hmacSHA1Hex(signKey, stringToSign)
+	auth := fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s;%s&q-key-time=%s;%s&q-header-list=host&q-url-param-list=&q-signature=%s",
+		ak, date, date, date, date, sig)
+	req, err := http.NewRequest(http.MethodDelete, "https://"+host+"/"+key, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Host", host)
+	req.Header.Set("Authorization", auth)
+	return doDelete(req)
+}
+
+func doDelete(req *http.Request) error {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return nil
+	}
+	if resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("存储删除失败: %s %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
 }
 
 func hmacSHA1Hex(key, msg string) string {

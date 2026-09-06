@@ -1145,6 +1145,17 @@ func LoginUpdateUserCheck(p map[string]any) string {
 	return ""
 }
 
+// WebScanLoginCheck mirrors PHP WebScanLoginValidate field rules (not the cache state check).
+func WebScanLoginCheck(p map[string]any) string {
+	if !phpRequired(p, "code") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "state") {
+		return "昵称缺少"
+	}
+	return ""
+}
+
 func OAReplySortCheck(p map[string]any) string {
 	if !phpRequired(p, "new_sort") {
 		return "请输入新排序值"

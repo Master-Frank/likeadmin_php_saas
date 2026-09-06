@@ -977,7 +977,9 @@ func FinanceRefundRecord(c *gin.Context) {
 }
 
 func OAReplyIndex(c *gin.Context) {
-	_, _, token := wechat.OAConfig(c)
+	appID, _, token := wechat.OAConfig(c)
+	aesKey := cfgsvc.GetString(c, "oa_setting", "encoding_aes_key", "")
+	encType := cfgsvc.GetInt(c, "oa_setting", "encryption_type", 1)
 	sig := c.Query("signature")
 	ts := c.Query("timestamp")
 	nonce := c.Query("nonce")
@@ -990,7 +992,7 @@ func OAReplyIndex(c *gin.Context) {
 		return
 	}
 	raw := middleware.ReadBody(c)
-	msg, err := wechat.ParseOAXML(raw)
+	msg, err := wechat.DecodeOABody(raw, token, aesKey, appID, encType, c.Query("msg_signature"), ts, nonce)
 	if err != nil || msg.MsgType == "" {
 		c.String(200, "success")
 		return
@@ -1009,6 +1011,12 @@ func OAReplyIndex(c *gin.Context) {
 		})
 	}
 	content := wechat.MatchReply(msg, mapped)
+	xmlBody := wechat.TextReplyXML(msg.FromUserName, msg.ToUserName, content)
+	if encType >= 2 && aesKey != "" && xmlBody != "success" {
+		if enc, err := wechat.EncryptedReplyXML(token, aesKey, appID, ts, nonce, xmlBody); err == nil {
+			xmlBody = enc
+		}
+	}
 	c.Header("Content-Type", "application/xml; charset=utf-8")
-	c.String(200, wechat.TextReplyXML(msg.FromUserName, msg.ToUserName, content))
+	c.String(200, xmlBody)
 }

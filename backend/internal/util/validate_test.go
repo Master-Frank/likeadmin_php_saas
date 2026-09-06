@@ -417,3 +417,15 @@ func TestUpgradeCheck(t *testing.T) {
 		t.Fatal(UpgradeDownloadCheck(map[string]any{}))
 	}
 }
+
+func TestWebScanLoginCheck(t *testing.T) {
+	if WebScanLoginCheck(map[string]any{}) != "参数缺失" {
+		t.Fatal(WebScanLoginCheck(map[string]any{}))
+	}
+	if WebScanLoginCheck(map[string]any{"code": "x"}) != "昵称缺少" {
+		t.Fatal(WebScanLoginCheck(map[string]any{"code": "x"}))
+	}
+	if WebScanLoginCheck(map[string]any{"code": "x", "state": "s"}) != "" {
+		t.Fatal("valid")
+	}
+}

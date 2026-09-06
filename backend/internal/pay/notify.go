@@ -11,9 +11,18 @@ import (
 )
 
 func DecryptWechatV3(raw []byte, apiV3Key string) wechat.PayNotify {
+	n, _ := DecryptWechatV3OK(raw, apiV3Key)
+	return n
+}
+
+// DecryptWechatV3OK decrypts a V3 notify. ok is false when ciphertext is present but cannot be authenticated.
+func DecryptWechatV3OK(raw []byte, apiV3Key string) (wechat.PayNotify, bool) {
 	n := wechat.ParsePayNotify(raw, nil)
-	if apiV3Key == "" || !strings.Contains(string(raw), "ciphertext") {
-		return n
+	if !strings.Contains(string(raw), "ciphertext") {
+		return n, true
+	}
+	if apiV3Key == "" {
+		return n, false
 	}
 	var env struct {
 		EventType string `json:"event_type"`
@@ -24,11 +33,11 @@ func DecryptWechatV3(raw []byte, apiV3Key string) wechat.PayNotify {
 		} `json:"resource"`
 	}
 	if json.Unmarshal(raw, &env) != nil || env.Resource.Ciphertext == "" {
-		return n
+		return n, false
 	}
 	plain, err := aesGCMDecrypt(apiV3Key, env.Resource.Nonce, env.Resource.AssociatedData, env.Resource.Ciphertext)
 	if err != nil {
-		return n
+		return n, false
 	}
 	dec := wechat.ParsePayNotify(plain, nil)
 	if env.EventType == "TRANSACTION.SUCCESS" {
@@ -37,7 +46,7 @@ func DecryptWechatV3(raw []byte, apiV3Key string) wechat.PayNotify {
 	if dec.Attach == "" {
 		dec.Attach = n.Attach
 	}
-	return dec
+	return dec, true
 }
 
 func aesGCMDecrypt(key, nonce, aad, ciphertextB64 string) ([]byte, error) {

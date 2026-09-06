@@ -1017,6 +1017,24 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     if [[ "$(jget msg <<<"$php_uu")" != "$(jget msg <<<"$go_uu")" ]]; then
       fail=$((fail + 1))
     fi
+    php_sl="$(curl -sS -X POST "$PHP/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+    go_sl="$(curl -sS -X POST "$GO/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+    echo "scan_login_bad php_msg=$(jget msg <<<"$php_sl") go_msg=$(jget msg <<<"$go_sl")"
+    if [[ "$(jget msg <<<"$php_sl")" != "$(jget msg <<<"$go_sl")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_sl2="$(curl -sS -X POST "$PHP/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    go_sl2="$(curl -sS -X POST "$GO/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    echo "scan_login_nostate php_msg=$(jget msg <<<"$php_sl2") go_msg=$(jget msg <<<"$go_sl2")"
+    if [[ "$(jget msg <<<"$php_sl2")" != "$(jget msg <<<"$go_sl2")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_sl3="$(curl -sS -X POST "$PHP/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"code":"x","state":"gone"}')"
+    go_sl3="$(curl -sS -X POST "$GO/api/login/scanLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"code":"x","state":"gone"}')"
+    echo "scan_login_expire php_msg=$(jget msg <<<"$php_sl3") go_msg=$(jget msg <<<"$go_sl3")"
+    if [[ "$(jget msg <<<"$php_sl3")" != "$(jget msg <<<"$go_sl3")" ]]; then
+      fail=$((fail + 1))
+    fi
     php_up="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     go_up="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     echo "upload_empty php_msg=$(jget msg <<<"$php_up") go_msg=$(jget msg <<<"$go_up")"
@@ -1641,6 +1659,17 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
       fail=$((fail + 1))
     fi
   fi
+fi
+
+go_ie="$(curl -sS "$GO/install/env")"
+echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie")"
+if [[ "$(jcode <<<"$go_ie")" != "1" ]]; then
+  fail=$((fail + 1))
+fi
+go_iw="$(curl -sS -o /dev/null -w '%{http_code}' "$GO/install")"
+echo "install_wizard http=$go_iw"
+if [[ "$go_iw" != "200" ]]; then
+  fail=$((fail + 1))
 fi
 
 echo "failed=$fail"

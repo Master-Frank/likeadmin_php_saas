@@ -69,6 +69,9 @@ func New() *gin.Engine {
 		cron.RunOnce()
 		c.String(http.StatusOK, "ok")
 	})
+	r.GET("/install", install.Wizard)
+	r.GET("/install/", install.Wizard)
+	r.GET("/install/env", install.Env)
 	r.GET("/install/check", install.Status)
 	r.POST("/install", install.Run)
 	r.Any("/install/status", install.Status)
@@ -116,7 +119,7 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 			return
 		}
 		// run login + auth
-		chain := []gin.HandlerFunc{middleware.Login(notNeed), middleware.Auth(), middleware.DemoGuard(), middleware.OperationLog(), h}
+		chain := []gin.HandlerFunc{middleware.Login(notNeed), middleware.Auth(), middleware.DemoGuard(), middleware.DemoMask(), middleware.OperationLog(), h}
 		c.Set("likeadmin.meta", meta)
 		idx := 0
 		var next func()

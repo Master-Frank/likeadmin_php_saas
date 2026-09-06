@@ -61,7 +61,7 @@ func due(item model.Crontab, now int64) bool {
 }
 
 func runCommand(item model.Crontab) string {
-	cmd := strings.ToLower(strings.TrimSpace(item.Command))
+	cmd := normalizeCommand(item.Command)
 	switch {
 	case cmd == "" || strings.Contains(cmd, "cache"):
 		if bootstrap.RDB != nil {
@@ -81,6 +81,21 @@ func runCommand(item model.Crontab) string {
 	default:
 		log.Printf("crontab skip unsupported command %s", cmd)
 		return ""
+	}
+}
+
+func normalizeCommand(raw string) string {
+	cmd := strings.ToLower(strings.TrimSpace(raw))
+	cmd = strings.ReplaceAll(cmd, "\\", "/")
+	switch {
+	case strings.Contains(cmd, "query_refund") || strings.Contains(cmd, "queryrefund"):
+		return "query_refund"
+	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
+		return "session"
+	case cmd == "" || strings.Contains(cmd, "cache") || cmd == "crontab":
+		return "cache"
+	default:
+		return cmd
 	}
 }
 

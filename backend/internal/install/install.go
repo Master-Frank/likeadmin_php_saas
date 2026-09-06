@@ -161,6 +161,7 @@ func Run(c *gin.Context) {
 		response.Fail(c, "写入安装锁失败："+err.Error())
 		return
 	}
+	restoreIndexLock()
 	if sqlDB, err := db.DB(); err == nil {
 		_ = sqlDB.Close()
 	}

@@ -78,6 +78,12 @@ func TestDecryptWechatV3(t *testing.T) {
 	if !n.Paid || n.OutTradeNo != "SN1234567890123456" || n.Attach != "recharge" || n.TransactionID != "wx1" {
 		t.Fatalf("%+v", n)
 	}
+	if _, ok := DecryptWechatV3OK(raw, "wrong-key-wrong-key-wrong-key!!"); ok {
+		t.Fatal("bad key accepted")
+	}
+	if _, ok := DecryptWechatV3OK([]byte(`{"resource":{"ciphertext":"xxxx"}}`), ""); ok {
+		t.Fatal("empty key accepted")
+	}
 }
 
 func TestNormalizePEM(t *testing.T) {

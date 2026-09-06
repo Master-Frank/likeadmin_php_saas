@@ -84,12 +84,22 @@ func LoginGetScanCode(c *gin.Context) {
 	if redirect == "" {
 		redirect = ctxutil.Domain(c) + "/pc"
 	}
-	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), ctxutil.Get(c).TenantID))
-	cache.Set("web_scan_login_"+state, "1", 10*time.Minute)
+	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), time.Now().UnixNano()%100000))
+	cache.Set("web_scan_"+state, state, 10*time.Minute)
 	response.Data(c, gin.H{"url": wechat.ScanCodeURL(appID, redirect, state)})
 }
 
 func LoginScanLogin(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := util.WebScanLoginCheck(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	state := util.ToString(p["state"])
+	if raw, ok := cache.Get("web_scan_" + state); !ok || raw == "" {
+		response.Fail(c, "二维码已失效或不存在,请重新扫码")
+		return
+	}
 	appID, secret := wechat.OpenConfig(c)
 	if appID == "" || secret == "" {
 		response.Fail(c, "请先完成微信开放平台配置")
@@ -259,7 +269,12 @@ func handlePayNotify(c *gin.Context) {
 	form := c.Request.PostForm
 	n := wechat.ParsePayNotify(raw, form)
 	if strings.Contains(string(raw), "ciphertext") {
-		n = pay.DecryptWechatV3(raw, pay.WechatCfg(c).SignKey)
+		dec, ok := pay.DecryptWechatV3OK(raw, pay.WechatCfg(c).SignKey)
+		if !ok {
+			c.JSON(200, gin.H{"code": "FAIL", "message": "验签失败"})
+			return
+		}
+		n = dec
 	}
 	if len(form) > 0 && (form.Get("trade_status") != "" || form.Get("sign") != "") {
 		if !pay.AliVerifyNotify(c, form) {
