@@ -1,14 +1,10 @@
 package openapi
 
 import (
-	"crypto/rand"
 	"fmt"
-	"math/big"
-	"time"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
-	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -18,6 +14,7 @@ import (
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/sms"
 	"likeadmin/backend/internal/tenantapi"
 	"likeadmin/backend/internal/util"
 
@@ -334,7 +331,7 @@ func UserResetPassword(c *gin.Context) {
 		response.Fail(c, "参数错误")
 		return
 	}
-	if !verifySms(c, mobile, code, "find_login_password") {
+	if !verifySms(c, mobile, code, "ZHDLMM") {
 		response.Fail(c, "验证码错误")
 		return
 	}
@@ -356,9 +353,9 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "请输入手机号")
 		return
 	}
-	scene := "change_mobile"
+	scene := "BGSJHM"
 	if typ == "bind" {
-		scene = "bind_mobile"
+		scene = "BDSJHM"
 	}
 	if !verifySms(c, mobile, code, scene) {
 		response.Fail(c, "验证码错误")
@@ -381,50 +378,12 @@ func UserBindMobile(c *gin.Context) {
 	response.Success(c, "绑定成功", nil)
 }
 
-func UserGetMobileByMnp(c *gin.Context) {
-	response.Fail(c, "请先完成微信小程序配置")
-}
+func UserGetMobileByMnp(c *gin.Context) { UserGetMobileByMnpReal(c) }
 
-func SmsSendCode(c *gin.Context) {
-	mobile := httpx.Str(c, "mobile")
-	if mobile == "" {
-		response.Fail(c, "请输入手机号")
-		return
-	}
-	scene := httpx.Str(c, "scene")
-	if scene == "" {
-		scene = "default"
-	}
-	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
-	code := fmt.Sprintf("%06d", n.Int64())
-	cache.Set(smsKey(scene, mobile), code, 5*time.Minute)
-	response.Success(c, "发送成功", nil)
-}
-
-func smsKey(scene, mobile string) string {
-	return "sms_code_" + scene + "_" + mobile
-}
+func SmsSendCode(c *gin.Context) { SmsSendCodeReal(c) }
 
 func verifySms(c *gin.Context, mobile, code, scene string) bool {
-	if code == "" {
-		return false
-	}
-	got, ok := cache.Get(smsKey(scene, mobile))
-	if !ok {
-		// also try frontend scene aliases
-		for _, alt := range []string{"default", scene} {
-			if v, ok2 := cache.Get(smsKey(alt, mobile)); ok2 && v == code {
-				cache.Del(smsKey(alt, mobile))
-				return true
-			}
-		}
-		return false
-	}
-	if got != code {
-		return false
-	}
-	cache.Del(smsKey(scene, mobile))
-	return true
+	return sms.Verify(c, mobile, code, scene)
 }
 
 func PcIndex(c *gin.Context) {

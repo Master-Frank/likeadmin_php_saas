@@ -14,6 +14,7 @@ import (
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
+	"likeadmin/backend/internal/wechat"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -401,16 +402,32 @@ func OAReplyAdd(c *gin.Context) {
 	if row.ContentType == 0 {
 		row.ContentType = 1
 	}
+	if row.ReplyType != 2 && row.Status == 1 {
+		q := bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND delete_time IS NULL", row.ReplyType)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Update("status", 0)
+	}
 	bootstrap.DB.Create(&row)
 	response.Success(c, "操作成功", nil)
 }
 
 func OAReplyEdit(c *gin.Context) {
+	replyType := httpx.Int(c, "reply_type")
+	status := httpx.Int(c, "status")
+	if replyType != 2 && status == 1 {
+		q := bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"))
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Update("status", 0)
+	}
 	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "keyword": httpx.Str(c, "keyword"),
-		"reply_type": httpx.Int(c, "reply_type"), "matching_type": httpx.Int(c, "matching_type"),
+		"reply_type": replyType, "matching_type": httpx.Int(c, "matching_type"),
 		"content_type": httpx.Int(c, "content_type"), "content": httpx.Str(c, "content"),
-		"status": httpx.Int(c, "status"), "sort": httpx.Int(c, "sort"), "update_time": util.NowUnix(),
+		"status": status, "sort": httpx.Int(c, "sort"), "update_time": util.NowUnix(),
 	})
 	response.Success(c, "操作成功", nil)
 }
@@ -462,7 +479,33 @@ func OAMenuSave(c *gin.Context) {
 }
 
 func OAMenuSaveAndPublish(c *gin.Context) {
-	OAMenuSave(c)
+	menu := httpx.List(c)
+	if menu == nil {
+		if v := httpx.Any(c, "menu"); v != nil {
+			if arr, ok := v.([]any); ok {
+				menu = arr
+			}
+		}
+	}
+	if menu == nil {
+		response.Fail(c, "请设置正确格式菜单")
+		return
+	}
+	if err := checkOAMenu(menu); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	cfgsvc.Set(c, "oa_setting", "menu", menu)
+	appID, secret, _ := wechat.OAConfig(c)
+	if appID == "" || secret == "" {
+		response.Fail(c, "请先完成微信公众号配置")
+		return
+	}
+	if err := wechat.PublishMenu(appID, secret, menu); err != nil {
+		response.Fail(c, "保存成功但发布失败："+err.Error())
+		return
+	}
+	response.Success(c, "保存并发布成功", nil)
 }
 
 func checkOAMenu(menu []any) error {

@@ -12,9 +12,11 @@ import (
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
+	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
+	"likeadmin/backend/internal/wechat"
 
 	"github.com/gin-gonic/gin"
 )
@@ -415,23 +417,6 @@ func SettingSetWebsite(c *gin.Context) {
 	response.Success(c, "设置成功", nil)
 }
 
-func ChannelGetSet(group string) (gin.HandlerFunc, gin.HandlerFunc) {
-	return ChannelGetOnly(group), ChannelSetOnly(group)
-}
-
-func ChannelGetOnly(group string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		response.Data(c, cfgsvc.Get(c, group, "config", map[string]any{}))
-	}
-}
-
-func ChannelSetOnly(group string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		cfgsvc.Set(c, group, "config", httpx.Params(c))
-		response.Success(c, "设置成功", nil)
-	}
-}
-
 func HotSearchGet(c *gin.Context) {
 	var rows []model.HotSearch
 	db := bootstrap.DB
@@ -495,10 +480,38 @@ func FinanceRefundRecord(c *gin.Context) {
 }
 
 func OAReplyIndex(c *gin.Context) {
-	echostr := c.Query("echostr")
-	if echostr != "" {
+	_, _, token := wechat.OAConfig(c)
+	sig := c.Query("signature")
+	ts := c.Query("timestamp")
+	nonce := c.Query("nonce")
+	if token != "" && sig != "" && !wechat.CheckOASignature(token, sig, ts, nonce) {
+		c.String(401, "invalid signature")
+		return
+	}
+	if echostr := c.Query("echostr"); echostr != "" {
 		c.String(200, echostr)
 		return
 	}
-	c.String(200, "success")
+	raw := middleware.ReadBody(c)
+	msg, err := wechat.ParseOAXML(raw)
+	if err != nil || msg.MsgType == "" {
+		c.String(200, "success")
+		return
+	}
+	q := bootstrap.DB.Where("delete_time IS NULL AND status = 1")
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	var rows []model.OfficialAccountReply
+	q.Order("sort asc, id asc").Find(&rows)
+	mapped := make([]wechat.ReplyRow, 0, len(rows))
+	for _, r := range rows {
+		mapped = append(mapped, wechat.ReplyRow{
+			Keyword: r.Keyword, ReplyType: r.ReplyType, MatchingType: r.MatchingType,
+			Content: r.Content, Status: r.Status, Sort: r.Sort,
+		})
+	}
+	content := wechat.MatchReply(msg, mapped)
+	c.Header("Content-Type", "application/xml; charset=utf-8")
+	c.String(200, wechat.TextReplyXML(msg.FromUserName, msg.ToUserName, content))
 }

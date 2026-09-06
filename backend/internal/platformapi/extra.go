@@ -5,6 +5,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
+	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
@@ -223,4 +224,8 @@ func SmsConfigDetail(c *gin.Context) {
 
 func UpgradeNotImpl(c *gin.Context) {
 	response.Fail(c, "在线升级面向 PHP 发行包，Go 版请通过发版更新")
+}
+
+func DownloadExport(c *gin.Context) {
+	export.Serve(c)
 }

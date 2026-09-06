@@ -172,6 +172,7 @@ type OperationLog struct {
 	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
 	AdminID    uint   `gorm:"column:admin_id" json:"admin_id"`
 	AdminName  string `gorm:"column:admin_name" json:"admin_name"`
+	Account    string `gorm:"column:account" json:"account"`
 	Action     string `gorm:"column:action" json:"action"`
 	Type       string `gorm:"column:type" json:"type"`
 	URL        string `gorm:"column:url" json:"url"`

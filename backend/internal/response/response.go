@@ -81,6 +81,9 @@ func Lists(c *gin.Context, lists any, count int64, pageNo, pageSize int, extend 
 	if extend == nil {
 		extend = map[string]any{}
 	}
+	if ExportHook != nil && ExportHook(c, lists, count) {
+		return
+	}
 	Data(c, gin.H{
 		"lists":     lists,
 		"count":     count,
@@ -89,6 +92,9 @@ func Lists(c *gin.Context, lists any, count int64, pageNo, pageSize int, extend 
 		"extend":    extend,
 	})
 }
+
+// ExportHook is set by router to handle export=1/2 without import cycles.
+var ExportHook func(c *gin.Context, rows any, count int64) bool
 
 func AbortFail(c *gin.Context, msg string, code, show int) {
 	FailCode(c, msg, code, show)

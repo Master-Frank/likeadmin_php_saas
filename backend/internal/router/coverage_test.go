@@ -44,6 +44,7 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"tools.generator/edit", "tools.generator/preview", "tools.generator/generate", "tools.generator/getmodels",
 		"article.articlecate/lists", "article.articlecate/all", "article.articlecate/add",
 		"article.article/lists", "article/all",
+		"download/export",
 		"channel.official_account_setting/getconfig", "channel.official_account_menu/detail",
 		"channel.official_account_reply/lists", "recharge.recharge/getconfig", "recharge.recharge/setconfig",
 	}
@@ -60,12 +61,14 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"notice.notice/settinglists", "finance.account_log/getumchangetype",
 		"recharge.recharge/refund", "finance.refund/log",
 		"channel.official_account_menu/save", "channel.official_account_reply/add",
-		"file/lists", "upload/image",
+		"file/lists", "upload/image", "download/export",
 	}
 	api := []string{
 		"index/index", "index/config", "index/policy", "index/decorate",
 		"pc/index", "pc/config", "pc/infocenter", "pc/articledetail",
 		"login/account", "login/register", "login/logout",
+		"login/codeurl", "login/oalogin", "login/mnplogin",
+		"login/getscancode", "login/scanlogin", "login/mnpauthbind", "login/oaauthbind", "login/updateuser",
 		"user/center", "user/info", "user/setinfo", "user/bindmobile",
 		"user/changepassword", "user/resetpassword",
 		"article/lists", "article/cate", "article/detail",

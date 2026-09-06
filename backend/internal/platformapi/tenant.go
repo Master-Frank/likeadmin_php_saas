@@ -283,11 +283,144 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		return err
 	}
 	_ = tx.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
-	return copyTenantMenus(tx, tenant.ID)
+	if err := copyTenantMenus(tx, tenant.ID); err != nil {
+		return err
+	}
+	if err := copyTenantArticles(tx, tenant.ID); err != nil {
+		return err
+	}
+	if err := copyTenantPay(tx, tenant.ID); err != nil {
+		return err
+	}
+	if err := copyTenantNotice(tx, tenant.ID); err != nil {
+		return err
+	}
+	return copyTenantDecorate(tx, tenant.ID)
 }
 
 func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
-	return initSharedTenant(tx, tenant, c)
+	if err := runTenantDataSQL(tenant.ID, tenant.SN); err != nil {
+		return err
+	}
+	pwd := httpx.Str(c, "password")
+	if pwd == "" {
+		pwd = config.C.Project.DefaultPassword
+	}
+	account := httpx.Str(c, "account")
+	if account == "" {
+		account = tenant.SN
+	}
+	admin := model.TenantAdmin{
+		TenantID: tenant.ID, Account: account, Name: "超级管理员",
+		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
+		Root:     1, MultipointLogin: 1, CreateTime: util.NowUnix(),
+	}
+	if err := tx.Create(&admin).Error; err != nil {
+		return err
+	}
+	dept := model.TenantDept{Name: "公司", Pid: 0, Sort: 0, Status: 1, TenantID: tenant.ID, CreateTime: util.NowUnix()}
+	if err := tx.Create(&dept).Error; err != nil {
+		return err
+	}
+	return tx.Create(&model.TenantAdminDept{AdminID: admin.ID, DeptID: dept.ID}).Error
+}
+
+func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
+	var cates []model.ArticleCate
+	tx.Where("tenant_id = 0 AND delete_time IS NULL").Find(&cates)
+	idMap := map[uint]uint{}
+	now := util.NowUnix()
+	for _, cate := range cates {
+		old := cate.ID
+		cate.ID = 0
+		cate.TenantID = tenantID
+		cate.CreateTime = now
+		if err := tx.Create(&cate).Error; err != nil {
+			return err
+		}
+		idMap[old] = cate.ID
+	}
+	var arts []model.Article
+	tx.Where("tenant_id = 0 AND delete_time IS NULL").Find(&arts)
+	for _, a := range arts {
+		a.ID = 0
+		a.TenantID = tenantID
+		if nid, ok := idMap[a.Cid]; ok {
+			a.Cid = nid
+		}
+		a.CreateTime = now
+		if err := tx.Create(&a).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTenantPay(tx *gorm.DB, tenantID uint) error {
+	var tpls []model.TenantPayConfig
+	tx.Where("tenant_id = 0").Find(&tpls)
+	wayToID := map[int]uint{}
+	for _, cfg := range tpls {
+		cfg.ID = 0
+		cfg.TenantID = tenantID
+		if err := tx.Create(&cfg).Error; err != nil {
+			return err
+		}
+		wayToID[cfg.PayWay] = cfg.ID
+	}
+	var ways []model.TenantPayWay
+	tx.Where("tenant_id = 0").Find(&ways)
+	for _, w := range ways {
+		w.ID = 0
+		w.TenantID = tenantID
+		if nid, ok := wayToID[int(w.PayConfigID)]; ok {
+			w.PayConfigID = nid
+		} else if nid, ok := wayToID[w.Scene]; ok && w.PayConfigID == 0 {
+			w.PayConfigID = nid
+		}
+		if err := tx.Create(&w).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTenantNotice(tx *gorm.DB, tenantID uint) error {
+	var tpls []model.TenantNoticeSetting
+	tx.Where("tenant_id = 0").Find(&tpls)
+	for _, n := range tpls {
+		n.ID = 0
+		n.TenantID = tenantID
+		if err := tx.Create(&n).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
+	now := util.NowUnix()
+	var pages []model.DecoratePage
+	tx.Where("tenant_id = 0").Find(&pages)
+	for _, p := range pages {
+		p.ID = 0
+		p.TenantID = tenantID
+		p.CreateTime = now
+		if err := tx.Create(&p).Error; err != nil {
+			return err
+		}
+	}
+	var bars []model.DecorateTabbar
+	tx.Where("tenant_id = 0").Find(&bars)
+	for _, b := range bars {
+		b.ID = 0
+		b.TenantID = tenantID
+		b.CreateTime = now
+		if err := tx.Create(&b).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
@@ -345,6 +478,46 @@ func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 	return nil
 }
 
+func runTenantDataSQL(tenantID uint, sn string) error {
+	candidates := []string{
+		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db/tenantData.sql"),
+		"/workspace/server/app/platformapi/db/tenantData.sql",
+	}
+	var raw []byte
+	var err error
+	for _, p := range candidates {
+		raw, err = os.ReadFile(p)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	content = strings.ReplaceAll(content, "{tenantSn}", sn)
+	content = strings.ReplaceAll(content, "{tenantId}", util.ToString(tenantID))
+	return execSQLScript(content)
+}
+
+func execSQLScript(content string) error {
+	parts := strings.Split(content, ";\n")
+	for _, sql := range parts {
+		sql = strings.TrimSpace(sql)
+		if sql == "" || strings.HasPrefix(sql, "--") || strings.HasPrefix(sql, "/*") {
+			continue
+		}
+		up := strings.ToUpper(sql)
+		if strings.HasPrefix(up, "SET ") || strings.HasPrefix(up, "BEGIN") || strings.HasPrefix(up, "COMMIT") {
+			continue
+		}
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func runTenantSQL(sn string) error {
 	candidates := []string{
 		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db/tenant.sql"),
@@ -364,17 +537,7 @@ func runTenantSQL(sn string) error {
 	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	content = strings.ReplaceAll(content, "{tenantSn}", sn)
 	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
-	parts := strings.Split(content, ";\n")
-	for _, sql := range parts {
-		sql = strings.TrimSpace(sql)
-		if sql == "" || strings.HasPrefix(sql, "--") {
-			continue
-		}
-		if err := bootstrap.DB.Exec(sql).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+	return execSQLScript(content)
 }
 
 func randomSN() string {

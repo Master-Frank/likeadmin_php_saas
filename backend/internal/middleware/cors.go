@@ -31,6 +31,10 @@ func CORS() gin.HandlerFunc {
 
 func InstallAndTenant() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/install") {
+			c.Next()
+			return
+		}
 		meta := ctxutil.Get(c)
 		lock := config.C.App.InstallLock
 		if lock != "" {

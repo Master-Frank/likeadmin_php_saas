@@ -20,7 +20,11 @@ for path in \
   /tenantapi/user.user/lists \
   /api/index/config \
   /api/article/lists \
-  /api/recharge/config
+  /api/recharge/config \
+  /tenantapi/channel.official_account_setting/getConfig \
+  /tenantapi/channel.mnp_settings/getConfig \
+  /tenantapi/channel.web_page_setting/getConfig \
+  /api/sms/sendCode
 do
   curl -s "$PHP$path" -H "token: $TOKEN" > /tmp/php.json
   curl -s "$GO$path"  -H "token: $TOKEN" > /tmp/go.json

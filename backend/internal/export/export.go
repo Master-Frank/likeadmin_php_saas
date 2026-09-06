@@ -1,0 +1,180 @@
+package export
+
+import (
+	"bytes"
+	"encoding/csv"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"time"
+
+	"likeadmin/backend/internal/cache"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/util"
+
+	"github.com/gin-gonic/gin"
+)
+
+type fileInfo struct {
+	Src  string `json:"src"`
+	Name string `json:"name"`
+}
+
+func Maybe(c *gin.Context, fileName string, rows any) bool {
+	exp := httpx.Int(c, "export")
+	if exp == 1 {
+		n := rowCount(rows)
+		if v, ok := c.Get("likeadmin.export_count"); ok {
+			if cnt, ok := v.(int64); ok && cnt > 0 {
+				n = int(cnt)
+			}
+		}
+		pageSize := httpx.Int(c, "page_size")
+		if pageSize <= 0 {
+			pageSize = config.C.Project.Lists.PageSize
+		}
+		if pageSize <= 0 {
+			pageSize = 25
+		}
+		max := config.C.Project.Lists.PageSizeMax
+		if max <= 0 {
+			max = 10000
+		}
+		sum := n / pageSize
+		if n%pageSize != 0 {
+			sum++
+		}
+		if sum < 1 {
+			sum = 1
+		}
+		response.Data(c, gin.H{
+			"count": n, "page_size": pageSize, "sum_page": sum,
+			"max_page": max / pageSize, "all_max_size": max,
+			"page_start": 1, "page_end": min(sum, 200), "file_name": fileName,
+		})
+		return true
+	}
+	if exp != 2 {
+		return false
+	}
+	key, err := SaveCSV(fileName, rows)
+	if err != nil {
+		response.Fail(c, err.Error())
+		return true
+	}
+	app := ctxutil.Get(c).App
+	if app == "" {
+		app = "platformapi"
+	}
+	u := ctxutil.Domain(c) + "/" + app + "/download/export?file=" + key
+	response.Result(c, response.CodeOpenNewPage, 1, "", gin.H{"url": u})
+	return true
+}
+
+func SaveCSV(fileName string, rows any) (string, error) {
+	if fileName == "" {
+		fileName = "export.csv"
+	}
+	if filepath.Ext(fileName) == "" {
+		fileName += ".csv"
+	}
+	dir := filepath.Join(os.TempDir(), "likeadmin-export")
+	if err := os.MkdirAll(dir, 0o775); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(fileName)))
+	f, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+	records := toRecords(rows)
+	for _, rec := range records {
+		_ = w.Write(rec)
+	}
+	w.Flush()
+	key := util.MD5(path + fmt.Sprintf("%d", time.Now().UnixNano()))
+	cache.Set("export_file_"+key, fileInfo{Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path)}, 30*time.Minute)
+	return key, nil
+}
+
+func Serve(c *gin.Context) {
+	key := c.Query("file")
+	if key == "" {
+		key = httpx.Str(c, "file")
+	}
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) || info.Name == "" {
+		response.Fail(c, "下载文件不存在")
+		return
+	}
+	cache.Del("export_file_" + key)
+	c.FileAttachment(filepath.Join(info.Src, info.Name), info.Name)
+}
+
+func toRecords(rows any) [][]string {
+	if rows == nil {
+		return [][]string{}
+	}
+	b, err := json.Marshal(rows)
+	if err != nil {
+		return [][]string{{fmt.Sprint(rows)}}
+	}
+	var arr []map[string]any
+	if json.Unmarshal(b, &arr) == nil && len(arr) > 0 {
+		keys := make([]string, 0)
+		seen := map[string]bool{}
+		for _, m := range arr {
+			for k := range m {
+				if !seen[k] {
+					seen[k] = true
+					keys = append(keys, k)
+				}
+			}
+		}
+		out := [][]string{keys}
+		for _, m := range arr {
+			rec := make([]string, len(keys))
+			for i, k := range keys {
+				rec[i] = util.ToString(m[k])
+			}
+			out = append(out, rec)
+		}
+		return out
+	}
+	var raw []any
+	if json.Unmarshal(b, &raw) == nil {
+		out := [][]string{}
+		for _, item := range raw {
+			out = append(out, []string{util.ToString(item)})
+		}
+		return out
+	}
+	var buf bytes.Buffer
+	buf.Write(b)
+	return [][]string{{buf.String()}}
+}
+
+func rowCount(rows any) int {
+	if rows == nil {
+		return 0
+	}
+	v := reflect.ValueOf(rows)
+	if v.Kind() == reflect.Slice {
+		return v.Len()
+	}
+	return 1
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

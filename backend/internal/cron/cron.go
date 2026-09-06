@@ -60,7 +60,7 @@ func parseInterval(expr string) int64 {
 }
 
 func runCommand(item model.Crontab) string {
-	cmd := strings.TrimSpace(item.Command)
+	cmd := strings.ToLower(strings.TrimSpace(item.Command))
 	switch {
 	case cmd == "" || strings.Contains(cmd, "cache"):
 		if bootstrap.RDB != nil {
@@ -68,6 +68,12 @@ func runCommand(item model.Crontab) string {
 				return err.Error()
 			}
 		}
+		return ""
+	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
+		now := util.NowUnix()
+		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.AdminSession{})
+		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
+		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.UserSession{})
 		return ""
 	default:
 		log.Printf("crontab skip unsupported command %s", cmd)

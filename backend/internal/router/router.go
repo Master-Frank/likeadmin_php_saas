@@ -8,6 +8,8 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/cron"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/export"
+	"likeadmin/backend/internal/install"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/openapi"
 	"likeadmin/backend/internal/platformapi"
@@ -25,6 +27,10 @@ func New() *gin.Engine {
 	}
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.CORS(), middleware.InstallAndTenant())
+	response.ExportHook = func(c *gin.Context, rows any, count int64) bool {
+		c.Set("likeadmin.export_count", count)
+		return export.Maybe(c, "export", rows)
+	}
 
 	notNeed := map[string]map[string][]string{
 		"platformapi": {
@@ -60,6 +66,9 @@ func New() *gin.Engine {
 		cron.RunOnce()
 		c.String(http.StatusOK, "ok")
 	})
+	r.GET("/install/check", install.Status)
+	r.POST("/install", install.Run)
+	r.Any("/install/status", install.Status)
 
 	spa := func(dir string) gin.HandlerFunc {
 		return func(c *gin.Context) {
@@ -104,7 +113,7 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 			return
 		}
 		// run login + auth
-		chain := []gin.HandlerFunc{middleware.Login(notNeed), middleware.Auth(), middleware.DemoGuard(), h}
+		chain := []gin.HandlerFunc{middleware.Login(notNeed), middleware.Auth(), middleware.DemoGuard(), middleware.OperationLog(), h}
 		c.Set("likeadmin.meta", meta)
 		idx := 0
 		var next func()
@@ -213,6 +222,7 @@ func platformRoutes() map[string]Handler {
 		"tools.generator/synccolumn": platformapi.GeneratorSyncColumn, "tools.generator/delete": platformapi.GeneratorDelete,
 		"tools.generator/edit": platformapi.GeneratorEdit, "tools.generator/preview": platformapi.GeneratorPreview,
 		"tools.generator/generate": platformapi.GeneratorGenerate, "tools.generator/getmodels": platformapi.GeneratorGetModels,
+		"download/export":       platformapi.DownloadExport,
 		"upgrade.upgrade/lists": platformapi.UpgradeNotImpl, "upgrade.upgrade/upgrade": platformapi.UpgradeNotImpl,
 		"setting.hot_search/getconfig": tenantapi.HotSearchGet, "setting.hot_search/setconfig": tenantapi.HotSearchSet,
 		"decorate.page/detail": tenantapi.DecoratePageDetail, "decorate.page/save": tenantapi.DecoratePageSave,
@@ -341,6 +351,7 @@ func tenantRoutes() map[string]Handler {
 		"file/lists": tenantapi.FileLists, "file/move": tenantapi.FileMove, "file/rename": tenantapi.FileRename,
 		"file/delete": tenantapi.FileDelete, "file/listcate": tenantapi.FileListCate,
 		"file/addcate": tenantapi.FileAddCate, "file/editcate": tenantapi.FileEditCate, "file/delcate": tenantapi.FileDelCate,
+		"download/export": platformapi.DownloadExport,
 	}
 }
 
@@ -351,9 +362,9 @@ func apiRoutes() map[string]Handler {
 		"pc/index": openapi.PcIndex, "pc/config": openapi.PcConfig,
 		"pc/infocenter": openapi.PcInfoCenter, "pc/articledetail": openapi.PcArticleDetail,
 		"login/register": openapi.LoginRegister, "login/account": openapi.LoginAccount, "login/logout": openapi.LoginLogout,
-		"login/codeurl": openapi.LoginStub, "login/oalogin": openapi.LoginStub, "login/mnplogin": openapi.LoginStub,
-		"login/getscancode": openapi.LoginStub, "login/scanlogin": openapi.LoginStub,
-		"login/mnpauthbind": openapi.LoginStub, "login/oaauthbind": openapi.LoginStub, "login/updateuser": openapi.LoginStub,
+		"login/codeurl": openapi.LoginCodeURL, "login/oalogin": openapi.LoginOALogin, "login/mnplogin": openapi.LoginMnpLogin,
+		"login/getscancode": openapi.LoginGetScanCode, "login/scanlogin": openapi.LoginScanLogin,
+		"login/mnpauthbind": openapi.LoginMnpAuthBind, "login/oaauthbind": openapi.LoginOAAuthBind, "login/updateuser": openapi.LoginUpdateUser,
 		"user/center": openapi.UserCenter, "user/info": openapi.UserInfo, "user/setinfo": openapi.UserSetInfo,
 		"user/bindmobile": openapi.UserBindMobile, "user/getmobilebymnp": openapi.UserGetMobileByMnp,
 		"user/changepassword": openapi.UserChangePassword, "user/resetpassword": openapi.UserResetPassword,

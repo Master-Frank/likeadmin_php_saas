@@ -1,0 +1,147 @@
+package tenantapi
+
+import (
+	"likeadmin/backend/internal/cfgsvc"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/filesvc"
+	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/wechat"
+
+	"github.com/gin-gonic/gin"
+)
+
+func ChannelOAGet(c *gin.Context) {
+	host := wechat.HostName(c)
+	qr := cfgsvc.GetString(c, "oa_setting", "qr_code", "")
+	if qr != "" {
+		qr = filesvc.GetFileURL(c, qr)
+	}
+	enc := cfgsvc.GetInt(c, "oa_setting", "encryption_type", 1)
+	response.Data(c, gin.H{
+		"name":             cfgsvc.GetString(c, "oa_setting", "name", ""),
+		"original_id":      cfgsvc.GetString(c, "oa_setting", "original_id", ""),
+		"qr_code":          qr,
+		"app_id":           cfgsvc.GetString(c, "oa_setting", "app_id", ""),
+		"app_secret":       cfgsvc.GetString(c, "oa_setting", "app_secret", ""),
+		"url":              ctxutil.Domain(c) + "/tenantapi/channel.official_account_reply/index",
+		"token":            cfgsvc.GetString(c, "oa_setting", "token", ""),
+		"encoding_aes_key": cfgsvc.GetString(c, "oa_setting", "encoding_aes_key", ""),
+		"encryption_type":  enc,
+		"business_domain":  host,
+		"js_secure_domain": host,
+		"web_auth_domain":  host,
+	})
+}
+
+func ChannelOASet(c *gin.Context) {
+	cfgsvc.Set(c, "oa_setting", "name", httpx.Str(c, "name"))
+	cfgsvc.Set(c, "oa_setting", "original_id", httpx.Str(c, "original_id"))
+	cfgsvc.Set(c, "oa_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
+	cfgsvc.Set(c, "oa_setting", "app_id", httpx.Str(c, "app_id"))
+	cfgsvc.Set(c, "oa_setting", "app_secret", httpx.Str(c, "app_secret"))
+	cfgsvc.Set(c, "oa_setting", "token", httpx.Str(c, "token"))
+	cfgsvc.Set(c, "oa_setting", "encoding_aes_key", httpx.Str(c, "encoding_aes_key"))
+	cfgsvc.Set(c, "oa_setting", "encryption_type", httpx.Int(c, "encryption_type"))
+	response.Success(c, "设置成功", nil)
+}
+
+func ChannelMnpGet(c *gin.Context) {
+	host := wechat.HostName(c)
+	qr := cfgsvc.GetString(c, "mnp_setting", "qr_code", "")
+	if qr != "" {
+		qr = filesvc.GetFileURL(c, qr)
+	}
+	httpsHost := "https://" + host
+	response.Data(c, gin.H{
+		"name":                 cfgsvc.GetString(c, "mnp_setting", "name", ""),
+		"original_id":          cfgsvc.GetString(c, "mnp_setting", "original_id", ""),
+		"qr_code":              qr,
+		"app_id":               cfgsvc.GetString(c, "mnp_setting", "app_id", ""),
+		"app_secret":           cfgsvc.GetString(c, "mnp_setting", "app_secret", ""),
+		"request_domain":       httpsHost,
+		"socket_domain":        "wss://" + host,
+		"upload_file_domain":   httpsHost,
+		"download_file_domain": httpsHost,
+		"udp_domain":           "udp://" + host,
+		"business_domain":      host,
+	})
+}
+
+func ChannelMnpSet(c *gin.Context) {
+	cfgsvc.Set(c, "mnp_setting", "name", httpx.Str(c, "name"))
+	cfgsvc.Set(c, "mnp_setting", "original_id", httpx.Str(c, "original_id"))
+	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
+	cfgsvc.Set(c, "mnp_setting", "app_id", httpx.Str(c, "app_id"))
+	cfgsvc.Set(c, "mnp_setting", "app_secret", httpx.Str(c, "app_secret"))
+	response.Success(c, "设置成功", nil)
+}
+
+func ChannelOpenGet(c *gin.Context) {
+	response.Data(c, gin.H{
+		"app_id":     cfgsvc.GetString(c, "open_platform", "app_id", ""),
+		"app_secret": cfgsvc.GetString(c, "open_platform", "app_secret", ""),
+	})
+}
+
+func ChannelOpenSet(c *gin.Context) {
+	cfgsvc.Set(c, "open_platform", "app_id", httpx.Str(c, "app_id"))
+	cfgsvc.Set(c, "open_platform", "app_secret", httpx.Str(c, "app_secret"))
+	response.Success(c, "设置成功", nil)
+}
+
+func ChannelH5Get(c *gin.Context) {
+	response.Data(c, gin.H{
+		"status":      cfgsvc.GetInt(c, "web_page", "status", 1),
+		"page_status": cfgsvc.GetInt(c, "web_page", "page_status", 0),
+		"page_url":    cfgsvc.GetString(c, "web_page", "page_url", ""),
+		"url":         ctxutil.Domain(c) + "/mobile",
+	})
+}
+
+func ChannelH5Set(c *gin.Context) {
+	cfgsvc.Set(c, "web_page", "status", httpx.Int(c, "status"))
+	cfgsvc.Set(c, "web_page", "page_status", httpx.Int(c, "page_status"))
+	cfgsvc.Set(c, "web_page", "page_url", httpx.Str(c, "page_url"))
+	response.Success(c, "设置成功", nil)
+}
+
+func ChannelAppGet(c *gin.Context) {
+	response.Data(c, gin.H{
+		"ios_download_url":     cfgsvc.GetString(c, "app", "ios_download_url", ""),
+		"android_download_url": cfgsvc.GetString(c, "app", "android_download_url", ""),
+		"download_title":       cfgsvc.GetString(c, "app", "download_title", ""),
+	})
+}
+
+func ChannelAppSet(c *gin.Context) {
+	cfgsvc.Set(c, "app", "ios_download_url", httpx.Str(c, "ios_download_url"))
+	cfgsvc.Set(c, "app", "android_download_url", httpx.Str(c, "android_download_url"))
+	cfgsvc.Set(c, "app", "download_title", httpx.Str(c, "download_title"))
+	response.Success(c, "设置成功", nil)
+}
+
+func ChannelGetSet(group string) (gin.HandlerFunc, gin.HandlerFunc) {
+	switch group {
+	case "official_account", "oa_setting":
+		return ChannelOAGet, ChannelOASet
+	case "mnp", "mnp_setting":
+		return ChannelMnpGet, ChannelMnpSet
+	case "open", "open_platform":
+		return ChannelOpenGet, ChannelOpenSet
+	case "h5", "web_page":
+		return ChannelH5Get, ChannelH5Set
+	default:
+		return ChannelAppGet, ChannelAppSet
+	}
+}
+
+func ChannelGetOnly(group string) gin.HandlerFunc {
+	g, _ := ChannelGetSet(group)
+	return g
+}
+
+func ChannelSetOnly(group string) gin.HandlerFunc {
+	_, s := ChannelGetSet(group)
+	return s
+}

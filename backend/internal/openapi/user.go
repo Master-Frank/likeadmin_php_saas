@@ -17,11 +17,49 @@ import (
 )
 
 func IndexConfig(c *gin.Context) {
+	var bars []model.DecorateTabbar
+	db := bootstrap.DB
+	if tid := ctxutil.Get(c).TenantID; tid > 0 {
+		db = db.Where("tenant_id = ?", tid)
+	}
+	db.Find(&bars)
+	tabbar := make([]map[string]any, 0, len(bars))
+	for _, b := range bars {
+		tabbar = append(tabbar, map[string]any{
+			"id": b.ID, "name": b.Name,
+			"selected": filesvc.GetFileURL(c, b.Selected), "unselected": filesvc.GetFileURL(c, b.Unselected),
+			"link": b.Link, "is_show": b.IsShow,
+		})
+	}
+	style := cfgsvc.Get(c, "tabbar", "style", nil)
+	if style == nil {
+		style = cfgsvc.Get(c, "decorate", "tabbar_style", map[string]any{})
+	}
 	response.Data(c, gin.H{
-		"web_name":    cfgsvc.GetString(c, "website", "name", "likeadmin"),
-		"web_favicon": filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "h5_favicon", "")),
-		"shop_name":   cfgsvc.GetString(c, "website", "shop_name", "likeadmin"),
-		"shop_logo":   filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
+		"domain": filesvc.GetFileURL(c, ""),
+		"style":  style,
+		"tabbar": tabbar,
+		"login": gin.H{
+			"login_way":       cfgsvc.Get(c, "login", "login_way", []any{"1", "2"}),
+			"coerce_mobile":   cfgsvc.GetInt(c, "login", "coerce_mobile", 1),
+			"login_agreement": cfgsvc.GetInt(c, "login", "login_agreement", 1),
+			"third_auth":      cfgsvc.GetInt(c, "login", "third_auth", 1),
+			"wechat_auth":     cfgsvc.GetInt(c, "login", "wechat_auth", 1),
+			"qq_auth":         cfgsvc.GetInt(c, "login", "qq_auth", 0),
+		},
+		"website": gin.H{
+			"h5_favicon": filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "h5_favicon", "")),
+			"shop_name":  cfgsvc.GetString(c, "website", "shop_name", "likeadmin"),
+			"shop_logo":  filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
+		},
+		"webPage": gin.H{
+			"status":      cfgsvc.GetInt(c, "web_page", "status", 1),
+			"page_status": cfgsvc.GetInt(c, "web_page", "page_status", 0),
+			"page_url":    cfgsvc.GetString(c, "web_page", "page_url", ""),
+			"url":         ctxutil.Domain(c) + "/mobile",
+		},
+		"version":   config.C.Project.Version,
+		"copyright": cfgsvc.Get(c, "copyright", "config", []any{}),
 	})
 }
 
@@ -66,16 +104,14 @@ func LoginRegister(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	u := model.User{
-		Account: account, Nickname: account,
-		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		Channel:  httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
-		Avatar: config.C.Project.DefaultImage["user_avatar"],
-	}
-	// generate sn
 	var maxSN int
 	bootstrap.DB.Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
-	u.SN = maxSN + 1
+	u := model.User{
+		Account: account, Nickname: "用户" + util.ToString(maxSN+1),
+		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
+		Channel:  httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
+		Avatar: config.C.Project.DefaultImage["user_avatar"], SN: maxSN + 1,
+	}
 	if err := bootstrap.DB.Create(&u).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -105,11 +141,14 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, "账号已禁用")
 		return
 	}
-	if scene != 2 {
-		if u.Password != util.CreatePassword(password, config.C.Project.UniqueIdentification) {
-			response.Fail(c, "密码错误")
+	if scene == 2 {
+		if !verifySms(c, account, httpx.Str(c, "code"), "YZMDL") {
+			response.Fail(c, "验证码错误")
 			return
 		}
+	} else if u.Password != util.CreatePassword(password, config.C.Project.UniqueIdentification) {
+		response.Fail(c, "密码错误")
+		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
@@ -238,12 +277,10 @@ func AccountLogLists(c *gin.Context) {
 	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
 }
 
-func WechatJsConfig(c *gin.Context) {
-	response.Data(c, gin.H{"appId": "", "timestamp": util.NowUnix(), "nonceStr": "", "signature": ""})
-}
+func WechatJsConfig(c *gin.Context) { WechatJsConfigReal(c) }
 
-func PayNotifyOK(c *gin.Context) { c.String(200, "success") }
-func AliNotify(c *gin.Context)   { c.String(200, "success") }
+func PayNotifyOK(c *gin.Context) { handlePayNotify(c) }
+func AliNotify(c *gin.Context)   { handlePayNotify(c) }
 
 func LoginStub(c *gin.Context) {
 	response.Fail(c, "请先完成微信开放平台配置")
