@@ -31,3 +31,22 @@ func TestLookupCompactName(t *testing.T) {
 		t.Fatalf("%+v", spec)
 	}
 }
+
+func TestFormatCellEnums(t *testing.T) {
+	if formatCell("channel", 1) != "微信小程序" {
+		t.Fatalf("channel %s", formatCell("channel", 1))
+	}
+	if formatCell("disable", 0) != "正常" || formatCell("disable", 1) != "禁用" {
+		t.Fatalf("disable %s %s", formatCell("disable", 0), formatCell("disable", 1))
+	}
+	if formatCell("pay_status_text", 1) != "已支付" {
+		t.Fatalf("pay %s", formatCell("pay_status_text", 1))
+	}
+	if formatCell("pay_status_text", "已支付") != "已支付" {
+		t.Fatalf("already text %s", formatCell("pay_status_text", "已支付"))
+	}
+	rec := toRecords([]map[string]any{{"channel": 2, "disable": 1}}, []Field{{Key: "channel", Title: "注册来源"}, {Key: "disable", Title: "是否禁用"}})
+	if len(rec) != 2 || rec[1][0] != "微信公众号" || rec[1][1] != "禁用" {
+		t.Fatalf("%v", rec)
+	}
+}

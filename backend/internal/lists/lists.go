@@ -1,6 +1,9 @@
 package lists
 
 import (
+	"strings"
+	"unicode"
+
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/util"
@@ -73,4 +76,42 @@ func Param(q Query, key string) string {
 
 func ParamInt(q Query, key string) int {
 	return util.ToInt(q.Params[key])
+}
+
+// Ident returns a SQL identifier or empty if the name is unsafe.
+func Ident(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	for i, r := range name {
+		if i == 0 {
+			if r != '_' && !unicode.IsLetter(r) {
+				return ""
+			}
+			continue
+		}
+		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return ""
+		}
+	}
+	return name
+}
+
+// OrderSQL builds `field asc|desc` from request params. fallback is used
+// when field is empty or not an identifier. allowed, when non-empty, is an
+// extra allowlist (column names).
+func OrderSQL(q Query, fallback string, allowed map[string]bool) string {
+	field := Ident(q.Field)
+	if field == "" {
+		return fallback
+	}
+	if len(allowed) > 0 && !allowed[field] && !allowed[strings.ToLower(field)] {
+		return fallback
+	}
+	dir := strings.ToLower(strings.TrimSpace(q.OrderBy))
+	if dir != "asc" && dir != "desc" {
+		return fallback
+	}
+	return field + " " + dir
 }

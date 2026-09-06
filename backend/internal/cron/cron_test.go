@@ -1,6 +1,10 @@
 package cron
 
-import "testing"
+import (
+	"testing"
+
+	"likeadmin/backend/internal/model"
+)
 
 func TestNormalizeCommand(t *testing.T) {
 	if normalizeCommand(`app\common\command\QueryRefund`) != "query_refund" {
@@ -11,5 +15,12 @@ func TestNormalizeCommand(t *testing.T) {
 	}
 	if normalizeCommand("clear_session") != "session" {
 		t.Fatal(normalizeCommand("clear_session"))
+	}
+}
+
+func TestRunCommandUnknown(t *testing.T) {
+	got := runCommand(model.Crontab{Command: "not_a_real_command"})
+	if got != "未定义的定时任务命令: not_a_real_command" {
+		t.Fatalf("got %q", got)
 	}
 }

@@ -68,35 +68,49 @@ func WriteRuntime(files []File) error {
 	return nil
 }
 
-// WriteModule writes generate_type=1 files into the PHP module / admin Vue tree.
+// WriteModule writes generate_type=1 Vue + menu SQL + Go runtime metadata.
+// PHP files are no longer written: generated tables are served by gencrud.
 func WriteModule(t model.GenerateTable, files []File) error {
 	c := newCtx(t, nil, time.Now())
-	app := filepath.Join(ServerRoot(), "app")
 	admin := filepath.Join(RepoRoot(), "admin", "src")
 	for _, f := range files {
-		var dest string
-		switch {
-		case strings.HasSuffix(f.Name, "Controller.php"):
-			dest = filepath.Join(joinClassDir(filepath.Join(app, c.module, "controller"), c.classDir), f.Name)
-		case strings.HasSuffix(f.Name, "Lists.php"):
-			dest = filepath.Join(joinClassDir(filepath.Join(app, c.module, "lists"), c.classDir), f.Name)
-		case f.Name == c.upperCamel()+".php":
-			dest = filepath.Join(joinClassDir(filepath.Join(app, "common", "model"), c.classDir), f.Name)
-		case strings.HasSuffix(f.Name, "Validate.php"):
-			dest = filepath.Join(joinClassDir(filepath.Join(app, c.module, "validate"), c.classDir), f.Name)
-		case strings.HasSuffix(f.Name, "Logic.php"):
-			dest = filepath.Join(joinClassDir(filepath.Join(app, c.module, "logic"), c.classDir), f.Name)
-		case strings.HasSuffix(f.Name, ".ts"):
-			dest = filepath.Join(admin, "api", f.Name)
-		case f.Name == "index.vue":
-			dest = filepath.Join(admin, "views", c.lowerTable(), f.Name)
-		case f.Name == "edit.vue":
-			dest = filepath.Join(admin, "views", c.tableName, f.Name)
-		case f.Name == "menu.sql":
-			dest = filepath.Join(RuntimeDir(), "sql", f.Name)
-		default:
+		dest := moduleDest(c, admin, f)
+		if dest == "" {
 			continue
 		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(dest, []byte(f.Content), 0644); err != nil {
+			return err
+		}
+	}
+	return WriteGoModule(t)
+}
+
+// moduleDest returns the generate_type=1 destination, or empty to skip.
+func moduleDest(c *ctx, admin string, f File) string {
+	switch {
+	case strings.HasSuffix(f.Name, ".php"):
+		return ""
+	case strings.HasSuffix(f.Name, ".ts"):
+		return filepath.Join(admin, "api", f.Name)
+	case f.Name == "index.vue":
+		return filepath.Join(admin, "views", c.lowerTable(), f.Name)
+	case f.Name == "edit.vue":
+		return filepath.Join(admin, "views", c.tableName, f.Name)
+	case f.Name == "menu.sql":
+		return filepath.Join(RuntimeDir(), "sql", f.Name)
+	default:
+		return ""
+	}
+}
+
+// WriteGoModule writes generated Go metadata under backend/internal/generated.
+func WriteGoModule(t model.GenerateTable) error {
+	root := filepath.Join(RepoRoot(), "backend", "internal", "generated")
+	for _, f := range BuildGo(t, nil) {
+		dest := filepath.Join(root, f.Name)
 		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 			return err
 		}

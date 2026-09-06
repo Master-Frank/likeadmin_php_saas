@@ -38,10 +38,7 @@ func AdminLists(c *gin.Context) {
 	}
 	var count int64
 	db.Count(&count)
-	order := "id desc"
-	if q.Field != "" && (q.OrderBy == "asc" || q.OrderBy == "desc") {
-		order = q.Field + " " + q.OrderBy
-	}
+	order := lists.OrderSQL(q, "id desc", nil)
 	var rows []model.Admin
 	db.Order(order).Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))

@@ -80,7 +80,7 @@ func runCommand(item model.Crontab) string {
 		return queryRefund()
 	default:
 		log.Printf("crontab skip unsupported command %s", cmd)
-		return ""
+		return fmt.Sprintf("未定义的定时任务命令: %s", cmd)
 	}
 }
 

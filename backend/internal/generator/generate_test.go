@@ -149,3 +149,36 @@ func TestNaming(t *testing.T) {
 		t.Fatalf("prefix %s", NoPrefix("la_config"))
 	}
 }
+
+func TestWriteModuleSkipsPHP(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.GenerateType = 1
+	files := Build(tbl, cols)
+	c := newCtx(tbl, cols, time.Now())
+	php, vue := 0, 0
+	for _, f := range files {
+		dest := moduleDest(c, "/tmp/admin", f)
+		if strings.HasSuffix(f.Name, ".php") {
+			php++
+			if dest != "" {
+				t.Fatalf("php should be skipped: %s -> %s", f.Name, dest)
+			}
+		}
+		if strings.HasSuffix(f.Name, ".ts") || strings.HasSuffix(f.Name, ".vue") || f.Name == "menu.sql" {
+			vue++
+			if dest == "" {
+				t.Fatalf("vue/sql should be written: %s", f.Name)
+			}
+		}
+	}
+	if php < 5 || vue < 3 {
+		t.Fatalf("php=%d vue=%d", php, vue)
+	}
+	goFiles := BuildGo(tbl, cols)
+	if len(goFiles) != 1 || goFiles[0].Type != "go" || !strings.Contains(goFiles[0].Content, "package generated") {
+		t.Fatalf("go files %+v", goFiles)
+	}
+	if !strings.Contains(goFiles[0].Content, "gencrud") {
+		t.Fatalf("go metadata should mention gencrud: %s", goFiles[0].Content)
+	}
+}

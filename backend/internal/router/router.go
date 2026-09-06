@@ -10,6 +10,7 @@ import (
 	"likeadmin/backend/internal/cron"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/export"
+	"likeadmin/backend/internal/gencrud"
 	"likeadmin/backend/internal/install"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/openapi"
@@ -114,6 +115,9 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 		}
 		key := strings.ToLower(ctrl + "/" + action)
 		h := lookup(routes, key)
+		if h == nil && gencrud.Match(app, ctrl, action) {
+			h = gencrud.Handle
+		}
 		if h == nil {
 			response.FailCode(c, "controller not exists:"+ctrl, response.CodeNotFound, 0)
 			return

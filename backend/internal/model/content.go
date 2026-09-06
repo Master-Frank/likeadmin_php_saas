@@ -345,3 +345,40 @@ type TenantSmsLog struct {
 }
 
 func (TenantSmsLog) TableName() string { return T("tenant_sms_log") }
+
+type NoticeRecord struct {
+	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
+	UserID     uint   `gorm:"column:user_id" json:"user_id"`
+	Title      string `gorm:"column:title" json:"title"`
+	Content    string `gorm:"column:content" json:"content"`
+	SceneID    int    `gorm:"column:scene_id" json:"scene_id"`
+	Read       int    `gorm:"column:read" json:"read"`
+	Recipient  int    `gorm:"column:recipient" json:"recipient"`
+	SendType   int    `gorm:"column:send_type" json:"send_type"`
+	NoticeType int    `gorm:"column:notice_type" json:"notice_type"`
+	Extra      string `gorm:"column:extra" json:"extra"`
+	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
+	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
+}
+
+func (NoticeRecord) TableName() string { return T("notice_record") }
+
+type TenantNoticeRecord struct {
+	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
+	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
+	UserID     uint   `gorm:"column:user_id" json:"user_id"`
+	Title      string `gorm:"column:title" json:"title"`
+	Content    string `gorm:"column:content" json:"content"`
+	SceneID    int    `gorm:"column:scene_id" json:"scene_id"`
+	Read       int    `gorm:"column:read" json:"read"`
+	Recipient  int    `gorm:"column:recipient" json:"recipient"`
+	SendType   int    `gorm:"column:send_type" json:"send_type"`
+	NoticeType int    `gorm:"column:notice_type" json:"notice_type"`
+	Extra      string `gorm:"column:extra" json:"extra"`
+	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
+	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
+}
+
+func (TenantNoticeRecord) TableName() string { return T("tenant_notice_record") }

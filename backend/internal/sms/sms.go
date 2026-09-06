@@ -84,14 +84,23 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if c != nil {
 		tid = ctxutil.Get(c).TenantID
 	}
+	content := "验证码" + code
+	if c != nil {
+		if notice := loadNoticeSMS(c, scene); len(notice) > 0 {
+			if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {
+				content = formatted
+			}
+		}
+	}
 	var logID uint
 	if bootstrap.DB != nil {
 		row := model.TenantSmsLog{
-			SceneID: scene, Mobile: mobile, Code: code, Content: "验证码" + code,
+			SceneID: scene, Mobile: mobile, Code: code, Content: content,
 			SendStatus: 1, SendTime: &now, TenantID: tid, CreateTime: now,
 		}
 		_ = bootstrap.DB.Create(&row).Error
 		logID = row.ID
+		addNoticeRecord(c, scene, mobile, code, tid)
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
 	if err := maybeGatewaySend(c, mobile, scene, code, logID); err != nil {

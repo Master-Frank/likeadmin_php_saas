@@ -38,8 +38,9 @@ func AdminLists(c *gin.Context) {
 	}
 	var count int64
 	db.Count(&count)
+	order := lists.OrderSQL(q, "id desc", nil)
 	var rows []model.TenantAdmin
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order(order).Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, tenantAdminListItem(c, a))

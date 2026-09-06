@@ -1741,5 +1741,118 @@ if [[ "$go_iw" != "200" ]]; then
   fail=$((fail + 1))
 fi
 
+if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  ts="${ts:-$(date +%s)}"
+  mysqlq "CREATE TABLE IF NOT EXISTS la_pair_gencrud (
+    id int unsigned NOT NULL AUTO_INCREMENT,
+    name varchar(64) NOT NULL DEFAULT '',
+    status int NOT NULL DEFAULT 0,
+    create_time int DEFAULT NULL,
+    update_time int DEFAULT NULL,
+    delete_time int DEFAULT NULL,
+    PRIMARY KEY (id)
+  )"
+  mysqlq "DELETE FROM la_generate_column WHERE table_id IN (SELECT id FROM la_generate_table WHERE table_name='la_pair_gencrud')"
+  mysqlq "DELETE FROM la_generate_table WHERE table_name='la_pair_gencrud'"
+  mysqlq "INSERT INTO la_generate_table (table_name,table_comment,template_type,author,generate_type,module_name,class_dir,class_comment,menu,\`delete\`,tree,relations,create_time) VALUES ('la_pair_gencrud','对拍生成器',0,'likeadmin',1,'platform','','对拍生成器','{\"pid\":0,\"type\":0,\"name\":\"对拍生成器\"}','{\"type\":1,\"name\":\"delete_time\"}','{}','[]',UNIX_TIMESTAMP())"
+  gid="$(mysqlq "SELECT id FROM la_generate_table WHERE table_name='la_pair_gencrud' ORDER BY id DESC LIMIT 1")"
+  if [[ -n "$gid" && "$gid" != "0" ]]; then
+    mysqlq "INSERT INTO la_generate_column (table_id,column_name,column_comment,column_type,is_required,is_pk,is_insert,is_update,is_lists,is_query,query_type,view_type,create_time) VALUES
+      ($gid,'id','主键','int',0,1,0,0,1,0,'=','input',UNIX_TIMESTAMP()),
+      ($gid,'name','名称','string',1,0,1,1,1,1,'like','input',UNIX_TIMESTAMP()),
+      ($gid,'status','状态','int',0,0,1,1,1,1,'=','select',UNIX_TIMESTAMP()),
+      ($gid,'create_time','创建时间','int',0,0,0,0,1,0,'=','datetime',UNIX_TIMESTAMP()),
+      ($gid,'delete_time','删除时间','int',0,0,0,0,0,0,'=','datetime',UNIX_TIMESTAMP())"
+    go_gn1="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
+    echo "gencrud_generate go_code=$(jcode <<<"$go_gn1") go_file=$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("file") or "")' <<<"$go_gn1")"
+    if [[ "$(jcode <<<"$go_gn1")" != "1" ]]; then
+      echo "  go_gn1=${go_gn1:0:240}"
+      fail=$((fail + 1))
+    fi
+    php_ctrl="/workspace/server/app/platform/controller/PairGencrudController.php"
+    go_meta="/workspace/backend/internal/generated/platform_pair_gencrud.go"
+    if [[ -f "$php_ctrl" ]]; then
+      echo "gencrud_php_written $php_ctrl"
+      fail=$((fail + 1))
+    fi
+    if [[ ! -f "$go_meta" ]]; then
+      echo "gencrud_go_missing $go_meta"
+      fail=$((fail + 1))
+    else
+      echo "gencrud_go_meta ok"
+    fi
+    go_add="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"n$ts\",\"status\":1}")"
+    echo "gencrud_add go_code=$(jcode <<<"$go_add") go_msg=$(jget msg <<<"$go_add")"
+    if [[ "$(jcode <<<"$go_add")" != "1" ]]; then
+      echo "  go_add=${go_add:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_ls="$(curl -sS "$GO/platformapi/pair_gencrud/lists?name=n$ts" -H "token: $TOKEN")"
+    go_id="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(ls[0].get("id") if ls else 0)' <<<"$go_ls")"
+    echo "gencrud_lists id=$go_id count=$(jget data.count <<<"$go_ls")"
+    if [[ "$go_id" == "0" || -z "$go_id" ]]; then
+      echo "  go_ls=${go_ls:0:240}"
+      fail=$((fail + 1))
+    else
+      go_dt="$(curl -sS "$GO/platformapi/pair_gencrud/detail?id=$go_id" -H "token: $TOKEN")"
+      go_dn="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("name") or "")' <<<"$go_dt")"
+      echo "gencrud_detail name=$go_dn"
+      if [[ "$go_dn" != "n$ts" ]]; then
+        fail=$((fail + 1))
+      fi
+      go_ed="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$go_id,\"name\":\"e$ts\",\"status\":0}")"
+      echo "gencrud_edit go_code=$(jcode <<<"$go_ed")"
+      if [[ "$(jcode <<<"$go_ed")" != "1" ]]; then
+        fail=$((fail + 1))
+      fi
+      go_del="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$go_id}")"
+      echo "gencrud_delete go_code=$(jcode <<<"$go_del")"
+      if [[ "$(jcode <<<"$go_del")" != "1" ]]; then
+        fail=$((fail + 1))
+      fi
+      left="$(mysqlq "SELECT COUNT(*) FROM la_pair_gencrud WHERE id=$go_id AND delete_time IS NULL")"
+      echo "gencrud_softdel left=$left"
+      if [[ "$left" != "0" ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
+    curl -sS -X POST "$GO/platformapi/tools.generator/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}" >/dev/null || true
+    rm -f "$go_meta" "$php_ctrl" /workspace/admin/src/api/pair_gencrud.ts
+    rm -rf /workspace/admin/src/views/pair_gencrud
+  else
+    echo "gencrud_table insert failed"
+    fail=$((fail + 1))
+  fi
+  mysqlq "DROP TABLE IF EXISTS la_pair_gencrud"
+
+  now="$(date +%s)"
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  curl -sS "$GO/crontab" >/dev/null || true
+  cron_err="$(mysqlq "SELECT error FROM la_dev_crontab WHERE name='pair-unknown'")"
+  cron_st="$(mysqlq "SELECT status FROM la_dev_crontab WHERE name='pair-unknown'")"
+  echo "crontab_unknown status=$cron_st error=$cron_err"
+  if [[ "$cron_st" != "3" || "$cron_err" != *未定义* ]]; then
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
+fi
+
+if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  ts="${ts:-$(date +%s)}"
+  mobile="13900${ts: -6}"
+  now="$(date +%s)"
+  go_sms="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"mobile\":\"$mobile\",\"scene\":\"YZMDL\"}")"
+  echo "sms_send go_code=$(jcode <<<"$go_sms") go_msg=$(jget msg <<<"$go_sms")"
+  nrec="$(mysqlq "SELECT COUNT(*) FROM la_tenant_notice_record WHERE scene_id=101 AND create_time>=$now")"
+  echo "sms_notice_record n=$nrec"
+  if [[ "$(jcode <<<"$go_sms")" == "1" && "$nrec" == "0" ]]; then
+    echo "  go_sms=${go_sms:0:240}"
+    fail=$((fail + 1))
+  fi
+fi
+
 echo "failed=$fail"
 exit "$fail"

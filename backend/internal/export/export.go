@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"likeadmin/backend/internal/cache"
@@ -141,7 +142,7 @@ func toRecords(rows any, fields []Field) [][]string {
 			for _, m := range arr {
 				rec := make([]string, len(fields))
 				for i, f := range fields {
-					rec[i] = util.ToString(m[f.Key])
+					rec[i] = formatCell(f.Key, m[f.Key])
 				}
 				out = append(out, rec)
 			}
@@ -196,4 +197,76 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func formatCell(key string, v any) string {
+	switch strings.ToLower(key) {
+	case "channel":
+		if n, ok := asInt(v); ok {
+			if d := util.ChannelDesc(n); d != "" {
+				return d
+			}
+		}
+	case "disable":
+		if n, ok := asInt(v); ok {
+			if n == 1 {
+				return "禁用"
+			}
+			return "正常"
+		}
+	case "pay_status", "pay_status_text":
+		if n, ok := asInt(v); ok {
+			return util.PayStatusText(n)
+		}
+	case "pay_way", "pay_way_text":
+		if n, ok := asInt(v); ok {
+			if d := util.PayWayText(n); d != "" {
+				return d
+			}
+		}
+	}
+	return util.ToString(v)
+}
+
+func asInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int8:
+		return int(n), true
+	case int16:
+		return int(n), true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case uint:
+		return int(n), true
+	case uint32:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case json.Number:
+		i, err := n.Int64()
+		return int(i), err == nil
+	case string:
+		s := strings.TrimSpace(n)
+		if s == "" {
+			return 0, false
+		}
+		for i, r := range s {
+			if r < '0' || r > '9' {
+				if i != 0 || r != '-' {
+					return 0, false
+				}
+			}
+		}
+		return util.ToInt(s), true
+	default:
+		return 0, false
+	}
 }
