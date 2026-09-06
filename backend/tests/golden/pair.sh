@@ -1373,14 +1373,37 @@ fi
 
 php_cl="$(curl -sS "$PHP/platformapi/crontab.crontab/lists" -H "token: $TOKEN")"
 go_cl="$(curl -sS "$GO/platformapi/crontab.crontab/lists" -H "token: $TOKEN")"
-cid="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("id") or 0)' <<<"$php_cl")"
+cid="$(python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print(0)
+    raise SystemExit(0)
+ls=(d.get("data") or {}).get("lists") or []
+print((ls[0] if ls else {}).get("id") or 0)
+' <<<"$php_cl")"
 if [[ "$cid" != "0" && -n "$cid" ]]; then
   php_cd="$(curl -sS "$PHP/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
   go_cd="$(curl -sS "$GO/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
-  php_ck="$(python3 -c 'import json,sys; print(",".join(sorted((json.load(sys.stdin).get("data") or {}).keys())))' <<<"$php_cd")"
-  go_ck="$(python3 -c 'import json,sys; print(",".join(sorted((json.load(sys.stdin).get("data") or {}).keys())))' <<<"$go_cd")"
+  keys_of() {
+    python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("")
+    raise SystemExit(0)
+data=d.get("data")
+print(",".join(sorted(data.keys())) if isinstance(data, dict) else "")
+' <<<"$1"
+  }
+  php_ck="$(keys_of "$php_cd")"
+  go_ck="$(keys_of "$go_cd")"
   echo "crontab_detail_keys php=$php_ck go=$go_ck"
-  if [[ "$php_ck" != "$go_ck" ]]; then
+  if [[ -n "$php_ck" && "$php_ck" != "$go_ck" ]]; then
+    echo "  php_cd=${php_cd:0:200}"
+    echo "  go_cd=${go_cd:0:200}"
     fail=$((fail + 1))
   fi
 fi
@@ -1388,8 +1411,20 @@ fi
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   php_fl="$(curl -sS "$PHP/tenantapi/file/lists?type=10" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_fl="$(curl -sS "$GO/tenantapi/file/lists?type=10" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  php_fk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))' <<<"$php_fl")"
-  go_fk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))' <<<"$go_fl")"
+  list_keys() {
+    python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print("")
+    raise SystemExit(0)
+ls=(d.get("data") or {}).get("lists") or []
+print(",".join(sorted((ls[0] if ls else {}).keys())))
+' <<<"$1"
+  }
+  php_fk="$(list_keys "$php_fl")"
+  go_fk="$(list_keys "$go_fl")"
   echo "file_lists_keys php=$php_fk go=$go_fk"
   if [[ -n "$php_fk" && "$php_fk" != "$go_fk" ]]; then
     fail=$((fail + 1))
@@ -1398,7 +1433,7 @@ fi
 
 ts="${ts:-$(date +%s)}"
 tsn="pt${ts: -6}"
-php_ta="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$tsn\",\"host_name\":\"$tsn\",\"account\":\"$tsn\",\"password\":\"likeadmin\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0}")"
+php_ta="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$tsn\",\"host_name\":\"$tsn\",\"account\":\"$tsn\",\"password\":\"likeadmin\",\"avatar\":\"\",\"domain_alias\":\"$tsn.likeadmin.test\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0}")"
 echo "tenant_add php_code=$(jcode <<<"$php_ta") php_msg=$(jget msg <<<"$php_ta")"
 if [[ "$(jcode <<<"$php_ta")" == "1" ]]; then
   tlist="$(curl -sS "$GO/platformapi/tenant.tenant/lists?keyword=$tsn" -H "token: $TOKEN")"
