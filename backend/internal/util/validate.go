@@ -156,6 +156,37 @@ func FileEditCateCheck(p map[string]any) string {
 	return FileNameCheck(ToString(p["name"]))
 }
 
+func UserPasswordCheck(p map[string]any) string {
+	pwd := strings.TrimSpace(ToString(p["password"]))
+	if pwd == "" {
+		return "请输入密码"
+	}
+	if n := len(pwd); n < 6 || n > 20 {
+		return "密码须在6-25位之间"
+	}
+	var letter, digit bool
+	for _, r := range pwd {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			letter = true
+		case r >= '0' && r <= '9':
+			digit = true
+		default:
+			return "密码须为字母数字组合"
+		}
+	}
+	if !letter || !digit {
+		return "密码须为字母数字组合"
+	}
+	if _, ok := p["password_confirm"]; !ok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+		return "请确认密码"
+	}
+	if pwd != strings.TrimSpace(ToString(p["password_confirm"])) {
+		return "两次输入的密码不一致"
+	}
+	return ""
+}
+
 func FileRenameCheck(p map[string]any) string {
 	return FileEditCateCheck(p)
 }

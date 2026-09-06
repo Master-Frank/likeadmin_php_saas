@@ -346,34 +346,45 @@ func UserChangePassword(c *gin.Context) {
 			return
 		}
 	}
-	pwd := httpx.Str(c, "password")
-	if pwd == "" {
-		response.Fail(c, "请输入新密码")
+	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
+	pwd := httpx.Str(c, "password")
 	tdb(c).Model(&u).Update("password", util.CreatePassword(pwd, salt))
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func UserResetPassword(c *gin.Context) {
 	mobile := httpx.Str(c, "mobile")
 	code := httpx.Str(c, "code")
-	pwd := httpx.Str(c, "password")
-	if mobile == "" || pwd == "" {
-		response.Fail(c, "参数错误")
+	if msg := util.ValidChinaMobile(mobile); msg != "" {
+		if mobile == "" {
+			response.Fail(c, "请输入手机号")
+			return
+		}
+		response.Fail(c, "请输入正确手机号")
+		return
+	}
+	if code == "" {
+		response.Fail(c, "请填写验证码")
+		return
+	}
+	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if !verifySms(c, mobile, code, "ZHDLMM") {
 		response.Fail(c, "验证码错误")
 		return
 	}
-	hashed := util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
+	hashed := util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification)
 	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
 	q.Update("password", hashed)
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func UserBindMobile(c *gin.Context) {
@@ -407,7 +418,7 @@ func UserBindMobile(c *gin.Context) {
 		return
 	}
 	tdb(c).Model(&u).Update("mobile", mobile)
-	response.Success(c, "绑定成功", nil)
+	response.SuccessNotice(c, "绑定成功")
 }
 
 func UserGetMobileByMnp(c *gin.Context) { UserGetMobileByMnpReal(c) }

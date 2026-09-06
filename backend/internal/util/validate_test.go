@@ -118,6 +118,27 @@ func TestOAReplyWriteCheck(t *testing.T) {
 	}
 }
 
+func TestUserPasswordCheck(t *testing.T) {
+	if UserPasswordCheck(map[string]any{}) != "请输入密码" {
+		t.Fatal(UserPasswordCheck(map[string]any{}))
+	}
+	if UserPasswordCheck(map[string]any{"password": "abc12", "password_confirm": "abc12"}) != "密码须在6-25位之间" {
+		t.Fatal("length")
+	}
+	if UserPasswordCheck(map[string]any{"password": "abcdef", "password_confirm": "abcdef"}) != "密码须为字母数字组合" {
+		t.Fatal("alphaNum")
+	}
+	if UserPasswordCheck(map[string]any{"password": "abc123"}) != "请确认密码" {
+		t.Fatal("confirm required")
+	}
+	if UserPasswordCheck(map[string]any{"password": "abc123", "password_confirm": "abc124"}) != "两次输入的密码不一致" {
+		t.Fatal("mismatch")
+	}
+	if UserPasswordCheck(map[string]any{"password": "abc123", "password_confirm": "abc123"}) != "" {
+		t.Fatal("expected ok")
+	}
+}
+
 func TestDictTypeWriteCheck(t *testing.T) {
 	if DictTypeWriteCheck(map[string]any{}) != "请填写字典名称" {
 		t.Fatal(DictTypeWriteCheck(map[string]any{}))

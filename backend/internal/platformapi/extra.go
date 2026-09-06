@@ -128,60 +128,198 @@ func PayWaySet(c *gin.Context) {
 	response.Success(c, "设置成功", nil)
 }
 
+func crontabTypeDesc(t int) string {
+	switch t {
+	case 1:
+		return "定时任务"
+	case 2:
+		return "守护进程"
+	default:
+		return ""
+	}
+}
+
+func crontabStatusDesc(s int) string {
+	switch s {
+	case 1:
+		return "运行"
+	case 2:
+		return "停止"
+	case 3:
+		return "错误"
+	default:
+		return ""
+	}
+}
+
+func crontabWriteCheck(p map[string]any, needID bool) string {
+	if needID {
+		if _, ok := p["id"]; !ok || util.ToInt(p["id"]) == 0 {
+			return "参数缺失"
+		}
+	}
+	if strings.TrimSpace(util.ToString(p["name"])) == "" {
+		return "请输入定时任务名称"
+	}
+	if _, ok := p["type"]; !ok {
+		return "请选择类型"
+	}
+	if util.ToInt(p["type"]) != 1 {
+		return "类型值错误"
+	}
+	if strings.TrimSpace(util.ToString(p["command"])) == "" {
+		return "请输入命令"
+	}
+	if _, ok := p["status"]; !ok {
+		return "请选择状态"
+	}
+	st := util.ToInt(p["status"])
+	if st != 1 && st != 2 && st != 3 {
+		return "状态值错误"
+	}
+	expr := strings.TrimSpace(util.ToString(p["expression"]))
+	if expr == "" {
+		return "请输入运行规则"
+	}
+	if !biz.ValidCron(expr) {
+		return "定时任务运行规则错误"
+	}
+	return ""
+}
+
 func CrontabLists(c *gin.Context) {
 	q := lists.Parse(c)
 	var rows []model.Crontab
 	var count int64
-	bootstrap.DB.Model(&model.Crontab{}).Count(&count)
-	bootstrap.DB.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db := bootstrap.DB.Model(&model.Crontab{}).Where("delete_time IS NULL")
+	db.Count(&count)
+	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
-	typeDesc := map[int]string{1: "定时任务"}
-	statusDesc := map[int]string{1: "运行", 2: "停止", 3: "错误"}
 	for _, r := range rows {
+		last := ""
+		if r.LastTime != nil && *r.LastTime > 0 {
+			last = util.FormatDateTime(*r.LastTime)
+		}
 		out = append(out, map[string]any{
-			"id": r.ID, "name": r.Name, "type": r.Type, "type_desc": typeDesc[r.Type],
+			"id": r.ID, "name": r.Name, "type": r.Type, "type_desc": crontabTypeDesc(r.Type),
 			"command": r.Command, "params": r.Params, "expression": r.Expression,
-			"status": r.Status, "status_desc": statusDesc[r.Status], "error": r.Error,
-			"last_time": util.FormatDateTimePtr(r.LastTime), "time": r.Time, "max_time": r.MaxTime,
+			"status": r.Status, "status_desc": crontabStatusDesc(r.Status), "error": r.Error,
+			"last_time": last, "time": r.Time, "max_time": r.MaxTime,
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func CrontabAdd(c *gin.Context) {
+	p := httpx.Params(c)
+	if msg := crontabWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	now := util.NowUnix()
 	bootstrap.DB.Create(&model.Crontab{
 		Name: httpx.Str(c, "name"), Type: httpx.Int(c, "type"), Command: httpx.Str(c, "command"),
-		Params: httpx.Str(c, "params"), Status: httpx.Int(c, "status"), Expression: httpx.Str(c, "expression"), Remark: httpx.Str(c, "remark"),
+		Params: httpx.Str(c, "params"), Status: httpx.Int(c, "status"), Expression: httpx.Str(c, "expression"),
+		Remark: httpx.Str(c, "remark"), LastTime: &now, CreateTime: now,
 	})
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "添加成功")
 }
 
 func CrontabEdit(c *gin.Context) {
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+	p := httpx.Params(c)
+	if msg := crontabWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	var r model.Crontab
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, httpx.Uint(c, "id")).Error != nil {
+		response.Fail(c, "定时任务不存在")
+		return
+	}
+	now := util.NowUnix()
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", r.ID).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "command": httpx.Str(c, "command"), "params": httpx.Str(c, "params"),
 		"status": httpx.Int(c, "status"), "expression": httpx.Str(c, "expression"), "remark": httpx.Str(c, "remark"),
+		"type": httpx.Int(c, "type"), "update_time": now,
 	})
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "编辑成功")
 }
 
 func CrontabDelete(c *gin.Context) {
-	bootstrap.DB.Delete(&model.Crontab{}, httpx.Uint(c, "id"))
-	response.Success(c, "删除成功", nil)
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	now := util.NowUnix()
+	res := bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Update("delete_time", now)
+	if res.RowsAffected == 0 {
+		response.Fail(c, "删除失败")
+		return
+	}
+	response.SuccessNotice(c, "删除成功")
 }
 
 func CrontabOperate(c *gin.Context) {
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.Uint(c, "id")).Update("status", httpx.Int(c, "status"))
-	response.Success(c, "操作成功", nil)
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	operate := httpx.Str(c, "operate")
+	if operate == "" {
+		response.Fail(c, "请选择操作")
+		return
+	}
+	var r model.Crontab
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Fail(c, "定时任务不存在")
+		return
+	}
+	status := r.Status
+	switch operate {
+	case "start":
+		status = 1
+	case "stop":
+		status = 2
+	default:
+		response.Fail(c, "请选择操作")
+		return
+	}
+	bootstrap.DB.Model(&r).Update("status", status)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func CrontabDetail(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var r model.Crontab
-	bootstrap.DB.First(&r, httpx.Uint(c, "id"))
-	response.Data(c, r)
+	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
+		response.Data(c, []any{})
+		return
+	}
+	response.Data(c, gin.H{
+		"id": r.ID, "name": r.Name, "type": r.Type, "type_desc": crontabTypeDesc(r.Type),
+		"command": r.Command, "params": r.Params, "status": r.Status, "status_desc": crontabStatusDesc(r.Status),
+		"expression": r.Expression, "remark": r.Remark,
+	})
 }
 
 func CrontabExpression(c *gin.Context) {
-	response.Data(c, gin.H{"lists": []string{}})
+	expr := httpx.Str(c, "expression")
+	if expr == "" {
+		response.Fail(c, "请输入运行规则")
+		return
+	}
+	lists, err := biz.CronExpressionLists(expr)
+	if err != nil {
+		response.Fail(c, "定时任务运行规则错误")
+		return
+	}
+	response.Data(c, lists)
 }
 
 func NoticeSettingLists(c *gin.Context) {

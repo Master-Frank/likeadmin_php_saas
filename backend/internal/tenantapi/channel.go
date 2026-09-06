@@ -43,7 +43,7 @@ func ChannelOASet(c *gin.Context) {
 	cfgsvc.Set(c, "oa_setting", "token", httpx.Str(c, "token"))
 	cfgsvc.Set(c, "oa_setting", "encoding_aes_key", httpx.Str(c, "encoding_aes_key"))
 	cfgsvc.Set(c, "oa_setting", "encryption_type", httpx.Int(c, "encryption_type"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ChannelMnpGet(c *gin.Context) {
@@ -74,7 +74,7 @@ func ChannelMnpSet(c *gin.Context) {
 	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
 	cfgsvc.Set(c, "mnp_setting", "app_id", httpx.Str(c, "app_id"))
 	cfgsvc.Set(c, "mnp_setting", "app_secret", httpx.Str(c, "app_secret"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ChannelOpenGet(c *gin.Context) {
@@ -87,7 +87,7 @@ func ChannelOpenGet(c *gin.Context) {
 func ChannelOpenSet(c *gin.Context) {
 	cfgsvc.Set(c, "open_platform", "app_id", httpx.Str(c, "app_id"))
 	cfgsvc.Set(c, "open_platform", "app_secret", httpx.Str(c, "app_secret"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ChannelH5Get(c *gin.Context) {
@@ -103,7 +103,7 @@ func ChannelH5Set(c *gin.Context) {
 	cfgsvc.Set(c, "web_page", "status", httpx.Int(c, "status"))
 	cfgsvc.Set(c, "web_page", "page_status", httpx.Int(c, "page_status"))
 	cfgsvc.Set(c, "web_page", "page_url", httpx.Str(c, "page_url"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ChannelAppGet(c *gin.Context) {
@@ -118,7 +118,7 @@ func ChannelAppSet(c *gin.Context) {
 	cfgsvc.Set(c, "app", "ios_download_url", httpx.Str(c, "ios_download_url"))
 	cfgsvc.Set(c, "app", "android_download_url", httpx.Str(c, "android_download_url"))
 	cfgsvc.Set(c, "app", "download_title", httpx.Str(c, "download_title"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ChannelGetSet(group string) (gin.HandlerFunc, gin.HandlerFunc) {

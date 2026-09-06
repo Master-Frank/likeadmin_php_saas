@@ -224,7 +224,7 @@ func tenantSelfUser(c *gin.Context, admin model.TenantAdmin, roleIDs, deptIDs, j
 	return gin.H{
 		"id": admin.ID, "account": admin.Account, "name": admin.Name,
 		"avatar": filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.Tenant["admin_avatar"])),
-		"root": admin.Root, "disable": admin.Disable, "multipoint_login": admin.MultipointLogin,
+		"root":   admin.Root, "disable": admin.Disable, "multipoint_login": admin.MultipointLogin,
 		"role_id": roleIDs, "dept_id": deptIDs, "jobs_id": jobIDs,
 	}
 }
@@ -672,7 +672,7 @@ func SettingSetWebsite(c *gin.Context) {
 	cfgsvc.Set(c, "website", "pc_desc", httpx.Str(c, "pc_desc"))
 	cfgsvc.Set(c, "website", "pc_keywords", httpx.Str(c, "pc_keywords"))
 	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.Str(c, "h5_favicon")))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func HotSearchGet(c *gin.Context) {
@@ -695,7 +695,7 @@ func RechargeGetConfig(c *gin.Context) {
 func RechargeSetConfig(c *gin.Context) {
 	cfgsvc.Set(c, "recharge", "status", httpx.Int(c, "status"))
 	cfgsvc.Set(c, "recharge", "min_amount", httpx.Any(c, "min_amount"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func RechargeLists(c *gin.Context) {

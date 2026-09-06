@@ -198,6 +198,9 @@ type Crontab struct {
 	LastTime   *int64 `gorm:"column:last_time" json:"last_time"`
 	Time       string `gorm:"column:time" json:"time"`
 	MaxTime    string `gorm:"column:max_time" json:"max_time"`
+	CreateTime int64  `gorm:"column:create_time" json:"create_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
+	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (Crontab) TableName() string { return T("dev_crontab") }

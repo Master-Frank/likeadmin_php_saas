@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/util"
@@ -37,26 +38,7 @@ func RunOnce() {
 }
 
 func due(item model.Crontab, now int64) bool {
-	if item.LastTime == nil {
-		return true
-	}
-	interval := parseInterval(item.Expression)
-	return now-*item.LastTime >= interval
-}
-
-func parseInterval(expr string) int64 {
-	expr = strings.TrimSpace(expr)
-	if expr == "" || expr == "* * * * *" {
-		return 60
-	}
-	parts := strings.Fields(expr)
-	if len(parts) >= 1 && strings.HasPrefix(parts[0], "*/") {
-		n := util.ParseInt(strings.TrimPrefix(parts[0], "*/"))
-		if n > 0 {
-			return int64(n) * 60
-		}
-	}
-	return 60
+	return biz.CronDue(item.Expression, item.LastTime, now)
 }
 
 func runCommand(item model.Crontab) string {

@@ -271,18 +271,42 @@ func UserInfo(c *gin.Context) {
 
 func UserSetInfo(c *gin.Context) {
 	u := currentUser(c)
+	if u.ID == 0 {
+		response.Fail(c, "请先登录")
+		return
+	}
 	field := httpx.Str(c, "field")
+	if field == "" {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	if _, ok := httpx.Params(c)["value"]; !ok {
+		response.Fail(c, "值不存在")
+		return
+	}
 	value := httpx.Any(c, "value")
 	allow := map[string]bool{"nickname": true, "account": true, "sex": true, "avatar": true, "real_name": true}
 	if !allow[field] {
-		response.Fail(c, "不允许修改")
+		response.Fail(c, "参数错误")
 		return
+	}
+	if field == "account" {
+		var n int64
+		q := tdb(c).Model(&model.User{}).Where("account = ? AND id <> ? AND delete_time IS NULL", util.ToString(value), u.ID)
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		q.Count(&n)
+		if n > 0 {
+			response.Fail(c, "账号已被使用!")
+			return
+		}
 	}
 	if field == "avatar" {
 		value = filesvc.SetFileURL(c, util.ToString(value))
 	}
 	tdb(c).Model(&u).Update(field, value)
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func ArticleLists(c *gin.Context) {

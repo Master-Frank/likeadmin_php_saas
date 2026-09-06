@@ -158,7 +158,7 @@ func HotSearchSet(c *gin.Context) {
 			Name: util.ToString(m["name"]), Sort: util.ToInt(m["sort"]), TenantID: tid, CreateTime: now,
 		})
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func SettingGetCopyright(c *gin.Context) {
@@ -167,7 +167,7 @@ func SettingGetCopyright(c *gin.Context) {
 
 func SettingSetCopyright(c *gin.Context) {
 	cfgsvc.Set(c, "copyright", "config", httpx.Any(c, "config"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func SettingGetAgreement(c *gin.Context) {
@@ -184,7 +184,7 @@ func SettingSetAgreement(c *gin.Context) {
 	cfgsvc.Set(c, "agreement", "service_content", httpx.Str(c, "service_content"))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
 	cfgsvc.Set(c, "agreement", "privacy_content", httpx.Str(c, "privacy_content"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func SettingGetSiteStatistics(c *gin.Context) {
@@ -193,7 +193,7 @@ func SettingGetSiteStatistics(c *gin.Context) {
 
 func SettingSetSiteStatistics(c *gin.Context) {
 	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.Str(c, "clarity_code"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func UserAdjustMoney(c *gin.Context) {

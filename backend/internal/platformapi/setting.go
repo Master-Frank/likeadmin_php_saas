@@ -36,7 +36,7 @@ func WebSetWebsite(c *gin.Context) {
 	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.Str(c, "web_logo_light")))
 	cfgsvc.Set(c, "platform", "web_logo_dark", filesvc.SetFileURL(c, httpx.Str(c, "web_logo_dark")))
 	cfgsvc.Set(c, "platform", "login_image", filesvc.SetFileURL(c, httpx.Str(c, "login_image")))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func WebGetCopyright(c *gin.Context) {
@@ -45,7 +45,7 @@ func WebGetCopyright(c *gin.Context) {
 
 func WebSetCopyright(c *gin.Context) {
 	cfgsvc.Set(c, "copyright", "config", httpx.Any(c, "config"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func WebGetAgreement(c *gin.Context) {
@@ -62,7 +62,7 @@ func WebSetAgreement(c *gin.Context) {
 	cfgsvc.Set(c, "agreement", "service_content", httpx.Str(c, "service_content"))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
 	cfgsvc.Set(c, "agreement", "privacy_content", httpx.Str(c, "privacy_content"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func UserGetConfig(c *gin.Context) {
@@ -71,7 +71,7 @@ func UserGetConfig(c *gin.Context) {
 
 func UserSetConfig(c *gin.Context) {
 	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.Str(c, "default_avatar")))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func UserGetRegisterConfig(c *gin.Context) {
@@ -91,7 +91,7 @@ func UserSetRegisterConfig(c *gin.Context) {
 			cfgsvc.Set(c, "login", k, v)
 		}
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func TransactionGet(c *gin.Context) {
@@ -104,7 +104,7 @@ func TransactionGet(c *gin.Context) {
 func TransactionSet(c *gin.Context) {
 	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders", httpx.Int(c, "cancel_unpaid_orders"))
 	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.Int(c, "cancel_unpaid_orders_times"))
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func CustomerGet(c *gin.Context) {
@@ -121,7 +121,7 @@ func CustomerSet(c *gin.Context) {
 	for k, v := range httpx.Params(c) {
 		cfgsvc.Set(c, "customer_service", k, v)
 	}
-	response.Success(c, "设置成功", nil)
+	response.SuccessNotice(c, "设置成功")
 }
 
 func CacheClear(c *gin.Context) {
@@ -438,18 +438,95 @@ func bool01(ok bool) int {
 
 func StorageDetail(c *gin.Context) {
 	engine := httpx.Str(c, "engine")
-	response.Success(c, "", cfgsvc.Get(c, "storage", engine, map[string]any{}))
+	if engine == "" {
+		response.Fail(c, "engine不能为空")
+		return
+	}
+	def := cfgsvc.GetString(c, "storage", "default", "")
+	row := map[string]any{"status": 0}
+	switch engine {
+	case "local":
+		row = map[string]any{"status": 0}
+	case "qiniu", "aliyun":
+		row = asStorageMap(cfgsvc.Get(c, "storage", engine, map[string]any{
+			"bucket": "", "access_key": "", "secret_key": "", "domain": "", "status": 0,
+		}))
+	case "qcloud":
+		row = asStorageMap(cfgsvc.Get(c, "storage", engine, map[string]any{
+			"bucket": "", "region": "", "access_key": "", "secret_key": "", "domain": "", "status": 0,
+		}))
+	default:
+		response.Fail(c, "engine不能为空")
+		return
+	}
+	if engine == def {
+		row["status"] = 1
+	} else {
+		row["status"] = 0
+	}
+	response.Success(c, "获取成功", row)
 }
 
 func StorageSetup(c *gin.Context) {
 	engine := httpx.Str(c, "engine")
-	cfgsvc.Set(c, "storage", engine, httpx.Params(c))
+	if engine == "" {
+		response.Fail(c, "engine不能为空")
+		return
+	}
+	if _, ok := httpx.Params(c)["status"]; !ok {
+		response.Fail(c, "status不能为空")
+		return
+	}
+	status := httpx.Int(c, "status")
+	if status == 1 {
+		cfgsvc.Set(c, "storage", "default", engine)
+	} else {
+		cfgsvc.Set(c, "storage", "default", "local")
+	}
+	switch engine {
+	case "local":
+		cfgsvc.Set(c, "storage", "local", map[string]any{})
+	case "qiniu", "aliyun":
+		cfgsvc.Set(c, "storage", engine, map[string]any{
+			"bucket": httpx.Str(c, "bucket"), "access_key": httpx.Str(c, "access_key"),
+			"secret_key": httpx.Str(c, "secret_key"), "domain": httpx.Str(c, "domain"),
+		})
+	case "qcloud":
+		cfgsvc.Set(c, "storage", engine, map[string]any{
+			"bucket": httpx.Str(c, "bucket"), "region": httpx.Str(c, "region"),
+			"access_key": httpx.Str(c, "access_key"), "secret_key": httpx.Str(c, "secret_key"),
+			"domain": httpx.Str(c, "domain"),
+		})
+	}
+	cache.Del("STORAGE_DEFAULT")
 	cache.Del("STORAGE_ENGINE")
-	response.Success(c, "设置成功", nil)
+	if engine == "local" && status == 0 {
+		response.SuccessNotice(c, "默认开启本地存储")
+		return
+	}
+	response.SuccessNotice(c, "配置成功")
 }
 
 func StorageChange(c *gin.Context) {
-	cfgsvc.Set(c, "storage", "default", httpx.Str(c, "engine"))
+	engine := httpx.Str(c, "engine")
+	if engine == "" {
+		response.Fail(c, "engine不能为空")
+		return
+	}
+	def := cfgsvc.GetString(c, "storage", "default", "local")
+	if def == engine {
+		cfgsvc.Set(c, "storage", "default", "local")
+	} else {
+		cfgsvc.Set(c, "storage", "default", engine)
+	}
 	cache.Del("STORAGE_DEFAULT")
-	response.Success(c, "切换成功", nil)
+	cache.Del("STORAGE_ENGINE")
+	response.SuccessNotice(c, "切换成功")
+}
+
+func asStorageMap(v any) map[string]any {
+	if m, ok := v.(map[string]any); ok && m != nil {
+		return m
+	}
+	return map[string]any{}
 }

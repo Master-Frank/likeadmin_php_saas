@@ -97,6 +97,8 @@ paths=(
   /platformapi/setting.user.user/getConfig
   /platformapi/setting.user.user/getRegisterConfig
   /platformapi/crontab.crontab/lists
+  /platformapi/crontab.crontab/expression?expression=*+*+*+*+*
+  /platformapi/setting.storage/detail?engine=local
   /platformapi/setting.pay.pay_config/lists
   /platformapi/setting.pay.pay_way/getPayWay
   /platformapi/setting.system.system/info
@@ -669,6 +671,79 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
     fi
   else
     echo "dict_type_add could not resolve id"
+    fail=$((fail + 1))
+  fi
+
+  php_ce="$(curl -sS "$PHP/platformapi/crontab.crontab/expression?expression=*+*+*+*+*" -H "token: $TOKEN")"
+  go_ce="$(curl -sS "$GO/platformapi/crontab.crontab/expression?expression=*+*+*+*+*" -H "token: $TOKEN")"
+  echo "crontab_expr php_code=$(jcode <<<"$php_ce") go_code=$(jcode <<<"$go_ce") php_tail=$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or []; print((data[-1] or {}).get("date") if data else "")' <<<"$php_ce") go_tail=$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or []; print((data[-1] or {}).get("date") if data else "")' <<<"$go_ce")"
+  if [[ "$(jcode <<<"$php_ce")" != "$(jcode <<<"$go_ce")" ]]; then
+    echo "  php_ce=${php_ce:0:300}"
+    echo "  go_ce=${go_ce:0:300}"
+    fail=$((fail + 1))
+  fi
+  php_cbad="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":1,"command":"x","status":2,"expression":"* * * * *"}')"
+  go_cbad="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":1,"command":"x","status":2,"expression":"* * * * *"}')"
+  echo "crontab_add_bad php_msg=$(jget msg <<<"$php_cbad") go_msg=$(jget msg <<<"$go_cbad")"
+  if [[ "$(jget msg <<<"$php_cbad")" != "$(jget msg <<<"$go_cbad")" ]]; then
+    fail=$((fail + 1))
+  fi
+  cname="paircron$(date +%s)"
+  php_ca="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cname\",\"type\":1,\"command\":\"crontab cache\",\"status\":2,\"expression\":\"0 * * * *\",\"params\":\"\",\"remark\":\"pair\"}")"
+  echo "crontab_add php_code=$(jcode <<<"$php_ca")"
+  if [[ "$(jcode <<<"$php_ca")" != "1" ]]; then
+    echo "  php_ca=${php_ca:0:300}"
+    fail=$((fail + 1))
+  fi
+  clist="$(curl -sS "$GO/platformapi/crontab.crontab/lists?name=$cname" -H "token: $TOKEN")"
+  cid="$(python3 -c '
+import json,sys
+name=sys.argv[1]
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==name), 0))
+' "$cname" <<<"$clist")"
+  if [[ "$cid" == "0" || -z "$cid" ]]; then
+    clist="$(curl -sS "$GO/platformapi/crontab.crontab/lists" -H "token: $TOKEN")"
+    cid="$(python3 -c '
+import json,sys
+name=sys.argv[1]
+d=json.loads(sys.stdin.read())
+ls=(d.get("data") or {}).get("lists") or []
+print(next((x.get("id") for x in ls if x.get("name")==name), 0))
+' "$cname" <<<"$clist")"
+  fi
+  if [[ "$cid" != "0" && -n "$cid" ]]; then
+    go_cd="$(curl -sS "$GO/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
+    php_cd="$(curl -sS "$PHP/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
+    echo "crontab_detail php_type=$(jget data.type_desc <<<"$php_cd") go_type=$(jget data.type_desc <<<"$go_cd")"
+    if [[ "$(jget data.type_desc <<<"$php_cd")" != "$(jget data.type_desc <<<"$go_cd")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_cdel="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid}")"
+    echo "crontab_delete php_code=$(jcode <<<"$php_cdel")"
+    if [[ "$(jcode <<<"$php_cdel")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  else
+    echo "crontab_add could not resolve id"
+    fail=$((fail + 1))
+  fi
+
+  php_st="$(curl -sS "$PHP/platformapi/setting.storage/detail?engine=local" -H "token: $TOKEN")"
+  go_st="$(curl -sS "$GO/platformapi/setting.storage/detail?engine=local" -H "token: $TOKEN")"
+  echo "storage_detail php_status=$(jget data.status <<<"$php_st") go_status=$(jget data.status <<<"$go_st")"
+  if [[ "$(jcode <<<"$php_st")" != "$(jcode <<<"$go_st")" || "$(jget data.status <<<"$php_st")" != "$(jget data.status <<<"$go_st")" ]]; then
+    echo "  php_st=${php_st:0:200}"
+    echo "  go_st=${go_st:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_sbad="$(curl -sS -X POST "$PHP/platformapi/setting.storage/setup" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"status":1}')"
+  go_sbad="$(curl -sS -X POST "$GO/platformapi/setting.storage/setup" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"status":1}')"
+  echo "storage_setup_bad php_msg=$(jget msg <<<"$php_sbad") go_msg=$(jget msg <<<"$go_sbad")"
+  if [[ "$(jget msg <<<"$php_sbad")" != "$(jget msg <<<"$go_sbad")" ]]; then
+    echo "  php_sbad=${php_sbad:0:200}"
+    echo "  go_sbad=${go_sbad:0:200}"
     fail=$((fail + 1))
   fi
 
