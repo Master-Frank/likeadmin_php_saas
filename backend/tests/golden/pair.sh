@@ -98,6 +98,7 @@ paths=(
   /platformapi/setting.pay.pay_config/lists
   /platformapi/setting.pay.pay_way/getPayWay
   /platformapi/setting.system.system/info
+  /platformapi/upgrade.upgrade/lists
 )
 if [[ -n "$TENANT_HOST" ]]; then
   paths+=(
@@ -372,6 +373,84 @@ except Exception:
     fi
     curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$uid,\"action\":2,\"num\":1.5,\"remark\":\"pair-restore\"}" >/dev/null
   fi
+
+  page="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  save_page="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=d.get("data") or {}
+print(json.dumps({"id": data.get("id"), "type": data.get("type") or 1, "data": data.get("data") or "", "meta": data.get("meta") or ""}, ensure_ascii=False))
+' <<<"$page")"
+  go_ps="$(curl -sS -X POST "$GO/tenantapi/decorate.page/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_page")"
+  php_pd="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "decorate_page_save go_code=$(jcode <<<"$go_ps") php_detail=$(jcode <<<"$php_pd")"
+  if [[ "$(jcode <<<"$go_ps")" != "1" || "$(jcode <<<"$php_pd")" != "1" ]]; then
+    echo "  go_ps=${go_ps:0:300}"
+    fail=$((fail + 1))
+  fi
+
+  tab="$(curl -sS "$PHP/tenantapi/decorate.tabbar/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  save_tab="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=d.get("data") or {}
+print(json.dumps({"style": data.get("style") or {}, "list": data.get("list") or []}, ensure_ascii=False))
+' <<<"$tab")"
+  go_ts="$(curl -sS -X POST "$GO/tenantapi/decorate.tabbar/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_tab")"
+  echo "decorate_tabbar_save go_code=$(jcode <<<"$go_ts")"
+  if [[ "$(jcode <<<"$go_ts")" != "1" ]]; then
+    echo "  go_ts=${go_ts:0:300}"
+    fail=$((fail + 1))
+  fi
+
+  ws="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getWebsite" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  marker="pairdesc$(date +%s)"
+  set_ws="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["pc_desc"]=sys.argv[1]
+print(json.dumps(data, ensure_ascii=False))
+' "$marker" <<<"$ws")"
+  go_ws="$(curl -sS -X POST "$GO/tenantapi/setting.web.web_setting/setWebsite" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$set_ws")"
+  php_ws="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getWebsite" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_desc="$(jget data.pc_desc <<<"$php_ws")"
+  echo "website_set go_code=$(jcode <<<"$go_ws") php_pc_desc=$php_desc"
+  if [[ "$(jcode <<<"$go_ws")" != "1" || "$php_desc" != "$marker" ]]; then
+    fail=$((fail + 1))
+  fi
+  restore_ws="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+print(json.dumps(d.get("data") or {}, ensure_ascii=False))
+' <<<"$ws")"
+  curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setWebsite" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$restore_ws" >/dev/null
+
+  td="$(curl -sS "$PHP/platformapi/tenant.tenant/detail?id=1" -H "token: $TOKEN")"
+  old_notes="$(jget data.notes <<<"$td")"
+  tedit="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["notes"]=sys.argv[1]
+print(json.dumps(data, ensure_ascii=False))
+' "pairnote$(date +%s)" <<<"$td")"
+  note_marker="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("notes",""))' "$tedit")"
+  go_te="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$tedit")"
+  php_td="$(curl -sS "$PHP/platformapi/tenant.tenant/detail?id=1" -H "token: $TOKEN")"
+  echo "tenant_edit go_code=$(jcode <<<"$go_te") php_notes=$(jget data.notes <<<"$php_td")"
+  if [[ "$(jcode <<<"$go_te")" != "1" || "$(jget data.notes <<<"$php_td")" != "$note_marker" ]]; then
+    echo "  go_te=${go_te:0:300}"
+    fail=$((fail + 1))
+  fi
+  restore_t="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["notes"]=sys.argv[1]
+print(json.dumps(data, ensure_ascii=False))
+' "$old_notes" <<<"$td")"
+  curl -sS -X POST "$PHP/platformapi/tenant.tenant/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$restore_t" >/dev/null
 fi
 
 echo "failed=$fail"

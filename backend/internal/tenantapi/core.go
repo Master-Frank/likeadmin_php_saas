@@ -586,6 +586,17 @@ func ArticleCateAll(c *gin.Context) {
 	response.Data(c, rows)
 }
 
+func decoratePayload(c *gin.Context, key string) string {
+	v := httpx.Any(c, key)
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return util.EncodeJSON(v)
+}
+
 func DecoratePageDetail(c *gin.Context) {
 	var p model.DecoratePage
 	db := tdb(c).Where("type = ?", httpx.Int(c, "type"))
@@ -593,21 +604,38 @@ func DecoratePageDetail(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if db.First(&p).Error != nil {
-		response.Data(c, gin.H{})
+		response.Success(c, "获取成功", gin.H{})
 		return
 	}
-	response.Data(c, p)
+	response.Success(c, "获取成功", p)
 }
 
 func DecoratePageSave(c *gin.Context) {
 	id := httpx.Uint(c, "id")
-	now := util.NowUnix()
-	if id > 0 {
-		tdb(c).Model(&model.DecoratePage{}).Where("id = ?", id).Updates(map[string]any{"data": httpx.Str(c, "data"), "update_time": now})
-	} else {
-		tdb(c).Create(&model.DecoratePage{Type: httpx.Int(c, "type"), Data: httpx.Str(c, "data"), TenantID: tenantDB(c), CreateTime: now})
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
 	}
-	response.Success(c, "保存成功", nil)
+	if httpx.Str(c, "type") == "" && httpx.Int(c, "type") == 0 && httpx.Any(c, "type") == nil {
+		response.Fail(c, "装修类型参数缺失")
+		return
+	}
+	data := decoratePayload(c, "data")
+	if data == "" {
+		response.Fail(c, "装修信息参数缺失")
+		return
+	}
+	var page model.DecoratePage
+	if tdb(c).Where("id = ?", id).First(&page).Error != nil {
+		response.Fail(c, "信息不存在")
+		return
+	}
+	now := util.NowUnix()
+	tdb(c).Model(&page).Updates(map[string]any{
+		"type": httpx.Int(c, "type"), "data": data,
+		"meta": decoratePayload(c, "meta"), "update_time": now,
+	})
+	response.SuccessNotice(c, "操作成功")
 }
 
 func DecorateTabbarDetail(c *gin.Context) {

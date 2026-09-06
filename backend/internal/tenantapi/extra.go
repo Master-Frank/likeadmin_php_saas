@@ -137,7 +137,7 @@ func DecorateTabbarSave(c *gin.Context) {
 			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now,
 		})
 	}
-	response.Success(c, "保存成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func HotSearchSet(c *gin.Context) {
@@ -454,6 +454,10 @@ func OAReplyLists(c *gin.Context) {
 }
 
 func OAReplyAdd(c *gin.Context) {
+	if httpx.Int(c, "reply_type") == 2 && httpx.Int(c, "sort") < 0 {
+		response.Fail(c, "排序值须大于或等于0")
+		return
+	}
 	row := model.OfficialAccountReply{
 		TenantID: tenantDB(c), Name: httpx.Str(c, "name"), Keyword: httpx.Str(c, "keyword"),
 		ReplyType: httpx.Int(c, "reply_type"), MatchingType: httpx.Int(c, "matching_type"),
@@ -474,7 +478,7 @@ func OAReplyAdd(c *gin.Context) {
 		q.Update("status", 0)
 	}
 	tdb(c).Create(&row)
-	response.Success(c, "操作成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func OAReplyEdit(c *gin.Context) {

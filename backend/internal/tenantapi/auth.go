@@ -45,6 +45,19 @@ func AdminLists(c *gin.Context) {
 }
 
 func AdminAdd(c *gin.Context) {
+	if msg := util.AdminWriteCheck(httpx.Str(c, "account"), httpx.Str(c, "name"), httpx.Str(c, "password"), true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	var exist model.TenantAdmin
+	q := tdb(c).Where("account = ? AND delete_time IS NULL", httpx.Str(c, "account"))
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&exist).Error == nil {
+		response.Fail(c, "账号已存在")
+		return
+	}
 	admin := model.TenantAdmin{
 		TenantID: tenantDB(c), Name: httpx.Str(c, "name"), Account: httpx.Str(c, "account"),
 		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
@@ -66,7 +79,7 @@ func AdminAdd(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminEdit(c *gin.Context) {

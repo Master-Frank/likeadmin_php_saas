@@ -44,6 +44,21 @@ func TestValidRegisterPassword(t *testing.T) {
 	}
 }
 
+func TestAdminWriteCheck(t *testing.T) {
+	if AdminWriteCheck("", "n", "123456", true) != "账号不能为空" {
+		t.Fatal(AdminWriteCheck("", "n", "123456", true))
+	}
+	if AdminWriteCheck("acc", "", "123456", true) != "名称不能为空" {
+		t.Fatal(AdminWriteCheck("acc", "", "123456", true))
+	}
+	if AdminWriteCheck("acc", "name", "123", true) != "密码长度须在6-32位字符" {
+		t.Fatal(AdminWriteCheck("acc", "name", "123", true))
+	}
+	if AdminWriteCheck("acc", "name", "123456", true) != "" {
+		t.Fatal("expected ok")
+	}
+}
+
 func TestValidChinaMobile(t *testing.T) {
 	if ValidChinaMobile("") != "请输入内容" {
 		t.Fatal(ValidChinaMobile(""))

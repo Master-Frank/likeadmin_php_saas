@@ -2,10 +2,16 @@ package platformapi
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
@@ -278,6 +284,83 @@ func asCfgMap(v any) map[string]any {
 		return m
 	}
 	return map[string]any{}
+}
+
+const upgradeProductCode = "462953db655787cb99deb5893f8d523a"
+
+func UpgradeLists(c *gin.Context) {
+	q := lists.Parse(c)
+	key := fmt.Sprintf("version_lists%d", q.PageNo)
+	var payload map[string]any
+	if raw, ok := cache.Get(key); ok && raw != "" {
+		_ = json.Unmarshal([]byte(raw), &payload)
+	}
+	if payload == nil {
+		url := fmt.Sprintf("https://server.mddai.cn/indexapi/version/lists?type=2&page_no=%d&page_size=%d&page=1&action=lists&product_code=%s",
+			q.PageNo, q.PageSize, upgradeProductCode)
+		client := &http.Client{Timeout: 8 * time.Second}
+		resp, err := client.Get(url)
+		if err == nil {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			var wrap map[string]any
+			if json.Unmarshal(body, &wrap) == nil {
+				if data, ok := wrap["data"].(map[string]any); ok {
+					payload = data
+					if b, err := json.Marshal(data); err == nil {
+						cache.Set(key, string(b), 30*time.Minute)
+					}
+				}
+			}
+		}
+	}
+	if payload == nil {
+		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
+		return
+	}
+	rawLists, _ := payload["lists"].([]any)
+	count := int64(util.ToInt(payload["count"]))
+	response.Lists(c, formatUpgradeLists(rawLists), count, q.PageNo, q.PageSize, nil)
+}
+
+func formatUpgradeLists(rows []any) []map[string]any {
+	local := config.C.Project.Version
+	out := make([]map[string]any, 0, len(rows))
+	for _, item := range rows {
+		m, _ := item.(map[string]any)
+		if m == nil {
+			continue
+		}
+		ver := util.ToString(m["version_no"])
+		m["version_str"] = ""
+		m["able_update"] = 0
+		if local == ver {
+			m["version_str"] = "您的系统当前处于此版本"
+		} else if local < ver {
+			m["version_str"] = "系统可更新至此版本"
+			m["able_update"] = 1
+		}
+		m["new_version"] = 0
+		notice := []any{}
+		if util.ToInt(m["uniapp_publish"]) == 1 {
+			notice = append(notice, "更新至当前版本后需重新发布手机端前端前台")
+		}
+		if util.ToInt(m["pc_admin_publish"]) == 1 {
+			notice = append(notice, "更新至当前版本后需重新发布前端PC后台")
+		}
+		if util.ToInt(m["pc_shop_publish"]) == 1 {
+			notice = append(notice, "更新至当前版本后需重新发布前端PC前台")
+		}
+		if extra := util.ToString(m["publish_content"]); extra != "" {
+			notice = append(notice, extra)
+		}
+		m["notice"] = notice
+		out = append(out, m)
+	}
+	if len(out) > 0 {
+		out[0]["new_version"] = 1
+	}
+	return out
 }
 
 func UpgradeNotImpl(c *gin.Context) {

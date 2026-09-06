@@ -93,10 +93,17 @@ func TenantDetail(c *gin.Context) {
 func TenantAdd(c *gin.Context) {
 	name := httpx.Str(c, "name")
 	if name == "" {
-		response.Fail(c, "请输入租户名称")
+		response.Fail(c, "请输入用户名")
 		return
 	}
 	alias := stripHost(httpx.Str(c, "domain_alias"))
+	if alias != "" {
+		var aliasRow model.Tenant
+		if bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", alias).First(&aliasRow).Error == nil {
+			response.Fail(c, "租户别名已存在")
+			return
+		}
+	}
 	sn := httpx.Str(c, "host_name")
 	if sn == "" {
 		sn = randomSN()
@@ -134,11 +141,32 @@ func TenantAdd(c *gin.Context) {
 
 func TenantEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	if httpx.Str(c, "name") == "" {
+		response.Fail(c, "请输入用户名")
+		return
+	}
+	var cur model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
+		response.Fail(c, "租户不存在")
+		return
+	}
+	alias := stripHost(httpx.Str(c, "domain_alias"))
+	if alias != "" {
+		var aliasRow model.Tenant
+		if bootstrap.DB.Where("domain_alias = ? AND id <> ? AND delete_time IS NULL", alias, id).First(&aliasRow).Error == nil {
+			response.Fail(c, "租户别名已存在")
+			return
+		}
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
 		"disable": httpx.Int(c, "disable"), "tel": httpx.Str(c, "tel"),
-		"domain_alias":        stripHost(httpx.Str(c, "domain_alias")),
+		"domain_alias":        alias,
 		"domain_alias_enable": httpx.Int(c, "domain_alias_enable"),
 		"notes":               httpx.Str(c, "notes"), "update_time": now,
 	})
@@ -146,8 +174,18 @@ func TenantEdit(c *gin.Context) {
 }
 
 func TenantDelete(c *gin.Context) {
+	id := httpx.Uint(c, "id")
+	if id == 0 {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	var cur model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
+		response.Fail(c, "租户不存在")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", httpx.Uint(c, "id")).Update("delete_time", now)
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Update("delete_time", now)
 	response.Result(c, 1, 1, "删除成功", []any{})
 }
 

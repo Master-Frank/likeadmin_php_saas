@@ -94,8 +94,12 @@ func AdminAdd(c *gin.Context) {
 	account := httpx.Str(c, "account")
 	name := httpx.Str(c, "name")
 	password := httpx.Str(c, "password")
-	if account == "" || name == "" || password == "" {
-		response.Fail(c, "参数缺失")
+	if msg := util.AdminWriteCheck(account, name, password, true); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	if len(httpx.Uints(c, "role_id")) == 0 && httpx.Int(c, "root") != 1 {
+		response.Fail(c, "请选择角色")
 		return
 	}
 	var exist model.Admin
@@ -127,7 +131,7 @@ func AdminAdd(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "添加成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminEdit(c *gin.Context) {
@@ -165,7 +169,7 @@ func AdminEdit(c *gin.Context) {
 	if httpx.Int(c, "disable") == 1 {
 		expireAdminTokens(id)
 	}
-	response.Success(c, "修改成功", nil)
+	response.SuccessNotice(c, "操作成功")
 }
 
 func AdminDelete(c *gin.Context) {

@@ -61,6 +61,32 @@ func ValidRegisterPassword(password string) string {
 	return ""
 }
 
+func AdminWriteCheck(account, name, password string, needPwd bool) string {
+	if account == "" {
+		return "账号不能为空"
+	}
+	if n := len([]rune(account)); n < 1 || n > 32 {
+		return "账号长度须在1-32位字符"
+	}
+	if name == "" {
+		return "名称不能为空"
+	}
+	if n := len([]rune(name)); n < 1 || n > 16 {
+		return "名称须在1-16位字符"
+	}
+	if needPwd {
+		if password == "" {
+			return "密码不能为空"
+		}
+		if n := len(password); n < 6 || n > 32 {
+			return "密码长度须在6-32位字符"
+		}
+	} else if password != "" && (len(password) < 6 || len(password) > 32) {
+		return "密码长度须在6-32位字符"
+	}
+	return ""
+}
+
 var chinaMobile = regexp.MustCompile(`^1[3-9]\d{9}$`)
 
 // ValidChinaMobile mirrors ThinkPHP mobile rule used by UserValidate.
