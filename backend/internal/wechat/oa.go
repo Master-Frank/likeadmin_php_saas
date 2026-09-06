@@ -63,8 +63,6 @@ func MatchReply(msg OAMessage, rows []ReplyRow) string {
 	}
 	if strings.EqualFold(msg.MsgType, "text") {
 		text := msg.Content
-		best := ""
-		bestSort := int(^uint(0) >> 1)
 		for _, r := range rows {
 			if r.Status != 1 || r.ReplyType != ReplyKeyword || r.Content == "" {
 				continue
@@ -75,13 +73,9 @@ func MatchReply(msg OAMessage, rows []ReplyRow) string {
 			} else {
 				ok = r.Keyword == text
 			}
-			if ok && r.Sort < bestSort {
-				best = r.Content
-				bestSort = r.Sort
+			if ok {
+				return r.Content
 			}
-		}
-		if best != "" {
-			return best
 		}
 		for _, r := range rows {
 			if r.Status == 1 && r.ReplyType == ReplyDefault && r.Content != "" {

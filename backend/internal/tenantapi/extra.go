@@ -116,8 +116,15 @@ func DecorateDataArticle(c *gin.Context) {
 
 func DecorateDataPC(c *gin.Context) {
 	var p model.DecoratePage
-	_ = tdb(c).First(&p, 4)
+	q := tdb(c).Where("type = ?", 4)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	_ = q.Order("id asc").First(&p)
 	update := util.FormatDateTimePtr(p.UpdateTime)
+	if update == "" {
+		update = util.FormatDateTime(p.CreateTime)
+	}
 	if update == "" {
 		update = util.FormatDateTime(util.NowUnix())
 	}
@@ -636,12 +643,11 @@ func OAReplyDelete(c *gin.Context) {
 		response.Fail(c, "记录不存在")
 		return
 	}
-	now := util.NowUnix()
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
+	q := tdb(c).Unscoped().Where("id = ?", httpx.Uint(c, "id"))
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
-	q.Update("delete_time", now)
+	q.Delete(&model.OfficialAccountReply{})
 	response.SuccessNotice(c, "操作成功")
 }
 

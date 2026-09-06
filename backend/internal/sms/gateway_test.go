@@ -49,6 +49,9 @@ func TestFormatContent(t *testing.T) {
 	if got := formatContent("您的验证码是${code}", map[string]string{"code": "1234"}); got != "您的验证码是1234" {
 		t.Fatalf("got %s", got)
 	}
+	if got := formatContent("您好{nickname}", map[string]string{"nickname": "张三"}); got != "您好张三" {
+		t.Fatalf("brace %s", got)
+	}
 }
 
 func TestTencentParams(t *testing.T) {

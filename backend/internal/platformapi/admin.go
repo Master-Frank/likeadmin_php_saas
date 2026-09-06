@@ -38,7 +38,7 @@ func AdminLists(c *gin.Context) {
 	}
 	var count int64
 	db.Count(&count)
-	order := lists.OrderSQL(q, "id desc", nil)
+	order := lists.OrderSQL(q, "id desc", map[string]bool{"create_time": true, "id": true})
 	var rows []model.Admin
 	db.Order(order).Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))

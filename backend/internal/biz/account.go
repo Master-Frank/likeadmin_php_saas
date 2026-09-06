@@ -39,7 +39,7 @@ func ChangeTypeDesc(changeType int) string {
 	return ""
 }
 
-func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action int, amount, left float64, sourceSN, remark string) {
+func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action int, amount, left float64, sourceSN, remark string, extra ...any) {
 	if db == nil {
 		db = bootstrap.DB
 	}
@@ -52,7 +52,7 @@ func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action i
 		return n > 0
 	}
 	row := model.UserAccountLog{
-		SN:           util.GenerateSN(exists, "", 4),
+		SN:           util.GenerateSN(exists, "20", 4),
 		UserID:       userID,
 		ChangeObject: UM,
 		ChangeType:   changeType,
@@ -63,6 +63,9 @@ func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action i
 		Remark:       remark,
 		TenantID:     tenantID,
 		CreateTime:   util.NowUnix(),
+	}
+	if len(extra) > 0 {
+		row.Extra = ExtraJSON(extra[0])
 	}
 	db.Create(&row)
 }

@@ -571,7 +571,15 @@ except Exception:
       echo "  php_um=${php_um:0:300}"
       fail=$((fail + 1))
     fi
-    curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$uid,\"action\":2,\"num\":1.5,\"remark\":\"pair-restore\"}" >/dev/null
+    go_adj="$(curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$uid,\"action\":2,\"num\":1.5,\"remark\":\"pair-restore\"}")"
+    echo "user_adjust_restore go_code=$(jcode <<<"$go_adj")"
+    if command -v mysql >/dev/null; then
+      oplog="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT action FROM la_operation_log WHERE url LIKE '%adjustMoney%' ORDER BY id DESC LIMIT 1" 2>/dev/null || true)"
+      echo "adjust_oplog=$oplog"
+      if [[ "$oplog" != *调整用户余额* ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
   fi
 
   page="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -878,6 +886,14 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   if [[ "$(jcode <<<"$php_ce")" != "$(jcode <<<"$go_ce")" ]]; then
     echo "  php_ce=${php_ce:0:300}"
     echo "  go_ce=${go_ce:0:300}"
+    fail=$((fail + 1))
+  fi
+  php_cebad="$(curl -sS "$PHP/platformapi/crontab.crontab/expression?expression=not-a-cron" -H "token: $TOKEN")"
+  go_cebad="$(curl -sS "$GO/platformapi/crontab.crontab/expression?expression=not-a-cron" -H "token: $TOKEN")"
+  echo "crontab_expr_bad php_msg=$(jget msg <<<"$php_cebad") go_msg=$(jget msg <<<"$go_cebad")"
+  if [[ "$(jget msg <<<"$php_cebad")" != "$(jget msg <<<"$go_cebad")" ]]; then
+    echo "  php_cebad=${php_cebad:0:200}"
+    echo "  go_cebad=${go_cebad:0:200}"
     fail=$((fail + 1))
   fi
   php_cbad="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":1,"command":"x","status":2,"expression":"* * * * *"}')"
@@ -1442,10 +1458,38 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
   if [[ "$(jcode <<<"$php_art")" != "$(jcode <<<"$go_art")" ]]; then
     fail=$((fail + 1))
   fi
+  php_pc="$(curl -sS "$PHP/tenantapi/decorate.data/pc" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_pc="$(curl -sS "$GO/tenantapi/decorate.data/pc" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_pcurl="$(jget data.pc_url <<<"$php_pc")"
+  go_pcurl="$(jget data.pc_url <<<"$go_pc")"
+  echo "decorate_pc php_code=$(jcode <<<"$php_pc") go_code=$(jcode <<<"$go_pc") php_url=$php_pcurl go_url=$go_pcurl"
+  if [[ "$(jcode <<<"$php_pc")" != "1" || "$(jcode <<<"$go_pc")" != "1" || "$go_pcurl" != *"/pc"* || "$php_pcurl" != *"/pc"* ]]; then
+    echo "  php_pc=${php_pc:0:200}"
+    echo "  go_pc=${go_pc:0:200}"
+    fail=$((fail + 1))
+  fi
   php_fin="$(curl -sS "$PHP/tenantapi/finance.account_log/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_fin="$(curl -sS "$GO/tenantapi/finance.account_log/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  echo "account_log php_code=$(jcode <<<"$php_fin") go_code=$(jcode <<<"$go_fin")"
+  php_fam="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print((ls[0] if ls else {}).get("change_amount",""))' <<<"$php_fin")"
+  go_fam="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print((ls[0] if ls else {}).get("change_amount",""))' <<<"$go_fin")"
+  echo "account_log php_code=$(jcode <<<"$php_fin") go_code=$(jcode <<<"$go_fin") php_amt=$php_fam go_amt=$go_fam"
   if [[ "$(jcode <<<"$php_fin")" != "$(jcode <<<"$go_fin")" ]]; then
+    fail=$((fail + 1))
+  fi
+  if [[ -n "$go_fam" && "$go_fam" != "+"* && "$go_fam" != "-"* ]]; then
+    echo "  go finance amount missing sign: $go_fam"
+    fail=$((fail + 1))
+  fi
+  if [[ -n "$php_fam" && -n "$go_fam" && "$php_fam" != "$go_fam" ]]; then
+    echo "  finance amount mismatch php=$php_fam go=$go_fam"
+    fail=$((fail + 1))
+  fi
+  php_asort="$(curl -sS "$PHP/tenantapi/article.article/lists?field=create_time&order_by=asc" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_asort="$(curl -sS "$GO/tenantapi/article.article/lists?field=create_time&order_by=asc" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_aid="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print((ls[0] if ls else {}).get("id",""))' <<<"$php_asort")"
+  go_aid="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print((ls[0] if ls else {}).get("id",""))' <<<"$go_asort")"
+  echo "article_sort php_code=$(jcode <<<"$php_asort") go_code=$(jcode <<<"$go_asort") php_id=$php_aid go_id=$go_aid"
+  if [[ "$(jcode <<<"$php_asort")" != "$(jcode <<<"$go_asort")" || ( -n "$php_aid" && -n "$go_aid" && "$php_aid" != "$go_aid" ) ]]; then
     fail=$((fail + 1))
   fi
   php_rr="$(curl -sS "$PHP/tenantapi/finance.refund/record" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -1484,6 +1528,12 @@ php_dd="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/add" -H "tok
 go_dd="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_data/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
 echo "dict_data_add_bad php_msg=$(jget msg <<<"$php_dd") go_msg=$(jget msg <<<"$go_dd")"
 if [[ "$(jget msg <<<"$php_dd")" != "$(jget msg <<<"$go_dd")" ]]; then
+  fail=$((fail + 1))
+fi
+php_tul="$(curl -sS "$PHP/platformapi/tenant.tenantuser/lists" -H "token: $TOKEN")"
+go_tul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists" -H "token: $TOKEN")"
+echo "tenantuser_lists_noid php_msg=$(jget msg <<<"$php_tul") go_msg=$(jget msg <<<"$go_tul")"
+if [[ "$(jget msg <<<"$php_tul")" != "$(jget msg <<<"$go_tul")" ]]; then
   fail=$((fail + 1))
 fi
 php_tal="$(curl -sS "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"

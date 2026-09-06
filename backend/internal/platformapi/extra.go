@@ -323,7 +323,7 @@ func CrontabExpression(c *gin.Context) {
 	}
 	lists, err := biz.CronExpressionLists(expr)
 	if err != nil {
-		response.Fail(c, "定时任务运行规则错误")
+		response.Fail(c, err.Error())
 		return
 	}
 	response.Data(c, lists)

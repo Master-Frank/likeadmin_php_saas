@@ -508,6 +508,10 @@ func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
 func TenantUserLists(c *gin.Context) {
 	q := lists.Parse(c)
 	tid := lists.ParamInt(q, "tenant_id")
+	if tid <= 0 {
+		response.Fail(c, "请选择租户标识")
+		return
+	}
 	db := tenantdb.ForTenant(uint(tid))
 	if db == nil {
 		db = bootstrap.DB
@@ -519,6 +523,19 @@ func TenantUserLists(c *gin.Context) {
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		like := "%" + kw + "%"
 		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
+	}
+	if ch := lists.Param(q, "channel"); ch != "" {
+		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
+	}
+	if start := lists.Param(q, "create_time_start"); start != "" {
+		if ts := util.ParseDateTime(start); ts > 0 {
+			db = db.Where("create_time >= ?", ts)
+		}
+	}
+	if end := lists.Param(q, "create_time_end"); end != "" {
+		if ts := util.ParseDateTime(end); ts > 0 {
+			db = db.Where("create_time <= ?", ts)
+		}
 	}
 	var count int64
 	db.Count(&count)
@@ -646,30 +663,46 @@ func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 func copyTenantPay(tx *gorm.DB, tenantID uint) error {
 	var tpls []model.TenantPayConfig
 	tx.Where("tenant_id = 0").Find(&tpls)
+	oldToNew := map[uint]uint{}
 	wayToID := map[int]uint{}
 	for _, cfg := range tpls {
+		oldID, payWay := cfg.ID, cfg.PayWay
 		cfg.ID = 0
 		cfg.TenantID = tenantID
 		if err := tx.Create(&cfg).Error; err != nil {
 			return err
 		}
-		wayToID[cfg.PayWay] = cfg.ID
+		oldToNew[oldID] = cfg.ID
+		wayToID[payWay] = cfg.ID
 	}
 	var ways []model.TenantPayWay
 	tx.Where("tenant_id = 0").Find(&ways)
 	for _, w := range ways {
 		w.ID = 0
 		w.TenantID = tenantID
-		if nid, ok := wayToID[int(w.PayConfigID)]; ok {
-			w.PayConfigID = nid
-		} else if nid, ok := wayToID[w.Scene]; ok && w.PayConfigID == 0 {
-			w.PayConfigID = nid
-		}
+		w.PayConfigID = remapTenantPayConfigID(w.PayConfigID, oldToNew, wayToID, w.Scene)
 		if err := tx.Create(&w).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// remapTenantPayConfigID prefers the copied config row id, then PHP's
+// pay_config_id==pay_way match, then scene when the template id is empty.
+func remapTenantPayConfigID(payConfigID uint, oldToNew map[uint]uint, wayToID map[int]uint, scene int) uint {
+	if nid, ok := oldToNew[payConfigID]; ok {
+		return nid
+	}
+	if nid, ok := wayToID[int(payConfigID)]; ok {
+		return nid
+	}
+	if payConfigID == 0 {
+		if nid, ok := wayToID[scene]; ok {
+			return nid
+		}
+	}
+	return payConfigID
 }
 
 func copyTenantNotice(tx *gorm.DB, tenantID uint) error {

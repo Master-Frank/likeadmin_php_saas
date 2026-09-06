@@ -243,26 +243,40 @@ func applyRefundQuery(lg model.RefundLog) {
 	if oq.First(&order).Error != nil {
 		return
 	}
-	if order.PayWay != 2 {
-		return
+	switch order.PayWay {
+	case paycfg.WayWechat:
+		cfg := paycfg.WechatCfgByTenant(order.TenantID)
+		if cfg.MchID == "" || cfg.APIClientKey == "" {
+			return
+		}
+		result, err := paycfg.WechatQueryRefund(cfg, lg.SN)
+		if err != nil || result == nil {
+			return
+		}
+		ok, msg, known := paycfg.ParseWechatRefundQuery(result)
+		if !known {
+			return
+		}
+		if ok {
+			updateRefundSuccess(lg.ID, rec.ID)
+			return
+		}
+		updateRefundMsg(lg.ID, "微信:"+msg)
+	case paycfg.WayAli:
+		result, err := paycfg.AliQueryRefundByTenant(order.TenantID, order.SN, lg.SN)
+		if err != nil || result == nil {
+			return
+		}
+		ok, msg, known := paycfg.ParseAliRefundQuery(result)
+		if !known {
+			return
+		}
+		if ok {
+			updateRefundSuccess(lg.ID, rec.ID)
+			return
+		}
+		updateRefundMsg(lg.ID, "支付宝:"+msg)
 	}
-	cfg := paycfg.WechatCfgByTenant(order.TenantID)
-	if cfg.MchID == "" || cfg.APIClientKey == "" {
-		return
-	}
-	result, err := paycfg.WechatQueryRefund(cfg, lg.SN)
-	if err != nil || result == nil {
-		return
-	}
-	ok, msg, known := paycfg.ParseWechatRefundQuery(result)
-	if !known {
-		return
-	}
-	if ok {
-		updateRefundSuccess(lg.ID, rec.ID)
-		return
-	}
-	updateRefundMsg(lg.ID, "微信:"+msg)
 }
 
 func updateRefundSuccess(logID, recordID uint) {

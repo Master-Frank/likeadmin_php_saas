@@ -31,3 +31,22 @@ func TestParseAliRefundBodyRejects(t *testing.T) {
 		t.Fatal("error code")
 	}
 }
+
+func TestParseAliRefundQuery(t *testing.T) {
+	ok, msg, known := ParseAliRefundQuery(nil)
+	if ok || known || msg != "" {
+		t.Fatal("nil")
+	}
+	ok, msg, known = ParseAliRefundQuery(map[string]any{"code": "10000", "refund_status": "REFUND_SUCCESS"})
+	if !ok || !known || msg != "" {
+		t.Fatalf("success %v %s %v", ok, msg, known)
+	}
+	ok, msg, known = ParseAliRefundQuery(map[string]any{"code": "40004", "msg": "Business Failed", "sub_msg": "订单不存在"})
+	if ok || !known || msg != "订单不存在" {
+		t.Fatalf("fail %v %s %v", ok, msg, known)
+	}
+	ok, msg, known = ParseAliRefundQuery(map[string]any{"code": "10000", "refund_status": "REFUND_PROCESSING"})
+	if ok || !known || msg != "REFUND_PROCESSING" {
+		t.Fatalf("ing %v %s %v", ok, msg, known)
+	}
+}

@@ -157,6 +157,34 @@ func AccessToken(appID, secret string) (string, error) {
 	return out.AccessToken, nil
 }
 
+// DefaultJSApiList matches PHP WechatLogic::jsConfig / EasyWeChat buildJsSdkConfig.
+var DefaultJSApiList = []string{
+	"onMenuShareTimeline",
+	"onMenuShareAppMessage",
+	"onMenuShareQQ",
+	"onMenuShareWeibo",
+	"onMenuShareQZone",
+	"openLocation",
+	"getLocation",
+	"chooseWXPay",
+	"updateAppMessageShareData",
+	"updateTimelineShareData",
+	"openAddress",
+	"scanQRCode",
+}
+
+func jsSDKConfig(appID string, ts int64, nonce, signature string) map[string]any {
+	return map[string]any{
+		"appId":       appID,
+		"timestamp":   ts,
+		"nonceStr":    nonce,
+		"signature":   signature,
+		"jsApiList":   DefaultJSApiList,
+		"openTagList": []string{},
+		"debug":       false,
+	}
+}
+
 func JsConfig(appID, secret, rawURL string) (map[string]any, error) {
 	ticket, err := jsapiTicket(appID, secret)
 	if err != nil {
@@ -170,12 +198,7 @@ func JsConfig(appID, secret, rawURL string) (map[string]any, error) {
 	}
 	signSrc := fmt.Sprintf("jsapi_ticket=%s&noncestr=%s&timestamp=%d&url=%s", ticket, nonce, ts, u)
 	sum := sha1.Sum([]byte(signSrc))
-	return map[string]any{
-		"appId":     appID,
-		"timestamp": ts,
-		"nonceStr":  nonce,
-		"signature": hex.EncodeToString(sum[:]),
-	}, nil
+	return jsSDKConfig(appID, ts, nonce, hex.EncodeToString(sum[:])), nil
 }
 
 func jsapiTicket(appID, secret string) (string, error) {

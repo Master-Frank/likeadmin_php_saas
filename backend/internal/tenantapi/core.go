@@ -424,7 +424,8 @@ func ArticleLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.Article
-	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order(lists.OrderSQL(q, "sort desc, id desc", map[string]bool{"create_time": true, "id": true})).
+		Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	cates := map[uint]string{}
 	var cateRows []model.ArticleCate
 	tdb(c).Find(&cateRows)
@@ -552,7 +553,8 @@ func ArticleCateLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.ArticleCate
-	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order(lists.OrderSQL(q, "sort desc, id desc", map[string]bool{"create_time": true, "id": true})).
+		Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, articleCateMap(c, r))
@@ -895,7 +897,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 		out = append(out, map[string]any{
 			"nickname": r.Nickname, "account": r.Account, "sn": r.SN,
 			"avatar": filesvc.GetFileURL(c, r.Avatar), "mobile": r.Mobile,
-			"action": r.Action, "change_amount": sym + util.ToString(r.ChangeAmount),
+			"action": r.Action, "change_amount": sym + util.MoneyString(r.ChangeAmount),
 			"left_amount": r.LeftAmount, "change_type": r.ChangeType, "source_sn": r.SourceSN,
 			"create_time":      util.FormatDateTime(r.CreateTime),
 			"change_type_desc": biz.UMChangeTypeDesc[util.ToString(r.ChangeType)],

@@ -44,6 +44,28 @@ func TestMatchReply(t *testing.T) {
 	if got := MatchReply(OAMessage{MsgType: "text", Content: "其他"}, rows); got != "默认" {
 		t.Fatalf("default=%s", got)
 	}
+	tied := []ReplyRow{
+		{ReplyType: ReplyKeyword, MatchingType: MatchFull, Keyword: "hi", Content: "先", Status: 1, Sort: 1},
+		{ReplyType: ReplyKeyword, MatchingType: MatchFull, Keyword: "hi", Content: "后", Status: 1, Sort: 1},
+	}
+	if got := MatchReply(OAMessage{MsgType: "text", Content: "hi"}, tied); got != "先" {
+		t.Fatalf("first match=%s", got)
+	}
+}
+
+func TestJSSDKConfig(t *testing.T) {
+	cfg := jsSDKConfig("wxapp", 1, "n", "sig")
+	if cfg["appId"] != "wxapp" || cfg["debug"] != false {
+		t.Fatalf("%v", cfg)
+	}
+	list, _ := cfg["jsApiList"].([]string)
+	if len(list) != 12 || list[0] != "onMenuShareTimeline" || list[len(list)-1] != "scanQRCode" {
+		t.Fatalf("jsApiList %v", list)
+	}
+	open, _ := cfg["openTagList"].([]string)
+	if open == nil || len(open) != 0 {
+		t.Fatalf("openTagList %v", open)
+	}
 }
 
 func TestWechatV2Sign(t *testing.T) {

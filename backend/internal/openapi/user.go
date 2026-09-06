@@ -57,11 +57,10 @@ func IndexConfig(c *gin.Context) {
 
 func IndexPolicy(c *gin.Context) {
 	typ := httpx.Str(c, "type")
-	if typ == "service" {
-		response.Data(c, gin.H{"title": cfgsvc.GetString(c, "agreement", "service_title", "服务协议"), "content": cfgsvc.GetString(c, "agreement", "service_content", "")})
-		return
-	}
-	response.Data(c, gin.H{"title": cfgsvc.GetString(c, "agreement", "privacy_title", "隐私政策"), "content": cfgsvc.GetString(c, "agreement", "privacy_content", "")})
+	response.Data(c, gin.H{
+		"title":   cfgsvc.GetString(c, "agreement", typ+"_title", ""),
+		"content": cfgsvc.GetString(c, "agreement", typ+"_content", ""),
+	})
 }
 
 func IndexDecorate(c *gin.Context) {

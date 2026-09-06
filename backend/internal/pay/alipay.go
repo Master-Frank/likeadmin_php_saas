@@ -241,6 +241,72 @@ func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) 
 	return res, nil
 }
 
+func AliQueryRefundByTenant(tenantID uint, orderSN, refundSN string) (map[string]any, error) {
+	cfg := AliCfgByTenant(tenantID)
+	if cfg.AppID == "" || cfg.PrivateKey == "" || orderSN == "" || refundSN == "" {
+		return nil, nil
+	}
+	key, err := parseRSAPrivateKey(cfg.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	biz, _ := json.Marshal(map[string]any{
+		"out_trade_no":   orderSN,
+		"out_request_no": refundSN,
+	})
+	params := map[string]string{
+		"app_id":      cfg.AppID,
+		"method":      "alipay.trade.fastpay.refund.query",
+		"format":      "JSON",
+		"charset":     "utf-8",
+		"sign_type":   "RSA2",
+		"timestamp":   time.Now().Format("2006-01-02 15:04:05"),
+		"version":     "1.0",
+		"biz_content": string(biz),
+	}
+	sig, err := rsaSHA256Base64(key, aliSignContent(params))
+	if err != nil {
+		return nil, err
+	}
+	params["sign"] = sig
+	form := url.Values{}
+	for k, v := range params {
+		form.Set(k, v)
+	}
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm("https://openapi.alipay.com/gateway.do", form)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var out map[string]any
+	if json.Unmarshal(raw, &out) != nil {
+		return nil, fmt.Errorf("支付宝退款查询响应无效")
+	}
+	body, _ := out["alipay_trade_fastpay_refund_query_response"].(map[string]any)
+	return body, nil
+}
+
+// ParseAliRefundQuery maps alipay.trade.fastpay.refund.query to the same
+// ok/msg/known triple as ParseWechatRefundQuery.
+func ParseAliRefundQuery(body map[string]any) (ok bool, msg string, known bool) {
+	if body == nil {
+		return false, "", false
+	}
+	status := firstNonEmpty(util.ToString(body["refund_status"]), util.ToString(body["refundStatus"]))
+	if status == "REFUND_SUCCESS" {
+		return true, "", true
+	}
+	code := util.ToString(body["code"])
+	if code != "" && code != "10000" {
+		return false, firstNonEmpty(util.ToString(body["sub_msg"]), util.ToString(body["msg"])), true
+	}
+	if status != "" {
+		return false, status, true
+	}
+	return false, "", false
+}
+
 // ParseAliRefundBody mirrors PHP RefundLogic::aliPayRefund success checks.
 func ParseAliRefundBody(body map[string]any) AliRefundResult {
 	res := AliRefundResult{Raw: body}

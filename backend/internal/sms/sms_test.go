@@ -38,3 +38,12 @@ func TestSendVerifyWithoutDB(t *testing.T) {
 		t.Fatal("code should be consumed")
 	}
 }
+
+func TestNoticeBySceneMissing(t *testing.T) {
+	if err := NoticeByScene(nil, 0, nil); err == nil || err.Error() != "找不到对应场景的配置" {
+		t.Fatalf("%v", err)
+	}
+	if err := NoticeByScene(nil, 101, nil); err == nil || err.Error() != "找不到对应场景的配置" {
+		t.Fatalf("%v", err)
+	}
+}
