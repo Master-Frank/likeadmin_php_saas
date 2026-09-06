@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -44,10 +45,11 @@ func loadPayConfig(c *gin.Context, payWay int) map[string]any {
 }
 
 func loadPayConfigByTenant(tenantID uint, payWay int) map[string]any {
-	if bootstrap.DB == nil {
+	db := tenantdb.ForTenant(tenantID)
+	if db == nil {
 		return nil
 	}
-	q := bootstrap.DB.Model(&model.TenantPayConfig{}).Where("pay_way = ?", payWay)
+	q := db.Model(&model.TenantPayConfig{}).Where("pay_way = ?", payWay)
 	if tenantID > 0 {
 		q = q.Where("tenant_id = ?", tenantID)
 	}

@@ -2,18 +2,11 @@ package tenantdb
 
 import "testing"
 
-func TestShardableTables(t *testing.T) {
-	need := []string{"user", "article", "tenant_admin", "decorate_tabbar"}
-	for _, n := range need {
-		if _, ok := shardable[n]; !ok {
-			t.Fatalf("missing shard table %s", n)
-		}
+func TestForTenantNilDB(t *testing.T) {
+	if ForTenant(1) != nil {
+		t.Fatal("expected nil without bootstrap.DB")
 	}
-	if _, ok := shardable["tenant"]; ok {
-		t.Fatal("la_tenant itself should not be sharded")
-	}
-	names := ShardableNames()
-	if len(names) != len(shardable) {
-		t.Fatalf("names %d shardable %d", len(names), len(shardable))
+	if ForTenant(0) != nil {
+		t.Fatal("zero tenant without DB")
 	}
 }

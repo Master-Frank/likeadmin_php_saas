@@ -7,10 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"io/fs"
+	"os"
+	"path/filepath"
+
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 	paycfg "likeadmin/backend/internal/pay"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 )
 
@@ -62,21 +68,19 @@ func due(item model.Crontab, now int64) bool {
 
 func runCommand(item model.Crontab) string {
 	cmd := normalizeCommand(item.Command)
+	_ = strings.Fields(strings.TrimSpace(item.Params))
 	switch {
-	case cmd == "" || strings.Contains(cmd, "cache"):
-		if bootstrap.RDB != nil {
-			if err := bootstrap.RDB.FlushDB(context.Background()).Err(); err != nil {
-				return err.Error()
-			}
+	case cmd == "cache" || cmd == "":
+		return flushCache()
+	case cmd == "clear":
+		if msg := flushCache(); msg != "" {
+			return msg
 		}
+		return clearRuntime()
+	case cmd == "session":
+		expireSessions()
 		return ""
-	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
-		now := util.NowUnix()
-		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.AdminSession{})
-		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
-		bootstrap.DB.Where("expire_time < ?", now).Delete(&model.UserSession{})
-		return ""
-	case strings.Contains(cmd, "query_refund") || strings.Contains(cmd, "refund"):
+	case cmd == "query_refund":
 		return queryRefund()
 	default:
 		log.Printf("crontab skip unsupported command %s", cmd)
@@ -92,11 +96,76 @@ func normalizeCommand(raw string) string {
 		return "query_refund"
 	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
 		return "session"
+	case cmd == "clear" || strings.HasSuffix(cmd, "/clear"):
+		return "clear"
 	case cmd == "" || strings.Contains(cmd, "cache") || cmd == "crontab":
 		return "cache"
 	default:
 		return cmd
 	}
+}
+
+func flushCache() string {
+	if bootstrap.RDB != nil {
+		if err := bootstrap.RDB.FlushDB(context.Background()).Err(); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
+}
+
+func expireSessions() {
+	now := util.NowUnix()
+	if bootstrap.DB == nil {
+		return
+	}
+	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.AdminSession{})
+	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
+	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.UserSession{})
+	var tenants []model.Tenant
+	bootstrap.DB.Where("tactics = 1 AND delete_time IS NULL AND sn <> ''").Find(&tenants)
+	for _, t := range tenants {
+		db := tenantdb.UseSN(t.SN)
+		if db == nil {
+			continue
+		}
+		db.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
+		db.Where("expire_time < ?", now).Delete(&model.UserSession{})
+	}
+}
+
+func clearRuntime() string {
+	root := ""
+	if pub := config.C.App.PublicDir; pub != "" {
+		root = filepath.Dir(pub)
+	}
+	if root == "" {
+		return ""
+	}
+	dir := filepath.Join(root, "runtime")
+	st, err := os.Stat(dir)
+	if err != nil || !st.IsDir() {
+		return ""
+	}
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == dir {
+			return nil
+		}
+		name := d.Name()
+		if name == "." || name == ".." {
+			return nil
+		}
+		if strings.HasPrefix(name, "curd-") && strings.HasSuffix(name, ".zip") {
+			return nil
+		}
+		if d.IsDir() && (name == "cache" || name == "temp" || name == "log") {
+			_ = os.RemoveAll(path)
+			_ = os.MkdirAll(path, 0755)
+			return fs.SkipDir
+		}
+		return nil
+	})
+	return ""
 }
 
 func queryRefund() string {

@@ -1789,6 +1789,28 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     echo "  go_sal=${go_sal:0:240}"
     fail=$((fail + 1))
   fi
+  if command -v mysql >/dev/null && [[ "$sid" != "0" ]]; then
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq "INSERT INTO la_user_$ssn (tenant_id,sn,account,nickname,create_time) VALUES ($sid,900001,'shu$ssn','sharduser',UNIX_TIMESTAMP())"
+    go_sul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists?tenant_id=$sid" -H "token: $TOKEN")"
+    go_suln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_sul")"
+    echo "shard_tenant_user_lists n=$go_suln"
+    if [[ "$go_suln" == "0" ]]; then
+      echo "  go_sul=${go_sul:0:240}"
+      fail=$((fail + 1))
+    fi
+    now="$(date +%s)"
+    mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30)))"
+    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'"
+    mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+    curl -sS "$GO/crontab" >/dev/null || true
+    left_sess="$(mysqlq "SELECT COUNT(*) FROM la_user_session_$ssn WHERE token='expiredshard'")"
+    echo "shard_session_cron left=$left_sess"
+    if [[ "$left_sess" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'"
+  fi
   go_sdel="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$sid}")"
   echo "shard_tenant_delete go_code=$(jcode <<<"$go_sdel")"
   if [[ "$(jcode <<<"$go_sdel")" != "1" ]]; then

@@ -48,11 +48,10 @@ func InstallAndTenant() gin.HandlerFunc {
 		if strings.Contains(first, "api") {
 			if first == "platformapi" {
 				meta.Source = ctxutil.SourcePlatform
-				if tid := c.Query("tenant_id"); tid == "" {
-					tid = c.Query("tenantId")
-				}
 				if tid := firstNonEmpty(c.Query("tenant_id"), c.Query("tenantId")); tid != "" {
-					meta.TenantID = uint(atoi(tid))
+					id := uint(atoi(tid))
+					meta.TenantID = id
+					bindPlatformTenant(meta, id)
 				}
 				c.Next()
 				return
@@ -126,6 +125,18 @@ func stripScheme(host string) string {
 		host = host[:i]
 	}
 	return host
+}
+
+func bindPlatformTenant(meta *ctxutil.RequestMeta, id uint) {
+	if meta == nil || id == 0 || bootstrap.DB == nil {
+		return
+	}
+	var tenant model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&tenant).Error != nil {
+		return
+	}
+	meta.TenantSN = tenant.SN
+	meta.Tactics = tenant.Tactics
 }
 
 func firstNonEmpty(a, b string) string {

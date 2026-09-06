@@ -16,6 +16,9 @@ func TestNormalizeCommand(t *testing.T) {
 	if normalizeCommand("clear_session") != "session" {
 		t.Fatal(normalizeCommand("clear_session"))
 	}
+	if normalizeCommand("clear") != "clear" {
+		t.Fatal(normalizeCommand("clear"))
+	}
 }
 
 func TestRunCommandUnknown(t *testing.T) {

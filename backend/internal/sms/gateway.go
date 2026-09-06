@@ -20,6 +20,7 @@ import (
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -112,9 +113,15 @@ func loadEngine(c *gin.Context, engine string) engineCfg {
 
 func loadNoticeSMS(c *gin.Context, scene int) map[string]any {
 	var raw string
-	q := bootstrap.DB.Model(&model.TenantNoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	db := tenantdb.Use(c)
+	if db == nil {
+		db = bootstrap.DB
+	}
+	q := db.Model(&model.TenantNoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice")
+	if c != nil {
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
 	}
 	if q.Scan(&raw).Error != nil || raw == "" {
 		bootstrap.DB.Model(&model.NoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice").Scan(&raw)

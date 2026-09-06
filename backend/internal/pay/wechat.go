@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"time"
 
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 
@@ -53,7 +53,7 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 	switch terminal {
 	case wechat.TerminalMNP, wechat.TerminalOA:
 		path = "/v3/pay/transactions/jsapi"
-		openid := lookupOpenid(order.UserID, terminal)
+		openid := lookupOpenid(order.TenantID, order.UserID, terminal)
 		if openid == "" {
 			return nil, fmt.Errorf("请先完成微信授权")
 		}
@@ -257,12 +257,13 @@ func payDesc(from string) string {
 	return "商品"
 }
 
-func lookupOpenid(userID uint, terminal int) string {
-	if bootstrap.DB == nil {
+func lookupOpenid(tenantID, userID uint, terminal int) string {
+	db := tenantdb.ForTenant(tenantID)
+	if db == nil {
 		return ""
 	}
 	var auth model.UserAuth
-	if bootstrap.DB.Where("user_id = ? AND terminal = ?", userID, terminal).First(&auth).Error == nil {
+	if db.Where("user_id = ? AND terminal = ?", userID, terminal).First(&auth).Error == nil {
 		return auth.Openid
 	}
 	return ""

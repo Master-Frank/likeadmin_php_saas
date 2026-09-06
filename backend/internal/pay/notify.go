@@ -66,9 +66,26 @@ func WechatPayTenantIDs() []uint {
 	if bootstrap.DB == nil {
 		return nil
 	}
-	var ids []uint
-	bootstrap.DB.Model(&model.TenantPayConfig{}).Where("pay_way = ?", WayWechat).Distinct("tenant_id").Pluck("tenant_id", &ids)
-	return ids
+	seen := map[uint]bool{}
+	var out []uint
+	add := func(id uint) {
+		if id == 0 || seen[id] {
+			return
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	var tenants []uint
+	bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL").Pluck("id", &tenants)
+	for _, id := range tenants {
+		add(id)
+	}
+	var more []uint
+	bootstrap.DB.Model(&model.TenantPayConfig{}).Where("pay_way = ?", WayWechat).Distinct("tenant_id").Pluck("tenant_id", &more)
+	for _, id := range more {
+		add(id)
+	}
+	return out
 }
 
 // CollectWechatSignKeys prefers the given tenant IDs, then every wechat pay config, then platform.

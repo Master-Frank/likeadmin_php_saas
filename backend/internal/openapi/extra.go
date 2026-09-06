@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"likeadmin/backend/internal/biz"
@@ -215,7 +216,22 @@ func PayWay(c *gin.Context) {
 			"remark": cfg.Remark, "is_default": w.IsDefault, "extra": extra,
 		})
 	}
+	sortPayWayItems(out)
 	response.Data(c, gin.H{"lists": out, "order_amount": order.OrderAmount})
+}
+
+func sortPayWayItems(out []map[string]any) {
+	sort.SliceStable(out, func(i, j int) bool {
+		di, dj := util.ToInt(out[i]["is_default"]), util.ToInt(out[j]["is_default"])
+		if di != dj {
+			return di > dj
+		}
+		si, sj := util.ToInt(out[i]["sort"]), util.ToInt(out[j]["sort"])
+		if si != sj {
+			return si > sj
+		}
+		return util.ToInt(out[i]["id"]) < util.ToInt(out[j]["id"])
+	})
 }
 
 func PayPrepay(c *gin.Context) {

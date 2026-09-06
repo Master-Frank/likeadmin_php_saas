@@ -510,7 +510,11 @@ func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
 func TenantUserLists(c *gin.Context) {
 	q := lists.Parse(c)
 	tid := lists.ParamInt(q, "tenant_id")
-	db := bootstrap.DB.Model(&model.User{}).Where("delete_time IS NULL")
+	db := tenantdb.ForTenant(uint(tid))
+	if db == nil {
+		db = bootstrap.DB
+	}
+	db = db.Model(&model.User{}).Where("delete_time IS NULL")
 	if tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -535,8 +539,12 @@ func TenantUserLists(c *gin.Context) {
 }
 
 func TenantUserDetail(c *gin.Context) {
+	tid := httpx.Uint(c, "tenant_id")
+	if tid == 0 {
+		tid = ctxutil.Get(c).TenantID
+	}
 	var u model.User
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&u).Error != nil {
+	if tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&u).Error != nil {
 		response.Fail(c, "用户不存在")
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,11 @@ func addNoticeRecord(c *gin.Context, scene int, mobile, code string, tid uint) {
 	}
 	now := util.NowUnix()
 	if tid > 0 {
-		_ = bootstrap.DB.Create(&model.TenantNoticeRecord{
+		db := tenantdb.Use(c)
+		if db == nil {
+			db = bootstrap.DB
+		}
+		_ = db.Create(&model.TenantNoticeRecord{
 			TenantID: tid, UserID: userID, Title: "", Content: content,
 			SceneID: scene, Read: 0, Recipient: recipient, SendType: sendTypeSMS,
 			NoticeType: noticeType, Extra: "", CreateTime: now,
@@ -53,7 +58,11 @@ func loadNoticeMeta(c *gin.Context, scene int) (recipient, noticeType int, sms m
 	}
 	if tid > 0 {
 		var row model.TenantNoticeSetting
-		q := bootstrap.DB.Where("scene_id = ?", scene).Where("tenant_id = ?", tid)
+		db := tenantdb.Use(c)
+		if db == nil {
+			db = bootstrap.DB
+		}
+		q := db.Where("scene_id = ?", scene).Where("tenant_id = ?", tid)
 		if q.First(&row).Error == nil {
 			return row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice)
 		}
