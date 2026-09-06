@@ -107,11 +107,26 @@ func WriteModule(t model.GenerateTable, files []File) error {
 	return nil
 }
 
-// ClearRuntime empties runtime/generate like PHP delGenerateDirContent.
+// ClearRuntime empties runtime/generate like PHP delGenerateDirContent,
+// but keeps already-built curd-*.zip packages so a second generate in the
+// same second (or a strangler double-hit) can still be downloaded.
 func ClearRuntime() error {
 	root := RuntimeDir()
-	if err := os.RemoveAll(root); err != nil {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(root, 0755)
+		}
 		return err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, "curd-") && strings.HasSuffix(name, ".zip") {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+			return err
+		}
 	}
 	return os.MkdirAll(root, 0755)
 }

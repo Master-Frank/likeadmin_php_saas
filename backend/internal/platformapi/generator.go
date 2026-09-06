@@ -326,7 +326,7 @@ func GeneratorGenerate(c *gin.Context) {
 	if needZip {
 		root := generator.RuntimeDir()
 		_ = os.MkdirAll(root, 0755)
-		fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
+		fileName := fmt.Sprintf("curd-%d.zip", time.Now().UnixNano())
 		zipPath := filepath.Join(root, fileName)
 		zf, err := os.Create(zipPath)
 		if err != nil {
@@ -355,13 +355,14 @@ func GeneratorDownload(c *gin.Context) {
 		response.Fail(c, "下载失败")
 		return
 	}
-	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
-		response.Fail(c, "请重新生成代码")
-		return
-	}
 	zipPath := filepath.Join(generator.RuntimeDir(), fileName)
 	if _, err := os.Stat(zipPath); err != nil {
 		response.Fail(c, "下载失败")
+		return
+	}
+	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
+		// File still on disk after a prior download (strangler pair hits the same URL twice).
+		c.FileAttachment(zipPath, "likeadmin-curd.zip")
 		return
 	}
 	cache.Del("curd_file_name" + fileName)

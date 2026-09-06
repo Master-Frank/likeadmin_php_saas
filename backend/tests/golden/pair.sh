@@ -1457,7 +1457,11 @@ except Exception:
       php_zip="$OUT/php-curd.zip"
       go_zip="$OUT/go-curd.zip"
       curl -sS -o "$php_zip" "$php_file" -H "token: $TOKEN" || true
-      curl -sS -o "$go_zip" "$go_file" -H "token: $TOKEN" || true
+      if [[ "$php_file" == "$go_file" ]]; then
+        cp -f "$php_zip" "$go_zip" || true
+      else
+        curl -sS -o "$go_zip" "$go_file" -H "token: $TOKEN" || true
+      fi
       php_ents="$(python3 -c '
 import zipfile,sys
 try:

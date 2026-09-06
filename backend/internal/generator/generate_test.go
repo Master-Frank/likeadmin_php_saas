@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +112,29 @@ func TestTreePreview(t *testing.T) {
 	}
 	if !strings.Contains(files[6].Content, `row-key="id"`) {
 		t.Fatalf("tree index missing row-key")
+	}
+}
+
+func TestClearRuntimeKeepsCurdZip(t *testing.T) {
+	root := RuntimeDir()
+	if err := os.MkdirAll(filepath.Join(root, "generate", "php"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(root, "curd-keep.zip")
+	if err := os.WriteFile(zipPath, []byte("PK\x03\x04"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "generate", "php", "x.php"), []byte("<?php"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearRuntime(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(zipPath); err != nil {
+		t.Fatalf("curd zip should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "generate", "php", "x.php")); err == nil {
+		t.Fatal("generated sources should be cleared")
 	}
 }
 
