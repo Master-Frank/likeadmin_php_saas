@@ -19,6 +19,19 @@ const (
 	SourceUser  = 1
 )
 
+func FetchWechatAvatar(c *gin.Context, openid, headimg string) string {
+	def := config.C.Project.DefaultImage["user_avatar"]
+	if strings.TrimSpace(headimg) == "" {
+		return def
+	}
+	name := util.MD5(openid+util.ToString(time.Now().Unix())) + ".jpeg"
+	rel := filepath.ToSlash(filepath.Join("uploads/user/avatar", name))
+	if _, err := storage.Fetch(c, headimg, rel); err != nil {
+		return def
+	}
+	return rel
+}
+
 func ReceiveUpload(c *gin.Context, scene, dir string) (name, rel, errMsg string) {
 	fh, err := c.FormFile("file")
 	if err != nil || fh == nil {

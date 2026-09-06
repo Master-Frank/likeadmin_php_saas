@@ -23,6 +23,12 @@ func db(c *gin.Context) *gorm.DB {
 }
 
 func Get(c *gin.Context, typ, name string, defaultValue any) any {
+	if db(c) == nil && bootstrap.DB == nil {
+		if defaultValue != nil {
+			return defaultValue
+		}
+		return projectFallback(typ, name)
+	}
 	query := db(c).Where("type = ? AND name = ?", typ, name)
 	meta := ctxutil.Get(c)
 	usePlatform := meta.Source == ctxutil.SourcePlatform || typ == "storage"

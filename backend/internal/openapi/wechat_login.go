@@ -224,7 +224,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 				return n > 0
 			})
 			now := util.NowUnix()
-			avatar := config.C.Project.DefaultImage["user_avatar"]
+			avatar := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)
 			nickname := "用户" + util.ToString(sn)
 			if terminal != wechat.TerminalMNP && sess.Nickname != "" {
 				nickname = sess.Nickname
@@ -246,6 +246,12 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	} else {
 		if user.IsDisable == 1 {
 			return nil, fmt.Errorf("您的账号异常，请联系客服。")
+		}
+		if user.Avatar == "" && sess.Headimgurl != "" {
+			if av := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl); av != "" {
+				user.Avatar = av
+				tdb(c).Model(&user).Update("avatar", av)
+			}
 		}
 		var auth model.UserAuth
 		if tdb(c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {

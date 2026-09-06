@@ -334,6 +334,43 @@ if [[ -n "$TENANT_HOST" ]]; then
     if [[ -n "$php_am" && "$php_am" != "$go_am" ]]; then
       fail=$((fail + 1))
     fi
+    aid="$(python3 -c '
+import json,sys
+def first_id(raw):
+    d=json.loads(raw) if isinstance(raw,str) else raw
+    data=d.get("data")
+    if isinstance(data, dict):
+        ls=data.get("lists") or []
+    elif isinstance(data, list):
+        ls=data
+    else:
+        ls=[]
+    return (ls[0] if ls else {}).get("id") or 0
+try:
+    print(first_id(open(sys.argv[1]).read()))
+except Exception:
+    print(0)
+' "$OUT/php_api_article_lists.json")"
+    if [[ "$aid" == "0" || -z "$aid" ]]; then
+      aid="$(python3 -c '
+import json,sys
+d=json.load(sys.stdin); data=d.get("data")
+ls=(data.get("lists") if isinstance(data,dict) else data) or []
+print((ls[0] if ls else {}).get("id") or 0)
+' <<<"$(curl -sS "$GO/api/article/lists" -H "Host: $TENANT_HOST")")"
+    fi
+    if [[ "$aid" != "0" && -n "$aid" ]]; then
+      php_pd="$(curl -sS "$PHP/api/pc/articleDetail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      go_pd="$(curl -sS "$GO/api/pc/articleDetail?id=$aid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      php_ct="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type((d.get("data") or {}).get("collect")).__name__)' <<<"$php_pd")"
+      go_ct="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type((d.get("data") or {}).get("collect")).__name__)' <<<"$go_pd")"
+      echo "pc_article_collect php=$php_ct go=$go_ct"
+      if [[ "$php_ct" != "$go_ct" ]]; then
+        echo "  php_pd=${php_pd:0:200}"
+        echo "  go_pd=${go_pd:0:200}"
+        fail=$((fail + 1))
+      fi
+    fi
   fi
 fi
 

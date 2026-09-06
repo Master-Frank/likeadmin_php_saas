@@ -90,7 +90,7 @@ func DemoGuard() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		response.AbortFail(c, "演示环境请勿修改", response.CodeFail, 1)
+		response.AbortFail(c, "演示环境不支持修改数据，请下载源码本地部署体验", response.CodeFail, 1)
 	}
 }
 

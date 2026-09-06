@@ -196,7 +196,7 @@ func PayWay(c *gin.Context) {
 		extra := ""
 		switch cfg.PayWay {
 		case 1:
-			extra = fmt.Sprintf("可用余额:%.2f", u.UserMoney)
+			extra = "可用余额:" + fmt.Sprint(util.FormatAmount(u.UserMoney))
 		case 2:
 			extra = "微信快捷支付"
 		case 3:
@@ -555,13 +555,11 @@ func PcArticleDetail(c *gin.Context) {
 	} else {
 		next = map[string]any{}
 	}
-	collect := 0
+	collect := false
 	if uid := ctxutil.Get(c).UserID; uid > 0 {
 		var n int64
 		tdb(c).Model(&model.ArticleCollect{}).Where("user_id = ? AND article_id = ? AND status = 1", uid, a.ID).Count(&n)
-		if n > 0 {
-			collect = 1
-		}
+		collect = n > 0
 	}
 	var cate model.ArticleCate
 	tdb(c).First(&cate, a.Cid)

@@ -9,6 +9,7 @@ import (
 
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"likeadmin/backend/internal/biz"
@@ -83,9 +84,51 @@ func runCommand(item model.Crontab) string {
 	case cmd == "query_refund":
 		return queryRefund()
 	default:
+		if ok, msg := runThinkCommand(item); ok {
+			return msg
+		}
 		log.Printf("crontab skip unsupported command %s", cmd)
-		return fmt.Sprintf("未定义的定时任务命令: %s", cmd)
+		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
 	}
+}
+
+func runThinkCommand(item model.Crontab) (bool, string) {
+	root := ""
+	if pub := config.C.App.PublicDir; pub != "" {
+		root = filepath.Dir(pub)
+	}
+	if root == "" {
+		return false, ""
+	}
+	if _, err := os.Stat(filepath.Join(root, "think")); err != nil {
+		return false, ""
+	}
+	php, err := exec.LookPath("php")
+	if err != nil {
+		return false, ""
+	}
+	args := []string{"think", strings.TrimSpace(item.Command)}
+	if p := strings.TrimSpace(item.Params); p != "" {
+		args = append(args, strings.Fields(p)...)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, php, args...)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err == nil {
+		return true, ""
+	}
+	low := strings.ToLower(text + " " + err.Error())
+	if strings.Contains(low, "not defined") || strings.Contains(low, "does not exist") ||
+		strings.Contains(low, "not found") || strings.Contains(low, "未定义") {
+		return false, ""
+	}
+	if text == "" {
+		text = err.Error()
+	}
+	return true, text
 }
 
 func normalizeCommand(raw string) string {

@@ -55,6 +55,32 @@ func Delete(c *gin.Context, uri string) error {
 	}
 }
 
+func Fetch(c *gin.Context, srcURL, rel string) (SaveResult, error) {
+	srcURL = strings.TrimSpace(srcURL)
+	if srcURL == "" {
+		return SaveResult{}, fmt.Errorf("empty url")
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(srcURL)
+	if err != nil {
+		return SaveResult{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(resp.Body)
+		return SaveResult{}, fmt.Errorf("远程文件下载失败: %s %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return SaveResult{}, err
+	}
+	if len(body) == 0 {
+		return SaveResult{}, fmt.Errorf("远程文件为空")
+	}
+	ct := resp.Header.Get("Content-Type")
+	return Save(c, rel, bytes.NewReader(body), int64(len(body)), ct)
+}
+
 func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType string) (SaveResult, error) {
 	engine := cfgsvc.GetString(c, "storage", "default", "local")
 	if engine == "" {
