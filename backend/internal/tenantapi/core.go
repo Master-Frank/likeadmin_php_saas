@@ -140,7 +140,7 @@ func WorkbenchIndex(c *gin.Context) {
 	response.Data(c, gin.H{
 		"version": gin.H{"version": config.C.Project.Version, "website": "www.likeadmin.cn", "name": "SaaS租户端"},
 		"today": gin.H{
-			"time": now.Format("2006-01-02 15:04:05"),
+			"time":        now.Format("2006-01-02 15:04:05"),
 			"today_sales": 0, "total_sales": 0, "today_visitor": 0, "total_visitor": 0,
 			"today_new_user": todayNew, "total_new_user": totalNew, "order_num": 0, "order_sum": 0,
 		},
@@ -395,10 +395,6 @@ func DecorateTabbarDetail(c *gin.Context) {
 	response.Data(c, gin.H{"style": cfgsvc.Get(c, "decorate", "tabbar_style", map[string]any{}), "list": rows})
 }
 
-func DecorateTabbarSave(c *gin.Context) {
-	response.Success(c, "保存成功", nil)
-}
-
 func SettingGetWebsite(c *gin.Context) {
 	response.Data(c, gin.H{
 		"name":        cfgsvc.GetString(c, "tenant", "name", ""),
@@ -420,14 +416,20 @@ func SettingSetWebsite(c *gin.Context) {
 }
 
 func ChannelGetSet(group string) (gin.HandlerFunc, gin.HandlerFunc) {
-	get := func(c *gin.Context) {
+	return ChannelGetOnly(group), ChannelSetOnly(group)
+}
+
+func ChannelGetOnly(group string) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		response.Data(c, cfgsvc.Get(c, group, "config", map[string]any{}))
 	}
-	set := func(c *gin.Context) {
+}
+
+func ChannelSetOnly(group string) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		cfgsvc.Set(c, group, "config", httpx.Params(c))
 		response.Success(c, "设置成功", nil)
 	}
-	return get, set
 }
 
 func HotSearchGet(c *gin.Context) {
@@ -440,15 +442,10 @@ func HotSearchGet(c *gin.Context) {
 	response.Data(c, gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": rows})
 }
 
-func HotSearchSet(c *gin.Context) {
-	cfgsvc.Set(c, "hot_search", "status", httpx.Int(c, "status"))
-	response.Success(c, "设置成功", nil)
-}
-
 func RechargeGetConfig(c *gin.Context) {
 	response.Data(c, gin.H{
-		"status":      cfgsvc.GetInt(c, "recharge", "status", 0),
-		"min_amount":  cfgsvc.Get(c, "recharge", "min_amount", 0),
+		"status":     cfgsvc.GetInt(c, "recharge", "status", 0),
+		"min_amount": cfgsvc.Get(c, "recharge", "min_amount", 0),
 	})
 }
 
@@ -495,10 +492,6 @@ func FinanceRefundRecord(c *gin.Context) {
 	var rows []model.RefundRecord
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
-}
-
-func FinanceRefundStat(c *gin.Context) {
-	response.Data(c, gin.H{"total": 0, "ing": 0, "success": 0, "error": 0})
 }
 
 func OAReplyIndex(c *gin.Context) {

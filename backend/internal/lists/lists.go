@@ -23,9 +23,9 @@ type Query struct {
 
 func Parse(c *gin.Context) Query {
 	q := Query{
-		PageNo:    1,
-		PageSize:  config.C.Project.Lists.PageSize,
-		Params:    map[string]any{},
+		PageNo:   1,
+		PageSize: config.C.Project.Lists.PageSize,
+		Params:   map[string]any{},
 	}
 	if q.PageSize <= 0 {
 		q.PageSize = 25

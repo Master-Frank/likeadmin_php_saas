@@ -15,16 +15,16 @@ const (
 type AdminInfo map[string]any
 
 type RequestMeta struct {
-	Source      Source
-	TenantID    uint
-	TenantSN    string
-	AdminInfo   AdminInfo
-	AdminID     uint
-	UserInfo    map[string]any
-	UserID      uint
-	App         string
-	Controller  string
-	Action      string
+	Source       Source
+	TenantID     uint
+	TenantSN     string
+	AdminInfo    AdminInfo
+	AdminID      uint
+	UserInfo     map[string]any
+	UserID       uint
+	App          string
+	Controller   string
+	Action       string
 	NotNeedLogin bool
 }
 

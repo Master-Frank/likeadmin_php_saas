@@ -47,7 +47,7 @@ func TenantLists(c *gin.Context) {
 		out = append(out, map[string]any{
 			"id": t.ID, "sn": t.SN, "name": t.Name,
 			"avatar": filesvc.GetFileURL(c, t.Avatar), "disable": t.Disable,
-			"create_time": util.FormatDateTime(t.CreateTime),
+			"create_time":  util.FormatDateTime(t.CreateTime),
 			"domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
 			"notes": t.Notes, "tel": t.Tel, "users_count": users,
 			"default_domain": def, "domain": domain,
@@ -130,9 +130,9 @@ func TenantEdit(c *gin.Context) {
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
 		"disable": httpx.Int(c, "disable"), "tel": httpx.Str(c, "tel"),
-		"domain_alias": stripHost(httpx.Str(c, "domain_alias")),
+		"domain_alias":        stripHost(httpx.Str(c, "domain_alias")),
 		"domain_alias_enable": httpx.Int(c, "domain_alias_enable"),
-		"notes": httpx.Str(c, "notes"), "update_time": now,
+		"notes":               httpx.Str(c, "notes"), "update_time": now,
 	})
 	response.Result(c, 1, 1, "操作成功", []any{})
 }
@@ -180,6 +180,33 @@ func TenantAdminDetail(c *gin.Context) {
 		"id": a.ID, "root": a.Root, "name": a.Name, "avatar": filesvc.GetFileURL(c, a.Avatar),
 		"account": a.Account, "multipoint_login": a.MultipointLogin, "disable": a.Disable,
 	})
+}
+
+func TenantAdminAdd(c *gin.Context) {
+	tid := httpx.Uint(c, "tenant_id")
+	account := httpx.Str(c, "account")
+	name := httpx.Str(c, "name")
+	password := httpx.Str(c, "password")
+	if tid == 0 || account == "" || name == "" || password == "" {
+		response.Fail(c, "参数缺失")
+		return
+	}
+	var exist model.TenantAdmin
+	if bootstrap.DB.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
+		response.Fail(c, "账号已存在")
+		return
+	}
+	admin := model.TenantAdmin{
+		TenantID: tid, Account: account, Name: name,
+		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
+		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
+		Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")), CreateTime: util.NowUnix(),
+	}
+	if err := bootstrap.DB.Create(&admin).Error; err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, "操作成功", nil)
 }
 
 func TenantAdminEdit(c *gin.Context) {
@@ -246,7 +273,7 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	admin := model.TenantAdmin{
 		TenantID: tenant.ID, Account: account, Name: "超级管理员",
 		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
-		Root: 1, MultipointLogin: 1, CreateTime: util.NowUnix(),
+		Root:     1, MultipointLogin: 1, CreateTime: util.NowUnix(),
 	}
 	if err := tx.Create(&admin).Error; err != nil {
 		return err
@@ -389,7 +416,7 @@ func rootDomain(c *gin.Context) string {
 func userMap(c *gin.Context, u model.User) map[string]any {
 	return map[string]any{
 		"id": u.ID, "sn": u.SN,
-		"avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"avatar":    filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 		"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 		"sex": u.Sex, "channel": u.Channel, "is_disable": u.IsDisable, "login_ip": u.LoginIP,
 		"login_time": util.FormatDateTimePtr(u.LoginTime), "user_money": u.UserMoney,

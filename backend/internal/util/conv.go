@@ -10,6 +10,28 @@ func ToInt(v any) int {
 	return int(toInt64(v))
 }
 
+func ToFloat(v any) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case float32:
+		return float64(t)
+	case int:
+		return float64(t)
+	case int64:
+		return float64(t)
+	case json.Number:
+		f, _ := t.Float64()
+		return f
+	case string:
+		f, _ := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		return f
+	default:
+		f, _ := strconv.ParseFloat(ToString(v), 64)
+		return f
+	}
+}
+
 func ToInt64(v any) int64 {
 	return toInt64(v)
 }

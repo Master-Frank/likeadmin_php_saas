@@ -107,10 +107,10 @@ func TransactionSet(c *gin.Context) {
 
 func CustomerGet(c *gin.Context) {
 	response.Data(c, gin.H{
-		"way":           cfgsvc.GetInt(c, "customer_service", "way", 1),
-		"phone":         cfgsvc.GetString(c, "customer_service", "phone", ""),
-		"service_qr":    filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "qr_code", "")),
-		"wechat_qr":     filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "wechat_qr", "")),
+		"way":               cfgsvc.GetInt(c, "customer_service", "way", 1),
+		"phone":             cfgsvc.GetString(c, "customer_service", "phone", ""),
+		"service_qr":        filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "qr_code", "")),
+		"wechat_qr":         filesvc.GetFileURL(c, cfgsvc.GetString(c, "customer_service", "wechat_qr", "")),
 		"enterprise_wechat": cfgsvc.GetString(c, "customer_service", "enterprise_wechat", ""),
 	})
 }

@@ -16,7 +16,11 @@ for path in \
   /platformapi/auth.admin/mySelf \
   /platformapi/auth.admin/lists \
   /platformapi/auth.role/lists \
-  /platformapi/auth.menu/lists
+  /platformapi/auth.menu/lists \
+  /tenantapi/user.user/lists \
+  /api/index/config \
+  /api/article/lists \
+  /api/recharge/config
 do
   curl -s "$PHP$path" -H "token: $TOKEN" > /tmp/php.json
   curl -s "$GO$path"  -H "token: $TOKEN" > /tmp/go.json

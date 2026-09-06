@@ -1,26 +1,26 @@
 package model
 
 type User struct {
-	ID           uint    `gorm:"column:id;primaryKey" json:"id"`
-	SN           int     `gorm:"column:sn" json:"sn"`
-	Avatar       string  `gorm:"column:avatar" json:"avatar"`
-	RealName     string  `gorm:"column:real_name" json:"real_name"`
-	Nickname     string  `gorm:"column:nickname" json:"nickname"`
-	Account      string  `gorm:"column:account" json:"account"`
-	Password     string  `gorm:"column:password" json:"-"`
-	Mobile       string  `gorm:"column:mobile" json:"mobile"`
-	Sex          int     `gorm:"column:sex" json:"sex"`
-	Channel      int     `gorm:"column:channel" json:"channel"`
-	IsDisable    int     `gorm:"column:is_disable" json:"is_disable"`
-	LoginIP      string  `gorm:"column:login_ip" json:"login_ip"`
-	LoginTime    *int64  `gorm:"column:login_time" json:"login_time"`
-	IsNewUser    int     `gorm:"column:is_new_user" json:"is_new_user"`
-	UserMoney    float64 `gorm:"column:user_money" json:"user_money"`
-	TotalRechargeMoney float64 `gorm:"column:total_recharge_money" json:"total_recharge_money"`
-	TenantID     uint    `gorm:"column:tenant_id" json:"tenant_id"`
-	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime   *int64  `gorm:"column:delete_time" json:"delete_time"`
+	ID                  uint    `gorm:"column:id;primaryKey" json:"id"`
+	SN                  int     `gorm:"column:sn" json:"sn"`
+	Avatar              string  `gorm:"column:avatar" json:"avatar"`
+	RealName            string  `gorm:"column:real_name" json:"real_name"`
+	Nickname            string  `gorm:"column:nickname" json:"nickname"`
+	Account             string  `gorm:"column:account" json:"account"`
+	Password            string  `gorm:"column:password" json:"-"`
+	Mobile              string  `gorm:"column:mobile" json:"mobile"`
+	Sex                 int     `gorm:"column:sex" json:"sex"`
+	Channel             int     `gorm:"column:channel" json:"channel"`
+	IsDisable           int     `gorm:"column:is_disable" json:"is_disable"`
+	LoginIP             string  `gorm:"column:login_ip" json:"login_ip"`
+	LoginTime           *int64  `gorm:"column:login_time" json:"login_time"`
+	IsNewUser           int     `gorm:"column:is_new_user" json:"is_new_user"`
+	UserMoney           float64 `gorm:"column:user_money" json:"user_money"`
+	TotalRechargeAmount float64 `gorm:"column:total_recharge_amount" json:"total_recharge_amount"`
+	TenantID            uint    `gorm:"column:tenant_id" json:"tenant_id"`
+	CreateTime          int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime          *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime          *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (User) TableName() string { return T("user") }
@@ -49,20 +49,21 @@ type UserAuth struct {
 func (UserAuth) TableName() string { return T("user_auth") }
 
 type UserAccountLog struct {
-	ID         uint    `gorm:"column:id;primaryKey" json:"id"`
-	SN         string  `gorm:"column:sn" json:"sn"`
-	UserID     uint    `gorm:"column:user_id" json:"user_id"`
-	ChangeObject int   `gorm:"column:change_object" json:"change_object"`
-	ChangeType int     `gorm:"column:change_type" json:"change_type"`
-	Action     int     `gorm:"column:action" json:"action"`
+	ID           uint    `gorm:"column:id;primaryKey" json:"id"`
+	SN           string  `gorm:"column:sn" json:"sn"`
+	UserID       uint    `gorm:"column:user_id" json:"user_id"`
+	ChangeObject int     `gorm:"column:change_object" json:"change_object"`
+	ChangeType   int     `gorm:"column:change_type" json:"change_type"`
+	Action       int     `gorm:"column:action" json:"action"`
 	ChangeAmount float64 `gorm:"column:change_amount" json:"change_amount"`
-	LeftAmount float64 `gorm:"column:left_amount" json:"left_amount"`
-	Remark     string  `gorm:"column:remark" json:"remark"`
-	Extra      string  `gorm:"column:extra" json:"extra"`
-	TenantID   uint    `gorm:"column:tenant_id" json:"tenant_id"`
-	CreateTime int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime *int64  `gorm:"column:delete_time" json:"delete_time"`
+	LeftAmount   float64 `gorm:"column:left_amount" json:"left_amount"`
+	SourceSN     string  `gorm:"column:source_sn" json:"source_sn"`
+	Remark       string  `gorm:"column:remark" json:"remark"`
+	Extra        string  `gorm:"column:extra" json:"extra"`
+	TenantID     uint    `gorm:"column:tenant_id" json:"tenant_id"`
+	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime   *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime   *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (UserAccountLog) TableName() string { return T("user_account_log") }
@@ -152,38 +153,40 @@ type HotSearch struct {
 func (HotSearch) TableName() string { return T("hot_search") }
 
 type OfficialAccountReply struct {
-	ID            uint   `gorm:"column:id;primaryKey" json:"id"`
-	Name          string `gorm:"column:name" json:"name"`
-	Keyword       string `gorm:"column:keyword" json:"keyword"`
-	ReplyType     int    `gorm:"column:reply_type" json:"reply_type"`
-	MatchingType  int    `gorm:"column:matching_type" json:"matching_type"`
-	ContentType   int    `gorm:"column:content_type" json:"content_type"`
-	Content       string `gorm:"column:content" json:"content"`
-	Status        int    `gorm:"column:status" json:"status"`
-	Sort          int    `gorm:"column:sort" json:"sort"`
-	CreateTime    int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime    *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime    *int64 `gorm:"column:delete_time" json:"delete_time"`
+	ID           uint   `gorm:"column:id;primaryKey" json:"id"`
+	TenantID     uint   `gorm:"column:tenant_id" json:"tenant_id"`
+	Name         string `gorm:"column:name" json:"name"`
+	Keyword      string `gorm:"column:keyword" json:"keyword"`
+	ReplyType    int    `gorm:"column:reply_type" json:"reply_type"`
+	MatchingType int    `gorm:"column:matching_type" json:"matching_type"`
+	ContentType  int    `gorm:"column:content_type" json:"content_type"`
+	Content      string `gorm:"column:content" json:"content"`
+	Status       int    `gorm:"column:status" json:"status"`
+	Sort         int    `gorm:"column:sort" json:"sort"`
+	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime   *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (OfficialAccountReply) TableName() string { return T("official_account_reply") }
 
 type RechargeOrder struct {
-	ID            uint    `gorm:"column:id;primaryKey" json:"id"`
-	SN            string  `gorm:"column:sn" json:"sn"`
-	UserID        uint    `gorm:"column:user_id" json:"user_id"`
-	PayWay        int     `gorm:"column:pay_way" json:"pay_way"`
-	PayStatus     int     `gorm:"column:pay_status" json:"pay_status"`
-	PayTime       *int64  `gorm:"column:pay_time" json:"pay_time"`
-	OrderAmount   float64 `gorm:"column:order_amount" json:"order_amount"`
-	OrderTerminal int     `gorm:"column:order_terminal" json:"order_terminal"`
-	TransactionID string  `gorm:"column:transaction_id" json:"transaction_id"`
-	RefundStatus  int     `gorm:"column:refund_status" json:"refund_status"`
-	RefundTransactionID string `gorm:"column:refund_transaction_id" json:"refund_transaction_id"`
-	TenantID      uint    `gorm:"column:tenant_id" json:"tenant_id"`
-	CreateTime    int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime    *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime    *int64  `gorm:"column:delete_time" json:"delete_time"`
+	ID                  uint    `gorm:"column:id;primaryKey" json:"id"`
+	SN                  string  `gorm:"column:sn" json:"sn"`
+	UserID              uint    `gorm:"column:user_id" json:"user_id"`
+	PaySN               string  `gorm:"column:pay_sn" json:"pay_sn"`
+	PayWay              int     `gorm:"column:pay_way" json:"pay_way"`
+	PayStatus           int     `gorm:"column:pay_status" json:"pay_status"`
+	PayTime             *int64  `gorm:"column:pay_time" json:"pay_time"`
+	OrderAmount         float64 `gorm:"column:order_amount" json:"order_amount"`
+	OrderTerminal       int     `gorm:"column:order_terminal" json:"order_terminal"`
+	TransactionID       string  `gorm:"column:transaction_id" json:"transaction_id"`
+	RefundStatus        int     `gorm:"column:refund_status" json:"refund_status"`
+	RefundTransactionID string  `gorm:"column:refund_transaction_id" json:"refund_transaction_id"`
+	TenantID            uint    `gorm:"column:tenant_id" json:"tenant_id"`
+	CreateTime          int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime          *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime          *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (RechargeOrder) TableName() string { return T("recharge_order") }
@@ -209,63 +212,63 @@ type RefundRecord struct {
 func (RefundRecord) TableName() string { return T("refund_record") }
 
 type RefundLog struct {
-	ID           uint   `gorm:"column:id;primaryKey" json:"id"`
-	SN           string `gorm:"column:sn" json:"sn"`
-	RecordID     uint   `gorm:"column:record_id" json:"record_id"`
-	UserID       uint   `gorm:"column:user_id" json:"user_id"`
-	HandleID     uint   `gorm:"column:handle_id" json:"handle_id"`
+	ID           uint    `gorm:"column:id;primaryKey" json:"id"`
+	SN           string  `gorm:"column:sn" json:"sn"`
+	RecordID     uint    `gorm:"column:record_id" json:"record_id"`
+	UserID       uint    `gorm:"column:user_id" json:"user_id"`
+	HandleID     uint    `gorm:"column:handle_id" json:"handle_id"`
 	OrderAmount  float64 `gorm:"column:order_amount" json:"order_amount"`
 	RefundAmount float64 `gorm:"column:refund_amount" json:"refund_amount"`
-	RefundStatus int    `gorm:"column:refund_status" json:"refund_status"`
-	RefundMsg    string `gorm:"column:refund_msg" json:"refund_msg"`
-	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	RefundStatus int     `gorm:"column:refund_status" json:"refund_status"`
+	RefundMsg    string  `gorm:"column:refund_msg" json:"refund_msg"`
+	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime   *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
 }
 
 func (RefundLog) TableName() string { return T("refund_log") }
 
 type PayConfig struct {
-	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
-	Name       string `gorm:"column:name" json:"name"`
-	PayWay     int    `gorm:"column:pay_way" json:"pay_way"`
-	Config     string `gorm:"column:config" json:"config"`
-	Icon       string `gorm:"column:icon" json:"icon"`
-	Sort       int    `gorm:"column:sort" json:"sort"`
-	Remark     string `gorm:"column:remark" json:"remark"`
+	ID     uint   `gorm:"column:id;primaryKey" json:"id"`
+	Name   string `gorm:"column:name" json:"name"`
+	PayWay int    `gorm:"column:pay_way" json:"pay_way"`
+	Config string `gorm:"column:config" json:"config"`
+	Icon   string `gorm:"column:icon" json:"icon"`
+	Sort   int    `gorm:"column:sort" json:"sort"`
+	Remark string `gorm:"column:remark" json:"remark"`
 }
 
 func (PayConfig) TableName() string { return T("pay_config") }
 
 type TenantPayConfig struct {
-	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
-	Name       string `gorm:"column:name" json:"name"`
-	PayWay     int    `gorm:"column:pay_way" json:"pay_way"`
-	Config     string `gorm:"column:config" json:"config"`
-	Icon       string `gorm:"column:icon" json:"icon"`
-	Sort       int    `gorm:"column:sort" json:"sort"`
-	Remark     string `gorm:"column:remark" json:"remark"`
-	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
+	ID       uint   `gorm:"column:id;primaryKey" json:"id"`
+	Name     string `gorm:"column:name" json:"name"`
+	PayWay   int    `gorm:"column:pay_way" json:"pay_way"`
+	Config   string `gorm:"column:config" json:"config"`
+	Icon     string `gorm:"column:icon" json:"icon"`
+	Sort     int    `gorm:"column:sort" json:"sort"`
+	Remark   string `gorm:"column:remark" json:"remark"`
+	TenantID uint   `gorm:"column:tenant_id" json:"tenant_id"`
 }
 
 func (TenantPayConfig) TableName() string { return T("tenant_pay_config") }
 
 type PayWay struct {
-	ID       uint `gorm:"column:id;primaryKey" json:"id"`
-	PayID    uint `gorm:"column:pay_id" json:"pay_id"`
-	Scene    int  `gorm:"column:scene" json:"scene"`
-	IsDefault int `gorm:"column:is_default" json:"is_default"`
-	Status   int  `gorm:"column:status" json:"status"`
+	ID          uint `gorm:"column:id;primaryKey" json:"id"`
+	PayConfigID uint `gorm:"column:pay_config_id" json:"pay_config_id"`
+	Scene       int  `gorm:"column:scene" json:"scene"`
+	IsDefault   int  `gorm:"column:is_default" json:"is_default"`
+	Status      int  `gorm:"column:status" json:"status"`
 }
 
 func (PayWay) TableName() string { return T("pay_way") }
 
 type TenantPayWay struct {
-	ID        uint `gorm:"column:id;primaryKey" json:"id"`
-	PayID     uint `gorm:"column:pay_id" json:"pay_id"`
-	Scene     int  `gorm:"column:scene" json:"scene"`
-	IsDefault int  `gorm:"column:is_default" json:"is_default"`
-	Status    int  `gorm:"column:status" json:"status"`
-	TenantID  uint `gorm:"column:tenant_id" json:"tenant_id"`
+	ID          uint `gorm:"column:id;primaryKey" json:"id"`
+	PayConfigID uint `gorm:"column:pay_config_id" json:"pay_config_id"`
+	Scene       int  `gorm:"column:scene" json:"scene"`
+	IsDefault   int  `gorm:"column:is_default" json:"is_default"`
+	Status      int  `gorm:"column:status" json:"status"`
+	TenantID    uint `gorm:"column:tenant_id" json:"tenant_id"`
 }
 
 func (TenantPayWay) TableName() string { return T("tenant_pay_way") }
@@ -306,19 +309,19 @@ type TenantNoticeSetting struct {
 func (TenantNoticeSetting) TableName() string { return T("tenant_notice_setting") }
 
 type SmsLog struct {
-	ID           uint   `gorm:"column:id;primaryKey" json:"id"`
-	SceneID      int    `gorm:"column:scene_id" json:"scene_id"`
-	Mobile       string `gorm:"column:mobile" json:"mobile"`
-	Content      string `gorm:"column:content" json:"content"`
-	Code         string `gorm:"column:code" json:"code"`
-	IsVerify     int    `gorm:"column:is_verify" json:"is_verify"`
-	CheckNum     int    `gorm:"column:check_num" json:"check_num"`
-	SendStatus   int    `gorm:"column:send_status" json:"send_status"`
-	SendTime     *int64 `gorm:"column:send_time" json:"send_time"`
-	Results      string `gorm:"column:results" json:"results"`
-	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime   *int64 `gorm:"column:delete_time" json:"delete_time"`
+	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
+	SceneID    int    `gorm:"column:scene_id" json:"scene_id"`
+	Mobile     string `gorm:"column:mobile" json:"mobile"`
+	Content    string `gorm:"column:content" json:"content"`
+	Code       string `gorm:"column:code" json:"code"`
+	IsVerify   int    `gorm:"column:is_verify" json:"is_verify"`
+	CheckNum   int    `gorm:"column:check_num" json:"check_num"`
+	SendStatus int    `gorm:"column:send_status" json:"send_status"`
+	SendTime   *int64 `gorm:"column:send_time" json:"send_time"`
+	Results    string `gorm:"column:results" json:"results"`
+	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (SmsLog) TableName() string { return T("sms_log") }

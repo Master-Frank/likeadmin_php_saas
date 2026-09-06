@@ -54,7 +54,30 @@ func PayConfigSet(c *gin.Context) {
 func PayWayGet(c *gin.Context) {
 	var rows []model.PayWay
 	bootstrap.DB.Find(&rows)
-	response.Success(c, "", rows)
+	if len(rows) == 0 {
+		response.Success(c, "", []any{})
+		return
+	}
+	maxScene := 0
+	for _, r := range rows {
+		if r.Scene > maxScene {
+			maxScene = r.Scene
+		}
+	}
+	grouped := map[int][]map[string]any{}
+	for i := 1; i <= maxScene; i++ {
+		grouped[i] = []map[string]any{}
+	}
+	for _, r := range rows {
+		var cfg model.PayConfig
+		bootstrap.DB.First(&cfg, r.PayConfigID)
+		grouped[r.Scene] = append(grouped[r.Scene], map[string]any{
+			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
+			"is_default": r.IsDefault, "status": r.Status,
+			"icon": cfg.Icon, "name": cfg.Name, "pay_way": cfg.PayWay,
+		})
+	}
+	response.Success(c, "", grouped)
 }
 
 func PayWaySet(c *gin.Context) {
@@ -196,10 +219,6 @@ func SmsConfigSet(c *gin.Context) {
 
 func SmsConfigDetail(c *gin.Context) {
 	response.Data(c, cfgsvc.Get(c, "sms", httpx.Str(c, "type"), map[string]any{}))
-}
-
-func GeneratorNotImpl(c *gin.Context) {
-	response.Fail(c, "代码生成器将在后续阶段提供 Go 模板")
 }
 
 func UpgradeNotImpl(c *gin.Context) {

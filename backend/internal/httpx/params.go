@@ -26,6 +26,7 @@ func Params(c *gin.Context) map[string]any {
 	if c.Request.Body != nil {
 		raw, _ := io.ReadAll(c.Request.Body)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(raw))
+		c.Set("likeadmin.raw", raw)
 		if len(raw) > 0 {
 			var body map[string]any
 			if json.Unmarshal(raw, &body) == nil {
@@ -33,12 +34,17 @@ func Params(c *gin.Context) map[string]any {
 					out[k] = v
 				}
 			} else {
-				_ = c.Request.ParseForm()
-				for k, vs := range c.Request.PostForm {
-					if len(vs) == 1 {
-						out[k] = vs[0]
-					} else {
-						out[k] = vs
+				var arr []any
+				if json.Unmarshal(raw, &arr) == nil {
+					out["_list"] = arr
+				} else {
+					_ = c.Request.ParseForm()
+					for k, vs := range c.Request.PostForm {
+						if len(vs) == 1 {
+							out[k] = vs[0]
+						} else {
+							out[k] = vs
+						}
 					}
 				}
 			}
@@ -46,6 +52,18 @@ func Params(c *gin.Context) map[string]any {
 	}
 	c.Set("likeadmin.params", out)
 	return out
+}
+
+func List(c *gin.Context) []any {
+	v := Params(c)["_list"]
+	if arr, ok := v.([]any); ok {
+		return arr
+	}
+	return nil
+}
+
+func Float(c *gin.Context, key string) float64 {
+	return util.ToFloat(Params(c)[key])
 }
 
 func Str(c *gin.Context, key string) string {

@@ -14,7 +14,7 @@ go run ./cmd/api
 
 默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。
 
-定时任务：
+定时任务（循环执行 `la_dev_crontab`，`LIKEADMIN_CRON_ONCE=1` 只跑一轮）：
 
 ```bash
 go run ./cmd/crontab
@@ -26,3 +26,5 @@ go run ./cmd/crontab
 - 响应：`{code, show, msg, data}`
 - 鉴权 Header：`token`
 - 密码：`md5(salt + md5(password + salt))`，salt 为 `project.unique_identification`
+
+平台 / 租户 / 用户四端前端 `src/api` 路径已注册。仍待微信/支付宝 SDK、短信网关与真实回调验签。

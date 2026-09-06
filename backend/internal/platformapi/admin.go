@@ -80,6 +80,16 @@ func adminListItem(c *gin.Context, a model.Admin) map[string]any {
 	}
 }
 
+func AdminAll(c *gin.Context) {
+	var rows []model.Admin
+	bootstrap.DB.Where("delete_time IS NULL").Order("id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, a := range rows {
+		out = append(out, map[string]any{"id": a.ID, "name": a.Name, "account": a.Account})
+	}
+	response.Data(c, out)
+}
+
 func AdminAdd(c *gin.Context) {
 	account := httpx.Str(c, "account")
 	name := httpx.Str(c, "name")
@@ -211,12 +221,12 @@ func AdminMySelf(c *gin.Context) {
 	perms := buttonPerms(admin)
 	response.Data(c, gin.H{
 		"user": gin.H{
-			"id":       admin.ID,
-			"account":  admin.Account,
-			"name":     admin.Name,
-			"avatar":   filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.DefaultImage["admin_avatar"])),
-			"disable":  admin.Disable,
-			"root":     admin.Root,
+			"id":      admin.ID,
+			"account": admin.Account,
+			"name":    admin.Name,
+			"avatar":  filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.DefaultImage["admin_avatar"])),
+			"disable": admin.Disable,
+			"root":    admin.Root,
 		},
 		"menu":        menu,
 		"permissions": perms,

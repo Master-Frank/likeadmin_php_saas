@@ -24,14 +24,14 @@ type TenantConfig struct {
 func (TenantConfig) TableName() string { return T("tenant_config") }
 
 type DictType struct {
-	ID           uint   `gorm:"column:id;primaryKey" json:"id"`
-	Name         string `gorm:"column:name" json:"name"`
-	Type         string `gorm:"column:type" json:"type"`
-	Status       int    `gorm:"column:status" json:"status"`
-	Remark       string `gorm:"column:remark" json:"remark"`
-	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
-	DeleteTime   *int64 `gorm:"column:delete_time" json:"delete_time"`
+	ID         uint   `gorm:"column:id;primaryKey" json:"id"`
+	Name       string `gorm:"column:name" json:"name"`
+	Type       string `gorm:"column:type" json:"type"`
+	Status     int    `gorm:"column:status" json:"status"`
+	Remark     string `gorm:"column:remark" json:"remark"`
+	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
 func (DictType) TableName() string { return T("dict_type") }
@@ -200,3 +200,46 @@ type Crontab struct {
 }
 
 func (Crontab) TableName() string { return T("dev_crontab") }
+
+type GenerateTable struct {
+	ID           uint   `gorm:"column:id;primaryKey" json:"id"`
+	Name         string `gorm:"column:table_name" json:"table_name"`
+	TableComment string `gorm:"column:table_comment" json:"table_comment"`
+	TemplateType int    `gorm:"column:template_type" json:"template_type"`
+	Author       string `gorm:"column:author" json:"author"`
+	Remark       string `gorm:"column:remark" json:"remark"`
+	GenerateType int    `gorm:"column:generate_type" json:"generate_type"`
+	ModuleName   string `gorm:"column:module_name" json:"module_name"`
+	ClassDir     string `gorm:"column:class_dir" json:"class_dir"`
+	ClassComment string `gorm:"column:class_comment" json:"class_comment"`
+	AdminID      uint   `gorm:"column:admin_id" json:"admin_id"`
+	Menu         string `gorm:"column:menu" json:"menu"`
+	Delete       string `gorm:"column:delete" json:"delete"`
+	Tree         string `gorm:"column:tree" json:"tree"`
+	Relations    string `gorm:"column:relations" json:"relations"`
+	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+}
+
+func (GenerateTable) TableName() string { return T("generate_table") }
+
+type GenerateColumn struct {
+	ID            uint   `gorm:"column:id;primaryKey" json:"id"`
+	TableID       uint   `gorm:"column:table_id" json:"table_id"`
+	ColumnName    string `gorm:"column:column_name" json:"column_name"`
+	ColumnComment string `gorm:"column:column_comment" json:"column_comment"`
+	ColumnType    string `gorm:"column:column_type" json:"column_type"`
+	IsRequired    int    `gorm:"column:is_required" json:"is_required"`
+	IsPk          int    `gorm:"column:is_pk" json:"is_pk"`
+	IsInsert      int    `gorm:"column:is_insert" json:"is_insert"`
+	IsUpdate      int    `gorm:"column:is_update" json:"is_update"`
+	IsLists       int    `gorm:"column:is_lists" json:"is_lists"`
+	IsQuery       int    `gorm:"column:is_query" json:"is_query"`
+	QueryType     string `gorm:"column:query_type" json:"query_type"`
+	ViewType      string `gorm:"column:view_type" json:"view_type"`
+	DictType      string `gorm:"column:dict_type" json:"dict_type"`
+	CreateTime    int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
+	UpdateTime    *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+}
+
+func (GenerateColumn) TableName() string { return T("generate_column") }

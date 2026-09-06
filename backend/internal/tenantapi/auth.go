@@ -3,6 +3,7 @@ package tenantapi
 import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -48,7 +49,7 @@ func AdminAdd(c *gin.Context) {
 	admin := model.TenantAdmin{
 		TenantID: tenantDB(c), Name: httpx.Str(c, "name"), Account: httpx.Str(c, "account"),
 		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
-		Disable: httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
+		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
 		Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")), CreateTime: util.NowUnix(),
 	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
@@ -84,6 +85,28 @@ func AdminEdit(c *gin.Context) {
 	for _, rid := range httpx.Uints(c, "role_id") {
 		bootstrap.DB.Create(&model.TenantAdminRole{AdminID: id, RoleID: rid})
 	}
+	response.Success(c, "修改成功", nil)
+}
+
+func AdminEditSelf(c *gin.Context) {
+	id := ctxutil.Get(c).AdminID
+	var admin model.TenantAdmin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
+		response.Fail(c, "管理员不存在")
+		return
+	}
+	data := map[string]any{
+		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")), "update_time": util.NowUnix(),
+	}
+	if pwd := httpx.Str(c, "password"); pwd != "" {
+		old := httpx.Str(c, "password_old")
+		if old != "" && admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
+			response.Fail(c, "原密码错误")
+			return
+		}
+		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
+	}
+	bootstrap.DB.Model(&admin).Updates(data)
 	response.Success(c, "修改成功", nil)
 }
 
@@ -269,4 +292,3 @@ func tenantMenuMap(m model.TenantSystemMenu) map[string]any {
 		"params": m.Params, "is_cache": m.IsCache, "is_show": m.IsShow, "is_disable": m.IsDisable,
 	}
 }
-

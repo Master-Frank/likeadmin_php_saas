@@ -25,10 +25,6 @@ func IndexConfig(c *gin.Context) {
 	})
 }
 
-func IndexIndex(c *gin.Context) {
-	response.Data(c, gin.H{})
-}
-
 func IndexPolicy(c *gin.Context) {
 	typ := httpx.Str(c, "type")
 	if typ == "service" {
@@ -73,7 +69,7 @@ func LoginRegister(c *gin.Context) {
 	u := model.User{
 		Account: account, Nickname: account,
 		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		Channel: httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
+		Channel:  httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
 		Avatar: config.C.Project.DefaultImage["user_avatar"],
 	}
 	// generate sn
@@ -121,7 +117,7 @@ func LoginAccount(c *gin.Context) {
 	response.Data(c, gin.H{
 		"nickname": u.Nickname, "sn": u.SN, "mobile": u.Mobile,
 		"avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
-		"token": info["token"],
+		"token":  info["token"],
 	})
 }
 
@@ -210,20 +206,6 @@ func ArticleCate(c *gin.Context) {
 	response.Data(c, rows)
 }
 
-func ArticleDetail(c *gin.Context) {
-	var a model.Article
-	if bootstrap.DB.First(&a, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "文章不存在")
-		return
-	}
-	bootstrap.DB.Model(&a).Update("click_actual", a.ClickActual+1)
-	response.Data(c, gin.H{
-		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
-		"click": a.ClickActual + a.ClickVirtual + 1, "create_time": util.FormatDateTime(a.CreateTime),
-	})
-}
-
 func SearchHot(c *gin.Context) {
 	var rows []model.HotSearch
 	db := bootstrap.DB
@@ -232,25 +214,6 @@ func SearchHot(c *gin.Context) {
 	}
 	db.Order("sort desc").Find(&rows)
 	response.Data(c, rows)
-}
-
-func PcConfig(c *gin.Context) {
-	response.Data(c, gin.H{
-		"pc_title":    cfgsvc.GetString(c, "website", "pc_title", "likeadmin"),
-		"pc_logo":     filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_logo", "")),
-		"pc_ico":      filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_ico", "")),
-		"pc_desc":     cfgsvc.GetString(c, "website", "pc_desc", ""),
-		"pc_keywords": cfgsvc.GetString(c, "website", "pc_keywords", ""),
-	})
-}
-
-func PcIndex(c *gin.Context) { response.Data(c, gin.H{}) }
-
-func RechargeConfig(c *gin.Context) {
-	response.Data(c, gin.H{
-		"status":     cfgsvc.GetInt(c, "recharge", "status", 0),
-		"min_amount": cfgsvc.Get(c, "recharge", "min_amount", 0),
-	})
 }
 
 func RechargeLists(c *gin.Context) {
@@ -273,10 +236,6 @@ func AccountLogLists(c *gin.Context) {
 	var rows []model.UserAccountLog
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
-}
-
-func SmsSendCode(c *gin.Context) {
-	response.Success(c, "发送成功", nil)
 }
 
 func WechatJsConfig(c *gin.Context) {
