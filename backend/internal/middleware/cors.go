@@ -31,7 +31,7 @@ func CORS() gin.HandlerFunc {
 
 func InstallAndTenant() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/install") {
+		if strings.HasPrefix(c.Request.URL.Path, "/install") || strings.HasPrefix(c.Request.URL.Path, "/crontab") {
 			c.Next()
 			return
 		}
