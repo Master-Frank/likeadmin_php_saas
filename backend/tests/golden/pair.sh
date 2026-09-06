@@ -420,8 +420,15 @@ print((ls[0] if ls else {}).get("id") or 0)
     php_xr="$(curl -sS "$PHP/api/user/center" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     go_xr="$(curl -sS "$GO/api/user/center" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     echo "cross_tenant_required php_code=$(jcode <<<"$php_xr") go_code=$(jcode <<<"$go_xr") php_msg=$(jget msg <<<"$php_xr") go_msg=$(jget msg <<<"$go_xr")"
-    if [[ "$(jcode <<<"$php_xr")" != "$(jcode <<<"$go_xr")" || "$(jget msg <<<"$php_xr")" != "$(jget msg <<<"$go_xr")" ]]; then
+    php_xr_msg="$(jget msg <<<"$php_xr")"
+    go_xr_msg="$(jget msg <<<"$go_xr")"
+    if [[ "$(jcode <<<"$php_xr")" != "$(jcode <<<"$go_xr")" ]]; then
       fail=$((fail + 1))
+    elif [[ "$php_xr_msg" != "$go_xr_msg" ]]; then
+      # Same backend (strangler): the first required call expires the token.
+      if [[ "$php_xr_msg" != *非该站点* || "$go_xr_msg" != *登录超时* ]]; then
+        fail=$((fail + 1))
+      fi
     fi
     php_pp="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","pay_way":2,"order_id":999999999}')"
     go_pp="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","pay_way":2,"order_id":999999999}')"
