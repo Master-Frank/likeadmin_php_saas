@@ -1641,6 +1641,12 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
       echo "  go_wr=${go_wr:0:240}"
       fail=$((fail + 1))
     fi
+    rec_sn="$(mysqlq "SELECT sn FROM la_refund_record WHERE order_id=$wid ORDER BY id DESC LIMIT 1")"
+    log_sn="$(mysqlq "SELECT sn FROM la_refund_log WHERE record_id=(SELECT id FROM la_refund_record WHERE order_id=$wid ORDER BY id DESC LIMIT 1) ORDER BY id DESC LIMIT 1")"
+    echo "refund_out_sn rec=$rec_sn log=$log_sn"
+    if [[ -z "$log_sn" || "$log_sn" == "$rec_sn" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
 fi
 
@@ -1860,6 +1866,13 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     fail=$((fail + 1))
   fi
   if command -v mysql >/dev/null && [[ "$sid" != "0" ]]; then
+    aid1="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT id FROM la_tenant_admin_$ssn WHERE root=1 LIMIT 1" 2>/dev/null)"
+    echo "shard_tenant_admin_id=$aid1"
+    if [[ "$aid1" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+  fi
+  if command -v mysql >/dev/null && [[ "$sid" != "0" ]]; then
     mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
     mysqlq "INSERT INTO la_user_$ssn (tenant_id,sn,account,nickname,create_time) VALUES ($sid,900001,'shu$ssn','sharduser',UNIX_TIMESTAMP())"
     go_sul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists?tenant_id=$sid" -H "token: $TOKEN")"
@@ -1874,6 +1887,13 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     echo "shard_tenant_user_total=$go_utc"
     if [[ "$go_utc" == "0" || -z "$go_utc" ]]; then
       echo "  go_tdu=${go_tdu:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_da="$(curl -sS "$GO/platformapi/decorate.data/article?limit=1&tenant_id=$sid" -H "token: $TOKEN")"
+    go_dan="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls))' <<<"$go_da")"
+    echo "shard_decorate_article n=$go_dan"
+    if [[ "$go_dan" == "0" ]]; then
+      echo "  go_da=${go_da:0:240}"
       fail=$((fail + 1))
     fi
     now="$(date +%s)"

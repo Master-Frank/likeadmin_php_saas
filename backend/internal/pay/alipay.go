@@ -183,7 +183,15 @@ type AliRefundResult struct {
 }
 
 func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) (AliRefundResult, error) {
-	cfg := AliCfg(c)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return AliRefundByTenant(tid, orderSN, refundSN, amount)
+}
+
+func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) (AliRefundResult, error) {
+	cfg := AliCfgByTenant(tenantID)
 	if cfg.AppID == "" || cfg.PrivateKey == "" || orderSN == "" {
 		return AliRefundResult{}, nil
 	}

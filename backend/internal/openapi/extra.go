@@ -55,42 +55,34 @@ func ArticleCancelCollect(c *gin.Context) {
 func ArticleCollect(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	var cols []model.ArticleCollect
-	tdb(c).Where("user_id = ? AND status = 1 AND delete_time IS NULL", uid).Order("id desc").Find(&cols)
-	ids := make([]uint, 0, len(cols))
-	for _, col := range cols {
-		ids = append(ids, col.ArticleID)
+	at := tenantdb.Table(c, model.Article{}.TableName())
+	ct := tenantdb.Table(c, model.ArticleCollect{}.TableName())
+	db := tdb(c).Table(at+" AS a").Joins("JOIN "+ct+" AS c ON c.article_id = a.id").
+		Where("c.user_id = ? AND c.status = 1 AND a.is_show = 1", uid)
+	var count int64
+	db.Count(&count)
+	type row struct {
+		ID           uint   `gorm:"column:id"`
+		ArticleID    uint   `gorm:"column:article_id"`
+		Title        string `gorm:"column:title"`
+		Image        string `gorm:"column:image"`
+		Desc         string `gorm:"column:desc"`
+		IsShow       int    `gorm:"column:is_show"`
+		ClickVirtual int    `gorm:"column:click_virtual"`
+		ClickActual  int    `gorm:"column:click_actual"`
+		CreateTime   int64  `gorm:"column:create_time"`
+		CollectTime  int64  `gorm:"column:collect_time"`
 	}
-	var arts []model.Article
-	if len(ids) > 0 {
-		tdb(c).Where("id IN ? AND is_show = 1 AND delete_time IS NULL", ids).Find(&arts)
-	}
-	byID := map[uint]model.Article{}
-	for _, a := range arts {
-		byID[a.ID] = a
-	}
-	filtered := make([]model.ArticleCollect, 0, len(cols))
-	for _, col := range cols {
-		if _, ok := byID[col.ArticleID]; ok {
-			filtered = append(filtered, col)
-		}
-	}
-	count := int64(len(filtered))
-	start, end := q.Offset, q.Offset+q.PageSize
-	if start > len(filtered) {
-		start = len(filtered)
-	}
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	out := make([]map[string]any, 0, end-start)
-	for _, col := range filtered[start:end] {
-		a := byID[col.ArticleID]
+	var rows []row
+	db.Select("c.id,c.article_id,a.title,a.image,a.desc,a.is_show,a.click_virtual,a.click_actual,a.create_time,c.create_time AS collect_time").
+		Order("a.sort desc, c.id desc").Offset(q.Offset).Limit(q.PageSize).Scan(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
 		out = append(out, map[string]any{
-			"id": col.ID, "article_id": col.ArticleID, "title": a.Title,
-			"image": filesvc.GetFileURL(c, a.Image), "desc": a.Desc, "is_show": a.IsShow,
-			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
-			"collect_time": util.FormatDateTimeMinute(col.CreateTime),
+			"id": r.ID, "article_id": r.ArticleID, "title": r.Title,
+			"image": filesvc.GetFileURL(c, r.Image), "desc": r.Desc, "is_show": r.IsShow,
+			"click": r.ClickActual + r.ClickVirtual, "create_time": util.FormatDateTime(r.CreateTime),
+			"collect_time": util.FormatDateTimeMinute(r.CollectTime),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)

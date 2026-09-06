@@ -105,7 +105,15 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 }
 
 func WechatRefund(c *gin.Context, transactionID, refundSN string, refundAmount, totalAmount float64) error {
-	cfg := WechatCfg(c)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	return WechatRefundByTenant(tid, transactionID, refundSN, refundAmount, totalAmount)
+}
+
+func WechatRefundByTenant(tenantID uint, transactionID, refundSN string, refundAmount, totalAmount float64) error {
+	cfg := WechatCfgByTenant(tenantID)
 	if cfg.MchID == "" || cfg.APIClientKey == "" {
 		return fmt.Errorf("请先完成支付渠道配置")
 	}

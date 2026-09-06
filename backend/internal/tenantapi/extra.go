@@ -2,6 +2,7 @@ package tenantapi
 
 import (
 	"likeadmin/backend/internal/biz"
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
@@ -100,7 +101,7 @@ func DecorateDataArticle(c *gin.Context) {
 		limit = 10
 	}
 	var rows []model.Article
-	tdb(c).Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0").
+	bootstrap.DB.Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0").
 		Order("id desc").Limit(limit).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
@@ -418,11 +419,19 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, "支付方式异常")
 		return
 	}
-	if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
+	if err := remoteRefund(c, &order, lastRefundLogSN(c, rec.ID), rec.ID); err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
 	response.SuccessNotice(c, "操作成功")
+}
+
+func lastRefundLogSN(c *gin.Context, recID uint) string {
+	var last model.RefundLog
+	if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+		return last.SN
+	}
+	return ""
 }
 
 func refundFailHandle(c *gin.Context, recID, logID uint, msg string) {
@@ -466,10 +475,10 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 	var err error
 	switch order.PayWay {
 	case 2:
-		err = pay.WechatRefund(c, order.TransactionID, refundSN, order.OrderAmount, order.OrderAmount)
+		err = pay.WechatRefundByTenant(order.TenantID, order.TransactionID, refundSN, order.OrderAmount, order.OrderAmount)
 	case 3:
 		var res pay.AliRefundResult
-		res, err = pay.AliRefund(c, order.SN, refundSN, order.OrderAmount)
+		res, err = pay.AliRefundByTenant(order.TenantID, order.SN, refundSN, order.OrderAmount)
 		if err == nil && res.OK {
 			applyAliRefundSuccess(c, order, recID, res)
 		}
@@ -502,7 +511,7 @@ func RechargeRefundAgain(c *gin.Context) {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
-	tdb(c).Create(&model.RefundLog{
+	againLog := model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
 			tdb(c).Model(&model.RefundLog{}).Where("sn = ?", sn).Count(&n)
@@ -511,13 +520,14 @@ func RechargeRefundAgain(c *gin.Context) {
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
 		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 0,
 		RefundMsg: "重新退款", TenantID: rec.TenantID, CreateTime: util.NowUnix(),
-	})
+	}
+	tdb(c).Create(&againLog)
 	if againOrder.PayWay != 2 && againOrder.PayWay != 3 {
 		refundFailHandle(c, rec.ID, 0, "支付方式异常")
 		response.Fail(c, "支付方式异常")
 		return
 	}
-	if err := remoteRefund(c, &againOrder, rec.SN, rec.ID); err != nil {
+	if err := remoteRefund(c, &againOrder, againLog.SN, rec.ID); err != nil {
 		response.Fail(c, err.Error())
 		return
 	}

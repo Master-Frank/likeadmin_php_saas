@@ -3,6 +3,7 @@ package middleware
 import (
 	"strings"
 
+	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
@@ -129,10 +130,11 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 	}
 	if info != nil && len(info) > 0 {
 		if meta.TenantID > 0 && uint(util.ToInt(info["tenant_id"])) != meta.TenantID {
+			authsvc.ExpireTenantToken(c, token)
 			response.AbortFail(c, "非该站点成员禁止访问", response.CodeLoginExpire, 1)
 			return
 		}
-		renewIfNeed(c, "tenant", token, info, config.C.Project.TenantToken)
+		renewIfNeed(c, "tenant", token, info, config.C.Project.AdminToken)
 		meta.AdminInfo = info
 		meta.AdminID = uint(util.ToInt(info["admin_id"]))
 	}

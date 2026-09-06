@@ -225,7 +225,9 @@ func LoginAccount(c *gin.Context) {
 func LoginLogout(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	if meta.UserInfo != nil {
-		authsvc.ExpireUserToken(c, util.ToString(meta.UserInfo["token"]))
+		if tok := util.ToString(meta.UserInfo["token"]); tok != "" {
+			authsvc.ExpireUserToken(c, tok)
+		}
 	}
 	response.Success(c, "success", nil)
 }
