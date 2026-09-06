@@ -842,6 +842,18 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   php_gm="$(curl -sS "$PHP/platformapi/tools.generator/getModels" -H "token: $TOKEN")"
   go_gm="$(curl -sS "$GO/platformapi/tools.generator/getModels" -H "token: $TOKEN")"
   echo "generator_models php_code=$(jcode <<<"$php_gm") go_code=$(jcode <<<"$go_gm") php_show=$(jget show <<<"$php_gm") go_show=$(jget show <<<"$go_gm")"
+  php_up="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_up="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/upgrade" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "upgrade_bad php_msg=$(jget msg <<<"$php_up") go_msg=$(jget msg <<<"$go_up")"
+  if [[ "$(jget msg <<<"$php_up")" != "$(jget msg <<<"$go_up")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ud="$(curl -sS -X POST "$PHP/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_ud="$(curl -sS -X POST "$GO/platformapi/upgrade.upgrade/downloadPkg" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "upgrade_dl_bad php_msg=$(jget msg <<<"$php_ud") go_msg=$(jget msg <<<"$go_ud")"
+  if [[ "$(jget msg <<<"$php_ud")" != "$(jget msg <<<"$go_ud")" ]]; then
+    fail=$((fail + 1))
+  fi
   if [[ "$(jcode <<<"$php_gm")" != "$(jcode <<<"$go_gm")" || "$(jget show <<<"$php_gm")" != "$(jget show <<<"$go_gm")" ]]; then
     fail=$((fail + 1))
   fi

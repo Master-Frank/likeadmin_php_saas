@@ -399,3 +399,21 @@ func TestSexChannelMoney(t *testing.T) {
 		t.Fatal(MoneyString(0), MoneyString(1.5))
 	}
 }
+
+func TestUpgradeCheck(t *testing.T) {
+	if UpgradeCheck(map[string]any{}) != "参数缺失" {
+		t.Fatal(UpgradeCheck(map[string]any{}))
+	}
+	if UpgradeCheck(map[string]any{"id": 1}) != "参数缺失" {
+		t.Fatal(UpgradeCheck(map[string]any{"id": 1}))
+	}
+	if UpgradeCheck(map[string]any{"id": 1, "update_type": 2}) != "更新类型错误" {
+		t.Fatal(UpgradeCheck(map[string]any{"id": 1, "update_type": 2}))
+	}
+	if UpgradeCheck(map[string]any{"id": 1, "update_type": 1}) != "" {
+		t.Fatal("valid upgrade params should pass field checks")
+	}
+	if UpgradeDownloadCheck(map[string]any{}) != "参数缺失" {
+		t.Fatal(UpgradeDownloadCheck(map[string]any{}))
+	}
+}

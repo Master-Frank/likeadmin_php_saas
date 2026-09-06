@@ -1345,3 +1345,28 @@ func UintSlicesChanged(oldIDs, newIDs []uint) bool {
 	}
 	return false
 }
+
+// UpgradeCheck mirrors PHP UpgradeValidate: id + update_type require, update_type must be 1.
+func UpgradeCheck(p map[string]any) string {
+	if !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "update_type") {
+		return "参数缺失"
+	}
+	if ToInt(p["update_type"]) != 1 {
+		return "更新类型错误"
+	}
+	return ""
+}
+
+// UpgradeDownloadCheck mirrors PHP downloadPkgValidate require fields.
+func UpgradeDownloadCheck(p map[string]any) string {
+	if !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "update_type") {
+		return "参数缺失"
+	}
+	return ""
+}

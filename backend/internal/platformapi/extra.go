@@ -538,8 +538,24 @@ func formatUpgradeLists(rows []any) []map[string]any {
 	return out
 }
 
-func UpgradeNotImpl(c *gin.Context) {
+func UpgradeDo(c *gin.Context) {
+	if msg := util.UpgradeCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	response.Fail(c, "在线升级面向 PHP 发行包，Go 版请通过发版更新")
+}
+
+func UpgradeDownloadPkg(c *gin.Context) {
+	if msg := util.UpgradeDownloadCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	response.Fail(c, "在线升级面向 PHP 发行包，Go 版请通过发版更新")
+}
+
+func UpgradeNotImpl(c *gin.Context) {
+	UpgradeDo(c)
 }
 
 func DownloadExport(c *gin.Context) {
