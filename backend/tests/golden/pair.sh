@@ -2004,6 +2004,81 @@ elif [[ "$(jcode <<<"$go_gta")" != "1" ]]; then
   fail=$((fail + 1))
 fi
 
+if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  now="$(date +%s)"
+  leak_sn="9${now: -8}"
+  mysqlq "INSERT INTO la_article_cate (tenant_id,name,sort,is_show,create_time) VALUES (999,'paircateleak',0,1,$now)"
+  mysqlq "INSERT INTO la_tenant_admin (tenant_id,name,account,password,avatar,create_time) VALUES (999,'leakadmin','leakadm$now','x','',$now)"
+  mysqlq "INSERT INTO la_tenant_system_menu (tenant_id,pid,type,name,icon,sort,perms,paths,component,selected,params,is_cache,is_show,is_disable,create_time) VALUES (999,0,'M','pairleakmenu','',0,'','','','','',0,1,0,$now)"
+  mysqlq "INSERT INTO la_tenant_system_role (tenant_id,name,\`desc\`,sort,create_time) VALUES (999,'leakrole','',0,$now)"
+  mysqlq "INSERT INTO la_user (tenant_id,sn,account,nickname,avatar,real_name,password,mobile,create_time) VALUES (999,$leak_sn,'leakuser$now','leak','','','','',$now)"
+  cate_id="$(mysqlq "SELECT id FROM la_article_cate WHERE tenant_id=999 AND name='paircateleak' ORDER BY id DESC LIMIT 1")"
+  admin_id="$(mysqlq "SELECT id FROM la_tenant_admin WHERE tenant_id=999 AND account='leakadm$now' ORDER BY id DESC LIMIT 1")"
+  menu_id="$(mysqlq "SELECT id FROM la_tenant_system_menu WHERE tenant_id=999 AND name='pairleakmenu' ORDER BY id DESC LIMIT 1")"
+  role_id="$(mysqlq "SELECT id FROM la_tenant_system_role WHERE tenant_id=999 AND name='leakrole' ORDER BY id DESC LIMIT 1")"
+  user_id="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=999 AND account='leakuser$now' ORDER BY id DESC LIMIT 1")"
+  if [[ -n "$cate_id" && "$cate_id" != "0" ]]; then
+    go_cate="$(curl -sS "$GO/tenantapi/article.article_cate/detail?id=$cate_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "cate_cross_tenant go_msg=$(jget msg <<<"$go_cate")"
+    if [[ "$(jget msg <<<"$go_cate")" != *资讯分类不存在* ]]; then
+      echo "  go_cate=${go_cate:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$admin_id" && "$admin_id" != "0" ]]; then
+    go_adm="$(curl -sS "$GO/tenantapi/auth.admin/detail?id=$admin_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "admin_cross_tenant go_msg=$(jget msg <<<"$go_adm")"
+    if [[ "$(jget msg <<<"$go_adm")" != *管理员不存在* ]]; then
+      echo "  go_adm=${go_adm:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$menu_id" && "$menu_id" != "0" ]]; then
+    go_menu="$(curl -sS "$GO/tenantapi/auth.menu/detail?id=$menu_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_mname="$(jget data.name <<<"$go_menu")"
+    echo "menu_cross_tenant name=$go_mname"
+    if [[ "$go_mname" == "pairleakmenu" ]]; then
+      echo "  go_menu=${go_menu:0:200}"
+      fail=$((fail + 1))
+    fi
+    curl -sS -X POST "$GO/tenantapi/auth.menu/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$menu_id,\"pid\":0,\"type\":\"M\",\"name\":\"hackedmenu\",\"is_show\":1,\"is_disable\":0}" >/dev/null
+    left_menu="$(mysqlq "SELECT name FROM la_tenant_system_menu WHERE id=$menu_id")"
+    echo "menu_cross_edit left=$left_menu"
+    if [[ "$left_menu" != "pairleakmenu" ]]; then
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$role_id" && "$role_id" != "0" ]]; then
+    go_role="$(curl -sS "$GO/tenantapi/auth.role/detail?id=$role_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_rname="$(jget data.name <<<"$go_role")"
+    echo "role_cross_tenant name=$go_rname"
+    if [[ "$go_rname" == "leakrole" ]]; then
+      echo "  go_role=${go_role:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$user_id" && "$user_id" != "0" ]]; then
+    go_adj="$(curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$user_id,\"action\":1,\"num\":1}")"
+    echo "user_cross_adjust go_msg=$(jget msg <<<"$go_adj")"
+    if [[ "$(jget msg <<<"$go_adj")" != *用户不存在* ]]; then
+      echo "  go_adj=${go_adj:0:200}"
+      fail=$((fail + 1))
+    fi
+    go_ued="$(curl -sS -X POST "$GO/tenantapi/user.user/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$user_id,\"field\":\"real_name\",\"value\":\"hacked\"}")"
+    echo "user_cross_edit go_msg=$(jget msg <<<"$go_ued")"
+    if [[ "$(jget msg <<<"$go_ued")" != *用户不存在* ]]; then
+      echo "  go_ued=${go_ued:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  mysqlq "DELETE FROM la_article_cate WHERE tenant_id=999 AND name='paircateleak'"
+  mysqlq "DELETE FROM la_tenant_admin WHERE tenant_id=999 AND account='leakadm$now'"
+  mysqlq "DELETE FROM la_tenant_system_menu WHERE tenant_id=999 AND name='pairleakmenu'"
+  mysqlq "DELETE FROM la_tenant_system_role WHERE tenant_id=999 AND name='leakrole'"
+  mysqlq "DELETE FROM la_user WHERE tenant_id=999 AND account='leakuser$now'"
+fi
+
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"

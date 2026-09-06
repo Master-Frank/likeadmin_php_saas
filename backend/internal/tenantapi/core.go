@@ -188,7 +188,7 @@ func WorkbenchIndex(c *gin.Context) {
 func AdminMySelf(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	var admin model.TenantAdmin
-	if tdb(c).Where("id = ?", meta.AdminID).First(&admin).Error != nil {
+	if scopeTID(tdb(c).Where("id = ?", meta.AdminID), c).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -409,7 +409,7 @@ func UserEdit(c *gin.Context) {
 			return
 		}
 	}
-	tdb(c).Model(&model.User{}).Where("id = ?", id).Update(field, value)
+	scopeTID(tdb(c).Model(&model.User{}).Where("id = ?", id), c).Update(field, value)
 	response.SuccessNotice(c, "操作成功")
 }
 

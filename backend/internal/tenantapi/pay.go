@@ -120,7 +120,11 @@ func PayWayGet(c *gin.Context) {
 	}
 	for _, r := range rows {
 		var cfg model.TenantPayConfig
-		tdb(c).First(&cfg, r.PayConfigID)
+		cq := tdb(c).Where("id = ?", r.PayConfigID)
+		if tid := tenantDB(c); tid > 0 {
+			cq = cq.Where("tenant_id = ?", tid)
+		}
+		cq.First(&cfg)
 		lists[r.Scene] = append(lists[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,
@@ -150,7 +154,11 @@ func PayWaySet(c *gin.Context) {
 			if id == 0 {
 				continue
 			}
-			tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", id).Updates(map[string]any{
+			q := tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", id)
+			if tid := tenantDB(c); tid > 0 {
+				q = q.Where("tenant_id = ?", tid)
+			}
+			q.Updates(map[string]any{
 				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
 			})
 		}

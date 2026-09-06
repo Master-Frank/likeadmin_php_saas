@@ -424,7 +424,7 @@ func RechargeLists(c *gin.Context) {
 func AccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
 	uid := ctxutil.Get(c).UserID
-	db := tdb(c).Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid)
+	db := scopeTenant(tdb(c).Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid), c)
 	if lists.Param(q, "type") == "um" {
 		db = db.Where("change_type IN ?", biz.UserMoneyChangeTypes())
 	}
@@ -470,7 +470,7 @@ func currentUser(c *gin.Context) model.User {
 	if id == 0 {
 		return u
 	}
-	tdb(c).First(&u, id)
+	scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&u)
 	return u
 }
 

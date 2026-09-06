@@ -129,8 +129,8 @@ func AdminEdit(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	var admin model.TenantAdmin
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
+	admin, ok := tenantAdminByID(c, id)
+	if !ok {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -167,7 +167,11 @@ func AdminEdit(c *gin.Context) {
 	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
 	newRoles := httpx.Uints(c, "role_id")
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if err := q.Updates(data).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -193,8 +197,8 @@ func AdminEditSelf(c *gin.Context) {
 		return
 	}
 	id := ctxutil.Get(c).AdminID
-	var admin model.TenantAdmin
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
+	admin, ok := tenantAdminByID(c, id)
+	if !ok {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -220,8 +224,8 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	var a model.TenantAdmin
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+	a, ok := tenantAdminByID(c, id)
+	if !ok {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -231,7 +235,11 @@ func AdminDelete(c *gin.Context) {
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		if tid := tenantDB(c); tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if err := q.Update("delete_time", now).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -255,8 +263,8 @@ func AdminDetail(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	var a model.TenantAdmin
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+	a, ok := tenantAdminByID(c, id)
+	if !ok {
 		response.Fail(c, "管理员不存在")
 		return
 	}
@@ -271,7 +279,7 @@ func AdminDetail(c *gin.Context) {
 
 func MenuRoute(c *gin.Context) {
 	var admin model.TenantAdmin
-	if tdb(c).Where("id = ?", ctxutil.Get(c).AdminID).First(&admin).Error != nil {
+	if scopeTID(tdb(c).Where("id = ?", ctxutil.Get(c).AdminID), c).First(&admin).Error != nil {
 		response.Data(c, []any{})
 		return
 	}
@@ -341,7 +349,7 @@ func MenuEdit(c *gin.Context) {
 	}
 	m := tenantMenuFromReq(c)
 	now := util.NowUnix()
-	tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Updates(map[string]any{
 		"pid": m.Pid, "type": m.Type, "name": m.Name, "icon": m.Icon, "sort": m.Sort, "perms": m.Perms,
 		"paths": m.Paths, "component": m.Component, "selected": m.Selected, "params": m.Params,
 		"is_cache": m.IsCache, "is_show": m.IsShow, "is_disable": m.IsDisable, "update_time": now,
@@ -356,7 +364,7 @@ func MenuDelete(c *gin.Context) {
 		return
 	}
 	var child int64
-	tdb(c).Model(&model.TenantSystemMenu{}).Where("pid = ?", id).Count(&child)
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("pid = ?", id), c).Count(&child)
 	if child > 0 {
 		response.Fail(c, "存在子菜单,不允许删除")
 		return
@@ -367,14 +375,14 @@ func MenuDelete(c *gin.Context) {
 		response.Fail(c, "已分配菜单不可删除")
 		return
 	}
-	tdb(c).Delete(&model.TenantSystemMenu{}, id)
+	scopeTID(tdb(c).Where("id = ?", id), c).Delete(&model.TenantSystemMenu{})
 	tdb(c).Where("menu_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	response.SuccessNotice(c, "操作成功")
 }
 
 func MenuDetail(c *gin.Context) {
 	var m model.TenantSystemMenu
-	tdb(c).First(&m, httpx.Uint(c, "id"))
+	scopeTID(tdb(c).Where("id = ?", httpx.Uint(c, "id")), c).First(&m)
 	response.Data(c, tenantMenuMap(m))
 }
 
@@ -383,7 +391,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")).Update("is_disable", httpx.Int(c, "is_disable"))
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_disable", httpx.Int(c, "is_disable"))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -440,7 +448,7 @@ func RoleEdit(c *gin.Context) {
 	}
 	id := httpx.Uint(c, "id")
 	var exist model.TenantSystemRole
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
@@ -448,7 +456,7 @@ func RoleEdit(c *gin.Context) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
-	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"),
 	})
 	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
@@ -468,7 +476,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	var exist model.TenantSystemRole
-	if tdb(c).Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
@@ -479,7 +487,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Update("delete_time", now)
 	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")
@@ -487,7 +495,7 @@ func RoleDelete(c *gin.Context) {
 
 func RoleDetail(c *gin.Context) {
 	var r model.TenantSystemRole
-	tdb(c).First(&r, httpx.Uint(c, "id"))
+	scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&r)
 	var menuIDs []uint
 	tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
 	if menuIDs == nil {
@@ -522,6 +530,17 @@ func authAdminIDPresent(p map[string]any) bool {
 		return false
 	}
 	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
+func tenantAdminByID(c *gin.Context, id uint) (model.TenantAdmin, bool) {
+	var admin model.TenantAdmin
+	if id == 0 {
+		return admin, false
+	}
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&admin).Error != nil || admin.ID == 0 {
+		return admin, false
+	}
+	return admin, true
 }
 
 func tenantAdminAccountTaken(c *gin.Context, account string, excludeID uint) bool {
@@ -594,7 +613,7 @@ func tenantRoleNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantSystemRole
-	tdb(c).Where("id IN ?", ids).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -607,7 +626,7 @@ func tenantDeptNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantDept
-	tdb(c).Where("id IN ?", ids).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -620,7 +639,7 @@ func tenantJobNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantJobs
-	tdb(c).Where("id IN ?", ids).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)

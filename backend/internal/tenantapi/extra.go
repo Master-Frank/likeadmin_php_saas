@@ -36,7 +36,7 @@ func AdminAll(c *gin.Context) {
 
 func ArticleCateDetail(c *gin.Context) {
 	var row model.ArticleCate
-	if tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
@@ -255,7 +255,7 @@ func UserAdjustMoney(c *gin.Context) {
 		return
 	}
 	var user model.User
-	if tdb(c).Where("id = ? AND delete_time IS NULL", uid).First(&user).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", uid), c).First(&user).Error != nil {
 		response.Fail(c, "用户不存在")
 		return
 	}
@@ -312,7 +312,7 @@ func FinanceRefundLog(c *gin.Context) {
 		statusText := map[int]string{0: "退款中", 1: "退款成功", 2: "退款失败"}[r.RefundStatus]
 		handler := ""
 		var admin model.TenantAdmin
-		if r.HandleID > 0 && tdb(c).Where("id = ?", r.HandleID).First(&admin).Error == nil {
+		if r.HandleID > 0 && scopeTID(tdb(c).Where("id = ?", r.HandleID), c).First(&admin).Error == nil {
 			handler = admin.Name
 		}
 		out = append(out, map[string]any{
@@ -377,18 +377,18 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	udb := tenantdb.ForTenant(order.TenantID)
-	var user model.User
-	if udb.First(&user, order.UserID).Error != nil || user.UserMoney < order.OrderAmount {
-		response.Fail(c, "退款失败:用户余额已不足退款金额")
-		return
-	}
 	adminID := ctxutil.Get(c).AdminID
 	var rec model.RefundRecord
+	var user model.User
 	err := udb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Update("refund_status", 1).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.User{}).Where("id = ?", order.UserID).Updates(map[string]any{
+		uq := tx.Model(&model.User{}).Where("id = ?", order.UserID)
+		if order.TenantID > 0 {
+			uq = uq.Where("tenant_id = ?", order.TenantID)
+		}
+		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money - ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount - ?", order.OrderAmount),
 		}).Error; err != nil {
@@ -443,7 +443,11 @@ func RechargeRefund(c *gin.Context) {
 
 func lastRefundLogSN(c *gin.Context, recID uint) string {
 	var last model.RefundLog
-	if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+	q := tdb(c).Where("record_id = ?", recID)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.Order("id desc").First(&last).Error == nil {
 		return last.SN
 	}
 	return ""
@@ -453,14 +457,28 @@ func refundFailHandle(c *gin.Context, recID, logID uint, msg string) {
 	if recID == 0 {
 		return
 	}
-	tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
+	rq := tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID)
+	if tid := tenantDB(c); tid > 0 {
+		rq = rq.Where("tenant_id = ?", tid)
+	}
+	rq.Update("refund_status", 2)
 	q := tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", recID)
+	if tid := tenantDB(c); tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
 	if logID > 0 {
 		q = q.Where("id = ?", logID)
 	} else {
 		var last model.RefundLog
-		if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+		lq := tdb(c).Where("record_id = ?", recID)
+		if tid := tenantDB(c); tid > 0 {
+			lq = lq.Where("tenant_id = ?", tid)
+		}
+		if lq.Order("id desc").First(&last).Error == nil {
 			q = tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID)
+			if tid := tenantDB(c); tid > 0 {
+				q = q.Where("tenant_id = ?", tid)
+			}
 		}
 	}
 	q.Updates(map[string]any{"refund_status": 2, "refund_msg": msg})
@@ -471,9 +489,17 @@ func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uin
 	if res.Raw != nil {
 		msg = util.EncodeJSON(res.Raw)
 	}
-	tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 1)
+	rq := tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID)
+	if tid := tenantDB(c); tid > 0 {
+		rq = rq.Where("tenant_id = ?", tid)
+	}
+	rq.Update("refund_status", 1)
 	var last model.RefundLog
-	if tdb(c).Where("record_id = ?", recID).Order("id desc").First(&last).Error == nil {
+	lq := tdb(c).Where("record_id = ?", recID)
+	if tid := tenantDB(c); tid > 0 {
+		lq = lq.Where("tenant_id = ?", tid)
+	}
+	if lq.Order("id desc").First(&last).Error == nil {
 		tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID).Updates(map[string]any{
 			"refund_status": 1, "refund_msg": msg,
 		})
@@ -523,13 +549,12 @@ func RechargeRefundAgain(c *gin.Context) {
 		response.Fail(c, "该退款记录已退款成功")
 		return
 	}
-	var user model.User
 	var againOrder model.RechargeOrder
-	tdb(c).First(&againOrder, rec.OrderID)
-	if tenantdb.ForTenant(rec.TenantID).First(&user, rec.UserID).Error != nil || user.UserMoney < againOrder.OrderAmount {
-		response.Fail(c, "退款失败:用户余额已不足退款金额")
-		return
+	oq := tdb(c).Where("id = ?", rec.OrderID)
+	if tid := tenantDB(c); tid > 0 {
+		oq = oq.Where("tenant_id = ?", tid)
 	}
+	oq.First(&againOrder)
 	againLog := model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
