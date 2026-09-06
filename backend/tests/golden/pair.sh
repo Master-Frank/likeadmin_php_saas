@@ -1536,6 +1536,12 @@ echo "tenantuser_lists_noid php_msg=$(jget msg <<<"$php_tul") go_msg=$(jget msg 
 if [[ "$(jget msg <<<"$php_tul")" != "$(jget msg <<<"$go_tul")" ]]; then
   fail=$((fail + 1))
 fi
+php_tud="$(curl -sS "$PHP/platformapi/tenant.tenantUser/detail" -H "token: $TOKEN")"
+go_tud="$(curl -sS "$GO/platformapi/tenant.tenantUser/detail" -H "token: $TOKEN")"
+echo "tenantuser_detail_noid php_msg=$(jget msg <<<"$php_tud") go_msg=$(jget msg <<<"$go_tud")"
+if [[ "$(jget msg <<<"$php_tud")" != "$(jget msg <<<"$go_tud")" ]]; then
+  fail=$((fail + 1))
+fi
 php_tal="$(curl -sS "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
 go_tal="$(curl -sS "$GO/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
 php_taln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$php_tal")"

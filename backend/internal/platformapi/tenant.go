@@ -554,6 +554,10 @@ func TenantUserLists(c *gin.Context) {
 }
 
 func TenantUserDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "请选择用户")
+		return
+	}
 	tid := httpx.Uint(c, "tenant_id")
 	if tid == 0 {
 		tid = ctxutil.Get(c).TenantID
@@ -563,7 +567,7 @@ func TenantUserDetail(c *gin.Context) {
 		response.Fail(c, "用户不存在")
 		return
 	}
-	response.Success(c, "获取成功", userMap(c, u))
+	response.Success(c, "获取租户用户详情成功", userMap(c, u))
 }
 
 func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
