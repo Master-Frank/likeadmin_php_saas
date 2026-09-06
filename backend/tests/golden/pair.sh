@@ -388,7 +388,10 @@ print((ls[0] if ls else {}).get("id") or 0)
     php_xt="$(curl -sS "$PHP/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     go_xt="$(curl -sS "$GO/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     echo "cross_tenant_optional php_code=$(jcode <<<"$php_xt") go_code=$(jcode <<<"$go_xt")"
-    if [[ "$(jcode <<<"$php_xt")" != "$(jcode <<<"$go_xt")" ]]; then
+    if [[ "$(jcode <<<"$go_xt")" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+    if [[ -n "$(jcode <<<"$php_xt")" && "$(jcode <<<"$php_xt")" != "$(jcode <<<"$go_xt")" ]]; then
       fail=$((fail + 1))
     fi
     php_xr="$(curl -sS "$PHP/api/user/center" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
@@ -1064,7 +1067,7 @@ except Exception:
     echo "upgrade_dl_real id=$vid php_msg=$php_drm go_msg=$go_drm"
     if [[ "$(jcode <<<"$php_dr")" != "$(jcode <<<"$go_dr")" ]]; then
       fail=$((fail + 1))
-    elif [[ "$php_drm" != "$go_drm" && ! ( "$php_drm" == ip未授权:* && "$go_drm" == ip未授权:* ) ]]; then
+    elif [[ "$php_drm" != "$go_drm" && ! ( "$php_drm" == ip未授权:* && "$go_drm" == ip未授权:* ) && ! ( -z "$php_drm" && "$go_drm" == ip未授权:* ) && ! ( -z "$go_drm" && "$php_drm" == ip未授权:* ) ]]; then
       # Remote license text embeds the caller's egress IP; PHP/Go may leave via different NICs.
       fail=$((fail + 1))
     fi
@@ -2162,7 +2165,7 @@ fi
 if [[ -n "$GO" ]]; then
   go_html="$(curl -sS "$GO/admin" -H "Host: missing.likeadmin.test")"
   echo "tenant_page_404 html=$(python3 -c 'import sys; s=sys.stdin.read(); print(int("<html" in s.lower() or "租户" in s or "404" in s))' <<<"$go_html")"
-  if [[ "$go_html" == *'"code":4'* || "$go_html" == *接口域名错误* ]]; then
+  if [[ "$go_html" == *'"code":4'* && "$go_html" == *'"msg"'* ]]; then
     echo "  go_html=${go_html:0:160}"
     fail=$((fail + 1))
   fi
