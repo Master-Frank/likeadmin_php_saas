@@ -84,14 +84,20 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if c != nil {
 		tid = ctxutil.Get(c).TenantID
 	}
+	var logID uint
 	if bootstrap.DB != nil {
 		row := model.TenantSmsLog{
 			SceneID: scene, Mobile: mobile, Code: code, Content: "验证码" + code,
 			SendStatus: 1, SendTime: &now, TenantID: tid, CreateTime: now,
 		}
 		_ = bootstrap.DB.Create(&row).Error
+		logID = row.ID
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
+	if err := maybeGatewaySend(c, mobile, scene, code, logID); err != nil {
+		cache.Del(cacheKey(scene, mobile))
+		return 0, "", err
+	}
 	return scene, code, nil
 }
 

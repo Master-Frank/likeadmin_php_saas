@@ -27,4 +27,4 @@ go run ./cmd/crontab
 - 鉴权 Header：`token`
 - 密码：`md5(salt + md5(password + salt))`，salt 为 `project.unique_identification`
 
-平台 / 租户 / 用户四端前端 `src/api` 路径已注册。仍待微信/支付宝 SDK、短信网关与真实回调验签。
+平台 / 租户 / 用户四端前端 `src/api` 路径已注册。微信/支付宝预下单、V3 回调解密、阿里云/腾讯云短信网关已有实现；**尚未**用真实库做黄金 JSON 对拍，也未 Nginx 切流。验收清单见 [`tests/golden/README.md`](tests/golden/README.md)。

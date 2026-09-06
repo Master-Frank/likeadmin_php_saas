@@ -188,10 +188,24 @@ func UserCenter(c *gin.Context) {
 
 func UserInfo(c *gin.Context) {
 	u := currentUser(c)
+	hasAuth := 0
+	if bootstrap.DB != nil && u.ID > 0 {
+		var n int64
+		bootstrap.DB.Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}).Count(&n)
+		if n > 0 {
+			hasAuth = 1
+		}
+	}
+	hasPwd := 0
+	if u.Password != "" {
+		hasPwd = 1
+	}
 	response.Data(c, gin.H{
 		"id": u.ID, "sn": u.SN, "sex": u.Sex, "account": u.Account, "nickname": u.Nickname,
 		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
-		"mobile": u.Mobile, "has_auth": 0, "version": config.C.Project.Version,
+		"mobile": u.Mobile, "has_auth": hasAuth, "has_password": hasPwd,
+		"create_time": util.FormatDateTime(u.CreateTime), "user_money": u.UserMoney,
+		"version": config.C.Project.Version,
 	})
 }
 

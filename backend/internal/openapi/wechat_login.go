@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
@@ -13,6 +14,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
 	"likeadmin/backend/internal/util"
@@ -247,7 +249,17 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 func handlePayNotify(c *gin.Context) {
 	raw := middleware.ReadBody(c)
 	_ = c.Request.ParseForm()
-	n := wechat.ParsePayNotify(raw, c.Request.PostForm)
+	form := c.Request.PostForm
+	n := wechat.ParsePayNotify(raw, form)
+	if strings.Contains(string(raw), "ciphertext") {
+		n = pay.DecryptWechatV3(raw, pay.WechatCfg(c).SignKey)
+	}
+	if len(form) > 0 && (form.Get("trade_status") != "" || form.Get("sign") != "") {
+		if !pay.AliVerifyNotify(c, form) {
+			c.String(200, "fail")
+			return
+		}
+	}
 	if n.Paid && (n.Attach == "recharge" || n.Attach == "") {
 		sn := wechat.RechargeSN(n.OutTradeNo)
 		if sn != "" {
@@ -256,6 +268,10 @@ func handlePayNotify(c *gin.Context) {
 				_ = markRechargePaid(&order, n.TransactionID)
 			}
 		}
+	}
+	if strings.Contains(string(raw), "ciphertext") || strings.Contains(string(raw), "event_type") {
+		c.JSON(200, gin.H{"code": "SUCCESS", "message": "成功"})
+		return
 	}
 	c.String(200, "success")
 }

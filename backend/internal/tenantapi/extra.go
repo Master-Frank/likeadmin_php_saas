@@ -11,6 +11,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
@@ -304,6 +305,7 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	adminID := ctxutil.Get(c).AdminID
+	var rec model.RefundRecord
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Update("refund_status", 1).Error; err != nil {
 			return err
@@ -326,7 +328,7 @@ func RechargeRefund(c *gin.Context) {
 		if order.PayWay == 2 || order.PayWay == 3 {
 			way = 1
 		}
-		rec := model.RefundRecord{
+		rec = model.RefundRecord{
 			SN: util.GenerateSN(exists, "", 4), UserID: order.UserID, OrderID: order.ID, OrderSN: order.SN,
 			OrderType: "recharge", OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount,
 			RefundType: 1, TransactionID: order.TransactionID, RefundWay: way, RefundStatus: 1,
@@ -350,7 +352,33 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
 	response.Success(c, "操作成功", nil)
+}
+
+func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, recID uint) error {
+	if refundSN == "" {
+		return nil
+	}
+	var err error
+	switch order.PayWay {
+	case 2:
+		err = pay.WechatRefund(c, order.TransactionID, refundSN, order.OrderAmount, order.OrderAmount)
+	case 3:
+		err = pay.AliRefund(c, order.SN, refundSN, order.OrderAmount)
+	}
+	if err != nil {
+		if recID > 0 {
+			bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", recID).Update("refund_status", 2)
+			bootstrap.DB.Model(&model.RefundLog{}).Where("record_id = ?", recID).Update("refund_status", 2)
+		}
+		bootstrap.DB.Model(order).Update("refund_status", 2)
+		return err
+	}
+	return nil
 }
 
 func RechargeRefundAgain(c *gin.Context) {
@@ -370,6 +398,14 @@ func RechargeRefundAgain(c *gin.Context) {
 		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 1,
 		RefundMsg: "重新退款", CreateTime: util.NowUnix(),
 	})
+	var order model.RechargeOrder
+	if bootstrap.DB.First(&order, rec.OrderID).Error == nil {
+		if err := remoteRefund(c, &order, rec.SN, rec.ID); err != nil {
+			response.Fail(c, err.Error())
+			return
+		}
+		bootstrap.DB.Model(&order).Update("refund_status", 1)
+	}
 	response.Success(c, "操作成功", nil)
 }
 

@@ -77,7 +77,7 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"accountlog/lists", "account_log/lists",
 		"sms/sendcode", "wechat/jsconfig", "upload/image",
 		"pay/payway", "pay/prepay", "pay/paystatus",
-		"pay/notifymnp", "pay/notifyoa", "pay/alinotify",
+		"pay/notifymnp", "pay/notifyoa", "pay/notifyapp", "pay/alinotify",
 	}
 	assertCovered(t, "platform", platformRoutes(), platform)
 	assertCovered(t, "tenant", tenantRoutes(), tenant)

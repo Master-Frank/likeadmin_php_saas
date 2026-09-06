@@ -12,6 +12,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
@@ -235,6 +236,8 @@ func PayPrepay(c *gin.Context) {
 		paySN = fmt.Sprintf("%s%d%s", order.SN, terminal, fmt.Sprintf("%04d", util.NowUnix()%10000))
 	}
 	bootstrap.DB.Model(&order).Updates(map[string]any{"pay_way": payWay, "pay_sn": paySN})
+	order.PayWay = payWay
+	order.PaySN = paySN
 	if order.OrderAmount == 0 {
 		if err := markRechargePaid(&order, ""); err != nil {
 			response.Fail(c, err.Error())
@@ -247,7 +250,28 @@ func PayPrepay(c *gin.Context) {
 		response.Fail(c, "充值不支持余额支付")
 		return
 	}
-	response.Fail(c, "请先完成支付渠道配置")
+	redirect := httpx.Str(c, "redirect")
+	if redirect == "" {
+		redirect = "/pages/payment/payment"
+	}
+	var (
+		data any
+		err  error
+	)
+	switch payWay {
+	case 2:
+		data, err = pay.WechatPrepay(c, order, paySN, terminal, from, redirect)
+	case 3:
+		data, err = pay.AliPrepay(c, order, from, redirect, terminal)
+	default:
+		response.Fail(c, "订单异常")
+		return
+	}
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, "", data)
 }
 
 func PayStatus(c *gin.Context) {

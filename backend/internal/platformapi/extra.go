@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"encoding/json"
+	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
@@ -203,23 +204,78 @@ func NoticeSet(c *gin.Context) {
 }
 
 func SmsConfigGet(c *gin.Context) {
-	response.Data(c, gin.H{
-		"ali":     cfgsvc.Get(c, "sms", "ali", map[string]any{}),
-		"tencent": cfgsvc.Get(c, "sms", "tencent", map[string]any{}),
+	response.Data(c, []any{
+		smsEngineRow(c, "ali", "阿里云短信", 0),
+		smsEngineRow(c, "tencent", "腾讯云短信", 0),
 	})
 }
 
 func SmsConfigSet(c *gin.Context) {
-	typ := httpx.Str(c, "type")
+	p := httpx.Params(c)
+	typ := util.ToString(p["type"])
+	if typ == "" {
+		typ = httpx.Str(c, "type")
+	}
 	if typ == "" {
 		typ = "ali"
 	}
-	cfgsvc.Set(c, "sms", typ, httpx.Params(c))
+	p["type"] = typ
+	if util.ToString(p["name"]) == "" {
+		if typ == "tencent" {
+			p["name"] = "腾讯云短信"
+		} else {
+			p["name"] = "阿里云短信"
+		}
+	}
+	cfgsvc.Set(c, "sms", typ, p)
+	if util.ToInt(p["status"]) == 1 {
+		engine := strings.ToUpper(typ)
+		current := strings.ToUpper(cfgsvc.GetString(c, "sms", "engine", ""))
+		if current != "" && current != engine {
+			oldName := strings.ToLower(current)
+			if oldName == "aliyun" {
+				oldName = "ali"
+			}
+			old := asCfgMap(cfgsvc.Get(c, "sms", oldName, map[string]any{}))
+			old["status"] = 0
+			cfgsvc.Set(c, "sms", oldName, old)
+		}
+		cfgsvc.Set(c, "sms", "engine", engine)
+	}
 	response.Success(c, "设置成功", nil)
 }
 
 func SmsConfigDetail(c *gin.Context) {
-	response.Data(c, cfgsvc.Get(c, "sms", httpx.Str(c, "type"), map[string]any{}))
+	typ := httpx.Str(c, "type")
+	def := map[string]any{"type": typ, "status": 0}
+	switch typ {
+	case "ali":
+		def = map[string]any{"type": "ali", "name": "阿里云短信", "sign": "", "app_key": "", "secret_key": "", "status": 0}
+	case "tencent":
+		def = map[string]any{"type": "tencent", "name": "腾讯云短信", "sign": "", "app_id": "", "secret_id": "", "secret_key": "", "status": 0}
+	}
+	row := asCfgMap(cfgsvc.Get(c, "sms", typ, def))
+	row["status"] = util.ToInt(row["status"])
+	response.Data(c, row)
+}
+
+func smsEngineRow(c *gin.Context, typ, name string, status int) map[string]any {
+	row := asCfgMap(cfgsvc.Get(c, "sms", typ, map[string]any{"type": typ, "name": name, "status": status}))
+	if util.ToString(row["type"]) == "" {
+		row["type"] = typ
+	}
+	if util.ToString(row["name"]) == "" {
+		row["name"] = name
+	}
+	row["status"] = util.ToInt(row["status"])
+	return row
+}
+
+func asCfgMap(v any) map[string]any {
+	if m, ok := v.(map[string]any); ok && m != nil {
+		return m
+	}
+	return map[string]any{}
 }
 
 func UpgradeNotImpl(c *gin.Context) {

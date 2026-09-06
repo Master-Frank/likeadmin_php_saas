@@ -52,7 +52,7 @@ func New() *gin.Engine {
 			"login":   {"register", "account", "logout", "codeurl", "oalogin", "mnplogin", "getscancode", "scanlogin"},
 			"sms":     {"sendcode"},
 			"user":    {"resetpassword"},
-			"pay":     {"notifymnp", "notifyoa", "alinotify"},
+			"pay":     {"notifymnp", "notifyoa", "notifyapp", "alinotify"},
 			"wechat":  {"jsconfig"},
 			"article": {"lists", "cate", "detail"},
 		},
@@ -379,6 +379,6 @@ func apiRoutes() map[string]Handler {
 		"wechat/jsconfig": openapi.WechatJsConfig,
 		"upload/image":    openapi.UploadImage,
 		"pay/payway":      openapi.PayWay, "pay/prepay": openapi.PayPrepay, "pay/paystatus": openapi.PayStatus,
-		"pay/notifymnp": openapi.PayNotifyOK, "pay/notifyoa": openapi.PayNotifyOK, "pay/alinotify": openapi.AliNotify,
+		"pay/notifymnp": openapi.PayNotifyOK, "pay/notifyoa": openapi.PayNotifyOK, "pay/notifyapp": openapi.PayNotifyOK, "pay/alinotify": openapi.AliNotify,
 	}
 }

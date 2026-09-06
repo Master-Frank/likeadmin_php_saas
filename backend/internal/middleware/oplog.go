@@ -47,13 +47,16 @@ func OperationLog() gin.HandlerFunc {
 			return
 		}
 		params := httpx.Params(c)
-		if _, ok := params["password"]; ok {
-			params["password"] = "******"
+		safe := make(map[string]any, len(params))
+		for k, v := range params {
+			safe[k] = v
 		}
-		if _, ok := params["app_secret"]; ok {
-			params["app_secret"] = "******"
+		for _, key := range []string{"password", "password_old", "old_password", "app_secret", "secret_key"} {
+			if _, ok := safe[key]; ok {
+				safe[key] = "******"
+			}
 		}
-		raw, _ := json.Marshal(params)
+		raw, _ := json.Marshal(safe)
 		action := meta.Controller + "/" + meta.Action
 		if util.ToInt(params["export"]) == 2 {
 			action += "-数据导出"
