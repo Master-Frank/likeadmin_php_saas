@@ -572,7 +572,7 @@ func IndexIndex(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	_ = db.First(&page)
-	response.Data(c, gin.H{"page": page, "article": limitArticles(c, "all", 20, 0, 0)})
+	response.Data(c, gin.H{"page": page, "article": limitArticles(c, "new", 20, 0, 0)})
 }
 
 func UploadImage(c *gin.Context) {

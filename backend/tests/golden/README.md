@@ -15,7 +15,7 @@
 | 租户生命周期 | 共享表租户 `pair1` 已建；分表 `tactics=1` 代码已接线 | 分表隔离待本轮验证 |
 | 租户内核 | login / getConfig / workbench / mySelf / menu / dept | 对拍已过 |
 | 租户业务 | 文章/用户 lists、装修 tabbar/page | 对拍已过 lists |
-| 用户端 | `/api` config/decorate/article/search；注册+登录+center | 对拍进行中；充值需登录 |
+| 用户端 | `/api` config/decorate/article/search；注册+登录+center/info | 注册校验已对齐 PHP；登录需 scene+terminal |
 | 定时/安装 | crontab 执行、`/install` 写 lock | 未验 |
 | 全量切流 | `backend/deploy/nginx-strangler.conf` 可把 API 切 Go | 未下线 PHP |
 

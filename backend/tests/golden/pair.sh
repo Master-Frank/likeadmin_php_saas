@@ -67,24 +67,39 @@ paths=(
   /platformapi/setting.dict.dict_type/lists
   /platformapi/tenant.tenant/lists
   /platformapi/setting.storage/lists
+  /platformapi/setting.web.web_setting/getWebsite
+  /platformapi/setting.user.user/getConfig
+  /platformapi/setting.user.user/getRegisterConfig
+  /platformapi/crontab.crontab/lists
+  /platformapi/setting.pay.pay_config/lists
+  /platformapi/setting.pay.pay_way/getPayWay
+  /platformapi/setting.system.system/info
 )
 if [[ -n "$TENANT_HOST" ]]; then
   paths+=(
     /api/index/config
+    /api/index/index
     /api/index/decorate?type=1
+    /api/index/policy?type=service
     /api/article/lists
     /api/article/cate
     /api/recharge/config
     /api/search/hotLists
+    /api/pc/index
+    /api/pc/infoCenter
     /tenantapi/config/getConfig
     /tenantapi/workbench/index
     /tenantapi/decorate.tabbar/detail
     /tenantapi/decorate.page/detail?type=1
     /tenantapi/auth.admin/mySelf
     /tenantapi/auth.menu/lists
+    /tenantapi/auth.role/lists
     /tenantapi/dept.dept/lists
+    /tenantapi/dept.jobs/lists
     /tenantapi/article.article/lists
+    /tenantapi/article.article_cate/lists
     /tenantapi/user.user/lists
+    /tenantapi/setting.web.web_setting/getWebsite
     /api/pc/config
   )
 fi
@@ -120,41 +135,48 @@ PY
 done
 
 if [[ -n "$TENANT_HOST" ]]; then
-  acc="pairuser$(date +%s)"
-  php_reg="$(curl -sS -X POST "$PHP/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
-    -d "{\"account\":\"$acc\",\"password\":\"likeadmin\",\"password_confirm\":\"likeadmin\",\"channel\":1}")"
-  go_dup="$(curl -sS -X POST "$GO/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
-    -d "{\"account\":\"$acc\",\"password\":\"likeadmin\",\"password_confirm\":\"likeadmin\",\"channel\":1}")"
+  ts="$(date +%s)"
+  acc="u1${ts: -4}"
+  pwd="Likeadmin1"
+  body="{\"account\":\"$acc\",\"password\":\"$pwd\",\"password_confirm\":\"$pwd\",\"channel\":1}"
+  php_reg="$(curl -sS -X POST "$PHP/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$body")"
+  go_dup="$(curl -sS -X POST "$GO/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$body")"
   php_rc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_reg")"
   go_rc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_dup")"
-  echo "register php_code=$php_rc (create) go_code=$go_rc (dup expect 0)"
+  echo "register acc=$acc php_code=$php_rc (create) go_code=$go_rc (dup expect 0)"
+  echo "  php_reg=$php_reg"
+  echo "  go_dup=$go_dup"
   if [[ "$php_rc" != "1" ]]; then
     fail=$((fail + 1))
   fi
-  # Go should see the PHP-created account and reject the duplicate
-  if [[ "$go_rc" != "0" && "$go_rc" != "1" ]]; then
+  if [[ "$go_rc" != "0" ]]; then
     fail=$((fail + 1))
   fi
-  php_ul="$(curl -sS -X POST "$PHP/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
-    -d "{\"account\":\"$acc\",\"password\":\"likeadmin\",\"terminal\":1}")"
-  go_ul="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
-    -d "{\"account\":\"$acc\",\"password\":\"likeadmin\",\"terminal\":1}")"
+  login_body="{\"account\":\"$acc\",\"password\":\"$pwd\",\"terminal\":1,\"scene\":1}"
+  php_ul="$(curl -sS -X POST "$PHP/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$login_body")"
+  go_ul="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$login_body")"
   php_uc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_ul")"
   go_uc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_ul")"
   echo "user_login php_code=$php_uc go_code=$go_uc"
-  if [[ "$php_uc" != "$go_uc" ]]; then
+  if [[ "$php_uc" != "1" || "$go_uc" != "1" ]]; then
+    echo "  php_login=$php_ul"
+    echo "  go_login=$go_ul"
     fail=$((fail + 1))
   fi
   UT="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_ul")"
   if [[ -n "$UT" ]]; then
-    curl -sS "$PHP/api/user/center" -H "Host: $TENANT_HOST" -H "token: $UT" >"$OUT/php_api_user_center.json" || true
-    curl -sS "$GO/api/user/center" -H "Host: $TENANT_HOST" -H "token: $UT" >"$OUT/go_api_user_center.json" || true
-    php_cc="$(python3 -c 'import json; print(json.load(open("/tmp/likeadmin-golden/php_api_user_center.json")).get("code"))')"
-    go_cc="$(python3 -c 'import json; print(json.load(open("/tmp/likeadmin-golden/go_api_user_center.json")).get("code"))')"
-    echo "user_center php_code=$php_cc go_code=$go_cc"
-    if [[ "$php_cc" != "$go_cc" ]]; then
-      fail=$((fail + 1))
-    fi
+    for upath in /api/user/center /api/user/info /api/recharge/lists /api/account_log/lists /api/recharge/config /api/article/collect; do
+      safe="${upath//\//_}"
+      curl -sS "$PHP$upath" -H "Host: $TENANT_HOST" -H "token: $UT" >"$OUT/php$safe.json" || true
+      curl -sS "$GO$upath" -H "Host: $TENANT_HOST" -H "token: $UT" >"$OUT/go$safe.json" || true
+      php_cc="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("code"))' "$OUT/php$safe.json")"
+      go_cc="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("code"))' "$OUT/go$safe.json")"
+      echo "OK   $upath php_code=$php_cc go_code=$go_cc"
+      if [[ "$php_cc" != "$go_cc" ]]; then
+        echo "FAIL $upath code php=$php_cc go=$go_cc"
+        fail=$((fail + 1))
+      fi
+    done
   fi
 fi
 

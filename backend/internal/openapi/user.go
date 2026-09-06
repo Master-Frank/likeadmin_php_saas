@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"likeadmin/backend/internal/authsvc"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -79,59 +80,113 @@ func IndexDecorate(c *gin.Context) {
 }
 
 func LoginRegister(c *gin.Context) {
-	account := httpx.Str(c, "account")
-	password := httpx.Str(c, "password")
-	confirm := httpx.Str(c, "password_confirm")
-	if account == "" || password == "" {
-		response.Fail(c, "请输入账号密码")
+	if httpx.Any(c, "channel") == nil || httpx.Int(c, "channel") == 0 {
+		response.Fail(c, "注册来源参数缺失")
 		return
 	}
-	if password != confirm {
-		response.Fail(c, "两次密码不一致")
+	account := httpx.Str(c, "account")
+	if msg := util.ValidRegisterAccount(account); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	password := httpx.Str(c, "password")
+	if msg := util.ValidRegisterPassword(password); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	if httpx.Str(c, "password_confirm") == "" {
+		response.Fail(c, "请确认密码")
+		return
+	}
+	if password != httpx.Str(c, "password_confirm") {
+		response.Fail(c, "两次输入的密码不一致")
 		return
 	}
 	tid := ctxutil.Get(c).TenantID
 	var exist model.User
-	if tdb(c).Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
+	if tdb(c).Where("account = ? AND delete_time IS NULL", account).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
 	now := util.NowUnix()
-	var maxSN int
-	tdb(c).Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
+	sn := util.CreateUserSN(func(v int) bool {
+		var n int64
+		tdb(c).Model(&model.User{}).Where("sn = ?", v).Count(&n)
+		return n > 0
+	})
+	avatar := cfgsvc.GetString(c, "default_image", "user_avatar", config.C.Project.DefaultImage["user_avatar"])
 	u := model.User{
-		Account: account, Nickname: "用户" + util.ToString(maxSN+1),
+		Account: account, Nickname: "用户" + util.ToString(sn),
 		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		Channel:  httpx.Int(c, "channel"), TenantID: tid, IsNewUser: 1, CreateTime: now,
-		Avatar: config.C.Project.DefaultImage["user_avatar"], SN: maxSN + 1,
+		Channel:  httpx.Int(c, "channel"), TenantID: tid, CreateTime: now,
+		Avatar: avatar, SN: sn, LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
 	}
 	if err := tdb(c).Create(&u).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "注册成功", nil)
+	response.Result(c, response.CodeOK, 1, "注册成功", []any{})
 }
 
 func LoginAccount(c *gin.Context) {
-	account := httpx.Str(c, "account")
-	password := httpx.Str(c, "password")
-	scene := httpx.Int(c, "scene")
 	terminal := httpx.Int(c, "terminal")
 	if terminal == 0 {
-		terminal = 3
+		response.Fail(c, "终端参数缺失")
+		return
+	}
+	if terminal < 1 || terminal > 6 {
+		response.Fail(c, "终端参数状态值不正确")
+		return
+	}
+	scene := httpx.Int(c, "scene")
+	if scene == 0 {
+		response.Fail(c, "场景不能为空")
+		return
+	}
+	if scene != 1 && scene != 2 {
+		response.Fail(c, "场景值错误")
+		return
+	}
+	if !util.LoginWayAllows(cfgsvc.Get(c, "login", "login_way", []any{"1", "2"}), scene) {
+		response.Fail(c, "不支持的登录方式")
+		return
+	}
+	account := httpx.Str(c, "account")
+	if account == "" {
+		response.Fail(c, "请输入账号")
+		return
+	}
+	ip := ctxutil.ClientIP(c)
+	if scene == 1 {
+		if !cache.UserLoginSafe(ip) {
+			response.Fail(c, cache.UserLoginSafeHint())
+			return
+		}
+		if httpx.Str(c, "password") == "" {
+			response.Fail(c, "请输入密码")
+			return
+		}
+	} else if httpx.Str(c, "code") == "" {
+		response.Fail(c, "请输入手机验证码")
+		return
 	}
 	tid := ctxutil.Get(c).TenantID
 	var u model.User
-	q := tdb(c).Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account)
+	q := tdb(c).Where("delete_time IS NULL")
+	if scene == 2 {
+		q = q.Where("mobile = ?", account)
+	} else {
+		q = q.Where("(account = ? OR mobile = ?)", account, account)
+	}
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
 	if q.First(&u).Error != nil {
-		response.Fail(c, "账号不存在")
+		response.Fail(c, "用户不存在")
 		return
 	}
 	if u.IsDisable == 1 {
-		response.Fail(c, "账号已禁用")
+		response.Fail(c, "用户已禁用")
 		return
 	}
 	if scene == 2 {
@@ -139,12 +194,21 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, "验证码错误")
 			return
 		}
-	} else if u.Password != util.CreatePassword(password, config.C.Project.UniqueIdentification) {
-		response.Fail(c, "密码错误")
-		return
+	} else {
+		if u.Password == "" {
+			cache.RecordUserLoginFail(ip)
+			response.Fail(c, "用户不存在")
+			return
+		}
+		if u.Password != util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification) {
+			cache.RecordUserLoginFail(ip)
+			response.Fail(c, "密码错误")
+			return
+		}
+		cache.RelieveUserLoginFail(ip)
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
+	tdb(c).Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ip})
 	info := authsvc.SetUserToken(c, u.ID, terminal)
 	response.Data(c, gin.H{
 		"nickname": u.Nickname, "sn": u.SN, "mobile": u.Mobile,
@@ -167,15 +231,11 @@ func UserCenter(c *gin.Context) {
 		response.Fail(c, "请先登录")
 		return
 	}
-	hasPwd := 0
-	if u.Password != "" {
-		hasPwd = 1
-	}
 	out := gin.H{
 		"id": u.ID, "sn": u.SN, "sex": u.Sex, "account": u.Account, "nickname": u.Nickname,
 		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 		"mobile": u.Mobile, "create_time": util.FormatDateTime(u.CreateTime),
-		"is_new_user": u.IsNewUser, "user_money": u.UserMoney, "has_password": hasPwd,
+		"is_new_user": u.IsNewUser, "user_money": u.UserMoney, "has_password": u.Password != "",
 	}
 	if info := ctxutil.Get(c).UserInfo; info != nil {
 		term := util.ToInt(info["terminal"])
@@ -194,22 +254,16 @@ func UserCenter(c *gin.Context) {
 
 func UserInfo(c *gin.Context) {
 	u := currentUser(c)
-	hasAuth := 0
+	hasAuth := false
 	if tdb(c) != nil && u.ID > 0 {
 		var n int64
 		tdb(c).Model(&model.UserAuth{}).Where("user_id = ? AND terminal IN ?", u.ID, []int{1, 2, 4}).Count(&n)
-		if n > 0 {
-			hasAuth = 1
-		}
-	}
-	hasPwd := 0
-	if u.Password != "" {
-		hasPwd = 1
+		hasAuth = n > 0
 	}
 	response.Data(c, gin.H{
 		"id": u.ID, "sn": u.SN, "sex": u.Sex, "account": u.Account, "nickname": u.Nickname,
 		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
-		"mobile": u.Mobile, "has_auth": hasAuth, "has_password": hasPwd,
+		"mobile": u.Mobile, "has_auth": hasAuth, "has_password": u.Password != "",
 		"create_time": util.FormatDateTime(u.CreateTime), "user_money": u.UserMoney,
 		"version": config.C.Project.Version,
 	})

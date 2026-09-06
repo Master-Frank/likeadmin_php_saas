@@ -33,7 +33,7 @@ func LoginCodeURL(c *gin.Context) {
 	if redirect == "" {
 		redirect = ctxutil.Domain(c)
 	}
-	response.Data(c, wechat.CodeURL(appID, redirect))
+	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, redirect)})
 }
 
 func LoginOALogin(c *gin.Context) {
@@ -201,17 +201,21 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			return map[string]any{}, nil
 		}
 		if err := tdb(c).Transaction(func(tx *gorm.DB) error {
-			var maxSN int
-			tx.Model(&model.User{}).Select("COALESCE(MAX(sn),0)").Scan(&maxSN)
+			sn := util.CreateUserSN(func(v int) bool {
+				var n int64
+				tx.Model(&model.User{}).Where("sn = ?", v).Count(&n)
+				return n > 0
+			})
 			now := util.NowUnix()
 			avatar := config.C.Project.DefaultImage["user_avatar"]
-			nickname := "用户" + util.ToString(maxSN+1)
+			nickname := "用户" + util.ToString(sn)
 			if terminal != wechat.TerminalMNP && sess.Nickname != "" {
 				nickname = sess.Nickname
 			}
 			user = model.User{
-				SN: maxSN + 1, Account: "u" + util.ToString(maxSN+1), Nickname: nickname,
+				SN: sn, Account: "u" + util.ToString(sn), Nickname: nickname,
 				Avatar: avatar, Channel: terminal, TenantID: tid, IsNewUser: 1, CreateTime: now,
+				LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
 			}
 			if err := tx.Create(&user).Error; err != nil {
 				return err
