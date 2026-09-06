@@ -106,7 +106,7 @@ func DecorateDataPC(c *gin.Context) {
 func DecorateTabbarSave(c *gin.Context) {
 	tid := tenantDB(c)
 	if style := httpx.Any(c, "style"); style != nil {
-		cfgsvc.Set(c, "decorate", "tabbar_style", style)
+		cfgsvc.Set(c, "tabbar", "style", style)
 	}
 	list := httpx.Any(c, "list")
 	arr, _ := list.([]any)
@@ -126,7 +126,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		}
 		bootstrap.DB.Create(&model.DecorateTabbar{
 			Name: util.ToString(m["name"]), Selected: filesvc.SetFileURL(c, util.ToString(m["selected"])),
-			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])), Link: util.ToString(m["link"]),
+			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])), Link: util.EncodeJSON(m["link"]),
 			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now,
 		})
 	}
@@ -488,6 +488,17 @@ func OAReplyStatus(c *gin.Context) {
 	response.Success(c, "操作成功", nil)
 }
 
+func OAReplySort(c *gin.Context) {
+	sort := httpx.Int(c, "new_sort")
+	if sort == 0 {
+		sort = httpx.Int(c, "sort")
+	}
+	bootstrap.DB.Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
+		"sort": sort, "update_time": util.NowUnix(),
+	})
+	response.Success(c, "操作成功", nil)
+}
+
 func OAMenuDetail(c *gin.Context) {
 	data := cfgsvc.Get(c, "oa_setting", "menu", []any{})
 	response.Data(c, data)
@@ -575,8 +586,24 @@ func TenantNoticeLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantNoticeSetting
-	db.Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	db.Order("id asc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		sms := util.DecodeJSON(r.SmsNotice)
+		smsStatus := "停用"
+		if m, ok := sms.(map[string]any); ok && util.ToInt(m["status"]) == 1 {
+			smsStatus = "启用"
+		}
+		typeDesc := "业务通知"
+		if r.Type == 2 {
+			typeDesc = "验证码"
+		}
+		out = append(out, map[string]any{
+			"id": r.ID, "scene_name": r.SceneName, "sms_notice": sms, "type": r.Type,
+			"sms_status_desc": smsStatus, "type_desc": typeDesc,
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func TenantNoticeDetail(c *gin.Context) {

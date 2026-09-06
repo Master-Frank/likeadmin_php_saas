@@ -22,10 +22,14 @@ func DeptLists(c *gin.Context) {
 	var rows []model.Dept
 	db.Order("sort desc, id desc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
-	for _, d := range rows {
+	root := 0
+	for i, d := range rows {
 		maps = append(maps, deptMap(d))
+		if i == 0 || int(d.Pid) < root {
+			root = int(d.Pid)
+		}
 	}
-	response.SuccessSilent(c, "", util.LinearToTree(maps, "children", "id", "pid", 0))
+	response.SuccessSilent(c, "", util.DeptTree(maps, root))
 }
 
 func DeptLeader(c *gin.Context) {
@@ -167,8 +171,15 @@ func JobsAll(c *gin.Context) {
 }
 
 func deptMap(d model.Dept) map[string]any {
+	statusDesc := "停用"
+	if d.Status == 1 {
+		statusDesc = "正常"
+	}
 	return map[string]any{
 		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
-		"mobile": d.Mobile, "status": d.Status, "create_time": util.FormatDateTime(d.CreateTime),
+		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimePtr(d.UpdateTime),
+		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
 	}
 }

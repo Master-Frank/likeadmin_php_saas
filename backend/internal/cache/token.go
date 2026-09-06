@@ -10,6 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
+func useDB(db *gorm.DB) *gorm.DB {
+	if db != nil {
+		return db
+	}
+	return bootstrap.DB
+}
+
 func GetAdminInfo(token string, ip string) map[string]any {
 	key := "token_admin_" + token
 	var cached map[string]any
@@ -69,34 +76,35 @@ func DeleteAdminInfo(token string) {
 	Del("token_admin_" + token)
 }
 
-func GetTenantAdminInfo(token, ip string) map[string]any {
+func GetTenantAdminInfo(token, ip string, db *gorm.DB) map[string]any {
 	key := "token_tenant_" + token
 	var cached map[string]any
 	if GetJSON(key, &cached) && len(cached) > 0 {
 		return cached
 	}
-	return SetTenantAdminInfo(token, ip)
+	return SetTenantAdminInfo(token, ip, db)
 }
 
-func SetTenantAdminInfo(token, ip string) map[string]any {
+func SetTenantAdminInfo(token, ip string, db *gorm.DB) map[string]any {
+	db = useDB(db)
 	var sess model.TenantAdminSession
 	now := util.NowUnix()
-	if err := bootstrap.DB.Where("token = ? AND expire_time > ?", token, now).First(&sess).Error; err != nil {
+	if err := db.Where("token = ? AND expire_time > ?", token, now).First(&sess).Error; err != nil {
 		return nil
 	}
 	var admin model.TenantAdmin
-	if err := bootstrap.DB.Where("id = ? AND delete_time IS NULL", sess.AdminID).First(&admin).Error; err != nil {
+	if err := db.Where("id = ? AND delete_time IS NULL", sess.AdminID).First(&admin).Error; err != nil {
 		return nil
 	}
 	roleIDs := []int{}
-	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
+	db.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
 	roleName := ""
 	if admin.Root == 1 {
 		roleName = "系统管理员"
 	} else {
 		var roles []model.TenantSystemRole
 		if len(roleIDs) > 0 {
-			bootstrap.DB.Where("id IN ?", roleIDs).Find(&roles)
+			db.Where("id IN ?", roleIDs).Find(&roles)
 		}
 		for i, r := range roles {
 			if i > 0 {
@@ -129,26 +137,27 @@ func DeleteTenantAdminInfo(token string) {
 	Del("token_tenant_" + token)
 }
 
-func GetUserInfo(token string) map[string]any {
+func GetUserInfo(token string, db *gorm.DB) map[string]any {
 	key := "token_user_" + token
 	var cached map[string]any
 	if GetJSON(key, &cached) && len(cached) > 0 {
 		return cached
 	}
-	return SetUserInfo(token)
+	return SetUserInfo(token, db)
 }
 
-func SetUserInfo(token string) map[string]any {
+func SetUserInfo(token string, db *gorm.DB) map[string]any {
+	db = useDB(db)
 	var sess model.UserSession
 	now := util.NowUnix()
-	if err := bootstrap.DB.Where("token = ? AND expire_time > ?", token, now).First(&sess).Error; err != nil {
+	if err := db.Where("token = ? AND expire_time > ?", token, now).First(&sess).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
 			return nil
 		}
 		return nil
 	}
 	var user model.User
-	if err := bootstrap.DB.Where("id = ? AND delete_time IS NULL", sess.UserID).First(&user).Error; err != nil {
+	if err := db.Where("id = ? AND delete_time IS NULL", sess.UserID).First(&user).Error; err != nil {
 		return nil
 	}
 	info := map[string]any{

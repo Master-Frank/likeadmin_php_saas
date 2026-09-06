@@ -121,6 +121,18 @@ func projectFallback(typ, name string) any {
 		case "limit_login_time":
 			return 30
 		}
+	case "website":
+		if v, ok := config.C.Project.Website[name]; ok {
+			return v
+		}
+	case "login":
+		if v, ok := config.C.Project.Login[name]; ok {
+			return v
+		}
+	case "decorate":
+		if v, ok := config.C.Project.Decorate[name]; ok {
+			return v
+		}
 	}
 	return nil
 }

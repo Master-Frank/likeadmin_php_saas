@@ -1,8 +1,6 @@
 package platformapi
 
 import (
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,6 +12,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/storage"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -132,21 +131,13 @@ func uploadSave(c *gin.Context, typ int, dir string, allow []string) {
 	}
 	name := time.Now().Format("20060102150405") + util.MD5(fh.Filename)[:8] + "." + ext
 	rel := filepath.ToSlash(filepath.Join(dir, time.Now().Format("20060102"), name))
-	abs := filepath.Join(config.C.App.PublicDir, rel)
-	_ = os.MkdirAll(filepath.Dir(abs), 0755)
 	src, err := fh.Open()
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
 	defer src.Close()
-	dst, err := os.Create(abs)
-	if err != nil {
-		response.Fail(c, err.Error())
-		return
-	}
-	defer dst.Close()
-	if _, err = io.Copy(dst, src); err != nil {
+	if _, err = storage.Save(c, rel, src, fh.Size, fh.Header.Get("Content-Type")); err != nil {
 		response.Fail(c, err.Error())
 		return
 	}

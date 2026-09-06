@@ -44,10 +44,17 @@ func TenantLists(c *gin.Context) {
 		if t.DomainAliasEnable == 0 && t.DomainAlias != "" {
 			domain = httpPrefix + t.DomainAlias + "/admin/"
 		}
+		avatar := t.Avatar
+		if avatar == "" {
+			avatar = config.C.Project.Website["shop_logo"]
+		}
 		out = append(out, map[string]any{
 			"id": t.ID, "sn": t.SN, "name": t.Name,
-			"avatar": filesvc.GetFileURL(c, t.Avatar), "disable": t.Disable,
+			"avatar": filesvc.GetFileURL(c, avatar), "disable": t.Disable,
 			"create_time":  util.FormatDateTime(t.CreateTime),
+			"update_time":  util.FormatDateTimePtr(t.UpdateTime),
+			"delete_time":  util.FormatDateTimePtr(t.DeleteTime),
+			"tactics":      t.Tactics,
 			"domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
 			"notes": t.Notes, "tel": t.Tel, "users_count": users,
 			"default_domain": def, "domain": domain,

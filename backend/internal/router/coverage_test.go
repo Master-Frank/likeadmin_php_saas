@@ -42,11 +42,13 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"tools.generator/generatetable", "tools.generator/datatable", "tools.generator/selecttable",
 		"tools.generator/detail", "tools.generator/synccolumn", "tools.generator/delete",
 		"tools.generator/edit", "tools.generator/preview", "tools.generator/generate", "tools.generator/getmodels",
+		"tools.generator/download",
 		"article.articlecate/lists", "article.articlecate/all", "article.articlecate/add",
 		"article.article/lists", "article/all",
 		"download/export",
 		"channel.official_account_setting/getconfig", "channel.official_account_menu/detail",
-		"channel.official_account_reply/lists", "recharge.recharge/getconfig", "recharge.recharge/setconfig",
+		"channel.official_account_reply/lists", "channel.official_account_reply/sort",
+		"recharge.recharge/getconfig", "recharge.recharge/setconfig",
 	}
 	tenant := []string{
 		"login/account", "config/getconfig", "workbench/index",
@@ -61,6 +63,7 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"notice.notice/settinglists", "finance.account_log/getumchangetype",
 		"recharge.recharge/refund", "finance.refund/log",
 		"channel.official_account_menu/save", "channel.official_account_reply/add",
+		"channel.official_account_reply/sort", "dept.dept/leaderdept",
 		"file/lists", "upload/image", "download/export",
 	}
 	api := []string{

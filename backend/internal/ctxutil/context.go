@@ -18,6 +18,7 @@ type RequestMeta struct {
 	Source       Source
 	TenantID     uint
 	TenantSN     string
+	Tactics      int
 	AdminInfo    AdminInfo
 	AdminID      uint
 	UserInfo     map[string]any
@@ -69,15 +70,21 @@ func Host(c *gin.Context) string {
 }
 
 func SubDomain(host string) string {
-	// host may include port
 	if i := indexByte(host, ':'); i >= 0 {
 		host = host[:i]
 	}
-	parts := split(host, ".")
-	if len(parts) < 3 {
-		return host
+	if isIPv4(host) {
+		return ""
 	}
-	return parts[0]
+	parts := split(host, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	root := parts[len(parts)-2] + "." + parts[len(parts)-1]
+	if host == root {
+		return ""
+	}
+	return trimDotSuffix(host[:len(host)-len(root)])
 }
 
 func indexByte(s string, c byte) int {
@@ -103,4 +110,23 @@ func split(s, sep string) []string {
 	}
 	out = append(out, cur)
 	return out
+}
+
+func isIPv4(host string) bool {
+	n := 0
+	for i := 0; i < len(host); i++ {
+		if host[i] == '.' {
+			n++
+		} else if host[i] < '0' || host[i] > '9' {
+			return false
+		}
+	}
+	return n == 3
+}
+
+func trimDotSuffix(s string) string {
+	for len(s) > 0 && s[len(s)-1] == '.' {
+		s = s[:len(s)-1]
+	}
+	return s
 }

@@ -87,6 +87,7 @@ func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string) bool 
 		if tenant.Disable == 0 && tenant.DomainAliasEnable == 0 {
 			meta.TenantID = tenant.ID
 			meta.TenantSN = tenant.SN
+			meta.Tactics = tenant.Tactics
 			return true
 		}
 		response.AbortFail(c, "该租户已停用", response.CodeForbidden, 1)
@@ -105,6 +106,7 @@ func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string) bool 
 	}
 	meta.TenantID = tenant.ID
 	meta.TenantSN = tenant.SN
+	meta.Tactics = tenant.Tactics
 	return true
 }
 

@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/decorate"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -17,6 +18,7 @@ import (
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
+	"likeadmin/backend/internal/workbench"
 
 	"github.com/gin-gonic/gin"
 )
@@ -139,17 +141,15 @@ func WorkbenchIndex(c *gin.Context) {
 		uq = uq.Where("tenant_id = ?", meta.TenantID)
 	}
 	uq.Count(&totalNew)
+	vDates, vNums := workbench.Series(now, 15, 0, 100)
+	sDates, sNums := workbench.Series(now, 7, 30, 200)
 	response.Data(c, gin.H{
-		"version": gin.H{"version": config.C.Project.Version, "website": "www.likeadmin.cn", "name": "SaaS租户端"},
-		"today": gin.H{
-			"time":        now.Format("2006-01-02 15:04:05"),
-			"today_sales": 0, "total_sales": 0, "today_visitor": 0, "total_visitor": 0,
-			"today_new_user": todayNew, "total_new_user": totalNew, "order_num": 0, "order_sum": 0,
-		},
-		"menu":    []gin.H{},
-		"visitor": gin.H{"date": []string{}, "list": []gin.H{{"name": "访客数", "data": []int{}}}},
-		"sale":    gin.H{"date": []string{}, "list": []gin.H{{"name": "销售量", "data": []int{}}}},
-		"support": []gin.H{},
+		"version": workbench.Version(c, "tenant"),
+		"today":   workbench.Today(now, todayNew, totalNew),
+		"menu":    workbench.TenantMenu(c),
+		"visitor": gin.H{"date": vDates, "list": []gin.H{{"name": "访客数", "data": vNums}}},
+		"sale":    gin.H{"date": sDates, "list": []gin.H{{"name": "销售量", "data": sNums}}},
+		"support": workbench.Support(c),
 	})
 }
 
@@ -165,15 +165,17 @@ func AdminMySelf(c *gin.Context) {
 	if meta.TenantID > 0 {
 		q = q.Where("tenant_id = ?", meta.TenantID)
 	}
+	roleIDs, deptIDs, jobIDs := []uint{}, []uint{}, []uint{}
+	bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
+	bootstrap.DB.Model(&model.TenantAdminDept{}).Where("admin_id = ?", admin.ID).Pluck("dept_id", &deptIDs)
+	bootstrap.DB.Model(&model.TenantAdminJobs{}).Where("admin_id = ?", admin.ID).Pluck("jobs_id", &jobIDs)
 	if admin.Root != 1 {
-		var roleIDs []uint
-		bootstrap.DB.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
 		var menuIDs []uint
 		if len(roleIDs) > 0 {
 			bootstrap.DB.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 		}
 		if len(menuIDs) == 0 {
-			response.Data(c, gin.H{"user": gin.H{"id": admin.ID, "account": admin.Account, "name": admin.Name, "avatar": filesvc.GetFileURL(c, admin.Avatar), "root": admin.Root}, "menu": []any{}, "permissions": []string{}})
+			response.Data(c, gin.H{"user": tenantSelfUser(c, admin, roleIDs, deptIDs, jobIDs), "menu": []any{}, "permissions": []string{}})
 			return
 		}
 		q = q.Where("id IN ?", menuIDs)
@@ -197,13 +199,38 @@ func AdminMySelf(c *gin.Context) {
 		}
 	}
 	response.Data(c, gin.H{
-		"user": gin.H{"id": admin.ID, "account": admin.Account, "name": admin.Name, "avatar": filesvc.GetFileURL(c, admin.Avatar), "root": admin.Root},
+		"user": tenantSelfUser(c, admin, roleIDs, deptIDs, jobIDs),
 		"menu": util.LinearToTree(maps, "children", "id", "pid", 0), "permissions": perms,
 	})
 }
 
+func tenantSelfUser(c *gin.Context, admin model.TenantAdmin, roleIDs, deptIDs, jobIDs []uint) gin.H {
+	if roleIDs == nil {
+		roleIDs = []uint{}
+	}
+	if deptIDs == nil {
+		deptIDs = []uint{}
+	}
+	if jobIDs == nil {
+		jobIDs = []uint{}
+	}
+	return gin.H{
+		"id": admin.ID, "account": admin.Account, "name": admin.Name,
+		"avatar": filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"root": admin.Root, "disable": admin.Disable, "multipoint_login": admin.MultipointLogin,
+		"role_id": roleIDs, "dept_id": deptIDs, "jobs_id": jobIDs,
+	}
+}
+
 func tenantDB(c *gin.Context) uint {
 	return ctxutil.Get(c).TenantID
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func UserLists(c *gin.Context) {
@@ -388,13 +415,7 @@ func DecoratePageSave(c *gin.Context) {
 }
 
 func DecorateTabbarDetail(c *gin.Context) {
-	var rows []model.DecorateTabbar
-	db := bootstrap.DB
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	db.Find(&rows)
-	response.Data(c, gin.H{"style": cfgsvc.Get(c, "decorate", "tabbar_style", map[string]any{}), "list": rows})
+	response.Data(c, gin.H{"style": decorate.Style(c), "list": decorate.Lists(c)})
 }
 
 func SettingGetWebsite(c *gin.Context) {

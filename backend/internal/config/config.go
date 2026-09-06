@@ -68,6 +68,9 @@ type ProjectConfig struct {
 	FileFile             []string          `mapstructure:"file_file"`
 	Platform             map[string]string `mapstructure:"platform"`
 	Tenant               map[string]string `mapstructure:"tenant"`
+	Website              map[string]string `mapstructure:"website"`
+	Login                map[string]any    `mapstructure:"login"`
+	Decorate             map[string]any    `mapstructure:"decorate"`
 }
 
 var C Config

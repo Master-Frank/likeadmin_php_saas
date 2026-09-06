@@ -15,9 +15,24 @@ func LinearToTree(data []map[string]any, subKey, idName, parentIDName string, pa
 		if equalID(row[parentIDName], parentID) {
 			temp := copyMap(row)
 			child := LinearToTree(data, subKey, idName, parentIDName, row[idName])
-			if len(child) > 0 {
-				temp[subKey] = child
-			}
+			temp[subKey] = child
+			tree = append(tree, temp)
+		}
+	}
+	return tree
+}
+
+func DeptTree(data []map[string]any, parentID any) []map[string]any {
+	return deptTreeLevel(data, parentID, 0)
+}
+
+func deptTreeLevel(data []map[string]any, parentID any, level int) []map[string]any {
+	tree := make([]map[string]any, 0)
+	for _, row := range data {
+		if equalID(row["pid"], parentID) {
+			temp := copyMap(row)
+			temp["level"] = level
+			temp["children"] = deptTreeLevel(data, row["id"], level+1)
 			tree = append(tree, temp)
 		}
 	}

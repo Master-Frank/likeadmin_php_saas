@@ -12,7 +12,7 @@ type Admin struct {
 	MultipointLogin int    `gorm:"column:multipoint_login" json:"multipoint_login"`
 	Disable         int    `gorm:"column:disable" json:"disable"`
 	CreateTime      int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime      *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime      *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime      *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -56,7 +56,7 @@ type SystemRole struct {
 	Desc       string `gorm:"column:desc" json:"desc"`
 	Sort       int    `gorm:"column:sort" json:"sort"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -85,7 +85,7 @@ type SystemMenu struct {
 	IsShow     int    `gorm:"column:is_show" json:"is_show"`
 	IsDisable  int    `gorm:"column:is_disable" json:"is_disable"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (SystemMenu) TableName() string { return T("system_menu") }

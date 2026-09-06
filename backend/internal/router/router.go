@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/cron"
 	"likeadmin/backend/internal/ctxutil"
@@ -15,6 +16,7 @@ import (
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantapi"
+	"likeadmin/backend/internal/tenantdb"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,6 +27,7 @@ func New() *gin.Engine {
 	if !config.C.App.Debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
+	tenantdb.Register(bootstrap.DB)
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.CORS(), middleware.InstallAndTenant())
 	response.ExportHook = func(c *gin.Context, rows any, count int64) bool {
@@ -222,6 +225,7 @@ func platformRoutes() map[string]Handler {
 		"tools.generator/synccolumn": platformapi.GeneratorSyncColumn, "tools.generator/delete": platformapi.GeneratorDelete,
 		"tools.generator/edit": platformapi.GeneratorEdit, "tools.generator/preview": platformapi.GeneratorPreview,
 		"tools.generator/generate": platformapi.GeneratorGenerate, "tools.generator/getmodels": platformapi.GeneratorGetModels,
+		"tools.generator/download": platformapi.GeneratorDownload,
 		"download/export":       platformapi.DownloadExport,
 		"upgrade.upgrade/lists": platformapi.UpgradeNotImpl, "upgrade.upgrade/upgrade": platformapi.UpgradeNotImpl,
 		"setting.hot_search/getconfig": tenantapi.HotSearchGet, "setting.hot_search/setconfig": tenantapi.HotSearchSet,
@@ -246,6 +250,7 @@ func platformRoutes() map[string]Handler {
 		"channel.official_account_reply/lists":         tenantapi.OAReplyLists, "channel.official_account_reply/add": tenantapi.OAReplyAdd,
 		"channel.official_account_reply/edit": tenantapi.OAReplyEdit, "channel.official_account_reply/delete": tenantapi.OAReplyDelete,
 		"channel.official_account_reply/detail": tenantapi.OAReplyDetail, "channel.official_account_reply/status": tenantapi.OAReplyStatus,
+		"channel.official_account_reply/sort":   tenantapi.OAReplySort,
 		"finance.account_log/lists": tenantapi.FinanceAccountLogLists, "finance.account_log/getumchangetype": tenantapi.GetUmChangeType,
 		"recharge.recharge/lists": tenantapi.RechargeLists, "recharge.recharge/getconfig": tenantapi.RechargeGetConfig,
 		"recharge.recharge/setconfig": tenantapi.RechargeSetConfig, "recharge.recharge/refund": tenantapi.RechargeRefund,
@@ -276,7 +281,7 @@ func tenantRoutes() map[string]Handler {
 		"auth.role/lists": tenantapi.RoleLists, "auth.role/add": tenantapi.RoleAdd,
 		"auth.role/edit": tenantapi.RoleEdit, "auth.role/delete": tenantapi.RoleDelete,
 		"auth.role/detail": tenantapi.RoleDetail, "auth.role/all": tenantapi.RoleAll,
-		"dept.dept/lists": tenantapi.DeptLists, "dept.dept/add": tenantapi.DeptAdd,
+		"dept.dept/lists": tenantapi.DeptLists, "dept.dept/leaderdept": tenantapi.DeptLeader, "dept.dept/add": tenantapi.DeptAdd,
 		"dept.dept/edit": tenantapi.DeptEdit, "dept.dept/delete": tenantapi.DeptDelete,
 		"dept.dept/detail": tenantapi.DeptDetail, "dept.dept/all": tenantapi.DeptAll,
 		"dept.jobs/lists": tenantapi.JobsLists, "dept.jobs/add": tenantapi.JobsAdd,
@@ -329,6 +334,7 @@ func tenantRoutes() map[string]Handler {
 		"tools.generator/synccolumn": platformapi.GeneratorSyncColumn, "tools.generator/delete": platformapi.GeneratorDelete,
 		"tools.generator/edit": platformapi.GeneratorEdit, "tools.generator/preview": platformapi.GeneratorPreview,
 		"tools.generator/generate": platformapi.GeneratorGenerate, "tools.generator/getmodels": platformapi.GeneratorGetModels,
+		"tools.generator/download": platformapi.GeneratorDownload,
 		"channel.official_account_setting/getconfig": oaGet, "channel.official_account_setting/setconfig": oaSet,
 		"channel.mnp_settings/getconfig": mnpGet, "channel.mnp_settings/setconfig": mnpSet,
 		"channel.open_setting/getconfig": openGet, "channel.open_setting/setconfig": openSet,
@@ -338,6 +344,7 @@ func tenantRoutes() map[string]Handler {
 		"channel.official_account_reply/lists": tenantapi.OAReplyLists, "channel.official_account_reply/add": tenantapi.OAReplyAdd,
 		"channel.official_account_reply/edit": tenantapi.OAReplyEdit, "channel.official_account_reply/delete": tenantapi.OAReplyDelete,
 		"channel.official_account_reply/detail": tenantapi.OAReplyDetail, "channel.official_account_reply/status": tenantapi.OAReplyStatus,
+		"channel.official_account_reply/sort":   tenantapi.OAReplySort,
 		"channel.official_account_menu/detail": tenantapi.OAMenuDetail, "channel.official_account_menu/save": tenantapi.OAMenuSave,
 		"channel.official_account_menu/saveandpublish": tenantapi.OAMenuSaveAndPublish,
 		"setting.hot_search/getconfig":                 tenantapi.HotSearchGet, "setting.hot_search/setconfig": tenantapi.HotSearchSet,

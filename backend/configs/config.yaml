@@ -40,9 +40,38 @@ project:
   lists:
     page_size_max: 25000
     page_size: 25
+  website:
+    name: likeadmin
+    url: www.likeadmin.cn/
+    shop_name: likeadmin
+    shop_logo: resource/image/common/shop_logo.png
+    pc_logo: resource/image/tenantapi/default/pc_logo.png
+    pc_ico: resource/image/tenantapi/default/web_favicon.ico
+    h5_favicon: resource/image/tenantapi/default/web_favicon.ico
+  login:
+    login_way: ["1", "2"]
+    coerce_mobile: 1
+    third_auth: 1
+    wechat_auth: 1
+    qq_auth: 0
+    login_agreement: 1
+  decorate:
+    tabbar_style:
+      default_color: "#999999"
+      selected_color: "#c455ff"
   default_image:
     admin_avatar: resource/image/common/avatar.png
     user_avatar: resource/image/common/default_avatar.png
+    qq_group: resource/image/common/qq_group.png
+    customer_service: resource/image/common/customer_service.jpg
+    menu_admin: resource/image/common/menu_admin.png
+    menu_role: resource/image/common/menu_role.png
+    menu_dept: resource/image/common/menu_dept.png
+    menu_dict: resource/image/common/menu_dict.png
+    menu_generator: resource/image/common/menu_generator.png
+    menu_auth: resource/image/common/menu_auth.png
+    menu_web: resource/image/common/menu_web.png
+    menu_file: resource/image/common/menu_file.png
   file_image: [jpg, png, gif, jpeg, webp, ico]
   file_video: [wmv, avi, mpg, mpeg, 3gp, mov, mp4, flv, f4v, rmvb, mkv]
   file_file: [zip, rar, txt, pdf, doc, docx, xls, xlsx, ppt, pptx, csv, ftr, 7z, gz]

@@ -219,14 +219,19 @@ func AdminMySelf(c *gin.Context) {
 	}
 	menu := menuTreeByAdmin(c, admin)
 	perms := buttonPerms(admin)
+	roleIDs, deptIDs, jobIDs := adminRelations(admin.ID)
 	response.Data(c, gin.H{
 		"user": gin.H{
-			"id":      admin.ID,
-			"account": admin.Account,
-			"name":    admin.Name,
-			"avatar":  filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.DefaultImage["admin_avatar"])),
-			"disable": admin.Disable,
-			"root":    admin.Root,
+			"id":               admin.ID,
+			"account":          admin.Account,
+			"name":             admin.Name,
+			"avatar":           filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.DefaultImage["admin_avatar"])),
+			"disable":          admin.Disable,
+			"root":             admin.Root,
+			"multipoint_login": admin.MultipointLogin,
+			"role_id":          roleIDs,
+			"dept_id":          deptIDs,
+			"jobs_id":          jobIDs,
 		},
 		"menu":        menu,
 		"permissions": perms,

@@ -1,10 +1,12 @@
 package platformapi
 
 import (
+	"archive/zip"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
@@ -183,12 +185,7 @@ func GeneratorGenerate(c *gin.Context) {
 	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
 		ids = []uint{id}
 	}
-	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "..", "backend", "internal", "generated")
-	if wd, err := os.Getwd(); err == nil {
-		if strings.HasSuffix(wd, "backend") {
-			root = filepath.Join(wd, "internal", "generated")
-		}
-	}
+	root := generatorRoot()
 	_ = os.MkdirAll(root, 0755)
 	for _, id := range ids {
 		var t model.GenerateTable
@@ -204,6 +201,61 @@ func GeneratorGenerate(c *gin.Context) {
 		_ = os.WriteFile(filepath.Join(dir, "lists.vue"), []byte(vueCode), 0644)
 	}
 	response.Success(c, "生成成功", nil)
+}
+
+func GeneratorDownload(c *gin.Context) {
+	ids := httpx.Uints(c, "id")
+	if len(ids) == 0 {
+		ids = httpx.Uints(c, "ids")
+	}
+	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
+		ids = []uint{id}
+	}
+	if len(ids) == 0 {
+		response.Fail(c, "请选择要下载的表")
+		return
+	}
+	root := generatorRoot()
+	_ = os.MkdirAll(root, 0755)
+	zipPath := filepath.Join(root, fmt.Sprintf("generate-%d.zip", time.Now().Unix()))
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	zw := zip.NewWriter(zf)
+	for _, id := range ids {
+		var t model.GenerateTable
+		if bootstrap.DB.First(&t, id).Error != nil {
+			continue
+		}
+		var cols []model.GenerateColumn
+		bootstrap.DB.Where("table_id = ?", t.ID).Find(&cols)
+		goCode, vueCode := renderGoVue(t, cols)
+		for name, content := range map[string]string{
+			t.ClassDir + "/" + t.ClassDir + ".go": goCode,
+			t.ClassDir + "/lists.vue":             vueCode,
+		} {
+			w, err := zw.Create(name)
+			if err != nil {
+				continue
+			}
+			_, _ = w.Write([]byte(content))
+		}
+	}
+	_ = zw.Close()
+	_ = zf.Close()
+	c.FileAttachment(zipPath, "likeadmin-generate.zip")
+}
+
+func generatorRoot() string {
+	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "..", "backend", "internal", "generated")
+	if wd, err := os.Getwd(); err == nil {
+		if strings.HasSuffix(wd, "backend") {
+			root = filepath.Join(wd, "internal", "generated")
+		}
+	}
+	return root
 }
 
 func GeneratorGetModels(c *gin.Context) {

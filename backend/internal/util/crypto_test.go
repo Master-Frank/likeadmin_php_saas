@@ -29,3 +29,22 @@ func TestLinearToTree(t *testing.T) {
 		t.Fatalf("child missing")
 	}
 }
+
+func TestDeptTreeLevelAndEmptyChildren(t *testing.T) {
+	data := []map[string]any{
+		{"id": 1, "pid": 0, "name": "a"},
+		{"id": 2, "pid": 1, "name": "b"},
+	}
+	tree := DeptTree(data, 0)
+	if len(tree) != 1 || tree[0]["level"] != 0 {
+		t.Fatalf("root %+v", tree)
+	}
+	child, _ := tree[0]["children"].([]map[string]any)
+	if len(child) != 1 || child[0]["level"] != 1 {
+		t.Fatalf("child %+v", child)
+	}
+	grand, _ := child[0]["children"].([]map[string]any)
+	if grand == nil {
+		t.Fatal("empty children should be present")
+	}
+}

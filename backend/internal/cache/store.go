@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,13 +44,19 @@ func payload(val any) string {
 	switch t := val.(type) {
 	case string:
 		return t
-	default:
-		b, err := json.Marshal(val)
-		if err != nil {
-			return ""
+	case map[string]any, []any, []map[string]any, []string, []int:
+		if s, err := phpSerialize(t); err == nil && s != "" {
+			return s
 		}
-		return string(b)
 	}
+	if s, err := phpSerialize(val); err == nil && strings.HasPrefix(s, "a:") {
+		return s
+	}
+	b, err := json.Marshal(val)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func Get(key string) (string, bool) {
@@ -67,7 +74,18 @@ func GetJSON(key string, dest any) bool {
 	if !ok || raw == "" {
 		return false
 	}
-	return json.Unmarshal([]byte(raw), dest) == nil
+	if json.Unmarshal([]byte(raw), dest) == nil {
+		return true
+	}
+	v, ok := phpUnserialize(raw)
+	if !ok || v == nil {
+		return false
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal(b, dest) == nil
 }
 
 func Set(key string, val any, ttl time.Duration) {

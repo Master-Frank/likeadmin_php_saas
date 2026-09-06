@@ -79,7 +79,7 @@ func Lists(c *gin.Context, lists any, count int64, pageNo, pageSize int, extend 
 		lists = []any{}
 	}
 	if extend == nil {
-		extend = map[string]any{}
+		extend = []any{}
 	}
 	if ExportHook != nil && ExportHook(c, lists, count) {
 		return

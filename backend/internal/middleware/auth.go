@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -102,7 +103,7 @@ func handlePlatformLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string
 		info = cache.GetAdminInfo(token, ctxutil.ClientIP(c))
 	}
 	if (info == nil || len(info) == 0) && need {
-		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 1)
+		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 0)
 		return
 	}
 	if info != nil && len(info) > 0 {
@@ -120,10 +121,10 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 	}
 	var info map[string]any
 	if token != "" {
-		info = cache.GetTenantAdminInfo(token, ctxutil.ClientIP(c))
+		info = cache.GetTenantAdminInfo(token, ctxutil.ClientIP(c), tenantdb.Use(c))
 	}
 	if (info == nil || len(info) == 0) && need {
-		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 1)
+		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 0)
 		return
 	}
 	if info != nil && len(info) > 0 {
@@ -145,10 +146,10 @@ func handleUserLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, ne
 	}
 	var info map[string]any
 	if token != "" {
-		info = cache.GetUserInfo(token)
+		info = cache.GetUserInfo(token, tenantdb.Use(c))
 	}
 	if (info == nil || len(info) == 0) && need {
-		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 1)
+		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 0)
 		return
 	}
 	if info != nil && len(info) > 0 {
@@ -178,11 +179,11 @@ func renewIfNeed(c *gin.Context, kind, token string, info map[string]any, cfg co
 		bootstrap.DB.Model(&model.AdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
 		cache.SetAdminInfo(token, ctxutil.ClientIP(c))
 	case "tenant":
-		bootstrap.DB.Model(&model.TenantAdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
-		cache.SetTenantAdminInfo(token, ctxutil.ClientIP(c))
+		tenantdb.Use(c).Model(&model.TenantAdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
+		cache.SetTenantAdminInfo(token, ctxutil.ClientIP(c), tenantdb.Use(c))
 	case "user":
-		bootstrap.DB.Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
-		cache.SetUserInfo(token)
+		tenantdb.Use(c).Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
+		cache.SetUserInfo(token, tenantdb.Use(c))
 	}
 }
 

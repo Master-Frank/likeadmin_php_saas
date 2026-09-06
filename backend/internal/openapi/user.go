@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/decorate"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -17,28 +18,12 @@ import (
 )
 
 func IndexConfig(c *gin.Context) {
-	var bars []model.DecorateTabbar
-	db := bootstrap.DB
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	db.Find(&bars)
-	tabbar := make([]map[string]any, 0, len(bars))
-	for _, b := range bars {
-		tabbar = append(tabbar, map[string]any{
-			"id": b.ID, "name": b.Name,
-			"selected": filesvc.GetFileURL(c, b.Selected), "unselected": filesvc.GetFileURL(c, b.Unselected),
-			"link": b.Link, "is_show": b.IsShow,
-		})
-	}
-	style := cfgsvc.Get(c, "tabbar", "style", nil)
-	if style == nil {
-		style = cfgsvc.Get(c, "decorate", "tabbar_style", map[string]any{})
-	}
+	websiteLogo := cfgsvc.GetString(c, "website", "shop_logo", config.C.Project.Website["shop_logo"])
+	websiteIcon := cfgsvc.GetString(c, "website", "h5_favicon", config.C.Project.Website["h5_favicon"])
 	response.Data(c, gin.H{
 		"domain": filesvc.GetFileURL(c, ""),
-		"style":  style,
-		"tabbar": tabbar,
+		"style":  decorate.Style(c),
+		"tabbar": decorate.Lists(c),
 		"login": gin.H{
 			"login_way":       cfgsvc.Get(c, "login", "login_way", []any{"1", "2"}),
 			"coerce_mobile":   cfgsvc.GetInt(c, "login", "coerce_mobile", 1),
@@ -48,9 +33,9 @@ func IndexConfig(c *gin.Context) {
 			"qq_auth":         cfgsvc.GetInt(c, "login", "qq_auth", 0),
 		},
 		"website": gin.H{
-			"h5_favicon": filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "h5_favicon", "")),
+			"h5_favicon": filesvc.GetFileURL(c, websiteIcon),
 			"shop_name":  cfgsvc.GetString(c, "website", "shop_name", "likeadmin"),
-			"shop_logo":  filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
+			"shop_logo":  filesvc.GetFileURL(c, websiteLogo),
 		},
 		"webPage": gin.H{
 			"status":      cfgsvc.GetInt(c, "web_page", "status", 1),
@@ -79,10 +64,13 @@ func IndexDecorate(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if db.First(&p).Error != nil {
-		response.Data(c, gin.H{})
+		response.Data(c, []any{})
 		return
 	}
-	response.Data(c, p)
+	response.Data(c, gin.H{
+		"type": p.Type, "name": p.Name,
+		"data": util.DecodeJSON(p.Data), "meta": util.DecodeJSON(p.Meta),
+	})
 }
 
 func LoginRegister(c *gin.Context) {
@@ -178,12 +166,25 @@ func UserCenter(c *gin.Context) {
 	if u.Password != "" {
 		hasPwd = 1
 	}
-	response.Data(c, gin.H{
+	out := gin.H{
 		"id": u.ID, "sn": u.SN, "sex": u.Sex, "account": u.Account, "nickname": u.Nickname,
 		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 		"mobile": u.Mobile, "create_time": util.FormatDateTime(u.CreateTime),
 		"is_new_user": u.IsNewUser, "user_money": u.UserMoney, "has_password": hasPwd,
-	})
+	}
+	if info := ctxutil.Get(c).UserInfo; info != nil {
+		term := util.ToInt(info["terminal"])
+		if term == 1 || term == 2 {
+			var n int64
+			bootstrap.DB.Model(&model.UserAuth{}).Where("user_id = ? AND terminal = ?", u.ID, term).Count(&n)
+			if n > 0 {
+				out["is_auth"] = 1
+			} else {
+				out["is_auth"] = 0
+			}
+		}
+	}
+	response.Data(c, out)
 }
 
 func UserInfo(c *gin.Context) {
@@ -238,12 +239,25 @@ func ArticleLists(c *gin.Context) {
 	db.Count(&count)
 	var rows []model.Article
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	collects := map[uint]bool{}
+	if uid := ctxutil.Get(c).UserID; uid > 0 && len(rows) > 0 {
+		ids := make([]uint, 0, len(rows))
+		for _, a := range rows {
+			ids = append(ids, a.ID)
+		}
+		var marks []model.ArticleCollect
+		bootstrap.DB.Where("user_id = ? AND status = 1 AND article_id IN ?", uid, ids).Find(&marks)
+		for _, m := range marks {
+			collects[m.ArticleID] = true
+		}
+	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, map[string]any{
-			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc,
+			"image": filesvc.GetFileURL(c, a.Image),
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
+			"collect": collects[a.ID],
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -255,8 +269,12 @@ func ArticleCate(c *gin.Context) {
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
-	response.Data(c, rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, map[string]any{"id": r.ID, "name": r.Name})
+	}
+	response.Data(c, out)
 }
 
 func SearchHot(c *gin.Context) {
@@ -265,8 +283,12 @@ func SearchHot(c *gin.Context) {
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	db.Order("sort desc").Find(&rows)
-	response.Data(c, rows)
+	db.Order("sort desc, id desc").Find(&rows)
+	data := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})
+	}
+	response.Data(c, gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": data})
 }
 
 func RechargeLists(c *gin.Context) {

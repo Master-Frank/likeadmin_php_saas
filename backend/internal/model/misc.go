@@ -6,7 +6,7 @@ type ConfigRow struct {
 	Name       string `gorm:"column:name"`
 	Value      string `gorm:"column:value"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime"`
+	UpdateTime *int64 `gorm:"column:update_time"`
 }
 
 func (ConfigRow) TableName() string { return T("config") }
@@ -18,7 +18,7 @@ type TenantConfig struct {
 	Value      string `gorm:"column:value"`
 	TenantID   uint   `gorm:"column:tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime"`
+	UpdateTime *int64 `gorm:"column:update_time"`
 }
 
 func (TenantConfig) TableName() string { return T("tenant_config") }
@@ -30,7 +30,7 @@ type DictType struct {
 	Status     int    `gorm:"column:status" json:"status"`
 	Remark     string `gorm:"column:remark" json:"remark"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -46,7 +46,7 @@ type DictData struct {
 	Status     int    `gorm:"column:status" json:"status"`
 	Remark     string `gorm:"column:remark" json:"remark"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -61,7 +61,7 @@ type Dept struct {
 	Mobile     string `gorm:"column:mobile" json:"mobile"`
 	Status     int    `gorm:"column:status" json:"status"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -75,7 +75,7 @@ type Jobs struct {
 	Status     int    `gorm:"column:status" json:"status"`
 	Remark     string `gorm:"column:remark" json:"remark"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -91,7 +91,7 @@ type TenantDept struct {
 	Status     int    `gorm:"column:status" json:"status"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -106,7 +106,7 @@ type TenantJobs struct {
 	Remark     string `gorm:"column:remark" json:"remark"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -121,7 +121,7 @@ type File struct {
 	URI        string `gorm:"column:uri" json:"uri"`
 	Source     int    `gorm:"column:source" json:"source"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -133,7 +133,7 @@ type FileCate struct {
 	Type       int    `gorm:"column:type" json:"type"`
 	Name       string `gorm:"column:name" json:"name"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -149,7 +149,7 @@ type TenantFile struct {
 	Source     int    `gorm:"column:source" json:"source"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -162,7 +162,7 @@ type TenantFileCate struct {
 	Name       string `gorm:"column:name" json:"name"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -219,7 +219,7 @@ type GenerateTable struct {
 	Tree         string `gorm:"column:tree" json:"tree"`
 	Relations    string `gorm:"column:relations" json:"relations"`
 	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime   *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (GenerateTable) TableName() string { return T("generate_table") }
@@ -240,7 +240,7 @@ type GenerateColumn struct {
 	ViewType      string `gorm:"column:view_type" json:"view_type"`
 	DictType      string `gorm:"column:dict_type" json:"dict_type"`
 	CreateTime    int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime    *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime    *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (GenerateColumn) TableName() string { return T("generate_column") }

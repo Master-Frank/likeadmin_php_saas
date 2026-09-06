@@ -292,16 +292,20 @@ func DictDataDetail(c *gin.Context) {
 
 func StorageLists(c *gin.Context) {
 	def := cfgsvc.GetString(c, "storage", "default", "local")
-	engines := []string{"local", "qiniu", "aliyun", "qcloud"}
-	out := []gin.H{}
-	for _, e := range engines {
-		status := 0
-		if e == def {
-			status = 1
-		}
-		out = append(out, gin.H{"name": e, "status": status})
+	out := []gin.H{
+		{"name": "本地存储", "path": "存储在本地服务器", "engine": "local", "status": bool01(def == "local")},
+		{"name": "七牛云存储", "path": "存储在七牛云，请前往七牛云开通存储服务", "engine": "qiniu", "status": bool01(def == "qiniu")},
+		{"name": "阿里云OSS", "path": "存储在阿里云，请前往阿里云开通存储服务", "engine": "aliyun", "status": bool01(def == "aliyun")},
+		{"name": "腾讯云COS", "path": "存储在腾讯云，请前往腾讯云开通存储服务", "engine": "qcloud", "status": bool01(def == "qcloud")},
 	}
 	response.Success(c, "", out)
+}
+
+func bool01(ok bool) int {
+	if ok {
+		return 1
+	}
+	return 0
 }
 
 func StorageDetail(c *gin.Context) {

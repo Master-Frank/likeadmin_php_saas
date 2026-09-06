@@ -12,7 +12,7 @@ type Tenant struct {
 	DomainAliasEnable int    `gorm:"column:domain_alias_enable" json:"domain_alias_enable"`
 	Notes             string `gorm:"column:notes" json:"notes"`
 	CreateTime        int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime        *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime        *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime        *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -31,7 +31,7 @@ type TenantAdmin struct {
 	Disable         int    `gorm:"column:disable" json:"disable"`
 	TenantID        uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime      int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime      *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime      *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime      *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -76,7 +76,7 @@ type TenantSystemRole struct {
 	Sort       int    `gorm:"column:sort" json:"sort"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -106,7 +106,7 @@ type TenantSystemMenu struct {
 	IsDisable  int    `gorm:"column:is_disable" json:"is_disable"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (TenantSystemMenu) TableName() string { return T("tenant_system_menu") }

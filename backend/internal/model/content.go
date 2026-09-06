@@ -19,7 +19,7 @@ type User struct {
 	TotalRechargeAmount float64 `gorm:"column:total_recharge_amount" json:"total_recharge_amount"`
 	TenantID            uint    `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime          int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime          *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime          *int64  `gorm:"column:update_time" json:"update_time"`
 	DeleteTime          *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -43,7 +43,7 @@ type UserAuth struct {
 	Unionid    string `gorm:"column:unionid"`
 	Terminal   int    `gorm:"column:terminal"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime"`
+	UpdateTime *int64 `gorm:"column:update_time"`
 }
 
 func (UserAuth) TableName() string { return T("user_auth") }
@@ -62,7 +62,7 @@ type UserAccountLog struct {
 	Extra        string  `gorm:"column:extra" json:"extra"`
 	TenantID     uint    `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime   *int64  `gorm:"column:update_time" json:"update_time"`
 	DeleteTime   *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -83,7 +83,7 @@ type Article struct {
 	Sort         int    `gorm:"column:sort" json:"sort"`
 	TenantID     uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime   *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime   *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -96,7 +96,7 @@ type ArticleCate struct {
 	IsShow     int    `gorm:"column:is_show" json:"is_show"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -109,7 +109,7 @@ type ArticleCollect struct {
 	Status     int    `gorm:"column:status" json:"status"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -123,7 +123,7 @@ type DecoratePage struct {
 	Meta       string `gorm:"column:meta" json:"meta"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (DecoratePage) TableName() string { return T("decorate_page") }
@@ -137,7 +137,7 @@ type DecorateTabbar struct {
 	IsShow     int    `gorm:"column:is_show" json:"is_show"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 }
 
 func (DecorateTabbar) TableName() string { return T("decorate_tabbar") }
@@ -164,7 +164,7 @@ type OfficialAccountReply struct {
 	Status       int    `gorm:"column:status" json:"status"`
 	Sort         int    `gorm:"column:sort" json:"sort"`
 	CreateTime   int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime   *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime   *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -185,7 +185,7 @@ type RechargeOrder struct {
 	RefundTransactionID string  `gorm:"column:refund_transaction_id" json:"refund_transaction_id"`
 	TenantID            uint    `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime          int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime          *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime          *int64  `gorm:"column:update_time" json:"update_time"`
 	DeleteTime          *int64  `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -206,7 +206,7 @@ type RefundRecord struct {
 	RefundStatus  int     `gorm:"column:refund_status" json:"refund_status"`
 	TenantID      uint    `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime    int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime    *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime    *int64  `gorm:"column:update_time" json:"update_time"`
 }
 
 func (RefundRecord) TableName() string { return T("refund_record") }
@@ -222,7 +222,7 @@ type RefundLog struct {
 	RefundStatus int     `gorm:"column:refund_status" json:"refund_status"`
 	RefundMsg    string  `gorm:"column:refund_msg" json:"refund_msg"`
 	CreateTime   int64   `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime   *int64  `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime   *int64  `gorm:"column:update_time" json:"update_time"`
 }
 
 func (RefundLog) TableName() string { return T("refund_log") }
@@ -320,7 +320,7 @@ type SmsLog struct {
 	SendTime   *int64 `gorm:"column:send_time" json:"send_time"`
 	Results    string `gorm:"column:results" json:"results"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 
@@ -339,7 +339,7 @@ type TenantSmsLog struct {
 	Results    string `gorm:"column:results" json:"results"`
 	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
-	UpdateTime *int64 `gorm:"column:update_time;autoUpdateTime" json:"update_time"`
+	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`
 }
 

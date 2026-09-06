@@ -166,12 +166,13 @@ func NoticeSettingLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.NoticeSetting
-	db.Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order("id asc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
+		sms := util.DecodeJSON(r.SmsNotice)
 		out = append(out, map[string]any{
-			"id": r.ID, "scene_name": r.SceneName, "sms_notice": r.SmsNotice, "type": r.Type,
-			"sms_status_desc": "", "type_desc": "",
+			"id": r.ID, "scene_name": r.SceneName, "sms_notice": sms, "type": r.Type,
+			"sms_status_desc": smsStatusDesc(r.SmsNotice), "type_desc": noticeTypeDesc(r.Type),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -284,4 +285,29 @@ func UpgradeNotImpl(c *gin.Context) {
 
 func DownloadExport(c *gin.Context) {
 	export.Serve(c)
+}
+
+func smsStatusDesc(raw string) string {
+	if raw == "" {
+		return "停用"
+	}
+	var m map[string]any
+	if json.Unmarshal([]byte(raw), &m) != nil {
+		return "停用"
+	}
+	if util.ToInt(m["status"]) == 1 {
+		return "启用"
+	}
+	return "停用"
+}
+
+func noticeTypeDesc(t int) string {
+	switch t {
+	case 1:
+		return "业务通知"
+	case 2:
+		return "验证码"
+	default:
+		return ""
+	}
 }

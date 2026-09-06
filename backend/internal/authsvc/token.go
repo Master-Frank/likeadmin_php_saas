@@ -8,6 +8,7 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -58,8 +59,9 @@ func ExpirePlatformToken(token string) bool {
 func SetTenantToken(c *gin.Context, adminID uint, terminal, multipoint int) map[string]any {
 	now := util.NowUnix()
 	expire := now + int64(config.C.Project.TenantToken.ExpireDuration)
+	db := tenantdb.Use(c)
 	var sess model.TenantAdminSession
-	err := bootstrap.DB.Where("admin_id = ? AND terminal = ?", adminID, terminal).First(&sess).Error
+	err := db.Where("admin_id = ? AND terminal = ?", adminID, terminal).First(&sess).Error
 	token := util.CreateToken(util.ToString(adminID), config.C.Project.UniqueIdentification)
 	if err == nil {
 		if sess.ExpireTime < now || multipoint == 0 {
@@ -68,12 +70,12 @@ func SetTenantToken(c *gin.Context, adminID uint, terminal, multipoint int) map[
 		}
 		sess.ExpireTime = expire
 		sess.UpdateTime = &now
-		bootstrap.DB.Save(&sess)
+		db.Save(&sess)
 	} else if err == gorm.ErrRecordNotFound {
 		sess = model.TenantAdminSession{AdminID: adminID, Terminal: terminal, Token: token, ExpireTime: expire, UpdateTime: &now}
-		bootstrap.DB.Create(&sess)
+		db.Create(&sess)
 	}
-	return cache.SetTenantAdminInfo(sess.Token, ctxutil.ClientIP(c))
+	return cache.SetTenantAdminInfo(sess.Token, ctxutil.ClientIP(c), db)
 }
 
 func ExpireTenantToken(token string) bool {
@@ -99,8 +101,9 @@ func ExpireTenantToken(token string) bool {
 func SetUserToken(c *gin.Context, userID uint, terminal int) map[string]any {
 	now := util.NowUnix()
 	expire := now + int64(config.C.Project.UserToken.ExpireDuration)
+	db := tenantdb.Use(c)
 	var sess model.UserSession
-	err := bootstrap.DB.Where("user_id = ? AND terminal = ?", userID, terminal).First(&sess).Error
+	err := db.Where("user_id = ? AND terminal = ?", userID, terminal).First(&sess).Error
 	token := util.CreateToken(util.ToString(userID), config.C.Project.UniqueIdentification)
 	if err == nil {
 		if sess.ExpireTime < now {
@@ -109,12 +112,12 @@ func SetUserToken(c *gin.Context, userID uint, terminal int) map[string]any {
 		}
 		sess.ExpireTime = expire
 		sess.UpdateTime = &now
-		bootstrap.DB.Save(&sess)
+		db.Save(&sess)
 	} else {
 		sess = model.UserSession{UserID: userID, Terminal: terminal, Token: token, ExpireTime: expire, UpdateTime: &now}
-		bootstrap.DB.Create(&sess)
+		db.Create(&sess)
 	}
-	return cache.SetUserInfo(sess.Token)
+	return cache.SetUserInfo(sess.Token, db)
 }
 
 func ExpireUserToken(token string) {
