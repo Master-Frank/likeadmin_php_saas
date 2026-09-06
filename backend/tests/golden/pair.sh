@@ -180,5 +180,44 @@ if [[ -n "$TENANT_HOST" ]]; then
   fi
 fi
 
+SHARD_HOST="${SHARD_HOST:-pair2.likeadmin.test}"
+if [[ -n "$TENANT_HOST" ]]; then
+  shard_login() {
+    local base="$1"
+    curl -sS -X POST "$base/tenantapi/login/account" \
+      -H "Host: $SHARD_HOST" -H 'Content-Type: application/json' \
+      -d "{\"account\":\"${SHARD_ACCOUNT:-pair2}\",\"password\":\"${SHARD_PASSWORD:-likeadmin}\",\"terminal\":1}"
+  }
+  php_s="$(shard_login "$PHP")"
+  go_s="$(shard_login "$GO")"
+  php_sc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_s")"
+  go_sc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_s")"
+  echo "shard_login php_code=$php_sc go_code=$go_sc"
+  if [[ "$php_sc" != "$go_sc" ]]; then
+    fail=$((fail + 1))
+  fi
+  ST="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_s")"
+  if [[ -n "$ST" ]]; then
+    php_iso="$(curl -sS "$PHP/tenantapi/article.article/lists" -H "Host: $SHARD_HOST" -H "token: $ST")"
+    go_iso="$(curl -sS "$GO/tenantapi/article.article/lists" -H "Host: $SHARD_HOST" -H "token: $ST")"
+    php_ic="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_iso")"
+    go_ic="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_iso")"
+    echo "shard_article php_code=$php_ic go_code=$go_ic"
+    if [[ "$php_ic" != "$go_ic" ]]; then
+      fail=$((fail + 1))
+    fi
+    if [[ -n "$TENANT_TOKEN" ]]; then
+      php_x="$(curl -sS "$PHP/tenantapi/auth.admin/mySelf" -H "Host: $SHARD_HOST" -H "token: $TENANT_TOKEN")"
+      go_x="$(curl -sS "$GO/tenantapi/auth.admin/mySelf" -H "Host: $SHARD_HOST" -H "token: $TENANT_TOKEN")"
+      php_xc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$php_x")"
+      go_xc="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("code"))' <<<"$go_x")"
+      echo "cross_tenant php_code=$php_xc go_code=$go_xc"
+      if [[ "$php_xc" != "$go_xc" ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
+  fi
+fi
+
 echo "failed=$fail"
 exit "$fail"

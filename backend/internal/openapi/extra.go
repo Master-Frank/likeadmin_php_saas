@@ -560,6 +560,9 @@ func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
 			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
+			"is_show": a.IsShow, "sort": a.Sort, "tenant_id": a.TenantID,
+			"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
+			"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
 		})
 	}
 	return out

@@ -83,10 +83,10 @@ func PayWayGet(c *gin.Context) {
 		lists[r.Scene] = append(lists[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,
-			"icon": filesvc.GetFileURL(c, cfg.Icon), "name": cfg.Name, "pay_way": cfg.PayWay,
+			"icon": filesvc.GetFileURL(c, cfg.Icon), "pay_way_name": cfg.Name,
 		})
 	}
-	response.Success(c, "", lists)
+	response.Success(c, "获取成功", lists)
 }
 
 func PayWaySet(c *gin.Context) {

@@ -289,5 +289,7 @@ func tenantMenuMap(m model.TenantSystemMenu) map[string]any {
 		"id": m.ID, "pid": m.Pid, "type": m.Type, "name": m.Name, "icon": m.Icon, "sort": m.Sort,
 		"perms": m.Perms, "paths": m.Paths, "component": m.Component, "selected": m.Selected,
 		"params": m.Params, "is_cache": m.IsCache, "is_show": m.IsShow, "is_disable": m.IsDisable,
+		"tenant_id": m.TenantID, "create_time": util.FormatDateTime(m.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(m.UpdateTime),
 	}
 }

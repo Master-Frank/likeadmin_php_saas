@@ -7,6 +7,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/export"
+	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
@@ -76,10 +77,10 @@ func PayWayGet(c *gin.Context) {
 		grouped[r.Scene] = append(grouped[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,
-			"icon": cfg.Icon, "name": cfg.Name, "pay_way": cfg.PayWay,
+			"icon": filesvc.GetFileURL(c, cfg.Icon), "pay_way_name": cfg.Name,
 		})
 	}
-	response.Success(c, "", grouped)
+	response.Success(c, "获取成功", grouped)
 }
 
 func PayWaySet(c *gin.Context) {

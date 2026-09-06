@@ -30,6 +30,7 @@ func DeptLists(c *gin.Context) {
 		maps = append(maps, map[string]any{
 			"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
 			"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
+			"tenant_id": d.TenantID,
 			"create_time": util.FormatDateTime(d.CreateTime),
 			"update_time": util.FormatDateTimePtr(d.UpdateTime),
 			"delete_time": util.FormatDateTimePtr(d.DeleteTime),

@@ -326,8 +326,9 @@ func ArticleLists(c *gin.Context) {
 			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
 			"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
 			"click": a.ClickActual + a.ClickVirtual, "cate_name": cates[a.Cid],
-			"create_time": util.FormatDateTime(a.CreateTime),
+			"tenant_id": a.TenantID, "create_time": util.FormatDateTime(a.CreateTime),
 			"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
+			"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -381,7 +382,23 @@ func ArticleCateLists(c *gin.Context) {
 	db.Count(&count)
 	var rows []model.ArticleCate
 	db.Order("sort desc, id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
-	response.Lists(c, rows, count, q.PageNo, q.PageSize, nil)
+	out := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		var n int64
+		tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", r.ID).Count(&n)
+		showDesc := "停用"
+		if r.IsShow == 1 {
+			showDesc = "启用"
+		}
+		out = append(out, map[string]any{
+			"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
+			"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
+			"create_time": util.FormatDateTime(r.CreateTime),
+			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+			"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
+		})
+	}
+	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
 func ArticleCateAdd(c *gin.Context) {
@@ -449,6 +466,11 @@ func SettingGetWebsite(c *gin.Context) {
 		"shop_name":   cfgsvc.GetString(c, "website", "shop_name", ""),
 		"shop_logo":   filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
 		"pc_logo":     filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_logo", "")),
+		"pc_title":    cfgsvc.GetString(c, "website", "pc_title", ""),
+		"pc_ico":      filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_ico", "")),
+		"pc_desc":     cfgsvc.GetString(c, "website", "pc_desc", ""),
+		"pc_keywords": cfgsvc.GetString(c, "website", "pc_keywords", ""),
+		"h5_favicon":  filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "h5_favicon", "")),
 	})
 }
 
@@ -457,6 +479,14 @@ func SettingSetWebsite(c *gin.Context) {
 	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.Str(c, "web_favicon")))
 	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.Str(c, "web_logo")))
 	cfgsvc.Set(c, "tenant", "login_image", filesvc.SetFileURL(c, httpx.Str(c, "login_image")))
+	cfgsvc.Set(c, "website", "shop_name", httpx.Str(c, "shop_name"))
+	cfgsvc.Set(c, "website", "shop_logo", filesvc.SetFileURL(c, httpx.Str(c, "shop_logo")))
+	cfgsvc.Set(c, "website", "pc_logo", filesvc.SetFileURL(c, httpx.Str(c, "pc_logo")))
+	cfgsvc.Set(c, "website", "pc_title", httpx.Str(c, "pc_title"))
+	cfgsvc.Set(c, "website", "pc_ico", filesvc.SetFileURL(c, httpx.Str(c, "pc_ico")))
+	cfgsvc.Set(c, "website", "pc_desc", httpx.Str(c, "pc_desc"))
+	cfgsvc.Set(c, "website", "pc_keywords", httpx.Str(c, "pc_keywords"))
+	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.Str(c, "h5_favicon")))
 	response.Success(c, "设置成功", nil)
 }
 

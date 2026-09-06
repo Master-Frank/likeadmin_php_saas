@@ -3,11 +3,13 @@ package platformapi
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -130,10 +132,30 @@ func CacheClear(c *gin.Context) {
 }
 
 func SystemInfo(c *gin.Context) {
-	hostname, _ := os.Hostname()
+	writable := 0
+	runtimeDir := filepath.Join(config.C.App.PublicDir, "..", "runtime")
+	if config.C.App.PublicDir == "" {
+		runtimeDir = "runtime"
+	}
+	if err := os.MkdirAll(runtimeDir, 0o755); err == nil {
+		probe := filepath.Join(runtimeDir, ".write_probe")
+		if err := os.WriteFile(probe, []byte("ok"), 0o644); err == nil {
+			writable = 1
+			_ = os.Remove(probe)
+		}
+	}
 	response.Data(c, gin.H{
-		"server": gin.H{"name": hostname, "os": runtime.GOOS, "arch": runtime.GOARCH, "go": runtime.Version()},
-		"system": gin.H{"name": "likeadmin-saas-go", "version": "1.0.5"},
+		"server": []gin.H{
+			{"param": "服务器操作系统", "value": runtime.GOOS},
+			{"param": "web服务器环境", "value": "Go " + runtime.Version()},
+			{"param": "PHP版本", "value": runtime.Version()},
+		},
+		"env": []gin.H{
+			{"option": "PHP版本", "require": "8.0版本以上", "status": 1, "remark": "Go 后端已替代 PHP 运行时"},
+		},
+		"auth": []gin.H{
+			{"dir": "/runtime", "require": "runtime目录可写", "status": writable, "remark": ""},
+		},
 	})
 }
 
