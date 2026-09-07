@@ -1015,32 +1015,8 @@ func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
 func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 	var tpls []model.TenantSystemMenu
 	tx.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
+	// PHP TenantSystemMenuLogic::initialization only copies tenant_id=0 templates.
 	if len(tpls) == 0 {
-		var plat []model.SystemMenu
-		tx.Order("pid, id").Find(&plat)
-		idMap := map[uint]uint{}
-		for _, m := range plat {
-			old := m.ID
-			row := model.TenantSystemMenu{
-				Pid: m.Pid, Type: m.Type, Name: m.Name, Icon: m.Icon, Sort: m.Sort, Perms: m.Perms,
-				Paths: m.Paths, Component: m.Component, Selected: m.Selected, Params: m.Params,
-				IsCache: m.IsCache, IsShow: m.IsShow, IsDisable: m.IsDisable, TenantID: tenantID,
-				CreateTime: util.NowUnix(),
-			}
-			if err := tx.Create(&row).Error; err != nil {
-				return err
-			}
-			idMap[old] = row.ID
-		}
-		var created []model.TenantSystemMenu
-		tx.Where("tenant_id = ?", tenantID).Find(&created)
-		for _, item := range created {
-			if item.Pid != 0 {
-				if nid, ok := idMap[item.Pid]; ok {
-					tx.Model(&item).Update("pid", nid)
-				}
-			}
-		}
 		return nil
 	}
 	idMap := map[uint]uint{}

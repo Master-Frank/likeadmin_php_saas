@@ -275,13 +275,8 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 		if err := tdb.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
 			return applyError("更新菜单信息失败")
 		}
-		var roleIDs []uint
-		tdb.Model(&model.TenantSystemRole{}).Where("tenant_id = ?", t.ID).Pluck("id", &roleIDs)
-		if len(roleIDs) > 0 {
-			if err := tdb.Where("role_id IN ?", roleIDs).Delete(&model.TenantSystemRoleMenu{}).Error; err != nil {
-				return applyError("更新菜单信息失败")
-			}
-		}
+		// PHP UpgradeLogic::upgradeMenu only deletes menus then initialization();
+		// it does not wipe tenant_system_role_menu.
 		if err := reinitTenantMenus(db, tdb, t.ID); err != nil {
 			return applyError("更新菜单信息失败")
 		}
@@ -298,32 +293,8 @@ func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
 	}
 	var tpls []model.TenantSystemMenu
 	shared.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
+	// PHP TenantSystemMenuLogic::initialization only copies tenant_id=0 templates.
 	if len(tpls) == 0 {
-		var plat []model.SystemMenu
-		shared.Order("pid, id").Find(&plat)
-		idMap := map[uint]uint{}
-		for _, m := range plat {
-			old := m.ID
-			row := model.TenantSystemMenu{
-				Pid: m.Pid, Type: m.Type, Name: m.Name, Icon: m.Icon, Sort: m.Sort, Perms: m.Perms,
-				Paths: m.Paths, Component: m.Component, Selected: m.Selected, Params: m.Params,
-				IsCache: m.IsCache, IsShow: m.IsShow, IsDisable: m.IsDisable, TenantID: tenantID,
-				CreateTime: util.NowUnix(),
-			}
-			if err := dest.Create(&row).Error; err != nil {
-				return err
-			}
-			idMap[old] = row.ID
-		}
-		var created []model.TenantSystemMenu
-		dest.Where("tenant_id = ?", tenantID).Find(&created)
-		for _, item := range created {
-			if item.Pid != 0 {
-				if nid, ok := idMap[item.Pid]; ok {
-					dest.Model(&item).Update("pid", nid)
-				}
-			}
-		}
 		return nil
 	}
 	idMap := map[uint]uint{}

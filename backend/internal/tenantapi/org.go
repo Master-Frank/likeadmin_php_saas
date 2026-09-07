@@ -56,6 +56,9 @@ func DeptAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.DeptPidCheck(p); msg != "" {
 		response.Fail(c, msg)
@@ -222,6 +225,9 @@ func JobsLists(c *gin.Context) {
 
 func JobsAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)

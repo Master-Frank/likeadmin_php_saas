@@ -1,7 +1,6 @@
 package tenantapi
 
 import (
-	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -132,8 +131,7 @@ func FileAddCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if _, ok := requireTenant(c); !ok {
-		response.Fail(c, "参数缺失")
+	if !guardTenantWrite(c) {
 		return
 	}
 	row := model.TenantFileCate{
@@ -146,6 +144,9 @@ func FileAddCate(c *gin.Context) {
 
 func FileEditCate(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -193,6 +194,9 @@ func UploadVideo(c *gin.Context) { tenantUpload(c, 20, "uploads/video", "video")
 func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", "file") }
 
 func tenantUpload(c *gin.Context, typ int, dir, scene string) {
+	if !guardTenantWrite(c) {
+		return
+	}
 	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
 	if errMsg != "" {
 		response.Fail(c, errMsg)
@@ -200,7 +204,7 @@ func tenantUpload(c *gin.Context, typ int, dir, scene string) {
 	}
 	row := model.TenantFile{
 		Cid: filesvc.UploadCID(c), Type: typ, Name: name, URI: rel, Source: filesvc.SourceAdmin,
-		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
+		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&row)
 	response.Success(c, "上传成功", gin.H{

@@ -300,6 +300,18 @@ func requirePlatformTenant(c *gin.Context) bool {
 	return false
 }
 
+// guardTenantWrite rejects platform/tenant creates that would land on tenant_id=0.
+func guardTenantWrite(c *gin.Context) bool {
+	if !requirePlatformTenant(c) {
+		return false
+	}
+	if _, ok := requireTenant(c); !ok {
+		response.Fail(c, "参数缺失")
+		return false
+	}
+	return true
+}
+
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a

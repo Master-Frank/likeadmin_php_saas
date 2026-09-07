@@ -219,8 +219,16 @@ func GeneratorDelete(c *gin.Context) {
 			return
 		}
 	}
-	bootstrap.DB.Where("id IN ?", ids).Delete(&model.GenerateTable{})
-	bootstrap.DB.Where("table_id IN ?", ids).Delete(&model.GenerateColumn{})
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id IN ?", ids).Delete(&model.GenerateTable{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("table_id IN ?", ids).Delete(&model.GenerateColumn{}).Error
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
 	response.SuccessNotice(c, "操作成功")
 }
 

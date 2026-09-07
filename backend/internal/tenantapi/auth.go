@@ -87,6 +87,9 @@ func AdminAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	account := httpx.BodyStr(c, "account")
 	name := httpx.BodyStr(c, "name")
@@ -350,6 +353,9 @@ func MenuAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.MenuWriteCheckTaken(p, false, func(typ, name string) bool {
 		return tenantMenuUniqueName(c, 0, typ, name) != ""
@@ -371,6 +377,9 @@ func MenuAdd(c *gin.Context) {
 
 func MenuEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -403,6 +412,9 @@ func MenuEdit(c *gin.Context) {
 
 func MenuDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -501,6 +513,9 @@ func RoleLists(c *gin.Context) {
 
 func RoleAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
