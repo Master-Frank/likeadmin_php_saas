@@ -104,7 +104,9 @@ func ArticleDetail(c *gin.Context) {
 		response.Data(c, gin.H{"collect": collect})
 		return
 	}
-	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
+	tdb(c).Model(&a).Updates(map[string]any{
+		"click_actual": a.ClickActual + 1, "update_time": util.NowUnix(),
+	})
 	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
 	out["collect"] = collect
 	response.Data(c, out)
@@ -271,7 +273,9 @@ func PayPrepay(c *gin.Context) {
 	if payWay == 2 {
 		paySN = pay.FormatPaySN(order.SN, terminal, util.NowUnix())
 	}
-	tdb(c).Model(&order).Updates(map[string]any{"pay_way": payWay, "pay_sn": paySN})
+	tdb(c).Model(&order).Updates(map[string]any{
+		"pay_way": payWay, "pay_sn": paySN, "update_time": util.NowUnix(),
+	})
 	order.PayWay = payWay
 	order.PaySN = paySN
 	if order.OrderAmount == 0 {
@@ -399,7 +403,9 @@ func UserChangePassword(c *gin.Context) {
 		}
 	}
 	pwd := httpx.BodyStr(c, "password")
-	tdb(c).Model(&u).Update("password", util.CreatePassword(pwd, salt))
+	tdb(c).Model(&u).Updates(map[string]any{
+		"password": util.CreatePassword(pwd, salt), "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -430,7 +436,9 @@ func UserResetPassword(c *gin.Context) {
 		return
 	}
 	hashed := util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification)
-	scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c).Update("password", hashed)
+	scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c).Updates(map[string]any{
+		"password": hashed, "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -466,7 +474,7 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "该手机号已被使用")
 		return
 	}
-	tdb(c).Model(&u).Update("mobile", mobile)
+	tdb(c).Model(&u).Updates(map[string]any{"mobile": mobile, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "绑定成功")
 }
 
@@ -554,7 +562,9 @@ func PcArticleDetail(c *gin.Context) {
 		response.Data(c, pcArticleMissing(c, id))
 		return
 	}
-	tdb(c).Model(&a).Update("click_actual", a.ClickActual+1)
+	tdb(c).Model(&a).Updates(map[string]any{
+		"click_actual": a.ClickActual + 1, "update_time": util.NowUnix(),
+	})
 	list := limitArticles(c, source, 0, int(a.Cid), 0)
 	nowIndex := 0
 	for i, item := range list {

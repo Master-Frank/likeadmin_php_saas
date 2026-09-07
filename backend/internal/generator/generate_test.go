@@ -103,6 +103,21 @@ func TestPreviewWithClassDirAndSoftDelete(t *testing.T) {
 	}
 }
 
+func TestPreviewClassDirPreservesCaseInSQL(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.ClassDir = "Setting"
+	files := Build(tbl, cols)
+	if !strings.Contains(files[8].Content, "Setting.config") {
+		t.Fatalf("menu.sql should keep classDir case: %s", files[8].Content)
+	}
+	if strings.Contains(files[8].Content, "setting.config") {
+		t.Fatal("menu.sql must not lowercase classDir")
+	}
+	if !strings.Contains(files[5].Content, "url: '/setting.config/lists'") {
+		t.Fatalf("vue api route is lowercased: %s", files[5].Content)
+	}
+}
+
 func TestTreePreview(t *testing.T) {
 	tbl, cols := sampleTable()
 	tbl.TemplateType = 1
@@ -114,6 +129,15 @@ func TestTreePreview(t *testing.T) {
 	}
 	if !strings.Contains(files[6].Content, `row-key="id"`) {
 		t.Fatalf("tree index missing row-key")
+	}
+	if !strings.Contains(files[7].Content, "el-tree-select") {
+		t.Fatalf("tree edit missing treeSelect: %s", files[7].Content)
+	}
+	if !strings.Contains(files[7].Content, "const treeList = ref") {
+		t.Fatalf("tree edit missing treeList const: %s", files[7].Content)
+	}
+	if !strings.Contains(files[7].Content, "顶级") {
+		t.Fatalf("tree edit missing getLists stub: %s", files[7].Content)
 	}
 }
 
@@ -144,6 +168,24 @@ func TestPreviewRelationsCheckboxAndBetweenTime(t *testing.T) {
 	}
 	if !strings.Contains(editVue, `split(",")`) || !strings.Contains(editVue, "formData.tags") {
 		t.Fatalf("checkbox split missing: %s", editVue)
+	}
+}
+
+func TestPreviewEmptyRelationTypeSkipped(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.Relations = `[{"name":"owner","model":"User","local_key":"id","foreign_key":"user_id"}]`
+	files := Build(tbl, cols)
+	if strings.Contains(files[2].Content, "hasOne") || strings.Contains(files[2].Content, "function owner") {
+		t.Fatalf("empty type must skip relation stub: %s", files[2].Content)
+	}
+}
+
+func TestPreviewExplicitHasOne(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.Relations = `[{"name":"owner","model":"User","type":"has_one","local_key":"id","foreign_key":"user_id"}]`
+	files := Build(tbl, cols)
+	if !strings.Contains(files[2].Content, "hasOne") || !strings.Contains(files[2].Content, "User::class") || !strings.Contains(files[2].Content, "function owner") {
+		t.Fatalf("has_one stub missing: %s", files[2].Content)
 	}
 }
 

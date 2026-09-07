@@ -489,7 +489,9 @@ func MenuUpdateStatus(c *gin.Context) {
 	}
 	id := httpx.BodyUint(c, "id")
 	// PHP MenuLogic::updateStatus updates by id with no existence check.
-	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Update("is_disable", httpx.BodyInt(c, "is_disable"))
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Updates(map[string]any{
+		"is_disable": httpx.BodyInt(c, "is_disable"), "update_time": util.NowUnix(),
+	})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
@@ -577,6 +579,7 @@ func RoleEdit(c *gin.Context) {
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
+		"update_time": util.NowUnix(),
 	})
 	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
 		if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {

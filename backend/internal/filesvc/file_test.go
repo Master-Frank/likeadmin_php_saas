@@ -21,6 +21,19 @@ func TestGetImageAttrEmpty(t *testing.T) {
 	}
 }
 
+func TestFormatEmptyDomain(t *testing.T) {
+	// PHP FileService::format: trim($domain) . '/' . trim($uri)
+	if got := Format("", "uploads/a.png"); got != "/uploads/a.png" {
+		t.Fatalf("empty domain uri=%q", got)
+	}
+	if got := Format("", "/uploads/a.png"); got != "/uploads/a.png" {
+		t.Fatalf("leading slash=%q", got)
+	}
+	if got := Format("", ""); got != "/" {
+		t.Fatalf("both empty=%q", got)
+	}
+}
+
 func TestUploadCateOKZero(t *testing.T) {
 	if UploadCateOK(nil, nil, 0, 1) != "" {
 		t.Fatal("cid 0 should skip lookup")

@@ -286,7 +286,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 				}
 				if av != "" {
 					user.Avatar = av
-					if err := tx.Model(&user).Update("avatar", av).Error; err != nil {
+					if err := tx.Model(&user).Updates(map[string]any{"avatar": av, "update_time": now}).Error; err != nil {
 						return err
 					}
 				}
@@ -299,7 +299,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 					return err
 				}
 			} else if auth.Unionid == "" && sess.Unionid != "" {
-				if err := tx.Model(&auth).Update("unionid", sess.Unionid).Error; err != nil {
+				if err := tx.Model(&auth).Updates(map[string]any{"unionid": sess.Unionid, "update_time": now}).Error; err != nil {
 					return err
 				}
 			}
@@ -447,7 +447,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		response.Fail(c, "手机号已被其他账号绑定")
 		return
 	}
-	tdb(c).Model(&u).Update("mobile", phone)
+	tdb(c).Model(&u).Updates(map[string]any{"mobile": phone, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "绑定成功")
 }
 

@@ -123,6 +123,7 @@ func DeptEdit(c *gin.Context) {
 	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
 		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
+		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
@@ -283,6 +284,7 @@ func JobsEdit(c *gin.Context) {
 	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
 		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"),
+		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }

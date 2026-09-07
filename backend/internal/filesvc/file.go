@@ -176,7 +176,7 @@ func Format(domain, uri string) string {
 	domain = strings.TrimRight(domain, "/")
 	uri = strings.TrimLeft(uri, "/")
 	if domain == "" {
-		return uri
+		return "/" + uri
 	}
 	if uri == "" {
 		return domain + "/"

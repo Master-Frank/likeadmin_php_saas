@@ -94,7 +94,7 @@ func newCtx(t model.GenerateTable, cols []model.GenerateColumn, now time.Time) *
 			rels = append(rels, map[string]string{
 				"name":        util.ToString(m["name"]),
 				"model":       util.ToString(m["model"]),
-				"type":        firstNonEmpty(util.ToString(m["type"]), "has_one"),
+				"type":        util.ToString(m["type"]),
 				"local_key":   firstNonEmpty(util.ToString(m["local_key"]), "id"),
 				"foreign_key": firstNonEmpty(util.ToString(m["foreign_key"]), "id"),
 			})
@@ -213,14 +213,16 @@ func (c *ctx) modelUse() string {
 }
 
 func (c *ctx) permsName() string {
+	// PHP SqlGenerator::getPermsNameContent keeps classDir case.
 	if c.classDir != "" {
-		return Lower(c.classDir + "." + c.tableName)
+		return c.classDir + "." + Lower(c.tableName)
 	}
 	return Lower(c.tableName)
 }
 
 func (c *ctx) vueRoute() string {
-	return c.permsName()
+	// PHP VueApiGenerator::getRouteContent lowercases the whole route.
+	return Lower(c.permsName())
 }
 
 func (c *ctx) perms(kind string) string {

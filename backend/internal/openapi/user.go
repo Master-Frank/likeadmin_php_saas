@@ -350,7 +350,7 @@ func UserSetInfo(c *gin.Context) {
 	if field == "avatar" {
 		value = filesvc.SetFileURL(c, util.ToString(value))
 	}
-	tdb(c).Model(&u).Update(field, value)
+	tdb(c).Model(&u).Updates(map[string]any{field: value, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "操作成功")
 }
 

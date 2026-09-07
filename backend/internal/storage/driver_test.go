@@ -4,8 +4,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPutAndDeleteQiniuFixture(t *testing.T) {
@@ -74,10 +76,11 @@ func TestPutAndDeleteAliyunFixture(t *testing.T) {
 }
 
 func TestPutQcloudUsesObjectKey(t *testing.T) {
-	var path string
+	var path, auth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
-		if !strings.Contains(r.Header.Get("Authorization"), "q-sign-algorithm=sha1") {
+		auth = r.Header.Get("Authorization")
+		if !strings.Contains(auth, "q-sign-algorithm=sha1") {
 			http.Error(w, "no sign", 403)
 			return
 		}
@@ -92,6 +95,38 @@ func TestPutQcloudUsesObjectKey(t *testing.T) {
 	}
 	if path != "/uploads/c.txt" {
 		t.Fatalf("path=%s", path)
+	}
+	assertQcloudUnixSign(t, auth)
+}
+
+func TestQcloudAuthUnixSignTime(t *testing.T) {
+	now := time.Unix(1770000000, 0)
+	auth := qcloudAuth(http.MethodPut, "uploads/c.txt", "bucket.cos.ap-guangzhou.myqcloud.com", "ak", "sk", now)
+	assertQcloudUnixSign(t, auth)
+	if !strings.Contains(auth, "q-sign-time=1770000000;1770001800") {
+		t.Fatalf("sign-time %s", auth)
+	}
+	if !strings.Contains(auth, "q-key-time=1770000000;1770001800") {
+		t.Fatalf("key-time %s", auth)
+	}
+	again := qcloudAuth(http.MethodPut, "uploads/c.txt", "bucket.cos.ap-guangzhou.myqcloud.com", "ak", "sk", now)
+	if auth != again {
+		t.Fatal("auth should be deterministic")
+	}
+}
+
+func assertQcloudUnixSign(t *testing.T, auth string) {
+	t.Helper()
+	re := regexp.MustCompile(`q-sign-time=(\d+);(\d+)`)
+	m := re.FindStringSubmatch(auth)
+	if m == nil {
+		t.Fatalf("missing unix q-sign-time: %s", auth)
+	}
+	if m[1] >= m[2] {
+		t.Fatalf("sign window %s;%s", m[1], m[2])
+	}
+	if strings.Contains(auth, "GMT") || strings.Contains(auth, "UTC") {
+		t.Fatalf("q-sign-time must not be HTTP Date: %s", auth)
 	}
 }
 

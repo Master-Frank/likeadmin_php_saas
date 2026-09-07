@@ -315,7 +315,9 @@ func UserAdjustMoney(c *gin.Context) {
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if action == biz.INC {
-			if err := tx.Model(&user).Update("user_money", gorm.Expr("user_money + ?", num)).Error; err != nil {
+			if err := tx.Model(&user).Updates(map[string]any{
+				"user_money": gorm.Expr("user_money + ?", num), "update_time": util.NowUnix(),
+			}).Error; err != nil {
 				return err
 			}
 			user.UserMoney += num
@@ -325,7 +327,9 @@ func UserAdjustMoney(c *gin.Context) {
 		if user.UserMoney < num {
 			return errInsufficient
 		}
-		if err := tx.Model(&user).Update("user_money", gorm.Expr("user_money - ?", num)).Error; err != nil {
+		if err := tx.Model(&user).Updates(map[string]any{
+			"user_money": gorm.Expr("user_money - ?", num), "update_time": util.NowUnix(),
+		}).Error; err != nil {
 			return err
 		}
 		user.UserMoney -= num
@@ -862,7 +866,9 @@ func OAReplyStatus(c *gin.Context) {
 	}
 	// PHP OfficialAccountReplyLogic::status only flips this row.
 	tid := tenantDB(c)
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", row.ID, tid).Update("status", status)
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", row.ID, tid).Updates(map[string]any{
+		"status": status, "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "操作成功")
 }
 

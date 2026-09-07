@@ -432,7 +432,9 @@ func UserEdit(c *gin.Context) {
 			return
 		}
 	}
-	scopeTID(tdb(c).Model(&model.User{}).Where("id = ?", id), c).Update(field, value)
+	scopeTID(tdb(c).Model(&model.User{}).Where("id = ?", id), c).Updates(map[string]any{
+		field: value, "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "操作成功")
 }
 

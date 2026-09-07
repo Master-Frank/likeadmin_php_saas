@@ -143,7 +143,7 @@ func newSpec(t model.GenerateTable, cols []model.GenerateColumn) *spec {
 	return sp
 }
 
-// RouteKey is the request controller, matching PHP permsName().
+// RouteKey is the HTTP controller, matching PHP VueApiGenerator::getRouteContent.
 func RouteKey(t model.GenerateTable) string {
 	name := generator.Lower(generator.NoPrefix(t.Name))
 	dir := strings.Trim(t.ClassDir, "\\/")

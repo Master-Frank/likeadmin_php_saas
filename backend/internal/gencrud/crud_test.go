@@ -19,6 +19,9 @@ func TestRouteKey(t *testing.T) {
 	if RouteKey(model.GenerateTable{Name: "la_config", ClassDir: "setting"}) != "setting.config" {
 		t.Fatalf("class_dir %s", RouteKey(model.GenerateTable{Name: "la_config", ClassDir: "setting"}))
 	}
+	if RouteKey(model.GenerateTable{Name: "la_config", ClassDir: "Setting"}) != "setting.config" {
+		t.Fatalf("class_dir case %s", RouteKey(model.GenerateTable{Name: "la_config", ClassDir: "Setting"}))
+	}
 }
 
 func TestModuleApp(t *testing.T) {

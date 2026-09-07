@@ -274,20 +274,13 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 		contentType = "application/octet-stream"
 	}
 	scheme, host := qcloudHost(cfg, region, bucket)
-	date := time.Now().UTC().Format(http.TimeFormat)
-	canon := "put\n/" + key + "\n\nhost=" + host + "\n"
-	stringToSign := "sha1\n" + date + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(canon))) + "\n"
-	signKey := hmacSHA1Hex(sk, date)
-	sig := hmacSHA1Hex(signKey, stringToSign)
-	auth := fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s;%s&q-key-time=%s;%s&q-header-list=host&q-url-param-list=&q-signature=%s",
-		ak, date, date, date, date, sig)
 	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+key, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Host", host)
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Authorization", auth)
+	req.Header.Set("Authorization", qcloudAuth(http.MethodPut, key, host, ak, sk, time.Now()))
 	return do(req)
 }
 
@@ -335,20 +328,35 @@ func deleteQcloud(cfg map[string]any, key string) error {
 		return fmt.Errorf("腾讯云COS配置不完整")
 	}
 	scheme, host := qcloudHost(cfg, region, bucket)
-	date := time.Now().UTC().Format(http.TimeFormat)
-	canon := "delete\n/" + key + "\n\nhost=" + host + "\n"
-	stringToSign := "sha1\n" + date + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(canon))) + "\n"
-	signKey := hmacSHA1Hex(sk, date)
-	sig := hmacSHA1Hex(signKey, stringToSign)
-	auth := fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s;%s&q-key-time=%s;%s&q-header-list=host&q-url-param-list=&q-signature=%s",
-		ak, date, date, date, date, sig)
 	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+key, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Host", host)
-	req.Header.Set("Authorization", auth)
+	req.Header.Set("Authorization", qcloudAuth(http.MethodDelete, key, host, ak, sk, time.Now()))
 	return doDelete(req)
+}
+
+// qcloudAuth is COS V5 (q-sign-algorithm=sha1) with unix q-sign-time / q-key-time,
+// matching the official COS SDK used by PHP storage/engine/Qcloud.php.
+func qcloudAuth(method, key, host, ak, sk string, now time.Time) string {
+	start := now.Unix()
+	signTime := fmt.Sprintf("%d;%d", start, start+1800)
+	path := qcloudURI(key)
+	httpString := strings.ToLower(method) + "\n" + path + "\n\nhost=" + host + "\n"
+	stringToSign := "sha1\n" + signTime + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(httpString))) + "\n"
+	signKey := hmacSHA1Hex(sk, signTime)
+	sig := hmacSHA1Hex(signKey, stringToSign)
+	return fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s&q-key-time=%s&q-header-list=host&q-url-param-list=&q-signature=%s",
+		ak, signTime, signTime, sig)
+}
+
+func qcloudURI(key string) string {
+	parts := strings.Split(strings.Trim(key, "/"), "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return "/" + strings.Join(parts, "/")
 }
 
 func aliyunHost(cfg map[string]any) (scheme, host string) {
