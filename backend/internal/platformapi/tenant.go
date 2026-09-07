@@ -292,7 +292,12 @@ func TenantAdminDetail(c *gin.Context) {
 	}
 	adb := tenantAdminDB(tenant)
 	var a model.TenantAdmin
-	if adb.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&a).Error != nil {
+	tid := httpx.Uint(c, "tenant_id")
+	q := adb.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
+	if tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if q.First(&a).Error != nil {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -365,7 +370,11 @@ func TenantAdminEdit(c *gin.Context) {
 	}
 	adb := tenantAdminDB(tenant)
 	var a model.TenantAdmin
-	if adb.Where("id = ? AND delete_time IS NULL", id).First(&a).Error != nil {
+	aq := adb.Where("id = ? AND delete_time IS NULL", id)
+	if tenant.ID > 0 {
+		aq = aq.Where("tenant_id = ?", tenant.ID)
+	}
+	if aq.First(&a).Error != nil {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -455,7 +464,11 @@ func resolveTenantAdmin(tid, adminID uint) (*gorm.DB, model.TenantAdmin, bool) {
 		}
 		adb := tenantAdminDB(tenant)
 		var a model.TenantAdmin
-		if adb.Where("id = ? AND delete_time IS NULL", adminID).First(&a).Error != nil {
+		q := adb.Where("id = ? AND delete_time IS NULL", adminID)
+		if tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if q.First(&a).Error != nil {
 			return adb, a, false
 		}
 		return adb, a, true

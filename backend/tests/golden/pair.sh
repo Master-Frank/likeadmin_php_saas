@@ -1669,6 +1669,12 @@ echo "tenant_admin_detail_time php=$php_tct go=$go_tct"
 if [[ -n "$php_tct" && "$php_tct" != "$go_tct" ]]; then
   fail=$((fail + 1))
 fi
+go_prm="$(curl -sS -X POST "$GO/platformapi/auth.role/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"fkplat$ts\",\"sort\":0,\"menu_id\":[99999999]}")"
+echo "platform_role_cross_menu go_msg=$(jget msg <<<"$go_prm")"
+if [[ "$(jget msg <<<"$go_prm")" != *菜单不存在* ]]; then
+  echo "  go_prm=${go_prm:0:200}"
+  fail=$((fail + 1))
+fi
 php_smsg="$(curl -sS "$PHP/platformapi/notice.sms_config/getConfig" -H "token: $TOKEN")"
 go_smsg="$(curl -sS "$GO/platformapi/notice.sms_config/getConfig" -H "token: $TOKEN")"
 php_ss="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(ls[0].get("status") if ls else "")' <<<"$php_smsg")"
@@ -2092,6 +2098,12 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
     echo "admin_cross_tenant go_msg=$(jget msg <<<"$go_adm")"
     if [[ "$(jget msg <<<"$go_adm")" != *管理员不存在* ]]; then
       echo "  go_adm=${go_adm:0:200}"
+      fail=$((fail + 1))
+    fi
+    go_pad="$(curl -sS "$GO/platformapi/tenant.tenant_admin/detail?id=$admin_id&tenant_id=1" -H "token: $TOKEN")"
+    echo "platform_admin_cross_tenant go_msg=$(jget msg <<<"$go_pad")"
+    if [[ "$(jget msg <<<"$go_pad")" != *租户管理员不存在* ]]; then
+      echo "  go_pad=${go_pad:0:200}"
       fail=$((fail + 1))
     fi
   fi

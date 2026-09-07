@@ -258,10 +258,10 @@ func applyRefundQuery(lg model.RefundLog) {
 			return
 		}
 		if ok {
-			updateRefundSuccess(lg.ID, rec.ID)
+			updateRefundSuccess(lg, rec)
 			return
 		}
-		updateRefundMsg(lg.ID, "微信:"+msg)
+		updateRefundMsg(lg, "微信:"+msg)
 	case paycfg.WayAli:
 		result, err := paycfg.AliQueryRefundByTenant(order.TenantID, order.SN, lg.SN)
 		if err != nil || result == nil {
@@ -272,20 +272,32 @@ func applyRefundQuery(lg model.RefundLog) {
 			return
 		}
 		if ok {
-			updateRefundSuccess(lg.ID, rec.ID)
+			updateRefundSuccess(lg, rec)
 			return
 		}
-		updateRefundMsg(lg.ID, "支付宝:"+msg)
+		updateRefundMsg(lg, "支付宝:"+msg)
 	}
 }
 
-func updateRefundSuccess(logID, recordID uint) {
-	bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", logID).Update("refund_status", 1)
-	bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", recordID).Update("refund_status", 1)
+func updateRefundSuccess(lg model.RefundLog, rec model.RefundRecord) {
+	lq := bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", lg.ID)
+	rq := bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", rec.ID)
+	if lg.TenantID > 0 {
+		lq = lq.Where("tenant_id = ?", lg.TenantID)
+	}
+	if rec.TenantID > 0 {
+		rq = rq.Where("tenant_id = ?", rec.TenantID)
+	}
+	lq.Update("refund_status", 1)
+	rq.Update("refund_status", 1)
 }
 
-func updateRefundMsg(logID uint, msg string) {
-	bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", logID).Update("refund_msg", msg)
+func updateRefundMsg(lg model.RefundLog, msg string) {
+	q := bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", lg.ID)
+	if lg.TenantID > 0 {
+		q = q.Where("tenant_id = ?", lg.TenantID)
+	}
+	q.Update("refund_msg", msg)
 }
 
 func Loop(interval time.Duration) {

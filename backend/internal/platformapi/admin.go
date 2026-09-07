@@ -119,11 +119,16 @@ func AdminAdd(c *gin.Context) {
 		Disable:         adminAddDisable(p),
 		MultipointLogin: httpx.Int(c, "multipoint_login"),
 	}
+	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := platformAdminLinksCheck(roles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
-		return saveAdminLinks(tx, admin.ID, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveAdminLinks(tx, admin.ID, roles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -178,6 +183,11 @@ func AdminEdit(c *gin.Context) {
 	var oldRoles []uint
 	bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
 	newRoles := httpx.Uints(c, "role_id")
+	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := platformAdminLinksCheck(newRoles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&admin).Updates(data).Error; err != nil {
 			return err
@@ -185,7 +195,7 @@ func AdminEdit(c *gin.Context) {
 		tx.Where("admin_id = ?", id).Delete(&model.AdminRole{})
 		tx.Where("admin_id = ?", id).Delete(&model.AdminDept{})
 		tx.Where("admin_id = ?", id).Delete(&model.AdminJobs{})
-		return saveAdminLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveAdminLinks(tx, id, newRoles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -319,6 +329,44 @@ func adminAddDisable(p map[string]any) int {
 		return 0
 	}
 	return util.ToInt(p["disable"])
+}
+
+func platformAdminLinksCheck(roles, depts, jobs []uint) string {
+	if !platformIDsOwned(&model.SystemRole{}, roles, "delete_time IS NULL") {
+		return "角色不存在"
+	}
+	if !platformIDsOwned(&model.Dept{}, depts, "delete_time IS NULL") {
+		return "部门不存在"
+	}
+	if !platformIDsOwned(&model.Jobs{}, jobs, "delete_time IS NULL") {
+		return "岗位不存在"
+	}
+	return ""
+}
+
+func platformIDsOwned(dest any, ids []uint, extra string) bool {
+	seen := map[uint]struct{}{}
+	uniq := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 {
+		return true
+	}
+	q := bootstrap.DB.Model(dest).Where("id IN ?", uniq)
+	if extra != "" {
+		q = q.Where(extra)
+	}
+	var n int64
+	q.Count(&n)
+	return n == int64(len(uniq))
 }
 
 func saveAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/util"
@@ -200,10 +201,18 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 		if err := db.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
 			return applyError("更新菜单信息失败")
 		}
+		var roleIDs []uint
+		db.Model(&model.TenantSystemRole{}).Where("tenant_id = ?", t.ID).Pluck("id", &roleIDs)
+		if len(roleIDs) > 0 {
+			if err := db.Where("role_id IN ?", roleIDs).Delete(&model.TenantSystemRoleMenu{}).Error; err != nil {
+				return applyError("更新菜单信息失败")
+			}
+		}
 		if err := reinitTenantMenus(db, t.ID); err != nil {
 			return applyError("更新菜单信息失败")
 		}
 	}
+	cache.ClearAdminAuthCache(0)
 	return nil
 }
 

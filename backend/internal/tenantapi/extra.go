@@ -1,6 +1,8 @@
 package tenantapi
 
 import (
+	"fmt"
+
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
@@ -526,7 +528,11 @@ func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uin
 		lq = lq.Where("tenant_id = ?", tid)
 	}
 	if lq.Order("id desc").First(&last).Error == nil {
-		tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID).Updates(map[string]any{
+		uq := tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID)
+		if tid := tenantDB(c); tid > 0 {
+			uq = uq.Where("tenant_id = ?", tid)
+		}
+		uq.Updates(map[string]any{
 			"refund_status": 1, "refund_msg": msg,
 		})
 	}
@@ -538,6 +544,11 @@ func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uin
 func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, recID uint) error {
 	if refundSN == "" {
 		return nil
+	}
+	if order == nil || order.OrderAmount <= 0 {
+		err := fmt.Errorf("订单金额异常")
+		refundFailHandle(c, recID, 0, err.Error())
+		return err
 	}
 	var err error
 	switch order.PayWay {

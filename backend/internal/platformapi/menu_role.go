@@ -179,13 +179,18 @@ func RoleAdd(c *gin.Context) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
+	menuIDs := httpx.Uints(c, "menu_id")
+	if !platformMenuIDsOwned(menuIDs) {
+		response.Fail(c, "菜单不存在")
+		return
+	}
 	now := util.NowUnix()
 	r := model.SystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), CreateTime: now}
 	if err := bootstrap.DB.Create(&r).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	for _, id := range httpx.Uints(c, "menu_id") {
+	for _, id := range menuIDs {
 		bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
 	response.SuccessNotice(c, "添加成功")
@@ -212,6 +217,10 @@ func RoleEdit(c *gin.Context) {
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"), "update_time": now,
 	})
 	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+		if !platformMenuIDsOwned(menuIDs) {
+			response.Fail(c, "菜单不存在")
+			return
+		}
 		bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
 		for _, mid := range menuIDs {
 			bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: id, MenuID: mid})
@@ -393,6 +402,27 @@ func menuUniqueName(id uint, typ, name string) string {
 		return "菜单名称已存在"
 	}
 	return ""
+}
+
+func platformMenuIDsOwned(ids []uint) bool {
+	seen := map[uint]struct{}{}
+	uniq := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 {
+		return true
+	}
+	var n int64
+	bootstrap.DB.Model(&model.SystemMenu{}).Where("id IN ?", uniq).Count(&n)
+	return n == int64(len(uniq))
 }
 
 func roleNameTaken(id uint, name string) bool {
