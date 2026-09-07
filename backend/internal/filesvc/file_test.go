@@ -1,6 +1,7 @@
 package filesvc
 
 import (
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/cache"
@@ -15,6 +16,17 @@ func TestRewriteContentDomains(t *testing.T) {
 	}
 	if rewriteContent("", in) != in {
 		t.Fatal("empty domain should keep content")
+	}
+}
+
+func TestClearContentDomains(t *testing.T) {
+	in := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video><img src="uploads/keep.png"></p>`
+	got := mapMediaSrc(in, func(src string) string {
+		return strings.ReplaceAll(src, "http://pair1.likeadmin.test/", "")
+	})
+	want := `<p><img src="uploads/images/a.png"><video src="uploads/video/b.mp4"></video><img src="uploads/keep.png"></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }
 

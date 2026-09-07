@@ -192,24 +192,29 @@ func SettingGetCopyright(c *gin.Context) {
 }
 
 func SettingSetCopyright(c *gin.Context) {
-	cfgsvc.Set(c, "copyright", "config", httpx.Any(c, "config"))
+	cfg := httpx.Any(c, "config")
+	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	cfgsvc.Set(c, "copyright", "config", cfg)
 	response.SuccessNotice(c, "设置成功")
 }
 
 func SettingGetAgreement(c *gin.Context) {
 	response.Data(c, gin.H{
 		"service_title":   cfgsvc.GetString(c, "agreement", "service_title", "服务协议"),
-		"service_content": cfgsvc.GetString(c, "agreement", "service_content", ""),
+		"service_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "service_content", "")),
 		"privacy_title":   cfgsvc.GetString(c, "agreement", "privacy_title", "隐私政策"),
-		"privacy_content": cfgsvc.GetString(c, "agreement", "privacy_content", ""),
+		"privacy_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "privacy_content", "")),
 	})
 }
 
 func SettingSetAgreement(c *gin.Context) {
 	cfgsvc.Set(c, "agreement", "service_title", httpx.Str(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", httpx.Str(c, "service_content"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.Str(c, "service_content")))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", httpx.Str(c, "privacy_content"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.Str(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -858,16 +863,16 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "oa_setting", "menu", menu)
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
 		response.Fail(c, "请先完成微信公众号配置")
 		return
 	}
 	if err := wechat.PublishMenu(appID, secret, menu); err != nil {
-		response.Fail(c, "保存成功但发布失败："+err.Error())
+		response.Fail(c, "保存发布菜单失败"+err.Error())
 		return
 	}
+	cfgsvc.Set(c, "oa_setting", "menu", menu)
 	response.Success(c, "保存并发布成功", nil)
 }
 

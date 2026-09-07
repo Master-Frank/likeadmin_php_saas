@@ -448,6 +448,27 @@ func TestUpgradeCheck(t *testing.T) {
 	}
 }
 
+func TestCopyrightConfigCheck(t *testing.T) {
+	if CopyrightConfigCheck(nil) != "参数异常" {
+		t.Fatal("nil")
+	}
+	if CopyrightConfigCheck("bad") != "参数异常" {
+		t.Fatal("string")
+	}
+	if CopyrightConfigCheck(1) != "参数异常" {
+		t.Fatal("number")
+	}
+	if CopyrightConfigCheck([]any{}) != "" {
+		t.Fatal("empty array")
+	}
+	if CopyrightConfigCheck([]any{map[string]any{"name": "x"}}) != "" {
+		t.Fatal("array")
+	}
+	if CopyrightConfigCheck(map[string]any{"0": "x"}) != "" {
+		t.Fatal("assoc array")
+	}
+}
+
 func TestWebScanLoginCheck(t *testing.T) {
 	if WebScanLoginCheck(map[string]any{}) != "参数缺失" {
 		t.Fatal(WebScanLoginCheck(map[string]any{}))

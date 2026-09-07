@@ -40,23 +40,41 @@ func rewriteContent(fileURL, content string) string {
 	if content == "" || fileURL == "" {
 		return content
 	}
-	return videoSrcRe.ReplaceAllStringFunc(imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
-		return prefixMediaSrc(fileURL, imgSrcRe, m)
-	}), func(m string) string {
-		return prefixMediaSrc(fileURL, videoSrcRe, m)
+	return mapMediaSrc(content, func(src string) string {
+		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+			return src
+		}
+		return fileURL + src
 	})
 }
 
-func prefixMediaSrc(fileURL string, re *regexp.Regexp, match string) string {
+// ClearContentDomains strips the file domain from img/video src, matching PHP clear_file_domain().
+func ClearContentDomains(c *gin.Context, content string) string {
+	if content == "" {
+		return content
+	}
+	return mapMediaSrc(content, func(src string) string {
+		return SetFileURL(c, src)
+	})
+}
+
+func mapMediaSrc(content string, rewrite func(string) string) string {
+	if content == "" || rewrite == nil {
+		return content
+	}
+	return videoSrcRe.ReplaceAllStringFunc(imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
+		return rewriteMediaSrc(imgSrcRe, m, rewrite)
+	}), func(m string) string {
+		return rewriteMediaSrc(videoSrcRe, m, rewrite)
+	})
+}
+
+func rewriteMediaSrc(re *regexp.Regexp, match string, rewrite func(string) string) string {
 	parts := re.FindStringSubmatch(match)
 	if len(parts) != 4 {
 		return match
 	}
-	src := parts[2]
-	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		return match
-	}
-	return parts[1] + fileURL + src + parts[3]
+	return parts[1] + rewrite(parts[2]) + parts[3]
 }
 
 func SetFileURL(c *gin.Context, uri string) string {

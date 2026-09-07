@@ -1397,6 +1397,19 @@ func UpgradeCheck(p map[string]any) string {
 	return ""
 }
 
+// CopyrightConfigCheck mirrors PHP WebSettingLogic::setCopyright is_array($params['config']).
+func CopyrightConfigCheck(v any) string {
+	if v == nil {
+		return "参数异常"
+	}
+	switch v.(type) {
+	case []any, []map[string]any, map[string]any:
+		return ""
+	default:
+		return "参数异常"
+	}
+}
+
 // UpgradeDownloadCheck mirrors PHP downloadPkgValidate require fields.
 func UpgradeDownloadCheck(p map[string]any) string {
 	if !phpRequired(p, "id") {

@@ -1218,6 +1218,23 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     if [[ "$php_hm" != "$go_hm" ]]; then
       fail=$((fail + 1))
     fi
+    pub_body='[{"name":"发布","has_menu":0,"type":"click","key":"pub"}]'
+    php_pub="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_menu/saveandpublish" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$pub_body")"
+    go_pub="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_menu/saveandpublish" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$pub_body")"
+    echo "oa_menu_publish php_code=$(jcode <<<"$php_pub") go_code=$(jcode <<<"$go_pub")"
+    if [[ "$(jcode <<<"$php_pub")" == "1" || "$(jcode <<<"$go_pub")" == "1" ]]; then
+      echo "  php_pub=${php_pub:0:160} go_pub=${go_pub:0:160}"
+      fail=$((fail + 1))
+    else
+      php_md2="$(curl -sS "$PHP/tenantapi/channel.official_account_menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      go_md2="$(curl -sS "$GO/tenantapi/channel.official_account_menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      php_key="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print((ls[0] if ls else {}).get("key",""))' <<<"$php_md2")"
+      go_key="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print((ls[0] if ls else {}).get("key",""))' <<<"$go_md2")"
+      echo "oa_menu_publish_keep php_key=$php_key go_key=$go_key"
+      if [[ "$php_key" != "pair" || "$go_key" != "pair" ]]; then
+        fail=$((fail + 1))
+      fi
+    fi
   fi
   php_rf="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_rf="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -1231,6 +1248,42 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jget msg <<<"$php_tw")" != "$(jget msg <<<"$go_tw")" ]]; then
     fail=$((fail + 1))
   fi
+  php_cp="$(curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setcopyright" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
+  go_cp="$(curl -sS -X POST "$GO/tenantapi/setting.web.web_setting/setcopyright" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
+  echo "copyright_bad php_msg=$(jget msg <<<"$php_cp") go_msg=$(jget msg <<<"$go_cp")"
+  if [[ "$(jget msg <<<"$php_cp")" != "参数异常" || "$(jget msg <<<"$go_cp")" != "参数异常" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ag0="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ag0="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  ag_html='<p><img src="http://'"$TENANT_HOST"'/uploads/pair-ag.png"></p>'
+  ag_body="$(python3 -c 'import json,sys; print(json.dumps({"service_title":"服务协议","service_content":sys.argv[1],"privacy_title":"隐私政策","privacy_content":sys.argv[1]}))' "$ag_html")"
+  php_ags="$(curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$ag_body")"
+  go_ags="$(curl -sS -X POST "$GO/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$ag_body")"
+  php_ag1="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ag1="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_agsrc="$(python3 -c 'import json,sys; print("pair-ag.png" in str((json.load(sys.stdin).get("data") or {}).get("service_content","")))' <<<"$php_ag1")"
+  go_agsrc="$(python3 -c 'import json,sys; d=json.load(sys.stdin); c=str((d.get("data") or {}).get("service_content","")); print(int("pair-ag.png" in c and ("http://" in c or "https://" in c)))' <<<"$go_ag1")"
+  echo "agreement_domain php_code=$(jcode <<<"$php_ags") go_code=$(jcode <<<"$go_ags") php_has=$php_agsrc go_has=$go_agsrc"
+  if [[ "$(jcode <<<"$php_ags")" != "1" || "$(jcode <<<"$go_ags")" != "1" || "$go_agsrc" != "1" ]]; then
+    echo "  php_ag1=${php_ag1:0:200} go_ag1=${go_ag1:0:200}"
+    fail=$((fail + 1))
+  fi
+  restore_ag() {
+    local base="$1" raw="$2"
+    local body
+    body="$(python3 -c 'import json,sys
+d=(json.load(sys.stdin).get("data") or {})
+print(json.dumps({
+  "service_title": d.get("service_title") or "服务协议",
+  "service_content": d.get("service_content") or "",
+  "privacy_title": d.get("privacy_title") or "隐私政策",
+  "privacy_content": d.get("privacy_content") or "",
+}))' <<<"$raw")"
+    curl -sS -X POST "$base/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$body" >/dev/null || true
+  }
+  restore_ag "$PHP" "$php_ag0"
+  restore_ag "$GO" "$go_ag0"
   if [[ -n "${UT:-}" ]]; then
     php_rc="$(curl -sS -X POST "$PHP/api/recharge/recharge" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     go_rc="$(curl -sS -X POST "$GO/api/recharge/recharge" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
@@ -2254,6 +2307,37 @@ echo "log_export_file php_code=$(jcode <<<"$php_lex2") go_code=$(jcode <<<"$go_l
 if [[ "$(jcode <<<"$php_lex2")" != "$(jcode <<<"$go_lex2")" ]]; then
   fail=$((fail + 1))
 fi
+php_pcp="$(curl -sS -X POST "$PHP/platformapi/setting.web.web_setting/setcopyright" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
+go_pcp="$(curl -sS -X POST "$GO/platformapi/setting.web.web_setting/setcopyright" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
+echo "platform_copyright_bad php_msg=$(jget msg <<<"$php_pcp") go_msg=$(jget msg <<<"$go_pcp")"
+if [[ "$(jget msg <<<"$php_pcp")" != "参数异常" || "$(jget msg <<<"$go_pcp")" != "参数异常" ]]; then
+  fail=$((fail + 1))
+fi
+if [[ -n "${TENANT_HOST:-}" && -n "${TENANT_TOKEN:-}" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  now="$(date +%s)"
+  mysqlq "INSERT INTO la_operation_log (admin_id,admin_name,account,action,type,url,params,result,ip,create_time) VALUES (1,'admin','admin','pair-plat-leak','GET','/platformapi/auth.admin/lists','{}','{}','127.0.0.1',$now)"
+  go_tlog="$(curl -sS "$GO/tenantapi/setting.system.log/lists?page_size=50" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  leak_n="$(python3 -c 'import json,sys
+d=json.load(sys.stdin)
+rows=(d.get("data") or {}).get("lists") or d.get("data") or []
+if isinstance(rows, dict):
+    rows=rows.get("lists") or []
+n=0
+for r in rows:
+    if not isinstance(r, dict):
+        continue
+    url=str(r.get("url") or "")
+    if "pair-plat-leak" in str(r.get("action") or "") or "/platformapi/" in url:
+        n+=1
+print(n)' <<<"$go_tlog")"
+  echo "tenant_log_isolate leak=$leak_n go_code=$(jcode <<<"$go_tlog")"
+  if [[ "$(jcode <<<"$go_tlog")" != "1" || "$leak_n" != "0" ]]; then
+    echo "  go_tlog=${go_tlog:0:240}"
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_operation_log WHERE action='pair-plat-leak'"
+fi
 if [[ -n "$go_exu" ]]; then
   go_exf="$(curl -sS -D - -o /tmp/likeadmin-golden/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"
   go_disp="$(printf '%s\n' "$go_exf" | awk -F': ' 'tolower($1)=="content-disposition"{print $2}')"
@@ -2505,6 +2589,16 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-softdel'"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
+  curl -sS "$GO/crontab" >/dev/null || true
+  softdel_st="$(mysqlq "SELECT status FROM la_dev_crontab WHERE name='pair-softdel'")"
+  softdel_err="$(mysqlq "SELECT error FROM la_dev_crontab WHERE name='pair-softdel'")"
+  echo "crontab_softdel status=$softdel_st error=$softdel_err"
+  if [[ "$softdel_st" != "1" || -n "$softdel_err" ]]; then
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-softdel'"
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
@@ -2521,8 +2615,12 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   sms_st="$(mysqlq "SELECT send_status FROM la_tenant_sms_log WHERE mobile='$mobile' ORDER BY id DESC LIMIT 1")"
-  echo "sms_send_status=$sms_st"
+  plat_sms="$(mysqlq "SELECT COUNT(*) FROM la_sms_log WHERE mobile='$mobile'")"
+  echo "sms_send_status=$sms_st plat_sms=$plat_sms"
   if [[ "$(jcode <<<"$go_sms")" == "1" && "$sms_st" != "1" ]]; then
+    fail=$((fail + 1))
+  fi
+  if [[ "$(jcode <<<"$go_sms")" == "1" && "$plat_sms" != "0" ]]; then
     fail=$((fail + 1))
   fi
 fi

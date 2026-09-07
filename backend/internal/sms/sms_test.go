@@ -1,6 +1,13 @@
 package sms
 
-import "testing"
+import (
+	"net/http/httptest"
+	"testing"
+
+	"likeadmin/backend/internal/ctxutil"
+
+	"github.com/gin-gonic/gin"
+)
 
 func TestSceneByTag(t *testing.T) {
 	cases := map[string]int{
@@ -36,6 +43,33 @@ func TestSendVerifyWithoutDB(t *testing.T) {
 	}
 	if Verify(nil, "13800000000", code, "YZMDL") {
 		t.Fatal("code should be consumed")
+	}
+}
+
+func TestPlatformSMS(t *testing.T) {
+	if platformSMS(nil) {
+		t.Fatal("nil context is tenant/user")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	if platformSMS(c) {
+		t.Fatal("empty meta is not platform")
+	}
+	meta := ctxutil.Get(c)
+	meta.App = "platformapi"
+	meta.Source = ctxutil.SourcePlatform
+	if !platformSMS(c) {
+		t.Fatal("platformapi should use la_sms_log")
+	}
+	meta.App = "api"
+	meta.Source = ctxutil.SourceUser
+	if platformSMS(c) {
+		t.Fatal("user api should use la_tenant_sms_log")
+	}
+	meta.App = "tenantapi"
+	meta.Source = ctxutil.SourceTenant
+	if platformSMS(c) {
+		t.Fatal("tenantapi should use la_tenant_sms_log")
 	}
 }
 

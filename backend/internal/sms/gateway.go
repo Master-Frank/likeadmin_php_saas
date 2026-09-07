@@ -78,13 +78,13 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, log
 		raw, _ := json.Marshal(result)
 		if err != nil {
 			raw, _ = json.Marshal(err.Error())
-			bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ?", logID).Updates(map[string]any{
+			updateSMSLog(c, logID, map[string]any{
 				"send_status": 2, "results": string(raw), "content": content,
-			})
+			}, "")
 		} else {
-			bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ?", logID).Updates(map[string]any{
+			updateSMSLog(c, logID, map[string]any{
 				"send_status": 1, "results": string(raw), "content": content,
-			})
+			}, "")
 		}
 	}
 	return err

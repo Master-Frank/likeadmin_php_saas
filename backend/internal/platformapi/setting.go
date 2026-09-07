@@ -10,11 +10,13 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -48,24 +50,29 @@ func WebGetCopyright(c *gin.Context) {
 }
 
 func WebSetCopyright(c *gin.Context) {
-	cfgsvc.Set(c, "copyright", "config", httpx.Any(c, "config"))
+	cfg := httpx.Any(c, "config")
+	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	cfgsvc.Set(c, "copyright", "config", cfg)
 	response.SuccessNotice(c, "设置成功")
 }
 
 func WebGetAgreement(c *gin.Context) {
 	response.Data(c, gin.H{
 		"service_title":   cfgsvc.GetString(c, "agreement", "service_title", "服务协议"),
-		"service_content": cfgsvc.GetString(c, "agreement", "service_content", ""),
+		"service_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "service_content", "")),
 		"privacy_title":   cfgsvc.GetString(c, "agreement", "privacy_title", "隐私政策"),
-		"privacy_content": cfgsvc.GetString(c, "agreement", "privacy_content", ""),
+		"privacy_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "privacy_content", "")),
 	})
 }
 
 func WebSetAgreement(c *gin.Context) {
 	cfgsvc.Set(c, "agreement", "service_title", httpx.Str(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", httpx.Str(c, "service_content"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.Str(c, "service_content")))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", httpx.Str(c, "privacy_content"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.Str(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -208,6 +215,22 @@ func SystemInfo(c *gin.Context) {
 func LogLists(c *gin.Context) {
 	q := lists.Parse(c)
 	db := bootstrap.DB.Model(&model.OperationLog{})
+	if ctxutil.Get(c).App == "tenantapi" {
+		db = db.Where("url LIKE ?", "%/tenantapi/%")
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			adb := tenantdb.Use(c)
+			if adb == nil {
+				adb = bootstrap.DB
+			}
+			var ids []uint
+			adb.Model(&model.TenantAdmin{}).Where("tenant_id = ? AND delete_time IS NULL", tid).Pluck("id", &ids)
+			if len(ids) == 0 {
+				db = db.Where("1 = 0")
+			} else {
+				db = db.Where("admin_id IN ?", ids)
+			}
+		}
+	}
 	if name := lists.Param(q, "admin_name"); name != "" {
 		db = db.Where("admin_name LIKE ?", "%"+name+"%")
 	}

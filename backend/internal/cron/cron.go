@@ -26,7 +26,7 @@ func RunOnce() {
 		return
 	}
 	var rows []model.Crontab
-	bootstrap.DB.Where("status = 1").Find(&rows)
+	bootstrap.DB.Where("status = 1 AND delete_time IS NULL").Find(&rows)
 	now := util.NowUnix()
 	for _, item := range rows {
 		if item.LastTime == nil || *item.LastTime <= 0 {

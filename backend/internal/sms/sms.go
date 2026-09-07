@@ -15,6 +15,7 @@ import (
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -94,12 +95,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	}
 	var logID uint
 	if bootstrap.DB != nil {
-		row := model.TenantSmsLog{
-			SceneID: scene, Mobile: mobile, Code: code, Content: content,
-			SendStatus: 0, SendTime: &now, TenantID: tid, CreateTime: now,
-		}
-		_ = bootstrap.DB.Create(&row).Error
-		logID = row.ID
+		logID = createSMSLog(c, scene, mobile, code, content, now)
 		addNoticeRecord(c, scene, map[string]string{"code": code, "mobile": mobile}, tid)
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
@@ -108,8 +104,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 		return 0, "", err
 	}
 	if logID > 0 {
-		bootstrap.DB.Model(&model.TenantSmsLog{}).Where("id = ? AND send_status = 0", logID).
-			Updates(map[string]any{"send_status": 1})
+		updateSMSLog(c, logID, map[string]any{"send_status": 1}, "send_status = 0")
 	}
 	return scene, code, nil
 }
@@ -140,19 +135,17 @@ func verifyScene(c *gin.Context, mobile, code string, scene int) bool {
 		return false
 	}
 	now := util.NowUnix()
-	q := bootstrap.DB.Model(&model.TenantSmsLog{}).
+	q := scopeSmsTenant(c, smsLogModel(c)).
 		Where("mobile = ? AND scene_id = ? AND code = ? AND is_verify = 0 AND send_status = 1 AND send_time >= ?",
 			mobile, scene, code, now-5*60)
-	if c != nil {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
+	var row struct {
+		ID       uint `gorm:"column:id"`
+		CheckNum int  `gorm:"column:check_num"`
 	}
-	var row model.TenantSmsLog
-	if q.Order("id desc").First(&row).Error != nil {
+	if q.Select("id, check_num").Order("id desc").First(&row).Error != nil {
 		return false
 	}
-	bootstrap.DB.Model(&row).Updates(map[string]any{"is_verify": 1, "check_num": row.CheckNum + 1})
+	updateSMSLog(c, row.ID, map[string]any{"is_verify": 1, "check_num": row.CheckNum + 1}, "")
 	cache.Del(cacheKey(scene, mobile))
 	return true
 }
@@ -161,26 +154,73 @@ func markLogVerified(c *gin.Context, mobile, code string, scene int) {
 	if bootstrap.DB == nil {
 		return
 	}
-	q := bootstrap.DB.Model(&model.TenantSmsLog{}).
-		Where("mobile = ? AND scene_id = ? AND code = ? AND is_verify = 0", mobile, scene, code)
-	if c != nil {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-	}
-	q.Updates(map[string]any{"is_verify": 1})
+	scopeSmsTenant(c, smsLogModel(c)).
+		Where("mobile = ? AND scene_id = ? AND code = ? AND is_verify = 0", mobile, scene, code).
+		Updates(map[string]any{"is_verify": 1})
 }
 
 func tooFrequent(c *gin.Context, mobile string, scene int) bool {
 	now := util.NowUnix()
-	q := bootstrap.DB.Model(&model.TenantSmsLog{}).
+	q := scopeSmsTenant(c, smsLogModel(c)).
 		Where("mobile = ? AND send_status IN (0,1) AND scene_id = ? AND send_time >= ?", mobile, scene, now-60)
-	if c != nil {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-	}
 	var n int64
 	q.Count(&n)
 	return n > 0
+}
+
+func platformSMS(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	meta := ctxutil.Get(c)
+	return meta.Source == ctxutil.SourcePlatform || meta.App == "platformapi"
+}
+
+func smsLogModel(c *gin.Context) *gorm.DB {
+	if platformSMS(c) {
+		return bootstrap.DB.Model(&model.SmsLog{})
+	}
+	return bootstrap.DB.Model(&model.TenantSmsLog{})
+}
+
+func scopeSmsTenant(c *gin.Context, q *gorm.DB) *gorm.DB {
+	if platformSMS(c) || c == nil {
+		return q
+	}
+	if tid := ctxutil.Get(c).TenantID; tid > 0 {
+		return q.Where("tenant_id = ?", tid)
+	}
+	return q
+}
+
+func createSMSLog(c *gin.Context, scene int, mobile, code, content string, now int64) uint {
+	if platformSMS(c) {
+		row := model.SmsLog{
+			SceneID: scene, Mobile: mobile, Code: code, Content: content,
+			SendStatus: 0, SendTime: &now, CreateTime: now,
+		}
+		_ = bootstrap.DB.Create(&row).Error
+		return row.ID
+	}
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	row := model.TenantSmsLog{
+		SceneID: scene, Mobile: mobile, Code: code, Content: content,
+		SendStatus: 0, SendTime: &now, TenantID: tid, CreateTime: now,
+	}
+	_ = bootstrap.DB.Create(&row).Error
+	return row.ID
+}
+
+func updateSMSLog(c *gin.Context, logID uint, fields map[string]any, extraWhere string) {
+	if logID == 0 || bootstrap.DB == nil {
+		return
+	}
+	q := smsLogModel(c).Where("id = ?", logID)
+	if extraWhere != "" {
+		q = q.Where(extraWhere)
+	}
+	q.Updates(fields)
 }
