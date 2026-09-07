@@ -24,6 +24,7 @@ func RunOnce() {
 	if bootstrap.DB == nil {
 		return
 	}
+	tenantdb.Register(bootstrap.DB)
 	EnsureNativeJobs()
 	var rows []model.Crontab
 	bootstrap.DB.Where("status = 1 AND delete_time IS NULL").Find(&rows)
@@ -304,7 +305,11 @@ func txnCancelSettings(tenantID uint, defOn, defMin int) (enabled, minutes int) 
 	}
 	var rows []kv
 	if tenantID > 0 {
-		bootstrap.DB.Model(&model.TenantConfig{}).Where("tenant_id = ? AND type = ?", tenantID, "transaction").
+		db := tenantdb.ForTenant(tenantID)
+		if db == nil {
+			return enabled, minutes
+		}
+		db.Model(&model.TenantConfig{}).Where("tenant_id = ? AND type = ?", tenantID, "transaction").
 			Select("name, value").Scan(&rows)
 	} else {
 		bootstrap.DB.Model(&model.ConfigRow{}).Where("type = ?", "transaction").

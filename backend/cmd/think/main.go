@@ -10,6 +10,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cron"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/upgrade"
 )
 
@@ -26,6 +27,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)
 	}
+	tenantdb.Register(bootstrap.DB)
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: think <command> [params...]")
 		os.Exit(1)

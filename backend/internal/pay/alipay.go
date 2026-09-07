@@ -202,8 +202,11 @@ func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) (AliRef
 
 func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) (AliRefundResult, error) {
 	cfg := AliCfgByTenant(tenantID)
-	if cfg.AppID == "" || cfg.PrivateKey == "" || orderSN == "" {
-		return AliRefundResult{}, nil
+	if cfg.AppID == "" || cfg.PrivateKey == "" {
+		return AliRefundResult{}, fmt.Errorf("请先完成支付渠道配置")
+	}
+	if orderSN == "" {
+		return AliRefundResult{}, fmt.Errorf("订单号缺失")
 	}
 	key, err := parseRSAPrivateKey(cfg.PrivateKey)
 	if err != nil {

@@ -201,14 +201,14 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 }
 
 func putAliyun(cfg map[string]any, key string, body []byte, contentType string) error {
-	ak, sk, bucket, domain := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket"), str(cfg, "domain")
+	ak, sk, bucket := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket")
 	if ak == "" || sk == "" || bucket == "" {
 		return fmt.Errorf("阿里云OSS配置不完整")
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	scheme, host := storageHost(domain, bucket+".oss-cn-hangzhou.aliyuncs.com")
+	scheme, host := aliyunHost(cfg)
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "PUT\n\n" + contentType + "\n" + date + "\n/" + bucket + "/" + key
 	mac := hmac.New(sha1.New, []byte(sk))
@@ -253,7 +253,7 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 func deleteQiniu(cfg map[string]any, key string) error {
 	ak, sk, bucket := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket")
 	if ak == "" || sk == "" || bucket == "" {
-		return nil
+		return fmt.Errorf("七牛云存储配置不完整")
 	}
 	entry := base64.URLEncoding.EncodeToString([]byte(bucket + ":" + key))
 	path := "/delete/" + entry
@@ -269,11 +269,11 @@ func deleteQiniu(cfg map[string]any, key string) error {
 }
 
 func deleteAliyun(cfg map[string]any, key string) error {
-	ak, sk, bucket, domain := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket"), str(cfg, "domain")
+	ak, sk, bucket := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket")
 	if ak == "" || sk == "" || bucket == "" {
-		return nil
+		return fmt.Errorf("阿里云OSS配置不完整")
 	}
-	scheme, host := storageHost(domain, bucket+".oss-cn-hangzhou.aliyuncs.com")
+	scheme, host := aliyunHost(cfg)
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "DELETE\n\n\n" + date + "\n/" + bucket + "/" + key
 	mac := hmac.New(sha1.New, []byte(sk))
@@ -291,7 +291,7 @@ func deleteAliyun(cfg map[string]any, key string) error {
 func deleteQcloud(cfg map[string]any, key string) error {
 	ak, sk, bucket, region := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket"), str(cfg, "region")
 	if ak == "" || sk == "" || bucket == "" {
-		return nil
+		return fmt.Errorf("腾讯云COS配置不完整")
 	}
 	scheme, host := qcloudHost(cfg, region, bucket)
 	date := time.Now().UTC().Format(http.TimeFormat)
@@ -308,6 +308,24 @@ func deleteQcloud(cfg map[string]any, key string) error {
 	req.Header.Set("Host", host)
 	req.Header.Set("Authorization", auth)
 	return doDelete(req)
+}
+
+func aliyunHost(cfg map[string]any) (scheme, host string) {
+	domain := firstNonEmpty(str(cfg, "domain"), str(cfg, "endpoint"))
+	fallback := str(cfg, "bucket") + ".oss-cn-hangzhou.aliyuncs.com"
+	if domain == "" {
+		if region := strings.TrimPrefix(str(cfg, "region"), "oss-"); region != "" {
+			fallback = str(cfg, "bucket") + ".oss-" + region + ".aliyuncs.com"
+		}
+	}
+	return storageHost(domain, fallback)
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func storageHost(domain, fallback string) (scheme, host string) {

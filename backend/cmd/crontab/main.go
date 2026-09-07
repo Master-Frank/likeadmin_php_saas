@@ -7,6 +7,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cron"
+	"likeadmin/backend/internal/tenantdb"
 )
 
 func main() {
@@ -21,6 +22,7 @@ func main() {
 	if err := bootstrap.Init(cfg); err != nil {
 		log.Fatalf("init: %v", err)
 	}
+	tenantdb.Register(bootstrap.DB)
 	if os.Getenv("LIKEADMIN_CRON_ONCE") == "1" {
 		cron.RunOnce()
 		return

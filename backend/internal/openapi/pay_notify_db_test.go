@@ -82,8 +82,15 @@ func TestApplyRefundNotifyMarksLog(t *testing.T) {
 		t.Skip("no database")
 	}
 	sn := "itrf" + time.Now().Format("150405.000")
+	order := model.RechargeOrder{
+		SN: sn, UserID: 1, PayWay: 2, PayStatus: 1, OrderAmount: 1,
+		OrderTerminal: 1, RefundStatus: 1, TenantID: 1, CreateTime: time.Now().Unix(),
+	}
+	if err := bootstrap.DB.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
 	rec := model.RefundRecord{
-		SN: sn + "r", UserID: 1, OrderID: 1, OrderSN: sn, OrderType: "recharge",
+		SN: sn + "r", UserID: 1, OrderID: order.ID, OrderSN: sn, OrderType: "recharge",
 		OrderAmount: 1, RefundAmount: 1, RefundStatus: 0, TenantID: 1, CreateTime: time.Now().Unix(),
 	}
 	if err := bootstrap.DB.Create(&rec).Error; err != nil {
@@ -99,13 +106,19 @@ func TestApplyRefundNotifyMarksLog(t *testing.T) {
 	t.Cleanup(func() {
 		bootstrap.DB.Where("id = ?", lg.ID).Delete(&model.RefundLog{})
 		bootstrap.DB.Where("id = ?", rec.ID).Delete(&model.RefundRecord{})
+		bootstrap.DB.Where("id = ?", order.ID).Delete(&model.RechargeOrder{})
 	})
-	pay.ApplyRefundNotify(wechat.PayNotify{RefundOK: true, OutRefundNo: sn})
+	pay.ApplyRefundNotify(wechat.PayNotify{RefundOK: true, OutRefundNo: sn, TransactionID: "wx-rf-tid"})
 	var gotLog model.RefundLog
 	var gotRec model.RefundRecord
+	var gotOrder model.RechargeOrder
 	bootstrap.DB.Where("id = ?", lg.ID).First(&gotLog)
 	bootstrap.DB.Where("id = ?", rec.ID).First(&gotRec)
+	bootstrap.DB.Where("id = ?", order.ID).First(&gotOrder)
 	if gotLog.RefundStatus != 1 || gotRec.RefundStatus != 1 {
 		t.Fatalf("log=%d rec=%d", gotLog.RefundStatus, gotRec.RefundStatus)
+	}
+	if gotOrder.RefundTransactionID != "wx-rf-tid" {
+		t.Fatalf("refund_transaction_id=%q", gotOrder.RefundTransactionID)
 	}
 }

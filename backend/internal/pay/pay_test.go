@@ -111,6 +111,13 @@ func TestWechatRefundMissingConfig(t *testing.T) {
 	}
 }
 
+func TestAliRefundMissingConfig(t *testing.T) {
+	_, err := AliRefundByTenant(0, "sn1", "rf1", 1)
+	if err == nil || err.Error() != "请先完成支付渠道配置" {
+		t.Fatalf("cfg %v", err)
+	}
+}
+
 func TestParseWechatRefundQuery(t *testing.T) {
 	ok, msg, known := ParseWechatRefundQuery(nil)
 	if ok || known || msg != "" {

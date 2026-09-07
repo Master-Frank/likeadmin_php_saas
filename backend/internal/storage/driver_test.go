@@ -105,3 +105,26 @@ func TestStorageHostHTTP(t *testing.T) {
 		t.Fatalf("fallback %s %s", scheme, host)
 	}
 }
+
+func TestAliyunHostUsesRegion(t *testing.T) {
+	scheme, host := aliyunHost(map[string]any{"bucket": "bkt", "region": "cn-beijing"})
+	if scheme != "https" || host != "bkt.oss-cn-beijing.aliyuncs.com" {
+		t.Fatalf("%s %s", scheme, host)
+	}
+	scheme, host = aliyunHost(map[string]any{"bucket": "bkt", "domain": "http://oss.local/path"})
+	if scheme != "http" || host != "oss.local/path" {
+		t.Fatalf("domain %s %s", scheme, host)
+	}
+}
+
+func TestDeleteCloudMissingConfig(t *testing.T) {
+	if err := deleteQiniu(map[string]any{}, "k"); err == nil {
+		t.Fatal("qiniu")
+	}
+	if err := deleteAliyun(map[string]any{}, "k"); err == nil {
+		t.Fatal("aliyun")
+	}
+	if err := deleteQcloud(map[string]any{}, "k"); err == nil {
+		t.Fatal("qcloud")
+	}
+}

@@ -38,4 +38,11 @@ func ApplyRefundNotify(n wechat.PayNotify) {
 		uq = uq.Where("tenant_id = ?", rec.TenantID)
 	}
 	uq.Updates(map[string]any{"refund_status": 1, "update_time": now})
+	if rec.OrderType == "recharge" && rec.OrderID > 0 && n.TransactionID != "" {
+		oq := bootstrap.DB.Model(&model.RechargeOrder{}).Where("id = ?", rec.OrderID)
+		if rec.TenantID > 0 {
+			oq = oq.Where("tenant_id = ?", rec.TenantID)
+		}
+		oq.Updates(map[string]any{"refund_transaction_id": n.TransactionID, "update_time": now})
+	}
 }
