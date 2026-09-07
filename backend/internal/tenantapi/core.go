@@ -495,11 +495,9 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if httpx.BodyUint(c, "cid") == 0 {
 		return "所属栏目必须存在"
 	}
-	if raw := httpx.BodyAny(c, "is_show"); raw == nil || util.ToString(raw) == "" {
-		return "是否显示必须存在"
-	}
-	if show := httpx.BodyInt(c, "is_show"); show != 0 && show != 1 {
-		return "是否显示取值异常"
+	// PHP ArticleValidate: is_show require|in:0,1 with no custom messages.
+	if msg := util.ArticleCateShowCheck(httpx.Body(c)); msg != "" {
+		return msg
 	}
 	return ""
 }

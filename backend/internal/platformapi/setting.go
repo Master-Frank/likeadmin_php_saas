@@ -163,9 +163,7 @@ func CustomerGet(c *gin.Context) {
 }
 
 func CustomerSet(c *gin.Context) {
-	if !response.RequirePOST(c) {
-		return
-	}
+	// PHP CustomerServiceController::setConfig uses $this->request->post() with no goCheck.
 	p := httpx.Body(c)
 	for _, k := range []string{"qr_code", "wechat", "phone", "service_time"} {
 		v, ok := p[k]

@@ -179,6 +179,8 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/file/listCate?type=10
     /tenantapi/finance.account_log/getUmChangeType
     /tenantapi/recharge.recharge/getConfig
+    /tenantapi/recharge.recharge/lists
+    /tenantapi/finance.refund/record
     /tenantapi/channel.official_account_setting/getConfig
     /api/pc/config
     /tenantapi/auth.role/all
@@ -1073,6 +1075,14 @@ print(json.dumps({"id": data.get("id") or int(sys.argv[1]), "template": tpl}, en
   if [[ "$(jget msg <<<"$php_nbad")" != "$(jget msg <<<"$go_nbad")" ]]; then
     fail=$((fail + 1))
   fi
+  php_nsg="$(curl -sS "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_nsg="$(curl -sS "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_notice_set_get php_msg=$(jget msg <<<"$php_nsg") go_msg=$(jget msg <<<"$go_nsg")"
+  if [[ "$(jget msg <<<"$php_nsg")" != "$(jget msg <<<"$go_nsg")" ]]; then
+    echo "  php_nsg=${php_nsg:0:200}"
+    echo "  go_nsg=${go_nsg:0:200}"
+    fail=$((fail + 1))
+  fi
 
   plist="$(curl -sS "$GO/tenantapi/setting.pay.pay_config/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   pay_id="$(python3 -c '
@@ -1338,6 +1348,30 @@ print((d.get("data") or {}).get("id") or 0)
     echo "  go_sbad=${go_sbad:0:200}"
     fail=$((fail + 1))
   fi
+  php_scg="$(curl -sS "$PHP/platformapi/setting.storage/change" -H "token: $TOKEN")"
+  go_scg="$(curl -sS "$GO/platformapi/setting.storage/change" -H "token: $TOKEN")"
+  echo "storage_change_get php_msg=$(jget msg <<<"$php_scg") go_msg=$(jget msg <<<"$go_scg")"
+  if [[ "$(jget msg <<<"$php_scg")" != "$(jget msg <<<"$go_scg")" ]]; then
+    echo "  php_scg=${php_scg:0:200}"
+    echo "  go_scg=${go_scg:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_sce="$(curl -sS -X POST "$PHP/platformapi/setting.storage/change" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_sce="$(curl -sS -X POST "$GO/platformapi/setting.storage/change" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "storage_change_empty php_msg=$(jget msg <<<"$php_sce") go_msg=$(jget msg <<<"$go_sce")"
+  if [[ "$(jget msg <<<"$php_sce")" != "$(jget msg <<<"$go_sce")" ]]; then
+    echo "  php_sce=${php_sce:0:200}"
+    echo "  go_sce=${go_sce:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_scl="$(curl -sS -X POST "$PHP/platformapi/setting.storage/change" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"engine":"local"}')"
+  go_scl="$(curl -sS -X POST "$GO/platformapi/setting.storage/change" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"engine":"local"}')"
+  echo "storage_change_local php_msg=$(jget msg <<<"$php_scl") go_msg=$(jget msg <<<"$go_scl")"
+  if [[ "$(jget msg <<<"$php_scl")" != "$(jget msg <<<"$go_scl")" || "$(jcode <<<"$php_scl")" != "$(jcode <<<"$go_scl")" ]]; then
+    echo "  php_scl=${php_scl:0:200}"
+    echo "  go_scl=${go_scl:0:200}"
+    fail=$((fail + 1))
+  fi
 
   php_web="$(curl -sS -X POST "$PHP/platformapi/setting.web.web_setting/setwebsite" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_web="$(curl -sS -X POST "$GO/platformapi/setting.web.web_setting/setwebsite" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -1345,6 +1379,31 @@ print((d.get("data") or {}).get("id") or 0)
   if [[ "$(jget msg <<<"$php_web")" != "$(jget msg <<<"$go_web")" ]]; then
     fail=$((fail + 1))
   fi
+  pws="$(curl -sS "$PHP/platformapi/setting.web.web_setting/getWebsite" -H "token: $TOKEN")"
+  pws_marker="pairpws$(date +%s)"
+  set_pws="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+data=dict(d.get("data") or {})
+data["name"]=sys.argv[1]
+print(json.dumps(data, ensure_ascii=False))
+' "$pws_marker" <<<"$pws")"
+  go_pws="$(curl -sS -X POST "$GO/platformapi/setting.web.web_setting/setWebsite" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$set_pws")"
+  php_pws2="$(curl -sS "$PHP/platformapi/setting.web.web_setting/getWebsite" -H "token: $TOKEN")"
+  go_pws2="$(curl -sS "$GO/platformapi/setting.web.web_setting/getWebsite" -H "token: $TOKEN")"
+  echo "platform_website_set go_code=$(jcode <<<"$go_pws") php_name=$(jget data.name <<<"$php_pws2") go_name=$(jget data.name <<<"$go_pws2")"
+  if [[ "$(jcode <<<"$go_pws")" != "1" || "$(jget data.name <<<"$php_pws2")" != "$pws_marker" || "$(jget data.name <<<"$go_pws2")" != "$pws_marker" ]]; then
+    echo "  go_pws=${go_pws:0:200}"
+    echo "  php_pws2=${php_pws2:0:200}"
+    echo "  go_pws2=${go_pws2:0:200}"
+    fail=$((fail + 1))
+  fi
+  restore_pws="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+print(json.dumps(d.get("data") or {}, ensure_ascii=False))
+' <<<"$pws")"
+  curl -sS -X POST "$PHP/platformapi/setting.web.web_setting/setWebsite" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$restore_pws" >/dev/null
   php_av="$(curl -sS -X POST "$PHP/platformapi/setting.user.user/setconfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_av="$(curl -sS -X POST "$GO/platformapi/setting.user.user/setconfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "user_avatar_bad php_msg=$(jget msg <<<"$php_av") go_msg=$(jget msg <<<"$go_av")"
@@ -1381,6 +1440,22 @@ print((d.get("data") or {}).get("id") or 0)
   go_cust="$(curl -sS "$GO/platformapi/setting.customer_service/getconfig" -H "token: $TOKEN")"
   echo "customer_get php_keys=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$php_cust") go_keys=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$go_cust")"
   if [[ "$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$php_cust")" != "$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$go_cust")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_csg="$(curl -sS "$PHP/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
+  go_csg="$(curl -sS "$GO/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
+  echo "customer_set_get php_code=$(jcode <<<"$php_csg") go_code=$(jcode <<<"$go_csg") php_msg=$(jget msg <<<"$php_csg") go_msg=$(jget msg <<<"$go_csg")"
+  if [[ "$(jcode <<<"$php_csg")" != "$(jcode <<<"$go_csg")" || "$(jget msg <<<"$php_csg")" != "$(jget msg <<<"$go_csg")" ]]; then
+    echo "  php_csg=${php_csg:0:200}"
+    echo "  go_csg=${go_csg:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_pnsg="$(curl -sS "$PHP/platformapi/notice.notice/set" -H "token: $TOKEN")"
+  go_pnsg="$(curl -sS "$GO/platformapi/notice.notice/set" -H "token: $TOKEN")"
+  echo "platform_notice_set_get php_msg=$(jget msg <<<"$php_pnsg") go_msg=$(jget msg <<<"$go_pnsg")"
+  if [[ "$(jget msg <<<"$php_pnsg")" != "$(jget msg <<<"$go_pnsg")" ]]; then
+    echo "  php_pnsg=${php_pnsg:0:200}"
+    echo "  go_pnsg=${go_pnsg:0:200}"
     fail=$((fail + 1))
   fi
   php_ad="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant_admin/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -1581,6 +1656,30 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
   echo "refund_bad php_msg=$(jget msg <<<"$php_rf") go_msg=$(jget msg <<<"$go_rf")"
   if [[ "$(jget msg <<<"$php_rf")" != "$(jget msg <<<"$go_rf")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_rfa="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_rfa="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "refund_again_empty php_msg=$(jget msg <<<"$php_rfa") go_msg=$(jget msg <<<"$go_rfa")"
+  if [[ "$(jget msg <<<"$php_rfa")" != "$(jget msg <<<"$go_rfa")" ]]; then
+    echo "  php_rfa=${php_rfa:0:200}"
+    echo "  go_rfa=${go_rfa:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rfag="$(curl -sS "$PHP/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rfag="$(curl -sS "$GO/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "refund_again_get php_msg=$(jget msg <<<"$php_rfag") go_msg=$(jget msg <<<"$go_rfag")"
+  if [[ "$(jget msg <<<"$php_rfag")" != "$(jget msg <<<"$go_rfag")" ]]; then
+    echo "  php_rfag=${php_rfag:0:200}"
+    echo "  go_rfag=${go_rfag:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rfam="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"record_id":99999999}')"
+  go_rfam="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refundAgain" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"record_id":99999999}')"
+  echo "refund_again_missing php_msg=$(jget msg <<<"$php_rfam") go_msg=$(jget msg <<<"$go_rfam")"
+  if [[ "$(jget msg <<<"$php_rfam")" != "$(jget msg <<<"$go_rfam")" ]]; then
+    echo "  php_rfam=${php_rfam:0:200}"
+    echo "  go_rfam=${go_rfam:0:200}"
     fail=$((fail + 1))
   fi
   php_tw="$(curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setwebsite" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -2039,6 +2138,22 @@ print(json.dumps({
   if [[ "$(jget msg <<<"$php_as")" != "$(jget msg <<<"$go_as")" ]]; then
     fail=$((fail + 1))
   fi
+  php_ans="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":1,"title":"x"}')"
+  go_ans="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":1,"title":"x"}')"
+  echo "article_add_noshown php_msg=$(jget msg <<<"$php_ans") go_msg=$(jget msg <<<"$go_ans")"
+  if [[ "$(jget msg <<<"$php_ans")" != "$(jget msg <<<"$go_ans")" ]]; then
+    echo "  php_ans=${php_ans:0:200}"
+    echo "  go_ans=${go_ans:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_abs="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":1,"title":"x","is_show":2}')"
+  go_abs="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":1,"title":"x","is_show":2}')"
+  echo "article_add_badshow php_msg=$(jget msg <<<"$php_abs") go_msg=$(jget msg <<<"$go_abs")"
+  if [[ "$(jget msg <<<"$php_abs")" != "$(jget msg <<<"$go_abs")" ]]; then
+    echo "  php_abs=${php_abs:0:200}"
+    echo "  go_abs=${go_abs:0:200}"
+    fail=$((fail + 1))
+  fi
   php_os="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
   go_os="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
   echo "oa_sort_bad php_msg=$(jget msg <<<"$php_os") go_msg=$(jget msg <<<"$go_os")"
@@ -2250,6 +2365,18 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
   if [[ -n "$php_rramt" && "$php_rramt" != "$go_rramt" ]]; then
     fail=$((fail + 1))
   fi
+  php_rrk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(",".join(sorted(ls[0])) if ls else "")' <<<"$php_rr")"
+  go_rrk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(",".join(sorted(ls[0])) if ls else "")' <<<"$go_rr")"
+  echo "refund_record_keys php=$php_rrk go=$go_rrk"
+  if [[ -n "$php_rrk" && "$php_rrk" != "$go_rrk" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_rlk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(",".join(sorted(ls[0])) if ls else "")' <<<"$php_rl")"
+  go_rlk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(",".join(sorted(ls[0])) if ls else "")' <<<"$go_rl")"
+  echo "recharge_lists_keys php=$php_rlk go=$go_rlk"
+  if [[ -n "$php_rlk" && "$php_rlk" != "$go_rlk" ]]; then
+    fail=$((fail + 1))
+  fi
   php_ss="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_ss="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   php_cc="$(python3 -c 'import json,sys; print(repr((json.load(sys.stdin).get("data") or {}).get("clarity_code")))' <<<"$php_ss")"
@@ -2275,6 +2402,27 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
     if [[ "$php_click" != "$go_click" ]]; then
       fail=$((fail + 1))
     fi
+    php_ens="$(curl -sS -X POST "$PHP/tenantapi/article.article/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$php_aid,\"cid\":1,\"title\":\"x\"}")"
+    go_ens="$(curl -sS -X POST "$GO/tenantapi/article.article/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$php_aid,\"cid\":1,\"title\":\"x\"}")"
+    echo "article_edit_noshown php_msg=$(jget msg <<<"$php_ens") go_msg=$(jget msg <<<"$go_ens")"
+    if [[ "$(jget msg <<<"$php_ens")" != "$(jget msg <<<"$go_ens")" ]]; then
+      echo "  php_ens=${php_ens:0:200}"
+      echo "  go_ens=${go_ens:0:200}"
+      fail=$((fail + 1))
+    fi
+    old_show="$(jget data.is_show <<<"$php_ad")"
+    if [[ "$old_show" == "1" ]]; then new_show=0; else new_show=1; fi
+    go_aus="$(curl -sS -X POST "$GO/tenantapi/article.article/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$php_aid,\"is_show\":$new_show}")"
+    php_ad2="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$php_aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_ad2="$(curl -sS "$GO/tenantapi/article.article/detail?id=$php_aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "article_status_set go_code=$(jcode <<<"$go_aus") php_show=$(jget data.is_show <<<"$php_ad2") go_show=$(jget data.is_show <<<"$go_ad2")"
+    if [[ "$(jcode <<<"$go_aus")" != "1" || "$(jget data.is_show <<<"$php_ad2")" != "$new_show" || "$(jget data.is_show <<<"$go_ad2")" != "$new_show" ]]; then
+      echo "  go_aus=${go_aus:0:200}"
+      echo "  php_ad2=${php_ad2:0:200}"
+      echo "  go_ad2=${go_ad2:0:200}"
+      fail=$((fail + 1))
+    fi
+    curl -sS -X POST "$PHP/tenantapi/article.article/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$php_aid,\"is_show\":${old_show:-1}}" >/dev/null
   fi
 fi
 
@@ -3957,6 +4105,22 @@ print(first_id(ls))')"
   fi
   restore_hs="${hs_old:-0}"
   curl -sS -X POST "$PHP/tenantapi/setting.hot_search/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"status\":$restore_hs,\"data\":[]}" >/dev/null || true
+  php_rc0="$(curl -sS "$PHP/tenantapi/recharge.recharge/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  rc_old_st="$(jget data.status <<<"$php_rc0")"
+  rc_old_min="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("min_amount",0))' <<<"$php_rc0")"
+  php_rcset="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"status":1,"min_amount":12.34}')"
+  go_rcset="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"status":1,"min_amount":12.34}')"
+  php_rc2="$(curl -sS "$PHP/tenantapi/recharge.recharge/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rc2="$(curl -sS "$GO/tenantapi/recharge.recharge/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_rcmin="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("min_amount"))' <<<"$php_rc2")"
+  go_rcmin="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("min_amount"))' <<<"$go_rc2")"
+  echo "recharge_set php_code=$(jcode <<<"$php_rcset") go_code=$(jcode <<<"$go_rcset") php_min=$php_rcmin go_min=$go_rcmin"
+  if [[ "$(jcode <<<"$php_rcset")" != "$(jcode <<<"$go_rcset")" || "$(jget data.status <<<"$php_rc2")" != "$(jget data.status <<<"$go_rc2")" || "$php_rcmin" != "$go_rcmin" ]]; then
+    echo "  php_rc2=${php_rc2:0:200}"
+    echo "  go_rc2=${go_rc2:0:200}"
+    fail=$((fail + 1))
+  fi
+  curl -sS -X POST "$PHP/tenantapi/recharge.recharge/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"status\":${rc_old_st:-0},\"min_amount\":$rc_old_min}" >/dev/null || true
   php_ad0="$(curl -sS "$PHP/tenantapi/article.article/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_ad0="$(curl -sS "$GO/tenantapi/article.article/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "article_detail_noid php_msg=$(jget msg <<<"$php_ad0") go_msg=$(jget msg <<<"$go_ad0")"
@@ -4225,6 +4389,24 @@ print(first(json.load(sys.stdin).get("data") or []))
   if [[ "$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$php_icon")" != "$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$go_icon")" ]]; then
     echo "  php_icon=$php_icon"
     echo "  go_icon=$go_icon"
+    fail=$((fail + 1))
+  fi
+  if [[ -n "$TENANT_TOKEN" ]]; then
+    php_tcsg="$(curl -sS "$PHP/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_tcsg="$(curl -sS "$GO/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "tenant_customer_set_get php_code=$(jcode <<<"$php_tcsg") go_code=$(jcode <<<"$go_tcsg") php_msg=$(jget msg <<<"$php_tcsg") go_msg=$(jget msg <<<"$go_tcsg")"
+    if [[ "$(jcode <<<"$php_tcsg")" != "$(jcode <<<"$go_tcsg")" || "$(jget msg <<<"$php_tcsg")" != "$(jget msg <<<"$go_tcsg")" ]]; then
+      echo "  php_tcsg=${php_tcsg:0:200}"
+      echo "  go_tcsg=${go_tcsg:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_cclear="$(curl -sS -X POST "$PHP/platformapi/setting.system.cache/clear" -H "token: $TOKEN")"
+  go_cclear="$(curl -sS -X POST "$GO/platformapi/setting.system.cache/clear" -H "token: $TOKEN")"
+  echo "cache_clear php_code=$(jcode <<<"$php_cclear") go_code=$(jcode <<<"$go_cclear") php_msg=$(jget msg <<<"$php_cclear") go_msg=$(jget msg <<<"$go_cclear") php_show=$(jget show <<<"$php_cclear") go_show=$(jget show <<<"$go_cclear")"
+  if [[ "$(jcode <<<"$php_cclear")" != "$(jcode <<<"$go_cclear")" || "$(jget msg <<<"$php_cclear")" != "$(jget msg <<<"$go_cclear")" || "$(jget show <<<"$php_cclear")" != "$(jget show <<<"$go_cclear")" ]]; then
+    echo "  php_cclear=${php_cclear:0:200}"
+    echo "  go_cclear=${go_cclear:0:200}"
     fail=$((fail + 1))
   fi
 fi
