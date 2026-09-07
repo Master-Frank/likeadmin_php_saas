@@ -437,11 +437,12 @@ func MenuDelete(c *gin.Context) {
 }
 
 func MenuDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	// PHP MenuValidate sceneDetail is id.require; ThinkPHP require treats 0/"0" as present.
+	if !authAdminIDPresent(httpx.Query(c)) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var m model.TenantSystemMenu
 	if scopeTID(tdb(c).Where("id = ?", id), c).First(&m).Error != nil {
 		response.Data(c, []any{})

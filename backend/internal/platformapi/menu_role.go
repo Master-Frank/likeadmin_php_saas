@@ -50,15 +50,14 @@ func MenuAll(c *gin.Context) {
 }
 
 func MenuDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
-		// PHP MenuValidate sceneDetail is id.require; ThinkPHP empty(0) → 参数缺失.
+	// PHP MenuValidate sceneDetail is id.require; ThinkPHP require treats 0/"0" as present.
+	if !phpRequiredParam(httpx.Query(c), "id") {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var m model.SystemMenu
-	// PHP MenuLogic::detail is findOrEmpty()->toArray(); unknown id is data: [].
-	if bootstrap.DB.First(&m, id).Error != nil {
+	// PHP MenuLogic::detail is findOrEmpty()->toArray(); unknown/zero id is data: [].
+	if bootstrap.DB.First(&m, httpx.QueryUint(c, "id")).Error != nil {
 		response.Data(c, []any{})
 		return
 	}

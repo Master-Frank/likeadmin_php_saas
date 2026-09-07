@@ -4296,6 +4296,16 @@ print(first_id(ls))')"
     echo "  go_pmd0=${go_pmd0:0:200}"
     fail=$((fail + 1))
   fi
+  php_pmdz="$(curl -sS "$PHP/platformapi/auth.menu/detail?id=0" -H "token: $TOKEN")"
+  go_pmdz="$(curl -sS "$GO/platformapi/auth.menu/detail?id=0" -H "token: $TOKEN")"
+  php_pmdzk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$php_pmdz")"
+  go_pmdzk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$go_pmdz")"
+  echo "platform_menu_detail_id0 php=$php_pmdzk go=$go_pmdzk"
+  if [[ "$php_pmdzk" != "$go_pmdzk" ]]; then
+    echo "  php_pmdz=${php_pmdz:0:200}"
+    echo "  go_pmdz=${go_pmdz:0:200}"
+    fail=$((fail + 1))
+  fi
   php_pmd="$(curl -sS "$PHP/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
   go_pmd="$(curl -sS "$GO/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
   php_pmdk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_pmd")"
@@ -4355,6 +4365,16 @@ print(first_id(ls))')"
   if [[ "$(jget msg <<<"$php_tmd0")" != "$(jget msg <<<"$go_tmd0")" ]]; then
     echo "  php_tmd0=${php_tmd0:0:200}"
     echo "  go_tmd0=${go_tmd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tmdz="$(curl -sS "$PHP/tenantapi/auth.menu/detail?id=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tmdz="$(curl -sS "$GO/tenantapi/auth.menu/detail?id=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_tmdzk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$php_tmdz")"
+  go_tmdzk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$go_tmdz")"
+  echo "tenant_menu_detail_id0 php=$php_tmdzk go=$go_tmdzk"
+  if [[ "$php_tmdzk" != "$go_tmdzk" ]]; then
+    echo "  php_tmdz=${php_tmdz:0:200}"
+    echo "  go_tmdz=${go_tmdz:0:200}"
     fail=$((fail + 1))
   fi
   php_tmdm="$(curl -sS "$PHP/tenantapi/auth.menu/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
