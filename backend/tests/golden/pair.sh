@@ -1272,15 +1272,28 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   restore_ag() {
     local base="$1" raw="$2"
     local body
-    body="$(python3 -c 'import json,sys
-d=(json.load(sys.stdin).get("data") or {})
+    body="$(python3 -c '
+import json,sys
+raw=sys.stdin.read().strip()
+if not raw:
+    raise SystemExit(0)
+try:
+    d=json.loads(raw)
+except Exception:
+    raise SystemExit(0)
+data=d.get("data") or {}
+if not isinstance(data, dict):
+    raise SystemExit(0)
 print(json.dumps({
-  "service_title": d.get("service_title") or "服务协议",
-  "service_content": d.get("service_content") or "",
-  "privacy_title": d.get("privacy_title") or "隐私政策",
-  "privacy_content": d.get("privacy_content") or "",
-}))' <<<"$raw")"
-    curl -sS -X POST "$base/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$body" >/dev/null || true
+  "service_title": data.get("service_title") or "服务协议",
+  "service_content": data.get("service_content") or "",
+  "privacy_title": data.get("privacy_title") or "隐私政策",
+  "privacy_content": data.get("privacy_content") or "",
+}))
+' <<<"$raw" || true)"
+    if [[ -n "$body" ]]; then
+      curl -sS -X POST "$base/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$body" >/dev/null || true
+    fi
   }
   restore_ag "$PHP" "$php_ag0"
   restore_ag "$GO" "$go_ag0"
