@@ -196,7 +196,7 @@ func PayWay(c *gin.Context) {
 		extra := ""
 		switch cfg.PayWay {
 		case 1:
-			extra = "可用余额:" + fmt.Sprint(util.FormatAmount(u.UserMoney))
+			extra = "可用余额:" + fmt.Sprint(u.UserMoney)
 		case 2:
 			extra = "微信快捷支付"
 		case 3:

@@ -517,6 +517,9 @@ func TenantAdminEditCheck(p map[string]any) string {
 		return "请输入用户名"
 	}
 	if _, ok := p["password"]; ok && strings.TrimSpace(ToString(p["password"])) != "" {
+		if n := len(ToString(p["password"])); n < 6 || n > 32 {
+			return "密码长度须在6-32位字符"
+		}
 		if _, cok := p["password_confirm"]; !cok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
 			return "确认密码不能为空"
 		}

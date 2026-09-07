@@ -349,6 +349,27 @@ func TestAuthAdminAddCheck(t *testing.T) {
 	}
 }
 
+func TestTenantAdminEditCheck(t *testing.T) {
+	p := map[string]any{"id": 1, "tenant_id": 1, "name": "管理员"}
+	if TenantAdminEditCheck(p) != "" {
+		t.Fatal(TenantAdminEditCheck(p))
+	}
+	p["password"] = "123"
+	p["password_confirm"] = "123"
+	if TenantAdminEditCheck(p) != "密码长度须在6-32位字符" {
+		t.Fatal(TenantAdminEditCheck(p))
+	}
+	p["password"] = "123456"
+	p["password_confirm"] = "654321"
+	if TenantAdminEditCheck(p) != "两次输入的密码不一致" {
+		t.Fatal(TenantAdminEditCheck(p))
+	}
+	p["password_confirm"] = "123456"
+	if TenantAdminEditCheck(p) != "" {
+		t.Fatal(TenantAdminEditCheck(p))
+	}
+}
+
 func TestAuthAdminEditCheck(t *testing.T) {
 	p := map[string]any{"account": "pair1", "name": "超级管理员", "multipoint_login": 1}
 	if AuthAdminEditCheck(p, true) != "请选择状态" {

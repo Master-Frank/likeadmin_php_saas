@@ -2262,6 +2262,13 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     fail=$((fail + 1))
   fi
   curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}" >/dev/null || true
+  left_admin="$(mysqlq "SELECT COUNT(*) FROM la_tenant_admin WHERE tenant_id=$gid AND delete_time IS NULL")"
+  left_dept="$(mysqlq "SELECT COUNT(*) FROM la_tenant_dept WHERE tenant_id=$gid AND delete_time IS NULL")"
+  left_menu="$(mysqlq "SELECT COUNT(*) FROM la_tenant_system_menu WHERE tenant_id=$gid")"
+  echo "shared_tenant_cleanup admin=$left_admin dept=$left_dept menu=$left_menu"
+  if [[ "$left_admin" != "0" || "$left_dept" != "0" || "$left_menu" != "0" ]]; then
+    fail=$((fail + 1))
+  fi
 elif [[ "$(jcode <<<"$go_gta")" != "1" ]]; then
   echo "  go_gta=${go_gta:0:240}"
   fail=$((fail + 1))

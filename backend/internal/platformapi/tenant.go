@@ -198,11 +198,13 @@ func TenantDelete(c *gin.Context) {
 		response.Fail(c, "租户不存在")
 		return
 	}
+	expireTenantAdmins(cur)
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Update("delete_time", now)
 	if cur.Tactics == 1 && cur.SN != "" {
 		dropShardedTenantTables(cur.SN)
 	}
+	cleanTenantScopedRows(cur.ID)
 	response.Result(c, 1, 1, "删除成功", []any{})
 }
 
@@ -234,6 +236,77 @@ func validTenantSN(sn string) bool {
 		}
 	}
 	return true
+}
+
+func expireTenantAdmins(tenant model.Tenant) {
+	if tenant.ID == 0 {
+		return
+	}
+	adb := tenantAdminDB(tenant)
+	var admins []model.TenantAdmin
+	adb.Where("tenant_id = ?", tenant.ID).Find(&admins)
+	now := util.NowUnix()
+	for _, a := range admins {
+		var sess []model.TenantAdminSession
+		adb.Where("admin_id = ?", a.ID).Find(&sess)
+		for _, s := range sess {
+			adb.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
+			cache.DeleteTenantAdminInfo(s.Token)
+		}
+		cache.ClearAdminAuthCache(a.ID)
+	}
+	var users []model.User
+	adb.Where("tenant_id = ?", tenant.ID).Find(&users)
+	for _, u := range users {
+		var sess []model.UserSession
+		adb.Where("user_id = ?", u.ID).Find(&sess)
+		for _, s := range sess {
+			adb.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
+			cache.Del("token_user_" + s.Token)
+		}
+	}
+}
+
+// cleanTenantScopedRows removes leftover shared-schema rows after a tenant is deleted.
+// tactics=1 shard tables are DROPped separately; this still clears shared tables
+// (recharge/refund/OA reply/hot search/collect) and leftover tactics=0 copies.
+func cleanTenantScopedRows(tid uint) {
+	if tid == 0 || bootstrap.DB == nil {
+		return
+	}
+	now := util.NowUnix()
+	db := bootstrap.DB
+	var adminIDs []uint
+	db.Model(&model.TenantAdmin{}).Where("tenant_id = ?", tid).Pluck("id", &adminIDs)
+	if len(adminIDs) > 0 {
+		db.Where("admin_id IN ?", adminIDs).Delete(&model.TenantAdminRole{})
+		db.Where("admin_id IN ?", adminIDs).Delete(&model.TenantAdminDept{})
+		db.Where("admin_id IN ?", adminIDs).Delete(&model.TenantAdminJobs{})
+		db.Where("admin_id IN ?", adminIDs).Delete(&model.TenantAdminSession{})
+	}
+	var roleIDs []uint
+	db.Model(&model.TenantSystemRole{}).Where("tenant_id = ?", tid).Pluck("id", &roleIDs)
+	if len(roleIDs) > 0 {
+		db.Where("role_id IN ?", roleIDs).Delete(&model.TenantSystemRoleMenu{})
+	}
+	soft := []any{
+		&model.TenantAdmin{}, &model.TenantDept{}, &model.TenantJobs{},
+		&model.TenantFile{}, &model.TenantFileCate{}, &model.TenantSystemRole{},
+		&model.User{}, &model.UserAccountLog{}, &model.Article{}, &model.ArticleCate{},
+		&model.ArticleCollect{}, &model.OfficialAccountReply{}, &model.RechargeOrder{},
+	}
+	for _, m := range soft {
+		db.Model(m).Where("tenant_id = ? AND delete_time IS NULL", tid).Update("delete_time", now)
+	}
+	hard := []any{
+		&model.TenantConfig{}, &model.TenantPayConfig{}, &model.TenantPayWay{},
+		&model.TenantNoticeSetting{}, &model.TenantNoticeRecord{},
+		&model.TenantSystemMenu{}, &model.DecoratePage{}, &model.DecorateTabbar{},
+		&model.HotSearch{}, &model.UserAuth{}, &model.UserSession{}, &model.RefundRecord{},
+	}
+	for _, m := range hard {
+		db.Where("tenant_id = ?", tid).Delete(m)
+	}
 }
 
 func TenantAdminLists(c *gin.Context) {

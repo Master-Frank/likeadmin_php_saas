@@ -1,6 +1,10 @@
 package platformapi
 
-import "testing"
+import (
+	"testing"
+
+	"likeadmin/backend/internal/model"
+)
 
 func TestRemapTenantPayConfigID(t *testing.T) {
 	oldToNew := map[uint]uint{5: 11, 6: 12}
@@ -29,4 +33,9 @@ func TestValidTenantSN(t *testing.T) {
 	if validTenantSN("") || validTenantSN("bad-sn") || validTenantSN("a_b") {
 		t.Fatal("invalid sn accepted")
 	}
+}
+
+func TestCleanTenantScopedRowsSkipsZero(t *testing.T) {
+	cleanTenantScopedRows(0)
+	expireTenantAdmins(model.Tenant{})
 }
