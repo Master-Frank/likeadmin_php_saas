@@ -140,7 +140,7 @@ paths=(
   /platformapi/config/dict?type=sex
   /platformapi/setting.web.web_setting/getCopyright
   /platformapi/setting.transaction_settings/getConfig
-  /platformapi/file/lists?type=10&cid=0
+  "/platformapi/file/lists?type=10&cid=0"
   /platformapi/file/listCate?type=10
 )
 if [[ -n "$TENANT_HOST" ]]; then
