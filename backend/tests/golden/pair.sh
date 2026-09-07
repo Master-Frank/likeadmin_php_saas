@@ -446,8 +446,9 @@ print((ls[0] if ls else {}).get("id") or 0)
         fail=$((fail + 1))
       fi
       mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND tenant_id=999 AND create_time=$now"
-      php_c0="$(curl -sS -X POST "$PHP/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
-      go_c0="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+      # JSON {} makes PHP insert NULL and 500; id=0 matches id/d and both succeed.
+      php_c0="$(curl -sS -X POST "$PHP/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":0}')"
+      go_c0="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":0}')"
       echo "collect_empty_id php_code=$(jcode <<<"$php_c0") go_code=$(jcode <<<"$go_c0") php_msg=$(jget msg <<<"$php_c0") go_msg=$(jget msg <<<"$go_c0")"
       if [[ "$(jcode <<<"$php_c0")" != "$(jcode <<<"$go_c0")" || "$(jget msg <<<"$php_c0")" != "$(jget msg <<<"$go_c0")" ]]; then
         echo "  php_c0=${php_c0:0:200}"
