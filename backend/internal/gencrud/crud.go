@@ -174,21 +174,18 @@ func doLists(c *gin.Context, sp *spec) {
 	var count int64
 	db.Count(&count)
 	if sp.tree {
-		q.PageType = 1
+		q.PageNo = 1
 		if q.PageSize < int(count) {
 			q.PageSize = int(count)
 			if q.PageSize < 1 {
 				q.PageSize = 1
 			}
-			q.Offset = 0
 		}
+		q.Offset = 0
 	}
 	order := lists.OrderSQL(q, sp.pk+" desc", sp.allowed)
 	var rows []map[string]any
-	query := db.Select(selectCols(sp)).Order(order)
-	if q.PageType != 1 {
-		query = query.Offset(q.Offset).Limit(q.PageSize)
-	}
+	query := db.Select(selectCols(sp)).Order(order).Offset(q.Offset).Limit(q.PageSize)
 	if err := query.Find(&rows).Error; err != nil {
 		response.Fail(c, err.Error())
 		return

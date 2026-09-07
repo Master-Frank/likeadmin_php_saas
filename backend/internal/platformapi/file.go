@@ -108,13 +108,6 @@ func FileAddCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if pid := httpx.Uint(c, "pid"); pid > 0 {
-		var parent model.FileCate
-		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", pid).First(&parent).Error != nil {
-			response.Fail(c, "父级分类不存在")
-			return
-		}
-	}
 	row := model.FileCate{Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"), CreateTime: util.NowUnix()}
 	bootstrap.DB.Create(&row)
 	response.SuccessNotice(c, "添加成功")
@@ -124,11 +117,6 @@ func FileEditCate(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileEditCateCheck(p); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	var cate model.FileCate
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&cate).Error != nil {
-		response.Fail(c, "文件分类不存在")
 		return
 	}
 	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{

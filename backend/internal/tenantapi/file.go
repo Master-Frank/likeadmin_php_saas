@@ -114,13 +114,6 @@ func FileAddCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if pid := httpx.Uint(c, "pid"); pid > 0 {
-		var parent model.TenantFileCate
-		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", pid), c).First(&parent).Error != nil {
-			response.Fail(c, "父级分类不存在")
-			return
-		}
-	}
 	row := model.TenantFileCate{
 		Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
@@ -133,11 +126,6 @@ func FileEditCate(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileEditCateCheck(p); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	var cate model.TenantFileCate
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&cate).Error != nil {
-		response.Fail(c, "文件分类不存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{

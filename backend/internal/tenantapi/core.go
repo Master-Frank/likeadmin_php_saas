@@ -647,7 +647,7 @@ func ArticleCateAll(c *gin.Context) {
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, articleCateMap(c, r))
+		out = append(out, articleCateRaw(r))
 	}
 	response.Data(c, out)
 }
@@ -659,9 +659,17 @@ func articleCateMap(c *gin.Context, r model.ArticleCate) map[string]any {
 	if r.IsShow == 1 {
 		showDesc = "启用"
 	}
+	out := articleCateRaw(r)
+	out["is_show_desc"] = showDesc
+	out["article_count"] = n
+	return out
+}
+
+// articleCateRaw matches PHP ArticleCate::toArray() used by detail()/getAllData().
+func articleCateRaw(r model.ArticleCate) map[string]any {
 	return map[string]any{
 		"id": r.ID, "name": r.Name, "sort": r.Sort, "is_show": r.IsShow,
-		"is_show_desc": showDesc, "article_count": n, "tenant_id": r.TenantID,
+		"tenant_id":   r.TenantID,
 		"create_time": util.FormatDateTime(r.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),

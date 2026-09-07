@@ -343,7 +343,8 @@ func NoticeSettingLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.NoticeSetting
-	db.Order("id asc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	// PHP NoticeSettingLists::lists() uses select() with no limit.
+	db.Order("id asc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		sms := util.DecodeJSON(r.SmsNotice)

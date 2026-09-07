@@ -46,7 +46,7 @@ func ArticleCateDetail(c *gin.Context) {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
-	response.Data(c, articleCateMap(c, row))
+	response.Data(c, articleCateRaw(row))
 }
 
 func ArticleCateUpdateStatus(c *gin.Context) {
@@ -237,7 +237,8 @@ func UserAdjustMoney(c *gin.Context) {
 	num := httpx.Float(c, "num")
 	remark := httpx.Str(c, "remark")
 	if uid == 0 {
-		response.Fail(c, "请选择用户")
+		// PHP AdjustUserMoney rule key is user_id; ThinkPHP prints "user_id不能为空".
+		response.Fail(c, "user_id不能为空")
 		return
 	}
 	if action != biz.INC && action != biz.DEC {
@@ -937,7 +938,8 @@ func TenantNoticeLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantNoticeSetting
-	db.Order("id asc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	// PHP TenantNoticeSettingLists::lists() uses select() with no limit.
+	db.Order("id asc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		sms := util.DecodeJSON(r.SmsNotice)

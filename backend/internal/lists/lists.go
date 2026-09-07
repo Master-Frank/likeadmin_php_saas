@@ -44,6 +44,9 @@ func Parse(c *gin.Context) Query {
 	if q.PageSize > config.C.Project.Lists.PageSizeMax && config.C.Project.Lists.PageSizeMax > 0 {
 		q.PageSize = config.C.Project.Lists.PageSizeMax
 	}
+	// PHP BaseDataLists::initPage: default page_type=1 paginates;
+	// any other value (including 0) uses page_size_max and page_no=1.
+	q.PageType = 1
 	if v, ok := params["page_type"]; ok {
 		q.PageType = util.ToInt(v)
 	}
@@ -54,14 +57,11 @@ func Parse(c *gin.Context) Query {
 	q.OrderBy = util.ToString(params["order_by"])
 	q.StartTime = util.ToString(params["start_time"])
 	q.EndTime = util.ToString(params["end_time"])
-	if q.PageType == 0 && q.Export == 0 {
-		// PHP: page_type 0 = no page? Looking at BaseDataLists:
-		// page_type 0-一般分页；1-不分页
-		// Wait, comments said: 0-一般分页；1-不分页，获取最大所有数据
-	}
-	if q.PageType == 1 {
-		q.PageSize = config.C.Project.Lists.PageSizeMax
+	if q.PageType != 1 {
 		q.PageNo = 1
+		if config.C.Project.Lists.PageSizeMax > 0 {
+			q.PageSize = config.C.Project.Lists.PageSizeMax
+		}
 	}
 	q.Offset = (q.PageNo - 1) * q.PageSize
 	if q.Offset < 0 {
