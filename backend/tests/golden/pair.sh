@@ -518,9 +518,9 @@ print((ls[0] if ls else {}).get("id") or 0)
         fail=$((fail + 1))
       fi
       mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND article_id IN (0,999999)"
-      php_cgq="$(curl -sS "$PHP/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT")"
-      go_cgq="$(curl -sS "$GO/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT")"
-      echo "collect_get_query php_msg=$(jget msg <<<"$php_cgq") go_msg=$(jget msg <<<"$go_cgq")"
+      php_cgq="$(curl -sS -X POST "$PHP/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":0}')"
+      go_cgq="$(curl -sS -X POST "$GO/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":0}')"
+      echo "collect_post_query_ignored php_msg=$(jget msg <<<"$php_cgq") go_msg=$(jget msg <<<"$go_cgq")"
       if [[ "$(jcode <<<"$php_cgq")" != "$(jcode <<<"$go_cgq")" || "$(jget msg <<<"$php_cgq")" != "$(jget msg <<<"$go_cgq")" ]]; then
         echo "  php_cgq=${php_cgq:0:200}"
         echo "  go_cgq=${go_cgq:0:200}"
