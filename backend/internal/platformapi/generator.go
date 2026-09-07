@@ -399,9 +399,18 @@ func GeneratorGenerate(c *gin.Context) {
 		if meta := ctxutil.Get(c); meta != nil && meta.App != "" {
 			app = meta.App
 		}
-		fileURL = ctxutil.Domain(c) + "/" + app + "/tools.generator/download?file=" + fileName
+		fileURL = generatorDownloadURL(ctxutil.Domain(c), app, fileName)
 	}
 	response.Result(c, 1, 1, "操作成功", gin.H{"file": fileURL})
+}
+
+// generatorDownloadURL matches PHP GenerateLogic file URL:
+// {domain}/{app}/tools.generator/download?file={name}
+func generatorDownloadURL(domain, app, fileName string) string {
+	if app == "" {
+		app = "platformapi"
+	}
+	return domain + "/" + app + "/tools.generator/download?file=" + fileName
 }
 
 func GeneratorDownload(c *gin.Context) {

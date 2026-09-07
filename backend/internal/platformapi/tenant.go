@@ -137,7 +137,7 @@ func TenantAdd(c *gin.Context) {
 	tenant := model.Tenant{
 		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		Tel: httpx.BodyStr(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.BodyInt(c, "domain_alias_enable"),
-		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyStr(c, "notes"), Tactics: tactics, CreateTime: now,
+		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyStr(c, "notes"), Tactics: tactics, CreateTime: now, UpdateTime: unixPtr(now),
 	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&tenant).Error; err != nil {
@@ -439,11 +439,12 @@ func TenantAdminAdd(c *gin.Context) {
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
+	now := util.NowUnix()
 	admin := model.TenantAdmin{
 		TenantID: tid, Account: account, Name: httpx.BodyStr(c, "name"),
 		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
 		Disable:  httpx.BodyInt(c, "disable"), MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
-		Avatar: avatar, CreateTime: util.NowUnix(),
+		Avatar: avatar, CreateTime: now, UpdateTime: unixPtr(now),
 	}
 	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAdminLinksCheck(adb, tid, roles, depts, jobs); msg != "" {
@@ -796,11 +797,8 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if account == "" {
 		account = tenant.SN
 	}
-	admin := model.TenantAdmin{
-		TenantID: tenant.ID, Account: account, Name: "超级管理员",
-		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
-		Root:     1, MultipointLogin: 1, CreateTime: util.NowUnix(),
-	}
+	now := util.NowUnix()
+	admin := newTenantSuperAdmin(0, tenant.ID, account, util.CreatePassword(pwd, config.C.Project.UniqueIdentification), now)
 	if err := tx.Create(&admin).Error; err != nil {
 		return err
 	}
@@ -837,11 +835,7 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		account = "admin"
 	}
 	now := util.NowUnix()
-	admin := model.TenantAdmin{
-		ID: 1, TenantID: tenant.ID, Account: account, Name: "超级管理员",
-		Password: util.CreatePassword(pwd, config.C.Project.UniqueIdentification),
-		Root:     1, MultipointLogin: 1, CreateTime: now,
-	}
+	admin := newTenantSuperAdmin(1, tenant.ID, account, util.CreatePassword(pwd, config.C.Project.UniqueIdentification), now)
 	if err := sdb.Create(&admin).Error; err != nil {
 		return err
 	}
@@ -856,9 +850,10 @@ func copyTenantDept(tx *gorm.DB, tenantID, adminID uint) error {
 	if err := tx.Where("tenant_id = 0 AND delete_time IS NULL").First(&tpl).Error; err != nil {
 		return fmt.Errorf("部门模板缺失")
 	}
+	now := util.NowUnix()
 	dept := model.TenantDept{
 		Name: tpl.Name, Pid: 0, Sort: tpl.Sort, Leader: tpl.Leader, Mobile: tpl.Mobile,
-		Status: tpl.Status, TenantID: tenantID, CreateTime: util.NowUnix(),
+		Status: tpl.Status, TenantID: tenantID, CreateTime: now, UpdateTime: unixPtr(now),
 	}
 	if err := tx.Create(&dept).Error; err != nil {
 		return err
@@ -876,6 +871,7 @@ func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 		cate.ID = 0
 		cate.TenantID = tenantID
 		cate.CreateTime = now
+		cate.UpdateTime = unixPtr(now)
 		if err := tx.Create(&cate).Error; err != nil {
 			return err
 		}
@@ -890,6 +886,7 @@ func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 			a.Cid = nid
 		}
 		a.CreateTime = now
+		a.UpdateTime = unixPtr(now)
 		if err := tx.Create(&a).Error; err != nil {
 			return err
 		}
@@ -951,9 +948,11 @@ func copyTenantNotice(dest *gorm.DB, tenantID uint) error {
 	if err := src.Where("tenant_id = 0").Find(&tpls).Error; err != nil {
 		return err
 	}
+	now := util.NowUnix()
 	for _, n := range tpls {
 		n.ID = 0
 		n.TenantID = tenantID
+		n.UpdateTime = unixPtr(now)
 		n.SystemNotice = canonicalizeNoticeJSON(n.SystemNotice)
 		n.SmsNotice = canonicalizeNoticeJSON(n.SmsNotice)
 		n.OaNotice = canonicalizeNoticeJSON(n.OaNotice)
@@ -995,6 +994,7 @@ func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
 		p.ID = 0
 		p.TenantID = tenantID
 		p.CreateTime = now
+		p.UpdateTime = unixPtr(now)
 		if err := tx.Create(&p).Error; err != nil {
 			return err
 		}
@@ -1005,6 +1005,7 @@ func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
 		b.ID = 0
 		b.TenantID = tenantID
 		b.CreateTime = now
+		b.UpdateTime = unixPtr(now)
 		if err := tx.Create(&b).Error; err != nil {
 			return err
 		}
@@ -1027,7 +1028,7 @@ func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 		row.TenantID = tenantID
 		now := util.NowUnix()
 		row.CreateTime = now
-		row.UpdateTime = &now
+		row.UpdateTime = unixPtr(now)
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -1170,6 +1171,22 @@ func tenantAliasTaken(alias string, excludeID uint) bool {
 	var row model.Tenant
 	return q.First(&row).Error == nil
 }
+
+// newTenantSuperAdmin mirrors PHP TenantAdminLogic::initialization / initAccount:
+// ThinkPHP create() and the sharded INSERT both write create_time and update_time = now.
+func newTenantSuperAdmin(id, tenantID uint, account, password string, now int64) model.TenantAdmin {
+	admin := model.TenantAdmin{
+		TenantID: tenantID, Account: account, Name: "超级管理员",
+		Password: password, Root: 1, MultipointLogin: 1,
+		CreateTime: now, UpdateTime: unixPtr(now),
+	}
+	if id != 0 {
+		admin.ID = id
+	}
+	return admin
+}
+
+func unixPtr(v int64) *int64 { return &v }
 
 func rootDomain(c *gin.Context) string {
 	host := ctxutil.Host(c)

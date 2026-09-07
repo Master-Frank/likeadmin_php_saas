@@ -242,10 +242,25 @@ func decodeNoticeObject(raw string) map[string]any {
 		if len(t) == 0 {
 			return nil
 		}
-		return t
+		return normalizeNoticeObject(t)
 	default:
 		return nil
 	}
+}
+
+// normalizeNoticeObject keeps PHP json_decode shapes: numeric status becomes
+// int (not float64), quoted "1" stays a string (DB rows store status that way),
+// and a null tpl becomes [] like the PHP detail fallback.
+func normalizeNoticeObject(m map[string]any) map[string]any {
+	if v, ok := m["status"]; ok {
+		if _, isStr := v.(string); !isStr {
+			m["status"] = util.ToInt(v)
+		}
+	}
+	if v, ok := m["tpl"]; ok && v == nil {
+		m["tpl"] = []any{}
+	}
+	return m
 }
 
 func supportHas(support string, code int) bool {

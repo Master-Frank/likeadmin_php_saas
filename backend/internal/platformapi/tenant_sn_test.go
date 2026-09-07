@@ -78,6 +78,24 @@ func TestCanonicalizeNoticeJSON(t *testing.T) {
 	}
 }
 
+func TestNewTenantSuperAdminStampsTimes(t *testing.T) {
+	now := int64(1700000000)
+	admin := newTenantSuperAdmin(0, 9, "pair9", "hash", now)
+	if admin.ID != 0 || admin.TenantID != 9 || admin.Account != "pair9" || admin.Name != "超级管理员" {
+		t.Fatalf("%+v", admin)
+	}
+	if admin.Root != 1 || admin.MultipointLogin != 1 || admin.CreateTime != now {
+		t.Fatalf("fields %+v", admin)
+	}
+	if admin.UpdateTime == nil || *admin.UpdateTime != now {
+		t.Fatalf("update_time %+v", admin.UpdateTime)
+	}
+	sharded := newTenantSuperAdmin(1, 9, "admin", "hash", now)
+	if sharded.ID != 1 || sharded.UpdateTime == nil || *sharded.UpdateTime != now {
+		t.Fatalf("sharded %+v", sharded)
+	}
+}
+
 func TestTenantAliasTakenSkipsEmpty(t *testing.T) {
 	if tenantAliasTaken("", 0) {
 		t.Fatal("empty alias must skip uniqueness like PHP TenantValidate")

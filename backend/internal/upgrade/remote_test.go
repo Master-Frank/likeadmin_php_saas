@@ -55,6 +55,82 @@ func TestGetRemoteVersionSkipsEmptyCache(t *testing.T) {
 	}
 }
 
+func TestGetRemoteVersionEmptyBodyIsNotVersionMiss(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lists.json"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIKEADMIN_UPGRADE_FIXTURE", dir)
+	cache.Del("version_lists")
+	payload := GetRemoteVersion(0, 0)
+	if hasVersionLists(payload) {
+		t.Fatalf("empty body should not invent lists: %+v", payload)
+	}
+	// Empty remote lists stay empty; the miss copy belongs to VersionByID / download.
+	if CheckVersionData(2) != "未获取到对应版本信息" {
+		t.Fatal("VersionByID miss must stay 未获取到对应版本信息")
+	}
+	if checkAbleUpgrade("1.0.5", VersionByID(2), payload) != "未获取到对应版本信息" {
+		t.Fatal("empty target is version miss, not lists failure")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "lists.json"), []byte(`{"code":1,"data":{"count":0,"lists":[]}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cache.Del("version_lists")
+	emptyLists := GetRemoteVersion(0, 0)
+	if hasVersionLists(emptyLists) {
+		t.Fatalf("empty lists payload: %+v", emptyLists)
+	}
+	if CheckVersionData(2) != "未获取到对应版本信息" {
+		t.Fatal("empty lists is still a VersionByID miss")
+	}
+}
+
+func TestFetchJSONNonJSON(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lists.json"), []byte("not-json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIKEADMIN_UPGRADE_FIXTURE", dir)
+	cache.Del("version_lists")
+	if wrap := fetchJSON("http://upgrade.local/indexapi/version/lists?action=lists"); wrap != nil {
+		t.Fatalf("non-json must be nil: %+v", wrap)
+	}
+	if payload := GetRemoteVersion(0, 0); hasVersionLists(payload) || payload == nil {
+		t.Fatalf("non-json lists: %+v", payload)
+	}
+}
+
+func TestCheckVersionDataMiss(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"code":1,"data":{"count":1,"lists":[{"id":2,"version_no":"1.0.6"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "lists.json"), []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIKEADMIN_UPGRADE_FIXTURE", dir)
+	cache.Del("version_lists")
+	if CheckVersionData(2) != "" {
+		t.Fatal(CheckVersionData(2))
+	}
+	if CheckVersionData(99) != "未获取到对应版本信息" {
+		t.Fatal(CheckVersionData(99))
+	}
+	if CheckVersionData(0) != "未获取到对应版本信息" {
+		t.Fatal("id 0")
+	}
+}
+
+func TestParseJSONBody(t *testing.T) {
+	if parseJSONBody(nil) != nil || parseJSONBody([]byte("")) != nil || parseJSONBody([]byte("not-json")) != nil {
+		t.Fatal("empty/non-json")
+	}
+	got := parseJSONBody([]byte(`{"code":1,"data":{}}`))
+	if got == nil || got["code"] != float64(1) {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestHasVersionLists(t *testing.T) {
 	if hasVersionLists(nil) || hasVersionLists(map[string]any{}) || hasVersionLists(map[string]any{"lists": []any{}}) {
 		t.Fatal("empty payload treated as ready")

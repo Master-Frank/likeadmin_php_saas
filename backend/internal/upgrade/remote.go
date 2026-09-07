@@ -216,12 +216,10 @@ func parseVerifyEnvelope(wrap map[string]any) map[string]any {
 }
 
 func fetchJSON(remote string) map[string]any {
-	if body := readFixture(remote); len(body) > 0 {
-		var wrap map[string]any
-		if json.Unmarshal(body, &wrap) != nil {
-			return nil
-		}
-		return wrap
+	if fixtureDir() != "" {
+		// Fixture mode never hits the live upgrade API, even when the
+		// file is missing or the body is empty / non-JSON.
+		return parseJSONBody(readFixture(remote))
 	}
 	resp, err := httpClient.Get(remote)
 	if err != nil {
@@ -229,6 +227,13 @@ func fetchJSON(remote string) map[string]any {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	return parseJSONBody(body)
+}
+
+func parseJSONBody(body []byte) map[string]any {
+	if len(body) == 0 {
+		return nil
+	}
 	var wrap map[string]any
 	if json.Unmarshal(body, &wrap) != nil {
 		return nil

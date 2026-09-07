@@ -117,6 +117,20 @@ func TestPhysicalTableName(t *testing.T) {
 	}
 }
 
+func TestGeneratorDownloadURL(t *testing.T) {
+	got := generatorDownloadURL("http://pair1.likeadmin.test", "platformapi", "curd-20260101120000.zip")
+	want := "http://pair1.likeadmin.test/platformapi/tools.generator/download?file=curd-20260101120000.zip"
+	if got != want {
+		t.Fatalf("%s", got)
+	}
+	if generatorDownloadURL("http://h", "", "a.zip") != "http://h/platformapi/tools.generator/download?file=a.zip" {
+		t.Fatal("empty app defaults to platformapi")
+	}
+	if generatorDownloadURL("http://h", "tenantapi", "a.zip") != "http://h/tenantapi/tools.generator/download?file=a.zip" {
+		t.Fatal("tenant app")
+	}
+}
+
 func TestScanPHPModelsModule(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "User.php"), []byte("<?php"), 0644); err != nil {

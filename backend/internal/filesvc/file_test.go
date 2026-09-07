@@ -121,6 +121,30 @@ func TestStorageCache(t *testing.T) {
 	}
 }
 
+func TestSetFileURLDomainVariants(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example"}, 0)
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("no trailing slash: %s", got)
+	}
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("trailing slash: %s", got)
+	}
+	if got := SetFileURL(nil, "uploads/rel.png"); got != "uploads/rel.png" {
+		t.Fatalf("already relative: %s", got)
+	}
+	if SetFileURL(nil, "") != "" {
+		t.Fatal("empty")
+	}
+}
+
 func TestStorageCacheTenantIsolation(t *testing.T) {
 	cache.Del("STORAGE_DEFAULT")
 	cache.Del("STORAGE_ENGINE")

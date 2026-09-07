@@ -77,6 +77,30 @@ func TestApplyNoticeSetTemplateList(t *testing.T) {
 	}
 }
 
+func TestDecodeNoticeObjectNormalizes(t *testing.T) {
+	num := decodeNoticeObject(`{"status":1,"tpl":null,"content":"hi"}`)
+	if num == nil {
+		t.Fatal("nil")
+	}
+	if st, ok := num["status"].(int); !ok || st != 1 {
+		t.Fatalf("numeric status should be int, got %T %v", num["status"], num["status"])
+	}
+	tpl, ok := num["tpl"].([]any)
+	if !ok || tpl == nil {
+		t.Fatalf("null tpl should become empty list, got %T %v", num["tpl"], num["tpl"])
+	}
+	quoted := decodeNoticeObject(`{"status":"1","content":"hi"}`)
+	if s, ok := quoted["status"].(string); !ok || s != "1" {
+		t.Fatalf("quoted status must stay string like PHP json_decode, got %T %v", quoted["status"], quoted["status"])
+	}
+	if _, ok := quoted["tpl"]; ok {
+		t.Fatal("missing tpl must stay missing")
+	}
+	if decodeNoticeObject("") != nil || decodeNoticeObject("{}") != nil {
+		t.Fatal("empty")
+	}
+}
+
 func TestApplyNoticeSetErrors(t *testing.T) {
 	if _, err := ApplyNoticeSet(false, 1, []any{}); err == nil || err.Error() != "通知配置不存在" {
 		t.Fatal(err)
