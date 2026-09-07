@@ -27,6 +27,11 @@ type SaveResult struct {
 	Engine string
 }
 
+var (
+	qiniuUploadURL = "https://upload.qiniup.com/"
+	qiniuRSURL     = "https://rs.qiniu.com"
+)
+
 func Delete(c *gin.Context, uri string) error {
 	if uri == "" {
 		return nil
@@ -184,7 +189,7 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 		return err
 	}
 	_ = w.Close()
-	req, err := http.NewRequest(http.MethodPost, "https://upload.qiniup.com/", &buf)
+	req, err := http.NewRequest(http.MethodPost, qiniuUploadURL, &buf)
 	if err != nil {
 		return err
 	}
@@ -203,17 +208,13 @@ func putAliyun(cfg map[string]any, key string, body []byte, contentType string) 
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	host := strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
-	if host == "" {
-		host = bucket + ".oss-cn-hangzhou.aliyuncs.com"
-	}
+	scheme, host := storageHost(domain, bucket+".oss-cn-hangzhou.aliyuncs.com")
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "PUT\n\n" + contentType + "\n" + date + "\n/" + bucket + "/" + key
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(canon))
 	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	url := "https://" + host + "/" + key
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+key, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -231,10 +232,7 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	host := bucket + ".cos." + region + ".myqcloud.com"
-	if region == "" {
-		host = strings.TrimPrefix(strings.TrimPrefix(str(cfg, "domain"), "https://"), "http://")
-	}
+	scheme, host := qcloudHost(cfg, region, bucket)
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "put\n/" + key + "\n\nhost=" + host + "\n"
 	stringToSign := "sha1\n" + date + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(canon))) + "\n"
@@ -242,7 +240,7 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 	sig := hmacSHA1Hex(signKey, stringToSign)
 	auth := fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s;%s&q-key-time=%s;%s&q-header-list=host&q-url-param-list=&q-signature=%s",
 		ak, date, date, date, date, sig)
-	req, err := http.NewRequest(http.MethodPut, "https://"+host+"/"+key, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+key, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -262,7 +260,7 @@ func deleteQiniu(cfg map[string]any, key string) error {
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(path + "\n"))
 	auth := ak + ":" + base64.URLEncoding.EncodeToString(mac.Sum(nil))
-	req, err := http.NewRequest(http.MethodPost, "https://rs.qiniu.com"+path, nil)
+	req, err := http.NewRequest(http.MethodPost, qiniuRSURL+path, nil)
 	if err != nil {
 		return err
 	}
@@ -275,16 +273,13 @@ func deleteAliyun(cfg map[string]any, key string) error {
 	if ak == "" || sk == "" || bucket == "" {
 		return nil
 	}
-	host := strings.TrimPrefix(strings.TrimPrefix(domain, "https://"), "http://")
-	if host == "" {
-		host = bucket + ".oss-cn-hangzhou.aliyuncs.com"
-	}
+	scheme, host := storageHost(domain, bucket+".oss-cn-hangzhou.aliyuncs.com")
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "DELETE\n\n\n" + date + "\n/" + bucket + "/" + key
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(canon))
 	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req, err := http.NewRequest(http.MethodDelete, "https://"+host+"/"+key, nil)
+	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+key, nil)
 	if err != nil {
 		return err
 	}
@@ -298,10 +293,7 @@ func deleteQcloud(cfg map[string]any, key string) error {
 	if ak == "" || sk == "" || bucket == "" {
 		return nil
 	}
-	host := bucket + ".cos." + region + ".myqcloud.com"
-	if region == "" {
-		host = strings.TrimPrefix(strings.TrimPrefix(str(cfg, "domain"), "https://"), "http://")
-	}
+	scheme, host := qcloudHost(cfg, region, bucket)
 	date := time.Now().UTC().Format(http.TimeFormat)
 	canon := "delete\n/" + key + "\n\nhost=" + host + "\n"
 	stringToSign := "sha1\n" + date + "\n" + fmt.Sprintf("%x", sha1.Sum([]byte(canon))) + "\n"
@@ -309,13 +301,39 @@ func deleteQcloud(cfg map[string]any, key string) error {
 	sig := hmacSHA1Hex(signKey, stringToSign)
 	auth := fmt.Sprintf("q-sign-algorithm=sha1&q-ak=%s&q-sign-time=%s;%s&q-key-time=%s;%s&q-header-list=host&q-url-param-list=&q-signature=%s",
 		ak, date, date, date, date, sig)
-	req, err := http.NewRequest(http.MethodDelete, "https://"+host+"/"+key, nil)
+	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+key, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Host", host)
 	req.Header.Set("Authorization", auth)
 	return doDelete(req)
+}
+
+func storageHost(domain, fallback string) (scheme, host string) {
+	scheme = "https"
+	raw := strings.TrimSpace(domain)
+	switch {
+	case strings.HasPrefix(raw, "https://"):
+		host = strings.TrimPrefix(raw, "https://")
+	case strings.HasPrefix(raw, "http://"):
+		scheme = "http"
+		host = strings.TrimPrefix(raw, "http://")
+	default:
+		host = raw
+	}
+	host = strings.TrimRight(host, "/")
+	if host == "" {
+		host = fallback
+	}
+	return scheme, host
+}
+
+func qcloudHost(cfg map[string]any, region, bucket string) (scheme, host string) {
+	if region != "" {
+		return "https", bucket + ".cos." + region + ".myqcloud.com"
+	}
+	return storageHost(str(cfg, "domain"), bucket+".cos.ap-guangzhou.myqcloud.com")
 }
 
 func doDelete(req *http.Request) error {

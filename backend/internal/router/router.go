@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -82,6 +83,16 @@ func New() *gin.Engine {
 		return func(c *gin.Context) {
 			c.File(filepath.Join(config.C.App.PublicDir, dir, "index.html"))
 		}
+	}
+	if config.C.App.PublicDir != "" {
+		r.GET("/", func(c *gin.Context) {
+			index := filepath.Join(config.C.App.PublicDir, "index.html")
+			if _, err := os.Stat(index); err == nil {
+				c.File(index)
+				return
+			}
+			c.Status(http.StatusNotFound)
+		})
 	}
 	r.GET("/platform", spa("platform"))
 	r.GET("/platform/*any", spa("platform"))

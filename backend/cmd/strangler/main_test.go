@@ -11,6 +11,21 @@ import (
 	"testing"
 )
 
+func TestPHPFallbackDefaultOff(t *testing.T) {
+	t.Setenv("LIKEADMIN_PHP_FALLBACK", "")
+	if phpFallbackEnabled() {
+		t.Fatal("production default must not proxy leftover paths to PHP")
+	}
+	t.Setenv("LIKEADMIN_PHP_FALLBACK", "0")
+	if phpFallbackEnabled() {
+		t.Fatal("explicit 0")
+	}
+	t.Setenv("LIKEADMIN_PHP_FALLBACK", "1")
+	if !phpFallbackEnabled() {
+		t.Fatal("explicit 1 should enable PHP fallback")
+	}
+}
+
 func TestGoAPI(t *testing.T) {
 	cases := map[string]bool{
 		"/platformapi/login/account":  true,

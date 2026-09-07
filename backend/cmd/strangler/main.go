@@ -16,7 +16,8 @@ const maxUpload = 50 << 20
 
 // Strangler front door: API prefixes go to the Go backend; static files and
 // SPA shells are served from public_dir so PHP is no longer on the page path.
-// LIKEADMIN_PHP_FALLBACK=1 (default) still proxies unknown paths to PHP.
+// LIKEADMIN_PHP_FALLBACK defaults off. Set it to 1 only while a leftover
+// PHP path still needs a temporary proxy.
 func main() {
 	listen := getenv("LIKEADMIN_STRANGLER", "127.0.0.1:8090")
 	goURL, err := url.Parse(getenv("LIKEADMIN_GO", "http://127.0.0.1:8080"))
@@ -28,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 	public := resolvePublicDir()
-	phpFallback := getenv("LIKEADMIN_PHP_FALLBACK", "1") != "0"
+	phpFallback := phpFallbackEnabled()
 	goProxy := newForwardProxy(goURL)
 	phpProxy := newForwardProxy(phpURL)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +154,10 @@ func servePublic(w http.ResponseWriter, r *http.Request, public string) bool {
 		}
 	}
 	return false
+}
+
+func phpFallbackEnabled() bool {
+	return getenv("LIKEADMIN_PHP_FALLBACK", "0") != "0"
 }
 
 func getenv(k, def string) string {

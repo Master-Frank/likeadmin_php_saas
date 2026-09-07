@@ -3092,6 +3092,25 @@ except Exception as e:
       if [[ "$php_ents" != "$go_ents" ]]; then
         fail=$((fail + 1))
       fi
+      zip_eq="$(python3 -c '
+import zipfile,re,sys
+date_re=re.compile(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}")
+def entries(path):
+    z=zipfile.ZipFile(path)
+    out={}
+    for n in z.namelist():
+        if n.endswith(".zip") or n.endswith("/"):
+            continue
+        out[n]=date_re.sub("DATE", z.read(n).decode("utf-8","replace"))
+    return out
+php,go=entries(sys.argv[1]),entries(sys.argv[2])
+diff=[n for n in sorted(set(php)|set(go)) if php.get(n)!=go.get(n)]
+print("ok" if php and go and not diff else (",".join(diff) if diff else "empty"))
+' "$php_zip" "$go_zip")"
+      echo "generator_zip_content $zip_eq"
+      if [[ "$zip_eq" != "ok" ]]; then
+        fail=$((fail + 1))
+      fi
     elif [[ "$(jcode <<<"$php_gn")" == "1" && -z "$php_file" && -z "$go_file" ]]; then
       echo "generator_generate both empty file (module mode)"
     elif [[ "$(jcode <<<"$php_gn")" != "1" ]]; then

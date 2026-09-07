@@ -22,6 +22,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var wechatAPIBase = "https://api.mch.weixin.qq.com"
+
 func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, terminal int, from, redirect string) (any, error) {
 	cfg := WechatCfg(c)
 	if cfg.MchID == "" || cfg.APIClientKey == "" {
@@ -193,7 +195,7 @@ func wechatV3Do(cfg WechatPayCfg, key *rsa.PrivateKey, method, path string, body
 	if len(body) > 0 {
 		reader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, "https://api.mch.weixin.qq.com"+path, reader)
+	req, err := http.NewRequest(method, wechatAPIBase+path, reader)
 	if err != nil {
 		return nil, err
 	}

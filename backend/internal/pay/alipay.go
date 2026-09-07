@@ -20,6 +20,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var aliGatewayURL = "https://openapi.alipay.com/gateway.do"
+
 func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string, terminal int) (any, error) {
 	// PHP AliPayService::pay match has no MNP case; default is 支付方式错误
 	// even when app_id is empty.
@@ -160,7 +162,9 @@ func aliQuery(params map[string]string) string {
 
 func aliForm(params map[string]string) string {
 	var b strings.Builder
-	b.WriteString(`<form id="alipaysubmit" name="alipaysubmit" action="https://openapi.alipay.com/gateway.do?charset=utf-8" method="POST">`)
+	b.WriteString(`<form id="alipaysubmit" name="alipaysubmit" action="`)
+	b.WriteString(html.EscapeString(aliGatewayURL))
+	b.WriteString(`?charset=utf-8" method="POST">`)
 	for k, v := range params {
 		b.WriteString(`<input type="hidden" name="`)
 		b.WriteString(html.EscapeString(k))
@@ -229,7 +233,7 @@ func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) 
 	for k, v := range params {
 		form.Set(k, v)
 	}
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm("https://openapi.alipay.com/gateway.do", form)
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm(aliGatewayURL, form)
 	if err != nil {
 		return AliRefundResult{}, err
 	}
@@ -279,7 +283,7 @@ func AliQueryRefundByTenant(tenantID uint, orderSN, refundSN string) (map[string
 	for k, v := range params {
 		form.Set(k, v)
 	}
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm("https://openapi.alipay.com/gateway.do", form)
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).PostForm(aliGatewayURL, form)
 	if err != nil {
 		return nil, err
 	}

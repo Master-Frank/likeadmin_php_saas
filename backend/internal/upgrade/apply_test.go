@@ -1,0 +1,151 @@
+package upgrade
+
+import (
+	"archive/zip"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func writeZip(t *testing.T, entries map[string]string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "package.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for name, body := range entries {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	return path
+}
+
+func TestResolvePackageLocalAndHTTP(t *testing.T) {
+	local := writeZip(t, map[string]string{"project/server/probe.txt": "ok"})
+	got, err := resolvePackage(local, t.TempDir())
+	if err != nil || got != local {
+		t.Fatalf("local: %s %v", got, err)
+	}
+	got, err = resolvePackage("file://"+local, t.TempDir())
+	if err != nil || got != local {
+		t.Fatalf("file: %s %v", got, err)
+	}
+	if _, err := resolvePackage("file://"+filepath.Join(t.TempDir(), "missing.zip"), t.TempDir()); err == nil {
+		t.Fatal("missing file:// should fail")
+	}
+
+	body, err := os.ReadFile(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/pkg.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	saveDir := t.TempDir()
+	got, err = resolvePackage(srv.URL+"/pkg.zip", saveDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(got) != "pkg.zip" {
+		t.Fatalf("downloaded name %s", got)
+	}
+	if raw, err := os.ReadFile(got); err != nil || string(raw) != string(body) {
+		t.Fatalf("downloaded bytes mismatch err=%v", err)
+	}
+	if _, err := resolvePackage(srv.URL+"/missing.zip", t.TempDir()); err == nil {
+		t.Fatal("http 404 should fail")
+	}
+}
+
+func TestApplyExtractedCopiesServerAndBackend(t *testing.T) {
+	src := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "project", "server", "public"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "project", "backend", "internal", "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "project", "server", "public", "probe.txt"), []byte("front"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "project", "backend", "internal", "pkg", "x.go"), []byte("package pkg\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	serverDest := t.TempDir()
+	backendDest := t.TempDir()
+	if err := applyExtracted(src, serverDest, backendDest, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(serverDest, "public", "probe.txt")); err != nil || string(got) != "front" {
+		t.Fatalf("server file: %q %v", got, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(backendDest, "internal", "pkg", "x.go")); err != nil || string(got) != "package pkg\n" {
+		t.Fatalf("backend file: %q %v", got, err)
+	}
+}
+
+func TestApplyLocalUnzipsThenCopies(t *testing.T) {
+	zipPath := writeZip(t, map[string]string{
+		"project/server/public/probe.txt":      "from-zip",
+		"project/backend/internal/pkg/x.go":    "package pkg\n",
+		"project/sql/data/skip-without-db.sql": "SELECT 1;",
+	})
+	extract := t.TempDir()
+	if err := unzip(zipPath, extract); err != nil {
+		t.Fatal(err)
+	}
+	serverDest := t.TempDir()
+	backendDest := t.TempDir()
+	if err := applyExtracted(extract, serverDest, backendDest, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(serverDest, "public", "probe.txt")); err != nil || string(got) != "from-zip" {
+		t.Fatalf("unzip+apply server: %q %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(backendDest, "internal", "pkg", "x.go")); err != nil {
+		t.Fatalf("unzip+apply backend: %v", err)
+	}
+}
+
+func TestUnzipSkipsParentPaths(t *testing.T) {
+	zipPath := writeZip(t, map[string]string{
+		"../escape.txt":           "bad",
+		"project/server/safe.txt": "ok",
+	})
+	dest := t.TempDir()
+	if err := unzip(zipPath, dest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "escape.txt")); err == nil {
+		t.Fatal("parent path should be skipped")
+	}
+	if got, err := os.ReadFile(filepath.Join(dest, "project", "server", "safe.txt")); err != nil || string(got) != "ok" {
+		t.Fatalf("safe=%q %v", got, err)
+	}
+}
+
+func TestResolvePackageEmpty(t *testing.T) {
+	if _, err := resolvePackage("", t.TempDir()); err == nil || !strings.Contains(err.Error(), "获取文件错误") {
+		t.Fatalf("empty: %v", err)
+	}
+}

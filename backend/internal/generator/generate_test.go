@@ -2,6 +2,7 @@ package generator
 
 import (
 	"archive/zip"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,47 @@ func TestZipRuntimeUsesGeneratePrefix(t *testing.T) {
 			names = append(names, f.Name)
 		}
 		t.Fatalf("missing generate/php/ZipProbe.php in %v", names)
+	}
+}
+
+func TestZipRuntimeContentBytes(t *testing.T) {
+	root := RuntimeDir()
+	if err := os.MkdirAll(filepath.Join(root, "php"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	want := "<?php\n// zip-content-probe\n"
+	src := filepath.Join(root, "php", "ZipContent.php")
+	if err := os.WriteFile(src, []byte(want), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(src) })
+	zipPath := filepath.Join(t.TempDir(), "curd-content.zip")
+	if err := ZipRuntime(zipPath); err != nil {
+		t.Fatal(err)
+	}
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	var got string
+	for _, f := range r.File {
+		if f.Name != "generate/php/ZipContent.php" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = string(b)
+	}
+	if got != want {
+		t.Fatalf("zip bytes=%q want=%q", got, want)
 	}
 }
 

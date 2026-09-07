@@ -10,6 +10,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cron"
+	"likeadmin/backend/internal/upgrade"
 )
 
 func main() {
@@ -28,6 +29,17 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: think <command> [params...]")
 		os.Exit(1)
+	}
+	if os.Args[1] == "upgrade-local" {
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: think upgrade-local <zip>")
+			os.Exit(1)
+		}
+		if err := upgrade.ApplyLocal(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 	msg := cron.RunNamed(os.Args[1], os.Args[2:]...)
 	if msg != "" {

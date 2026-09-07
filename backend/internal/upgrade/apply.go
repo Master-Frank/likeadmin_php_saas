@@ -65,7 +65,7 @@ func ApplyPackage(link, zipName string) error {
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return err
 	}
-	savePath, err := downFile(link, localDir)
+	savePath, err := resolvePackage(link, localDir)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,51 @@ func ApplyPackage(link, zipName string) error {
 	if err := unzip(savePath, tempDir); err != nil {
 		return err
 	}
-	db := bootstrap.DB
+	if err := applyExtracted(tempDir, filepath.Dir(root)+string(os.PathSeparator), backendRoot(), bootstrap.DB); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(tempDir)
+	return nil
+}
+
+// ApplyLocal applies an already-downloaded upgrade zip (offline / fixture).
+func ApplyLocal(zipPath string) error {
+	return ApplyPackage(zipPath, "")
+}
+
+func resolvePackage(link, saveDir string) (string, error) {
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return "", errStatus("获取文件错误")
+	}
+	if strings.HasPrefix(link, "file://") {
+		p := strings.TrimPrefix(link, "file://")
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p, nil
+		}
+		return "", errStatus("获取文件错误")
+	}
+	if !strings.Contains(link, "://") {
+		if st, err := os.Stat(link); err == nil && !st.IsDir() {
+			return link, nil
+		}
+	}
+	return downFile(link, saveDir)
+}
+
+func applyExtracted(tempDir, projectDest, backendDest string, db *gorm.DB) error {
+	applyFiles := func() error {
+		if err := upgradePgSQL(filepath.Join(tempDir, "project", "pg")); err != nil {
+			return err
+		}
+		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), projectDest); err != nil {
+			return err
+		}
+		return upgradeFile(filepath.Join(tempDir, "project", "backend"), backendDest)
+	}
+	if db == nil {
+		return applyFiles()
+	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := upgradeSQL(tx, filepath.Join(tempDir, "project", "sql", "data")); err != nil {
 			return err
@@ -81,24 +125,11 @@ func ApplyPackage(link, zipName string) error {
 		if err := upgradeMenu(tx, filepath.Join(tempDir, "project", "menu")); err != nil {
 			return err
 		}
-		if err := upgradePgSQL(filepath.Join(tempDir, "project", "pg")); err != nil {
-			return err
-		}
-		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), filepath.Dir(root)+string(os.PathSeparator)); err != nil {
-			return err
-		}
-		if err := upgradeFile(filepath.Join(tempDir, "project", "backend"), backendRoot()); err != nil {
-			return err
-		}
-		return nil
+		return applyFiles()
 	}); err != nil {
 		return err
 	}
-	if err := upgradeSQL(db, filepath.Join(tempDir, "project", "sql", "structure")); err != nil {
-		return err
-	}
-	_ = os.RemoveAll(tempDir)
-	return nil
+	return upgradeSQL(db, filepath.Join(tempDir, "project", "sql", "structure"))
 }
 
 func downFile(remote, saveDir string) (string, error) {
