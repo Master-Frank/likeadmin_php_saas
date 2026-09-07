@@ -74,10 +74,11 @@ func DeptAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	now := util.NowUnix()
 	tdb(c).Create(&model.TenantDept{
 		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
 		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
-		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
@@ -245,9 +246,10 @@ func JobsAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	now := util.NowUnix()
 	tdb(c).Create(&model.TenantJobs{
 		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
-		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }

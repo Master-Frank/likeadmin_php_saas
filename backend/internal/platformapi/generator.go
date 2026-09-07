@@ -142,7 +142,7 @@ func GeneratorSelectTable(c *gin.Context) {
 				Menu:      util.EncodeJSON(map[string]any{"pid": 0, "type": 0, "name": comment}),
 				Delete:    util.EncodeJSON(map[string]any{"type": 0, "name": "delete_time"}),
 				Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
-				AdminID: adminID, CreateTime: now,
+				AdminID: adminID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 			}
 			if err := tx.Create(&gt).Error; err != nil {
 				return err
@@ -598,7 +598,7 @@ func syncColumns(tx *gorm.DB, tableID uint, tableName string) error {
 			TableID: tableID, ColumnName: col.ColumnName, ColumnComment: col.ColumnComment,
 			ColumnType: util.DbFieldType(col.ColumnType), IsPk: pk, IsRequired: req,
 			IsInsert: ins, IsUpdate: upd, IsLists: lists, IsQuery: query,
-			QueryType: "=", ViewType: "input", CreateTime: now,
+			QueryType: "=", ViewType: "input", CreateTime: now, UpdateTime: util.UnixPtr(now),
 		}).Error; err != nil {
 			return err
 		}

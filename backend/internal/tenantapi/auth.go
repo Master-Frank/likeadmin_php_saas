@@ -109,11 +109,12 @@ func AdminAdd(c *gin.Context) {
 	if _, ok := p["disable"]; ok {
 		disable = httpx.BodyInt(c, "disable")
 	}
+	now := util.NowUnix()
 	admin := model.TenantAdmin{
 		TenantID: tenantDB(c), Name: name, Account: account,
 		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
 		Disable:  disable, MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
-		Avatar: avatar, CreateTime: util.NowUnix(),
+		Avatar: avatar, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAuthLinksCheck(c, roles, depts, jobs); msg != "" {
@@ -375,7 +376,9 @@ func MenuAdd(c *gin.Context) {
 	}
 	m := tenantMenuFromReq(c)
 	m.TenantID = tenantDB(c)
-	m.CreateTime = util.NowUnix()
+	now := util.NowUnix()
+	m.CreateTime = now
+	m.UpdateTime = util.UnixPtr(now)
 	tdb(c).Create(&m)
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
@@ -539,7 +542,8 @@ func RoleAdd(c *gin.Context) {
 		response.Fail(c, "菜单不存在")
 		return
 	}
-	r := model.TenantSystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: util.NowUnix()}
+	now := util.NowUnix()
+	r := model.TenantSystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	tdb(c).Create(&r)
 	for _, id := range menuIDs {
 		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})

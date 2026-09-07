@@ -87,7 +87,7 @@ func LoginAccount(c *gin.Context) {
 		authsvc.RelieveLoginFail(c, tenantLockTag)
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c)})
+	tdb(c).Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
 	info := authsvc.SetTenantToken(c, admin.ID, terminal, admin.MultipointLogin)
 	avatar := admin.Avatar
 	if avatar == "" {
@@ -491,13 +491,14 @@ func ArticleAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	now := util.NowUnix()
 	a := model.Article{
 		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyStr(c, "title"), Desc: httpx.BodyStr(c, "desc"),
 		Abstract: httpx.BodyStr(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
 		Author: httpx.BodyStr(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
 		IsShow: httpx.BodyInt(c, "is_show"), Sort: httpx.BodyInt(c, "sort"),
 		ClickVirtual: httpx.BodyInt(c, "click_virtual"),
-		TenantID:     tenantDB(c), CreateTime: util.NowUnix(),
+		TenantID:     tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	tdb(c).Create(&a)
 	response.SuccessNotice(c, "添加成功")
@@ -650,7 +651,8 @@ func ArticleCateAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyStr(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
+	now := util.NowUnix()
+	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyStr(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)})
 	response.SuccessNotice(c, "添加成功")
 }
 
@@ -667,6 +669,7 @@ func ArticleCateEdit(c *gin.Context) {
 	}
 	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
+		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }

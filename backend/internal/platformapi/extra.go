@@ -248,7 +248,7 @@ func CrontabAdd(c *gin.Context) {
 	bootstrap.DB.Create(&model.Crontab{
 		Name: httpx.BodyStr(c, "name"), Type: httpx.BodyInt(c, "type"), Command: httpx.BodyStr(c, "command"),
 		Params: httpx.BodyStr(c, "params"), Status: httpx.BodyInt(c, "status"), Expression: httpx.BodyStr(c, "expression"),
-		Remark: httpx.BodyStr(c, "remark"), System: httpx.BodyInt(c, "system"), LastTime: &now, CreateTime: now,
+		Remark: httpx.BodyStr(c, "remark"), System: httpx.BodyInt(c, "system"), LastTime: &now, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }

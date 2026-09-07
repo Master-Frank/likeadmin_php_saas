@@ -2,6 +2,18 @@ package util
 
 import "testing"
 
+func TestUnixPtr(t *testing.T) {
+	now := int64(1700000000)
+	p := UnixPtr(now)
+	if p == nil || *p != now {
+		t.Fatalf("%v", p)
+	}
+	other := UnixPtr(now)
+	if p == other {
+		t.Fatal("UnixPtr must return a distinct pointer")
+	}
+}
+
 func TestCreatePasswordMatchesPHP(t *testing.T) {
 	// PHP: md5(salt + md5(plaintext + salt))
 	got := CreatePassword("likeadmin", "likeadmin")

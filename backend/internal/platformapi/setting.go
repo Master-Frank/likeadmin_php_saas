@@ -313,7 +313,8 @@ func DictTypeAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyStr(c, "name"), Type: httpx.BodyStr(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix()})
+	now := util.NowUnix()
+	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyStr(c, "name"), Type: httpx.BodyStr(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now)})
 	response.SuccessNotice(c, "添加成功")
 }
 
@@ -445,10 +446,11 @@ func DictDataAdd(c *gin.Context) {
 	if typeVal == "" {
 		typeVal = typ.Type
 	}
+	now := util.NowUnix()
 	bootstrap.DB.Create(&model.DictData{
 		Name: httpx.BodyStr(c, "name"), Value: httpx.BodyStr(c, "value"), TypeID: typ.ID,
 		TypeValue: typeVal, Sort: httpx.BodyInt(c, "sort"), Status: httpx.BodyInt(c, "status"),
-		Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix(),
+		Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }

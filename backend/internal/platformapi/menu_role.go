@@ -80,7 +80,9 @@ func MenuAdd(c *gin.Context) {
 		return
 	}
 	m := menuFromReq(c)
-	m.CreateTime = util.NowUnix()
+	now := util.NowUnix()
+	m.CreateTime = now
+	m.UpdateTime = util.UnixPtr(now)
 	if err := bootstrap.DB.Create(&m).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -224,7 +226,7 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	r := model.SystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now}
+	r := model.SystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	if err := bootstrap.DB.Create(&r).Error; err != nil {
 		response.Fail(c, err.Error())
 		return

@@ -56,14 +56,14 @@ func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid ui
 		_ = db.Create(&model.TenantNoticeRecord{
 			TenantID: tid, UserID: userID, Title: title, Content: content,
 			SceneID: scene, Read: 0, Recipient: meta.recipient, SendType: sendTypeSMS,
-			NoticeType: meta.noticeType, Extra: "", CreateTime: now,
+			NoticeType: meta.noticeType, Extra: "", CreateTime: now, UpdateTime: util.UnixPtr(now),
 		}).Error
 		return
 	}
 	_ = bootstrap.DB.Create(&model.NoticeRecord{
 		UserID: userID, Title: title, Content: content,
 		SceneID: scene, Read: 0, Recipient: meta.recipient, SendType: sendTypeSMS,
-		NoticeType: meta.noticeType, Extra: "", CreateTime: now,
+		NoticeType: meta.noticeType, Extra: "", CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}).Error
 }
 

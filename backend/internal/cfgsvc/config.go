@@ -102,7 +102,7 @@ func Set(c *gin.Context, typ, name string, value any) any {
 		var row model.ConfigRow
 		err := bootstrap.DB.Where("type = ? AND name = ?", typ, name).First(&row).Error
 		if err != nil {
-			bootstrap.DB.Create(&model.ConfigRow{Type: typ, Name: name, Value: s, CreateTime: now})
+			bootstrap.DB.Create(&model.ConfigRow{Type: typ, Name: name, Value: s, CreateTime: now, UpdateTime: util.UnixPtr(now)})
 		} else {
 			bootstrap.DB.Model(&row).Updates(map[string]any{"value": s, "update_time": now})
 		}
@@ -112,7 +112,7 @@ func Set(c *gin.Context, typ, name string, value any) any {
 	q := db(c).Where("type = ? AND name = ? AND tenant_id = ?", typ, name, meta.TenantID)
 	err := q.First(&row).Error
 	if err != nil {
-		db(c).Create(&model.TenantConfig{Type: typ, Name: name, Value: s, TenantID: meta.TenantID, CreateTime: now})
+		db(c).Create(&model.TenantConfig{Type: typ, Name: name, Value: s, TenantID: meta.TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now)})
 	} else {
 		db(c).Model(&row).Updates(map[string]any{"value": s, "update_time": now})
 	}

@@ -77,3 +77,6 @@ func FormatDateTimeOrNil(ts *int64) any {
 func NowUnix() int64 {
 	return time.Now().Unix()
 }
+
+// UnixPtr returns a distinct *int64 for ThinkPHP auto_timestamp fields.
+func UnixPtr(v int64) *int64 { return &v }

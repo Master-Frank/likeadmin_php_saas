@@ -126,7 +126,8 @@ func FileAddCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	row := model.FileCate{Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyStr(c, "name"), CreateTime: util.NowUnix()}
+	now := util.NowUnix()
+	row := model.FileCate{Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyStr(c, "name"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	bootstrap.DB.Create(&row)
 	response.SuccessNotice(c, "添加成功")
 }
@@ -185,9 +186,10 @@ func uploadSave(c *gin.Context, typ int, dir, scene string) {
 		response.Fail(c, errMsg)
 		return
 	}
+	now := util.NowUnix()
 	row := model.File{
 		Cid: filesvc.UploadCID(c), Type: typ, Name: name, URI: rel,
-		Source: filesvc.SourceAdmin, CreateTime: util.NowUnix(),
+		Source: filesvc.SourceAdmin, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	bootstrap.DB.Create(&row)
 	response.Success(c, "上传成功", gin.H{

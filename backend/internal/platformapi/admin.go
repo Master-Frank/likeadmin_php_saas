@@ -114,11 +114,11 @@ func AdminAdd(c *gin.Context) {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
 	admin := model.Admin{
-		Name:            name,
-		Account:         account,
-		Avatar:          avatar,
-		Password:        util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		CreateTime:      now,
+		Name:       name,
+		Account:    account,
+		Avatar:     avatar,
+		Password:   util.CreatePassword(password, config.C.Project.UniqueIdentification),
+		CreateTime: now, UpdateTime: util.UnixPtr(now),
 		Disable:         adminAddDisable(p),
 		MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 	}

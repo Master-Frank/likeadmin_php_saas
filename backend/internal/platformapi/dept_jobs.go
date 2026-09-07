@@ -63,10 +63,11 @@ func DeptAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	now := util.NowUnix()
 	d := model.Dept{
 		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
 		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
-		CreateTime: util.NowUnix(),
+		CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := bootstrap.DB.Create(&d).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -251,9 +252,10 @@ func JobsAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	now := util.NowUnix()
 	j := model.Jobs{
 		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
-		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix(),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := bootstrap.DB.Create(&j).Error; err != nil {
 		response.Fail(c, err.Error())

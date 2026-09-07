@@ -34,8 +34,9 @@ func ArticleAddCollect(c *gin.Context) {
 	var row model.ArticleCollect
 	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
+		now := util.NowUnix()
 		tdb(c).Create(&model.ArticleCollect{
-			UserID: uid, ArticleID: aid, Status: 1, TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
+			UserID: uid, ArticleID: aid, Status: 1, TenantID: ctxutil.Get(c).TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		})
 	} else {
 		articleCollectDB(c).Where("id = ?", row.ID).Updates(map[string]any{"status": 1, "update_time": util.NowUnix()})
@@ -137,6 +138,7 @@ func RechargeCreate(c *gin.Context) {
 		response.Fail(c, "接口域名错误或租户不存在")
 		return
 	}
+	now := util.NowUnix()
 	exists := func(sn string) bool {
 		var n int64
 		tdb(c).Model(&model.RechargeOrder{}).Where("sn = ? AND tenant_id = ?", sn, tid).Count(&n)
@@ -144,7 +146,7 @@ func RechargeCreate(c *gin.Context) {
 	}
 	order := model.RechargeOrder{
 		SN: util.GenerateSN(exists, "", 4), UserID: uid, TenantID: tid,
-		PayStatus: 0, OrderAmount: money, OrderTerminal: terminal, CreateTime: util.NowUnix(),
+		PayStatus: 0, OrderAmount: money, OrderTerminal: terminal, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := tdb(c).Create(&order).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -693,10 +695,11 @@ func UploadImage(c *gin.Context) {
 		response.Fail(c, errMsg)
 		return
 	}
+	now := util.NowUnix()
 	row := model.TenantFile{
 		Cid: 0, Type: 10, Name: name, URI: rel,
 		Source: filesvc.SourceUser, SourceID: ctxutil.Get(c).UserID,
-		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
+		TenantID: ctxutil.Get(c).TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := tdb(c).Create(&row).Error; err != nil {
 		response.Fail(c, err.Error())

@@ -168,7 +168,7 @@ func LoginRegister(c *gin.Context) {
 		Account: account, Nickname: "用户" + util.ToString(sn),
 		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
 		Channel:  httpx.BodyInt(c, "channel"), TenantID: tid, CreateTime: now,
-		Avatar: avatar, SN: sn, LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
+		Avatar: avatar, SN: sn, LoginTime: util.ZeroUnixPtr(), UpdateTime: util.UnixPtr(now),
 	}
 	if err := tdb(c).Create(&u).Error; err != nil {
 		if util.IsDuplicateKey(err) {
@@ -259,7 +259,7 @@ func LoginAccount(c *gin.Context) {
 		cache.RelieveUserLoginFail(ip)
 	}
 	now := util.NowUnix()
-	tdb(c).Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ip})
+	tdb(c).Model(&u).Updates(map[string]any{"login_time": now, "login_ip": ip, "update_time": now})
 	info := authsvc.SetUserToken(c, u.ID, terminal)
 	response.Data(c, gin.H{
 		"nickname": u.Nickname, "sn": u.SN, "mobile": u.Mobile,

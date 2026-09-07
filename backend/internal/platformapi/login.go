@@ -74,7 +74,7 @@ func LoginAccount(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	ip := ctxutil.ClientIP(c)
-	bootstrap.DB.Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ip})
+	bootstrap.DB.Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ip, "update_time": now})
 	info := authsvc.SetPlatformToken(c, admin.ID, terminal, admin.MultipointLogin)
 	avatar := admin.Avatar
 	if avatar == "" {

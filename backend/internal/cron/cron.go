@@ -546,6 +546,7 @@ func EnsureNativeJobs() {
 		job.Time = "0"
 		job.MaxTime = "0"
 		job.CreateTime = now
+		job.UpdateTime = util.UnixPtr(now)
 		_ = bootstrap.DB.Create(&job).Error
 	}
 }

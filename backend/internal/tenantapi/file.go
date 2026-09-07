@@ -143,9 +143,10 @@ func FileAddCate(c *gin.Context) {
 	if !guardTenantWrite(c) {
 		return
 	}
+	now := util.NowUnix()
 	row := model.TenantFileCate{
 		Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyStr(c, "name"),
-		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	tdb(c).Create(&row)
 	response.SuccessNotice(c, "添加成功")
@@ -214,9 +215,10 @@ func tenantUpload(c *gin.Context, typ int, dir, scene string) {
 		response.Fail(c, errMsg)
 		return
 	}
+	now := util.NowUnix()
 	row := model.TenantFile{
 		Cid: filesvc.UploadCID(c), Type: typ, Name: name, URI: rel, Source: filesvc.SourceAdmin,
-		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	tdb(c).Create(&row)
 	response.Success(c, "上传成功", gin.H{

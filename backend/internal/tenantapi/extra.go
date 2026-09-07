@@ -72,7 +72,9 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_show", httpx.BodyInt(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"is_show": httpx.BodyInt(c, "is_show"), "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "修改成功")
 }
 
@@ -96,7 +98,9 @@ func ArticleUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_show", httpx.BodyInt(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"is_show": httpx.BodyInt(c, "is_show"), "update_time": util.NowUnix(),
+	})
 	response.SuccessNotice(c, "修改成功")
 }
 
@@ -173,7 +177,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		tdb(c).Create(&model.DecorateTabbar{
 			Name: util.ToString(m["name"]), Selected: filesvc.SetFileURL(c, util.ToString(m["selected"])),
 			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])), Link: util.EncodeJSON(m["link"]),
-			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now,
+			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		})
 	}
 	response.SuccessNotice(c, "操作成功")
@@ -496,11 +500,12 @@ func RechargeRefund(c *gin.Context) {
 		if order.PayWay == 2 || order.PayWay == 3 {
 			way = 1
 		}
+		now := util.NowUnix()
 		rec = model.RefundRecord{
 			SN: util.GenerateSN(exists, "", 4), UserID: order.UserID, OrderID: order.ID, OrderSN: order.SN,
 			OrderType: "recharge", OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount,
 			RefundType: 1, TransactionID: order.TransactionID, RefundWay: way, RefundStatus: 0,
-			TenantID: order.TenantID, CreateTime: util.NowUnix(),
+			TenantID: order.TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		}
 		if err := tx.Create(&rec).Error; err != nil {
 			return err
@@ -514,7 +519,7 @@ func RechargeRefund(c *gin.Context) {
 		return tx.Create(&model.RefundLog{
 			SN: util.GenerateSN(logExists, "", 4), RecordID: rec.ID, UserID: order.UserID, HandleID: adminID,
 			OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount, RefundStatus: 0,
-			TenantID: order.TenantID, CreateTime: util.NowUnix(),
+			TenantID: order.TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		}).Error
 	})
 	if err != nil {
@@ -640,6 +645,7 @@ func RechargeRefundAgain(c *gin.Context) {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
+	now := util.NowUnix()
 	againLog := model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
@@ -649,7 +655,7 @@ func RechargeRefundAgain(c *gin.Context) {
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
 		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 0,
-		TenantID: rec.TenantID, CreateTime: util.NowUnix(),
+		TenantID: rec.TenantID, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	tdb(c).Create(&againLog)
 	if againOrder.PayWay != 2 && againOrder.PayWay != 3 {
@@ -705,11 +711,12 @@ func OAReplyAdd(c *gin.Context) {
 		response.Fail(c, "排序值须大于或等于0")
 		return
 	}
+	now := util.NowUnix()
 	row := model.OfficialAccountReply{
 		TenantID: tenantDB(c), Name: httpx.BodyStr(c, "name"), Keyword: httpx.BodyStr(c, "keyword"),
 		ReplyType: httpx.BodyInt(c, "reply_type"), MatchingType: httpx.BodyInt(c, "matching_type"),
 		ContentType: httpx.BodyInt(c, "content_type"), Content: httpx.BodyStr(c, "content"),
-		Status: httpx.BodyInt(c, "status"), Sort: httpx.BodyInt(c, "sort"), CreateTime: util.NowUnix(),
+		Status: httpx.BodyInt(c, "status"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if row.TenantID == 0 {
 		response.Fail(c, "参数缺失")

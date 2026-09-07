@@ -212,8 +212,9 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 			return
 		}
 	}
+	now := util.NowUnix()
 	if err := tdb(c).Create(&model.UserAuth{
-		TenantID: ctxutil.Get(c).TenantID, UserID: uid, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
+		TenantID: ctxutil.Get(c).TenantID, UserID: uid, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -259,13 +260,13 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			user = model.User{
 				SN: sn, Account: "u" + util.ToString(sn), Nickname: nickname,
 				Avatar: avatar, Channel: terminal, TenantID: tid, IsNewUser: 1, CreateTime: now,
-				LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
+				LoginTime: util.ZeroUnixPtr(), UpdateTime: util.UnixPtr(now),
 			}
 			if err := tx.Create(&user).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&model.UserAuth{
-				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
+				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now, UpdateTime: util.UnixPtr(now),
 			}).Error; err != nil {
 				return err
 			}
@@ -293,7 +294,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			var auth model.UserAuth
 			if scopeTenant(tx.Model(&model.UserAuth{}), c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
 				if err := tx.Create(&model.UserAuth{
-					TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
+					TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now, UpdateTime: util.UnixPtr(now),
 				}).Error; err != nil {
 					return err
 				}

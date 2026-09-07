@@ -199,7 +199,7 @@ func createSMSLog(c *gin.Context, scene int, mobile, code, content string, now i
 	if platformSMS(c) {
 		row := model.SmsLog{
 			SceneID: scene, Mobile: mobile, Code: code, Content: content,
-			SendStatus: 0, SendTime: &now, CreateTime: now,
+			SendStatus: 0, SendTime: &now, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		}
 		_ = bootstrap.DB.Create(&row).Error
 		return row.ID
@@ -210,7 +210,7 @@ func createSMSLog(c *gin.Context, scene int, mobile, code, content string, now i
 	}
 	row := model.TenantSmsLog{
 		SceneID: scene, Mobile: mobile, Code: code, Content: content,
-		SendStatus: 0, SendTime: &now, TenantID: tid, CreateTime: now,
+		SendStatus: 0, SendTime: &now, TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	_ = bootstrap.DB.Create(&row).Error
 	return row.ID
