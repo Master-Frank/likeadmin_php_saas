@@ -214,9 +214,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		}
 		if err := tdb(c).Transaction(func(tx *gorm.DB) error {
 			sn := util.CreateUserSN(func(v int) bool {
-				var n int64
-				tx.Model(&model.User{}).Where("sn = ?", v).Count(&n)
-				return n > 0
+				return userSNTaken(c, tx, v)
 			})
 			now := util.NowUnix()
 			avatar := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)

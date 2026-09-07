@@ -24,6 +24,21 @@ func tdb(c *gin.Context) *gorm.DB {
 	return tenantdb.Use(c)
 }
 
+func userSNTaken(c *gin.Context, db *gorm.DB, v int) bool {
+	if db == nil {
+		return false
+	}
+	q := db.Model(&model.User{}).Where("sn = ?", v)
+	if c != nil {
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+	}
+	var n int64
+	q.Count(&n)
+	return n > 0
+}
+
 func scopeTenant(db *gorm.DB, c *gin.Context) *gorm.DB {
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		return db.Where("tenant_id = ?", tid)
@@ -138,9 +153,7 @@ func LoginRegister(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	sn := util.CreateUserSN(func(v int) bool {
-		var n int64
-		tdb(c).Model(&model.User{}).Where("sn = ?", v).Count(&n)
-		return n > 0
+		return userSNTaken(c, tdb(c), v)
 	})
 	avatar := cfgsvc.GetString(c, "default_image", "user_avatar", config.C.Project.DefaultImage["user_avatar"])
 	u := model.User{

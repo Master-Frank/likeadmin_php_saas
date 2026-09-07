@@ -11,6 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestUserSNTakenNilDB(t *testing.T) {
+	if userSNTaken(nil, nil, 123) {
+		t.Fatal("nil db")
+	}
+}
+
 func TestDecoratePageValueEmpty(t *testing.T) {
 	v := decoratePageValue(model.DecoratePage{})
 	arr, ok := v.([]any)

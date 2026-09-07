@@ -463,6 +463,17 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "超级管理员不允许被禁用")
 		return
 	}
+	if account := httpx.Str(c, "account"); account != "" {
+		var taken model.TenantAdmin
+		tq := adb.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id)
+		if tenant.ID > 0 {
+			tq = tq.Where("tenant_id = ?", tenant.ID)
+		}
+		if tq.First(&taken).Error == nil {
+			response.Fail(c, "账号已存在")
+			return
+		}
+	}
 	now := util.NowUnix()
 	data := map[string]any{
 		"name":             httpx.Str(c, "name"),
@@ -735,10 +746,11 @@ func TenantUserDetail(c *gin.Context) {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	tid := httpx.Uint(c, "tenant_id")
-	if tid == 0 {
-		tid = ctxutil.Get(c).TenantID
+	if !phpRequiredParam(httpx.Params(c), "tenant_id") {
+		response.Fail(c, "请选择租户标识")
+		return
 	}
+	tid := httpx.Uint(c, "tenant_id")
 	var u model.User
 	q := tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
 	if tid > 0 {

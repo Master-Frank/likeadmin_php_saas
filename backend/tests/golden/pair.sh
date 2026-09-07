@@ -1170,6 +1170,17 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   if [[ "$(jcode <<<"$php_ae")" != "$(jcode <<<"$go_ae")" || "$(jget msg <<<"$php_ae")" != "$(jget msg <<<"$go_ae")" ]]; then
     fail=$((fail + 1))
   fi
+  if command -v mysql >/dev/null; then
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq "INSERT INTO la_tenant_admin (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES (1,0,'dupadm','dupadm$ts','x','',0,UNIX_TIMESTAMP())"
+    go_tadup="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":1,\"tenant_id\":1,\"name\":\"超级管理员\",\"disable\":0,\"multipoint_login\":1,\"role_id\":[],\"account\":\"dupadm$ts\"}")"
+    echo "tenant_admin_edit_dup go_msg=$(jget msg <<<"$go_tadup")"
+    if [[ "$(jget msg <<<"$go_tadup")" != *账号已存在* ]]; then
+      echo "  go_tadup=${go_tadup:0:200}"
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_tenant_admin WHERE account='dupadm$ts' AND tenant_id=1"
+  fi
   go_rd="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"tenant_id":1,"name":"超级管理员","disable":1,"multipoint_login":1,"role_id":[],"account":"pair1"}')"
   echo "platform_root_disable go_msg=$(jget msg <<<"$go_rd")"
   if [[ "$(jget msg <<<"$go_rd")" != *超级管理员不允许被禁用* ]]; then
@@ -1547,6 +1558,30 @@ print(json.dumps({
     echo "  go_pms=${go_pms:0:200}"
     fail=$((fail + 1))
   fi
+  go_tdw="$(curl -sS -X POST "$GO/tenantapi/setting.dict.dict_type/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","type":"x"}')"
+  echo "tenant_dict_write go_msg=$(jget msg <<<"$go_tdw")"
+  if [[ "$(jget msg <<<"$go_tdw")" != *controller not exists* ]]; then
+    echo "  go_tdw=${go_tdw:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_tsw="$(curl -sS -X POST "$GO/tenantapi/setting.storage/setup" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"engine":"local"}')"
+  echo "tenant_storage_write go_msg=$(jget msg <<<"$go_tsw")"
+  if [[ "$(jget msg <<<"$go_tsw")" != *controller not exists* ]]; then
+    echo "  go_tsw=${go_tsw:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_tcw="$(curl -sS -X POST "$GO/tenantapi/crontab.crontab/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","command":"x","type":1}')"
+  echo "tenant_crontab_write go_msg=$(jget msg <<<"$go_tcw")"
+  if [[ "$(jget msg <<<"$go_tcw")" != *controller not exists* ]]; then
+    echo "  go_tcw=${go_tcw:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_tgw="$(curl -sS -X POST "$GO/tenantapi/tools.generator/selectTable" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"table":[{"name":"la_config","comment":"x"}]}')"
+  echo "tenant_generator_write go_msg=$(jget msg <<<"$go_tgw")"
+  if [[ "$(jget msg <<<"$go_tgw")" != *controller not exists* ]]; then
+    echo "  go_tgw=${go_tgw:0:200}"
+    fail=$((fail + 1))
+  fi
   go_rlog="$(curl -sS "$GO/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "refund_log_missing go_msg=$(jget msg <<<"$go_rlog")"
   if [[ "$(jget msg <<<"$go_rlog")" != *退款记录不存在* ]]; then
@@ -1888,6 +1923,12 @@ php_tud="$(curl -sS "$PHP/platformapi/tenant.tenantUser/detail" -H "token: $TOKE
 go_tud="$(curl -sS "$GO/platformapi/tenant.tenantUser/detail" -H "token: $TOKEN")"
 echo "tenantuser_detail_noid php_msg=$(jget msg <<<"$php_tud") go_msg=$(jget msg <<<"$go_tud")"
 if [[ "$(jget msg <<<"$php_tud")" != "$(jget msg <<<"$go_tud")" ]]; then
+  fail=$((fail + 1))
+fi
+go_tud2="$(curl -sS "$GO/platformapi/tenant.tenantUser/detail?id=1" -H "token: $TOKEN")"
+echo "tenantuser_detail_notid go_msg=$(jget msg <<<"$go_tud2")"
+if [[ "$(jget msg <<<"$go_tud2")" != *请选择租户标识* ]]; then
+  echo "  go_tud2=${go_tud2:0:200}"
   fail=$((fail + 1))
 fi
 php_tal="$(curl -sS "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
