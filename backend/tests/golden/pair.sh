@@ -1928,6 +1928,54 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_mp4")" != "$(jget msg <<<"$go_mp4")" ]]; then
       fail=$((fail + 1))
     fi
+    php_vf="$(curl -sS -X POST "$PHP/tenantapi/upload/video" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_vf="$(curl -sS -X POST "$GO/tenantapi/upload/video" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "upload_video_empty php_msg=$(jget msg <<<"$php_vf") go_msg=$(jget msg <<<"$go_vf")"
+    if [[ "$(jget msg <<<"$php_vf")" != "$(jget msg <<<"$go_vf")" ]]; then
+      echo "  php_vf=${php_vf:0:200}"
+      echo "  go_vf=${go_vf:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_ff="$(curl -sS -X POST "$PHP/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_ff="$(curl -sS -X POST "$GO/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    echo "upload_file_empty php_msg=$(jget msg <<<"$php_ff") go_msg=$(jget msg <<<"$go_ff")"
+    if [[ "$(jget msg <<<"$php_ff")" != "$(jget msg <<<"$go_ff")" ]]; then
+      echo "  php_ff=${php_ff:0:200}"
+      echo "  go_ff=${go_ff:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_vtxt="$(curl -sS -X POST "$PHP/tenantapi/upload/video" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair.txt")"
+    go_vtxt="$(curl -sS -X POST "$GO/tenantapi/upload/video" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair.txt")"
+    echo "upload_video_txt php_msg=$(jget msg <<<"$php_vtxt") go_msg=$(jget msg <<<"$go_vtxt")"
+    if [[ "$(jget msg <<<"$php_vtxt")" != "$(jget msg <<<"$go_vtxt")" ]]; then
+      echo "  php_vtxt=${php_vtxt:0:200}"
+      echo "  go_vtxt=${go_vtxt:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_fmp4="$(curl -sS -X POST "$PHP/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair.mp4")"
+    go_fmp4="$(curl -sS -X POST "$GO/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair.mp4")"
+    echo "upload_file_mp4 php_msg=$(jget msg <<<"$php_fmp4") go_msg=$(jget msg <<<"$go_fmp4")"
+    if [[ "$(jget msg <<<"$php_fmp4")" != "$(jget msg <<<"$go_fmp4")" ]]; then
+      echo "  php_fmp4=${php_fmp4:0:200}"
+      echo "  go_fmp4=${go_fmp4:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pvf="$(curl -sS -X POST "$PHP/platformapi/upload/video" -H "token: $TOKEN")"
+    go_pvf="$(curl -sS -X POST "$GO/platformapi/upload/video" -H "token: $TOKEN")"
+    echo "platform_upload_video_empty php_msg=$(jget msg <<<"$php_pvf") go_msg=$(jget msg <<<"$go_pvf")"
+    if [[ "$(jget msg <<<"$php_pvf")" != "$(jget msg <<<"$go_pvf")" ]]; then
+      echo "  php_pvf=${php_pvf:0:200}"
+      echo "  go_pvf=${go_pvf:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pff="$(curl -sS -X POST "$PHP/platformapi/upload/file" -H "token: $TOKEN")"
+    go_pff="$(curl -sS -X POST "$GO/platformapi/upload/file" -H "token: $TOKEN")"
+    echo "platform_upload_file_empty php_msg=$(jget msg <<<"$php_pff") go_msg=$(jget msg <<<"$go_pff")"
+    if [[ "$(jget msg <<<"$php_pff")" != "$(jget msg <<<"$go_pff")" ]]; then
+      echo "  php_pff=${php_pff:0:200}"
+      echo "  go_pff=${go_pff:0:200}"
+      fail=$((fail + 1))
+    fi
     php_ucid="$(curl -sS -X POST "$PHP/tenantapi/upload/image" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
     go_ucid="$(curl -sS -X POST "$GO/tenantapi/upload/image" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
     echo "file_upload_cid_missing php_msg=$(jget msg <<<"$php_ucid") go_msg=$(jget msg <<<"$go_ucid")"
@@ -2395,6 +2443,27 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
   if [[ "$php_cc" != "$go_cc" ]]; then
     fail=$((fail + 1))
   fi
+  php_old_cc="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("clarity_code") or "")' <<<"$php_ss")"
+  php_ss1="$(curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"clarity_code":"pair-clarity"}')"
+  go_ss1="$(curl -sS -X POST "$GO/tenantapi/setting.web.web_setting/setSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"clarity_code":"pair-clarity"}')"
+  echo "set_site_statistics php_msg=$(jget msg <<<"$php_ss1") go_msg=$(jget msg <<<"$go_ss1")"
+  if [[ "$(jget msg <<<"$php_ss1")" != "$(jget msg <<<"$go_ss1")" ]]; then
+    echo "  php_ss1=${php_ss1:0:200}"
+    echo "  go_ss1=${go_ss1:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ss2="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ss2="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_cc2="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("clarity_code"))' <<<"$php_ss2")"
+  go_cc2="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("clarity_code"))' <<<"$go_ss2")"
+  echo "set_site_statistics_get php=$php_cc2 go=$go_cc2"
+  if [[ "$php_cc2" != "pair-clarity" || "$go_cc2" != "pair-clarity" ]]; then
+    echo "  php_ss2=${php_ss2:0:200}"
+    echo "  go_ss2=${go_ss2:0:200}"
+    fail=$((fail + 1))
+  fi
+  curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"clarity_code":sys.argv[1]}))' "$php_old_cc")" >/dev/null
+  curl -sS -X POST "$GO/tenantapi/setting.web.web_setting/setSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"clarity_code":sys.argv[1]}))' "$php_old_cc")" >/dev/null
   php_pccfg="$(curl -sS "$PHP/api/pc/config" -H "Host: $TENANT_HOST")"
   go_pccfg="$(curl -sS "$GO/api/pc/config" -H "Host: $TENANT_HOST")"
   php_pt="$(python3 -c 'import json,sys; w=(json.load(sys.stdin).get("data") or {}).get("website") or {}; print(repr((w.get("pc_title"), w.get("pc_desc"), w.get("pc_keywords"))))' <<<"$php_pccfg")"
@@ -3838,6 +3907,22 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
       echo "  go_wcb2=${go_wcb2:0:200}"
       fail=$((fail + 1))
     fi
+    php_oab="$(curl -sS -X POST "$PHP/api/login/oaAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_oab="$(curl -sS -X POST "$GO/api/login/oaAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "oa_auth_bind_empty php_msg=$(jget msg <<<"$php_oab") go_msg=$(jget msg <<<"$go_oab")"
+    if [[ "$(jget msg <<<"$php_oab")" != "$(jget msg <<<"$go_oab")" ]]; then
+      echo "  php_oab=${php_oab:0:200}"
+      echo "  go_oab=${go_oab:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_oab2="$(curl -sS -X POST "$PHP/api/login/oaAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    go_oab2="$(curl -sS -X POST "$GO/api/login/oaAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    echo "oa_auth_bind_noconfig php_msg=$(jget msg <<<"$php_oab2") go_msg=$(jget msg <<<"$go_oab2")"
+    if [[ "$(jget msg <<<"$php_oab2")" != "$(jget msg <<<"$go_oab2")" ]]; then
+      echo "  php_oab2=${php_oab2:0:200}"
+      echo "  go_oab2=${go_oab2:0:200}"
+      fail=$((fail + 1))
+    fi
   fi
   php_mnp="$(curl -sS -X POST "$PHP/api/login/mnpLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
   go_mnp="$(curl -sS -X POST "$GO/api/login/mnpLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
@@ -4203,10 +4288,20 @@ print(first_id(ls))')"
   if [[ "$php_ulk" != "$go_ulk" ]]; then
     fail=$((fail + 1))
   fi
+  php_pmd0="$(curl -sS "$PHP/platformapi/auth.menu/detail" -H "token: $TOKEN")"
+  go_pmd0="$(curl -sS "$GO/platformapi/auth.menu/detail" -H "token: $TOKEN")"
+  echo "platform_menu_detail_noid php_msg=$(jget msg <<<"$php_pmd0") go_msg=$(jget msg <<<"$go_pmd0")"
+  if [[ "$(jget msg <<<"$php_pmd0")" != "$(jget msg <<<"$go_pmd0")" ]]; then
+    echo "  php_pmd0=${php_pmd0:0:200}"
+    echo "  go_pmd0=${go_pmd0:0:200}"
+    fail=$((fail + 1))
+  fi
   php_pmd="$(curl -sS "$PHP/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
   go_pmd="$(curl -sS "$GO/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
-  echo "platform_menu_detail_missing php_code=$(jcode <<<"$php_pmd") go_code=$(jcode <<<"$go_pmd")"
-  if [[ "$(jcode <<<"$php_pmd")" != "$(jcode <<<"$go_pmd")" ]]; then
+  php_pmdk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_pmd")"
+  go_pmdk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$go_pmd")"
+  echo "platform_menu_detail_missing php=$php_pmdk go=$go_pmdk"
+  if [[ "$(jcode <<<"$php_pmd")" != "$(jcode <<<"$go_pmd")" || "$php_pmdk" != "$go_pmdk" ]]; then
     echo "  php_pmd=${php_pmd:0:200}"
     echo "  go_pmd=${go_pmd:0:200}"
     fail=$((fail + 1))
