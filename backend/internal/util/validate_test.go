@@ -501,3 +501,15 @@ func TestWebScanLoginCheck(t *testing.T) {
 		t.Fatal("valid")
 	}
 }
+
+func TestWechatJsConfigCheck(t *testing.T) {
+	if WechatJsConfigCheck(map[string]any{}) != "请提供url" {
+		t.Fatal(WechatJsConfigCheck(map[string]any{}))
+	}
+	if WechatJsConfigCheck(map[string]any{"url": ""}) != "请提供url" {
+		t.Fatal(WechatJsConfigCheck(map[string]any{"url": ""}))
+	}
+	if WechatJsConfigCheck(map[string]any{"url": "https://example.com/"}) != "" {
+		t.Fatal("valid")
+	}
+}

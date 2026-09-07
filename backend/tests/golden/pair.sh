@@ -1483,6 +1483,14 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_sl3")" != "$(jget msg <<<"$go_sl3")" ]]; then
       fail=$((fail + 1))
     fi
+    php_js="$(curl -sS -X POST "$PHP/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+    go_js="$(curl -sS -X POST "$GO/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+    echo "jsconfig_nourl php_msg=$(jget msg <<<"$php_js") go_msg=$(jget msg <<<"$go_js")"
+    if [[ "$(jget msg <<<"$php_js")" != "$(jget msg <<<"$go_js")" ]]; then
+      echo "  php_js=${php_js:0:200}"
+      echo "  go_js=${go_js:0:200}"
+      fail=$((fail + 1))
+    fi
     php_up="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     go_up="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"
     echo "upload_empty php_msg=$(jget msg <<<"$php_up") go_msg=$(jget msg <<<"$go_up")"

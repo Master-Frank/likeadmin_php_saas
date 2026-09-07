@@ -337,6 +337,10 @@ func findRechargeBySN(sn string) (*model.RechargeOrder, error) {
 }
 
 func WechatJsConfigReal(c *gin.Context) {
+	if msg := util.WechatJsConfigCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
 		response.Fail(c, "获取jssdk失败:请先完成微信公众号配置")

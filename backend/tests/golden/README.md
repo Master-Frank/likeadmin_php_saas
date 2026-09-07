@@ -18,7 +18,7 @@
 | 平台字典 | dict_type 校验 + add/edit/delete | 对拍已过 |
 | 用户端 | `/api` config/decorate/article/search；注册+登录+center/info | 对拍已过（含注册重复、登录后 lists） |
 | 定时/安装 | crontab 执行、`/install` 导入 like.sql 并写 lock/.env | 安装导入已实现；本库 lock 已存在未重装 |
-| 全量切流 | `cmd/strangler` 把 API 切 Go，其余回 PHP；nginx 配置仍可用 | strangler :8090 对拍 failed=0；本机未装 nginx |
+| 全量切流 | `cmd/strangler` 把 API 切 Go，其余回 PHP；nginx 配置听 :8091 | strangler :8090 对拍 failed=0；nginx :8091 对拍 failed=0 |
 
 允许差异：新签发 `token`、键顺序、工作台随机演示曲线。不允许：`code`/`show`/`msg` 语义、列表字段、空 `data` 形态、时间格式。
 
@@ -32,5 +32,10 @@ export TENANT_HOST=pair1.likeadmin.test
 
 # 切流代理（API 走 Go，其余回 PHP）
 export GO=http://127.0.0.1:8090
+./backend/tests/golden/pair.sh
+
+# 生产 Nginx 切流（与 Go strangler 错开端口）
+# nginx -c /workspace/backend/deploy/nginx.local.conf
+export GO=http://127.0.0.1:8091
 ./backend/tests/golden/pair.sh
 ```

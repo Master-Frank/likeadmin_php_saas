@@ -1185,6 +1185,14 @@ func WebScanLoginCheck(p map[string]any) string {
 	return ""
 }
 
+// WechatJsConfigCheck mirrors PHP WechatValidate::sceneJsConfig.
+func WechatJsConfigCheck(p map[string]any) string {
+	if !phpRequired(p, "url") {
+		return "请提供url"
+	}
+	return ""
+}
+
 func OAReplySortCheck(p map[string]any) string {
 	if !phpRequired(p, "new_sort") {
 		return "请输入新排序值"
