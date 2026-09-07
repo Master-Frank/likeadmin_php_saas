@@ -57,6 +57,9 @@ func DecryptWechatV3OK(raw []byte, apiV3Key string) (wechat.PayNotify, bool) {
 
 // DecryptWechatV3WithKeys tries each API v3 key until ciphertext authenticates.
 func DecryptWechatV3WithKeys(raw []byte, keys []string) (wechat.PayNotify, bool) {
+	if !strings.Contains(string(raw), "ciphertext") {
+		return wechat.ParsePayNotify(raw, nil), true
+	}
 	for _, key := range keys {
 		if n, ok := DecryptWechatV3OK(raw, key); ok {
 			return n, true

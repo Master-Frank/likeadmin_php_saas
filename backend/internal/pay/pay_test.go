@@ -90,6 +90,11 @@ func TestDecryptWechatV3(t *testing.T) {
 	if _, ok := DecryptWechatV3WithKeys(raw, []string{"", "wrong-key-wrong-key-wrong-key!!"}); ok {
 		t.Fatal("all bad keys accepted")
 	}
+	plainV3 := []byte(`{"event_type":"REFUND.SUCCESS","out_refund_no":"RF1","refund_status":"SUCCESS"}`)
+	n, ok := DecryptWechatV3WithKeys(plainV3, nil)
+	if !ok || n.OutRefundNo != "RF1" || !n.RefundOK {
+		t.Fatalf("plain v3 %+v ok=%v", n, ok)
+	}
 }
 
 func TestNormalizePEM(t *testing.T) {
