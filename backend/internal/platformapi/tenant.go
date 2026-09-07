@@ -1,6 +1,7 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -930,11 +931,37 @@ func copyTenantNotice(dest *gorm.DB, tenantID uint) error {
 	for _, n := range tpls {
 		n.ID = 0
 		n.TenantID = tenantID
+		n.SystemNotice = canonicalizeNoticeJSON(n.SystemNotice)
+		n.SmsNotice = canonicalizeNoticeJSON(n.SmsNotice)
+		n.OaNotice = canonicalizeNoticeJSON(n.OaNotice)
+		n.MnpNotice = canonicalizeNoticeJSON(n.MnpNotice)
 		if err := dest.Create(&n).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// canonicalizeNoticeJSON mirrors PHP NoticeLogic::initialization re-encoding
+// after ThinkPHP JSON getters so copied rows stay valid JSON objects.
+func canonicalizeNoticeJSON(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	var v any = raw
+	for i := 0; i < 3; i++ {
+		s, ok := v.(string)
+		if !ok {
+			break
+		}
+		var next any
+		if json.Unmarshal([]byte(s), &next) != nil {
+			return s
+		}
+		v = next
+	}
+	return util.EncodeJSON(v)
 }
 
 func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
@@ -1033,12 +1060,21 @@ func runTenantDataSQL(tenantID uint, sn string) error {
 	if err != nil {
 		return err
 	}
-	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	content = strings.ReplaceAll(content, "{tenantSn}", sn)
-	content = strings.ReplaceAll(content, "{tenantId}", util.ToString(tenantID))
+	content := applyTenantSQLPlaceholders(string(raw), sn, tenantID)
 	return bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		return execSQLScript(tx, content)
 	})
+}
+
+// applyTenantSQLPlaceholders mirrors PHP TenantCreatService prefix + token rewrite.
+func applyTenantSQLPlaceholders(content, sn string, tenantID uint) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "{tenantSn}", sn)
+	if tenantID > 0 {
+		content = strings.ReplaceAll(content, "{tenantId}", util.ToString(tenantID))
+	}
+	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
+	return content
 }
 
 func execSQLScript(db *gorm.DB, content string) error {
@@ -1052,7 +1088,8 @@ func execSQLScript(db *gorm.DB, content string) error {
 			continue
 		}
 		up := strings.ToUpper(sql)
-		if strings.HasPrefix(up, "SET ") || strings.HasPrefix(up, "BEGIN") || strings.HasPrefix(up, "COMMIT") {
+		// BEGIN/COMMIT are no-ops: callers already wrap in a GORM transaction.
+		if strings.HasPrefix(up, "BEGIN") || strings.HasPrefix(up, "COMMIT") || strings.HasPrefix(up, "ROLLBACK") {
 			continue
 		}
 		if err := db.Exec(sql).Error; err != nil {
@@ -1078,10 +1115,7 @@ func runTenantSQL(sn string) error {
 	if err != nil {
 		return err
 	}
-	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	content = strings.ReplaceAll(content, "{tenantSn}", sn)
-	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
-	return execSQLScript(bootstrap.DB, content)
+	return execSQLScript(bootstrap.DB, applyTenantSQLPlaceholders(string(raw), sn, 0))
 }
 
 func randomSN() string {

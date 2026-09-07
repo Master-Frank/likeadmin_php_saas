@@ -267,7 +267,7 @@ func PublishMenu(appID, secret string, buttons []any) error {
 		ErrMsg  string `json:"errmsg"`
 	}
 	if err := postJSON("https://api.weixin.qq.com/cgi-bin/menu/create?access_token="+url.QueryEscape(tok),
-		map[string]any{"button": buttons}, &out); err != nil {
+		map[string]any{"button": BuildMenuButtons(buttons)}, &out); err != nil {
 		return err
 	}
 	if out.ErrCode != 0 {

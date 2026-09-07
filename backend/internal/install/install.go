@@ -155,6 +155,8 @@ func Run(c *gin.Context) {
 		envPath = httpx.Str(c, "env_path")
 	}
 	_ = WriteEnv(envPath, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
+	goCfg := httpx.Str(c, "go_config_path")
+	_ = WriteGoConfig(goCfg, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
 	content := fmt.Sprintf("installed_at=%s\nhost=%s\nport=%d\ndatabase=%s\n",
 		time.Now().Format(time.RFC3339), host, port, dbName)
 	if err := os.WriteFile(lock, []byte(content), 0o644); err != nil {

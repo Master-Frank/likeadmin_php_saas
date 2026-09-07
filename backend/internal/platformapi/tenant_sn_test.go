@@ -1,8 +1,10 @@
 package platformapi
 
 import (
+	"encoding/json"
 	"testing"
 
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 )
 
@@ -38,6 +40,28 @@ func TestValidTenantSN(t *testing.T) {
 func TestCleanTenantScopedRowsSkipsZero(t *testing.T) {
 	cleanTenantScopedRows(0)
 	expireTenantAdmins(model.Tenant{})
+}
+
+func TestApplyTenantSQLPlaceholders(t *testing.T) {
+	old := config.C.Database.Prefix
+	config.C.Database.Prefix = "lk_"
+	defer func() { config.C.Database.Prefix = old }()
+	got := applyTenantSQLPlaceholders("INSERT INTO `la_article_{tenantSn}` VALUES ({tenantId});", "pair2", 9)
+	if got != "INSERT INTO `lk_article_pair2` VALUES (9);" {
+		t.Fatalf("%s", got)
+	}
+}
+
+func TestCanonicalizeNoticeJSON(t *testing.T) {
+	raw := canonicalizeNoticeJSON(`{"status":1,"content":"hi"}`)
+	var m map[string]any
+	if json.Unmarshal([]byte(raw), &m) != nil || int(m["status"].(float64)) != 1 {
+		t.Fatalf("%s", raw)
+	}
+	dbl := canonicalizeNoticeJSON(`"{\"status\":0}"`)
+	if json.Unmarshal([]byte(dbl), &m) != nil {
+		t.Fatalf("double %s", dbl)
+	}
 }
 
 func TestTenantAliasTakenSkipsEmpty(t *testing.T) {

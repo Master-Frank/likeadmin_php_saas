@@ -74,9 +74,13 @@ type ProjectConfig struct {
 	Decorate             map[string]any    `mapstructure:"decorate"`
 }
 
-var C Config
+var (
+	C    Config
+	Path string
+)
 
 func Load(path string) error {
+	Path = path
 	v := viper.New()
 	v.SetConfigFile(path)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

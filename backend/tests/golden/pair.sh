@@ -2396,6 +2396,19 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
   if [[ -z "$got_dept" || "$got_dept" != "$tpl_dept" ]]; then
     fail=$((fail + 1))
   fi
+  sms_json="$(mysqlq "SELECT sms_notice FROM la_tenant_notice_setting WHERE tenant_id=$gid AND scene_id=101 LIMIT 1")"
+  sms_ok="$(python3 -c 'import json,sys
+s=sys.argv[1]
+try:
+    v=json.loads(s)
+    print(int(isinstance(v, dict) and "status" in v))
+except Exception:
+    print(0)
+' "$sms_json")"
+  echo "shared_notice_json ok=$sms_ok"
+  if [[ "$sms_ok" != "1" ]]; then
+    fail=$((fail + 1))
+  fi
   now="$(date +%s)"
   mysqlq "INSERT INTO la_refund_log (tenant_id,sn,record_id,user_id,handle_id,order_amount,refund_amount,refund_status,create_time) VALUES ($gid,'pairrl$now',1,1,1,1.00,1.00,0,$now)"
   mysqlq "INSERT INTO la_tenant_sms_log (tenant_id,scene_id,mobile,content,code,send_status,send_time,create_time) VALUES ($gid,101,'13800000000','pair','1234',1,$now,$now)"
