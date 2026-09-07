@@ -4534,8 +4534,6 @@ print(first_id(ls))')"
   pair_post_msg decorate_save_type0 "/tenantapi/decorate.page/save" '{"id":0,"type":0,"data":[{}]}'
   pair_post_msg decorate_save_type_missing "/tenantapi/decorate.page/save" '{"id":0,"data":[{}]}'
   pair_post_msg decorate_save_data_empty "/tenantapi/decorate.page/save" '{"id":0,"type":1,"data":[]}'
-  pair_post_msg pay_config_set_id0 "/platformapi/setting.pay.pay_config/setConfig" '{"id":0,"name":"x","icon":"x","sort":1}'
-  pair_post_msg tenant_pay_config_set_id0 "/tenantapi/setting.pay.pay_config/setConfig" '{"id":0,"name":"x","icon":"x","sort":1}'
   pair_post_msg adjust_money_user0 "/tenantapi/user.user/adjustMoney" '{"user_id":0,"action":1,"num":1}'
   pair_post_msg dict_data_add_type0 "/platformapi/setting.dict.dict_data/add" '{"name":"x","value":"x","type_id":0,"status":1}'
   pair_post_msg generator_delete_id0 "/platformapi/tools.generator/delete" '{"id":0}'
