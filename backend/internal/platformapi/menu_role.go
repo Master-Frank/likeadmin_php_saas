@@ -71,6 +71,7 @@ func MenuAdd(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -96,6 +97,7 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -119,6 +121,7 @@ func MenuDelete(c *gin.Context) {
 	}
 	bootstrap.DB.Delete(&model.SystemMenu{}, id)
 	bootstrap.DB.Where("menu_id = ?", id).Delete(&model.SystemRoleMenu{})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -133,6 +136,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		"is_disable":  httpx.Int(c, "is_disable"),
 		"update_time": now,
 	})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 

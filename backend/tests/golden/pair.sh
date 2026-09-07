@@ -1243,6 +1243,28 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     if [[ "$(jget msg <<<"$php_ps")" != "$(jget msg <<<"$go_ps")" ]]; then
       fail=$((fail + 1))
     fi
+    if command -v mysql >/dev/null; then
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      self_uid="$(mysqlq "SELECT id FROM la_user WHERE account='$acc' AND delete_time IS NULL LIMIT 1")"
+      other_uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL AND id<>IFNULL('$self_uid',0) ORDER BY id LIMIT 1")"
+      now="$(date +%s)"
+      if [[ -n "$other_uid" && "$other_uid" != "0" ]]; then
+        mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('pwu$now',$other_uid,2,0,9,1,0,1,$now)"
+        oid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='pwu$now'")"
+        go_pwu="$(curl -sS "$GO/api/pay/payWay?from=recharge&order_id=$oid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+        go_ppu="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"from\":\"recharge\",\"pay_way\":2,\"order_id\":$oid}")"
+        echo "pay_order_owner go_way=$(jget msg <<<"$go_pwu") go_prepay=$(jget msg <<<"$go_ppu")"
+        if [[ "$(jget msg <<<"$go_pwu")" != *待支付订单不存在* ]]; then
+          echo "  go_pwu=${go_pwu:0:200}"
+          fail=$((fail + 1))
+        fi
+        if [[ "$(jget msg <<<"$go_ppu")" != *充值订单不存在* ]]; then
+          echo "  go_ppu=${go_ppu:0:200}"
+          fail=$((fail + 1))
+        fi
+        mysqlq "DELETE FROM la_recharge_order WHERE sn='pwu$now'"
+      fi
+    fi
     php_bm="$(curl -sS -X POST "$PHP/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     go_bm="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     echo "bind_mobile_bad php_msg=$(jget msg <<<"$php_bm") go_msg=$(jget msg <<<"$go_bm")"

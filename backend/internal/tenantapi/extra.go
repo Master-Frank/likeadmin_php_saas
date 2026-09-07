@@ -408,11 +408,19 @@ func RechargeRefund(c *gin.Context) {
 		}).Error; err != nil {
 			return err
 		}
-		tx.First(&user, order.UserID)
+		uq = tx.Where("id = ?", order.UserID)
+		if order.TenantID > 0 {
+			uq = uq.Where("tenant_id = ?", order.TenantID)
+		}
+		uq.First(&user)
 		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncAdmin, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
 		exists := func(sn string) bool {
 			var n int64
-			tx.Model(&model.RefundRecord{}).Where("sn = ?", sn).Count(&n)
+			q := tx.Model(&model.RefundRecord{}).Where("sn = ?", sn)
+			if order.TenantID > 0 {
+				q = q.Where("tenant_id = ?", order.TenantID)
+			}
+			q.Count(&n)
 			return n > 0
 		}
 		way := 2
@@ -430,7 +438,11 @@ func RechargeRefund(c *gin.Context) {
 		}
 		logExists := func(sn string) bool {
 			var n int64
-			tx.Model(&model.RefundLog{}).Where("sn = ?", sn).Count(&n)
+			q := tx.Model(&model.RefundLog{}).Where("sn = ?", sn)
+			if order.TenantID > 0 {
+				q = q.Where("tenant_id = ?", order.TenantID)
+			}
+			q.Count(&n)
 			return n > 0
 		}
 		return tx.Create(&model.RefundLog{
@@ -576,7 +588,11 @@ func RechargeRefundAgain(c *gin.Context) {
 	againLog := model.RefundLog{
 		SN: util.GenerateSN(func(sn string) bool {
 			var n int64
-			tdb(c).Model(&model.RefundLog{}).Where("sn = ?", sn).Count(&n)
+			q := tdb(c).Model(&model.RefundLog{}).Where("sn = ?", sn)
+			if rec.TenantID > 0 {
+				q = q.Where("tenant_id = ?", rec.TenantID)
+			}
+			q.Count(&n)
 			return n > 0
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,

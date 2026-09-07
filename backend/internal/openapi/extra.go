@@ -109,6 +109,13 @@ func ArticleDetail(c *gin.Context) {
 	response.Data(c, out)
 }
 
+func userTerminal(c *gin.Context) int {
+	if info := ctxutil.Get(c).UserInfo; info != nil {
+		return util.ToInt(info["terminal"])
+	}
+	return 0
+}
+
 func RechargeCreate(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
 	if uid == 0 {
@@ -121,12 +128,7 @@ func RechargeCreate(c *gin.Context) {
 		return
 	}
 	money := httpx.Float(c, "money")
-	terminal := httpx.Int(c, "terminal")
-	if terminal == 0 {
-		if info := ctxutil.Get(c).UserInfo; info != nil {
-			terminal = util.ToInt(info["terminal"])
-		}
-	}
+	terminal := userTerminal(c)
 	exists := func(sn string) bool {
 		var n int64
 		tdb(c).Model(&model.RechargeOrder{}).Where("sn = ?", sn).Count(&n)
@@ -163,17 +165,13 @@ func PayWay(c *gin.Context) {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
+	uid := ctxutil.Get(c).UserID
 	var order model.RechargeOrder
-	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND user_id = ? AND delete_time IS NULL", orderID, uid), c).First(&order).Error != nil {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
-	terminal := httpx.Int(c, "terminal")
-	if terminal == 0 {
-		if info := ctxutil.Get(c).UserInfo; info != nil {
-			terminal = util.ToInt(info["terminal"])
-		}
-	}
+	terminal := userTerminal(c)
 	tid := ctxutil.Get(c).TenantID
 	var ways []model.TenantPayWay
 	q := tdb(c).Where("scene = ? AND status = 1", terminal)
@@ -249,12 +247,13 @@ func PayPrepay(c *gin.Context) {
 	}
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
+	uid := ctxutil.Get(c).UserID
 	if from != "recharge" {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
 	var order model.RechargeOrder
-	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
+	if scopeTenant(tdb(c).Where("id = ? AND user_id = ? AND delete_time IS NULL", orderID, uid), c).First(&order).Error != nil {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
@@ -262,10 +261,7 @@ func PayPrepay(c *gin.Context) {
 		response.FailWithData(c, "订单已支付", p)
 		return
 	}
-	terminal := 0
-	if info := ctxutil.Get(c).UserInfo; info != nil {
-		terminal = util.ToInt(info["terminal"])
-	}
+	terminal := userTerminal(c)
 	paySN := order.SN
 	if payWay == 2 {
 		paySN = fmt.Sprintf("%s%d%s", order.SN, terminal, fmt.Sprintf("%04d", util.NowUnix()%10000))
@@ -567,7 +563,7 @@ func PcArticleDetail(c *gin.Context) {
 	}
 	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, a.ID)
 	var cate model.ArticleCate
-	tdb(c).First(&cate, a.Cid)
+	scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", a.Cid), c).First(&cate)
 	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
 	out["last"] = last
 	out["next"] = next

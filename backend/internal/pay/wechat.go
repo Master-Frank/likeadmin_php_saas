@@ -270,8 +270,12 @@ func lookupOpenid(tenantID, userID uint, terminal int) string {
 	if db == nil {
 		return ""
 	}
+	q := db.Where("user_id = ? AND terminal = ?", userID, terminal)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
 	var auth model.UserAuth
-	if db.Where("user_id = ? AND terminal = ?", userID, terminal).First(&auth).Error == nil {
+	if q.First(&auth).Error == nil {
 		return auth.Openid
 	}
 	return ""

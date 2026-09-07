@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
 
 	"github.com/gin-gonic/gin"
@@ -72,6 +73,20 @@ func TestPcArticleMissingShape(t *testing.T) {
 	}
 	if _, ok := out["new"].([]map[string]any); !ok {
 		t.Fatalf("new %+v", out["new"])
+	}
+}
+
+func TestUserTerminalFromToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	if userTerminal(c) != 0 {
+		t.Fatalf("empty token terminal=%d", userTerminal(c))
+	}
+	ctxutil.Set(c, &ctxutil.RequestMeta{UserInfo: map[string]any{"terminal": 2}})
+	if userTerminal(c) != 2 {
+		t.Fatalf("token terminal=%d", userTerminal(c))
 	}
 }
 

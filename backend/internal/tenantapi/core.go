@@ -796,7 +796,7 @@ func RechargeLists(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(ro + " AS ro").Joins("JOIN " + u + " AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
 	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("ro.tenant_id = ?", tid)
+		db = db.Where("ro.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	}
 	if sn := lists.Param(q, "sn"); sn != "" {
 		db = db.Where("ro.sn = ?", sn)
@@ -855,7 +855,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(al + " AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
 	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("al.tenant_id = ?", tid)
+		db = db.Where("al.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	}
 	if lists.Param(q, "change_type") != "" {
 		db = db.Where("al.change_type = ?", lists.ParamInt(q, "change_type"))
@@ -915,7 +915,7 @@ func FinanceRefundRecord(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	base := tdb(c).Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 	if tid := tenantDB(c); tid > 0 {
-		base = base.Where("r.tenant_id = ?", tid)
+		base = base.Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	}
 	if sn := lists.Param(q, "sn"); sn != "" {
 		base = base.Where("r.sn = ?", sn)
@@ -939,7 +939,7 @@ func FinanceRefundRecord(c *gin.Context) {
 	extendWhere := func(db *gorm.DB) *gorm.DB {
 		db = db.Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
 		if tid := tenantDB(c); tid > 0 {
-			db = db.Where("r.tenant_id = ?", tid)
+			db = db.Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 		}
 		if sn := lists.Param(q, "sn"); sn != "" {
 			db = db.Where("r.sn = ?", sn)

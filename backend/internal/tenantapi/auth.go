@@ -329,6 +329,7 @@ func MenuAdd(c *gin.Context) {
 	m.TenantID = tenantDB(c)
 	m.CreateTime = util.NowUnix()
 	tdb(c).Create(&m)
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -354,6 +355,7 @@ func MenuEdit(c *gin.Context) {
 		"paths": m.Paths, "component": m.Component, "selected": m.Selected, "params": m.Params,
 		"is_cache": m.IsCache, "is_show": m.IsShow, "is_disable": m.IsDisable, "update_time": now,
 	})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -377,6 +379,7 @@ func MenuDelete(c *gin.Context) {
 	}
 	scopeTID(tdb(c).Where("id = ?", id), c).Delete(&model.TenantSystemMenu{})
 	tdb(c).Where("menu_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -392,6 +395,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_disable", httpx.Int(c, "is_disable"))
+	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
