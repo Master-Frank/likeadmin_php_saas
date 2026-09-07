@@ -57,12 +57,10 @@ func DeptAdd(c *gin.Context) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if msg := util.DeptWriteCheck(p, false); msg != "" {
+	if msg := util.DeptWriteCheckTaken(p, false, func(name string) bool {
+		return deptNameTaken(0, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if deptNameTaken(0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "部门名称已存在")
 		return
 	}
 	d := model.Dept{
@@ -92,7 +90,9 @@ func DeptEdit(c *gin.Context) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if msg := util.DeptWriteCheck(p, true); msg != "" {
+	if msg := util.DeptWriteCheckTaken(p, true, func(name string) bool {
+		return deptNameTaken(id, name)
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -108,10 +108,6 @@ func DeptEdit(c *gin.Context) {
 			response.Fail(c, "部门不存在")
 			return
 		}
-	}
-	if deptNameTaken(id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "部门名称已存在")
-		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Updates(map[string]any{
@@ -247,16 +243,12 @@ func JobsAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.JobsWriteCheck(p, false); msg != "" {
+	if msg := util.JobsWriteCheckTaken(p, false, func(name string) bool {
+		return jobsNameTaken(0, name)
+	}, func(code string) bool {
+		return jobsCodeTaken(0, code)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if jobsNameTaken(0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "岗位名称已存在")
-		return
-	}
-	if jobsCodeTaken(0, httpx.BodyStr(c, "code")) {
-		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	j := model.Jobs{
@@ -285,16 +277,12 @@ func JobsEdit(c *gin.Context) {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	if msg := util.JobsWriteCheck(p, true); msg != "" {
+	if msg := util.JobsWriteCheckTaken(p, true, func(name string) bool {
+		return jobsNameTaken(id, name)
+	}, func(code string) bool {
+		return jobsCodeTaken(id, code)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if jobsNameTaken(id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "岗位名称已存在")
-		return
-	}
-	if jobsCodeTaken(id, httpx.BodyStr(c, "code")) {
-		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	now := util.NowUnix()

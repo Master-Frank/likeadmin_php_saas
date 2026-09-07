@@ -95,22 +95,19 @@ func AdminAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.AuthAdminAddCheck(p); msg != "" {
+	account := httpx.BodyStr(c, "account")
+	name := httpx.BodyStr(c, "name")
+	if msg := util.AuthAdminAddCheckTaken(p, func(s string) bool {
+		var exist model.Admin
+		return bootstrap.DB.Where("account = ? AND delete_time IS NULL", s).First(&exist).Error == nil
+	}, func(s string) bool {
+		var exist model.Admin
+		return bootstrap.DB.Where("name = ? AND delete_time IS NULL", s).First(&exist).Error == nil
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	name := httpx.BodyStr(c, "name")
 	password := httpx.BodyStr(c, "password")
-	var exist model.Admin
-	if bootstrap.DB.Where("account = ? AND delete_time IS NULL", account).First(&exist).Error == nil {
-		response.Fail(c, "账号已存在")
-		return
-	}
-	if bootstrap.DB.Where("name = ? AND delete_time IS NULL", name).First(&exist).Error == nil {
-		response.Fail(c, "名称已存在")
-		return
-	}
 	now := util.NowUnix()
 	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
@@ -158,19 +155,16 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, "管理员不存在")
 		return
 	}
-	if msg := util.AuthAdminEditCheck(p, admin.Root == 1); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
 	account := httpx.BodyStr(c, "account")
 	name := httpx.BodyStr(c, "name")
-	var exist model.Admin
-	if bootstrap.DB.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id).First(&exist).Error == nil {
-		response.Fail(c, "账号已存在")
-		return
-	}
-	if bootstrap.DB.Where("name = ? AND delete_time IS NULL AND id <> ?", name, id).First(&exist).Error == nil {
-		response.Fail(c, "名称已存在")
+	if msg := util.AuthAdminEditCheckTaken(p, admin.Root == 1, func(s string) bool {
+		var exist model.Admin
+		return bootstrap.DB.Where("account = ? AND delete_time IS NULL AND id <> ?", s, id).First(&exist).Error == nil
+	}, func(s string) bool {
+		var exist model.Admin
+		return bootstrap.DB.Where("name = ? AND delete_time IS NULL AND id <> ?", s, id).First(&exist).Error == nil
+	}); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()

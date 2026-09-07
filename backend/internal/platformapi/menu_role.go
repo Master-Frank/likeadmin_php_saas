@@ -61,11 +61,9 @@ func MenuAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.MenuWriteCheck(p, false); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
-	if msg := menuUniqueName(0, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
+	if msg := util.MenuWriteCheckTaken(p, false, func(typ, name string) bool {
+		return menuUniqueName(0, typ, name) != ""
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -88,21 +86,19 @@ func MenuEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.MenuWriteCheck(p, true); msg != "" {
+	id := httpx.BodyUint(c, "id")
+	if msg := util.MenuWriteCheckTaken(p, true, func(typ, name string) bool {
+		return menuUniqueName(id, typ, name) != ""
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.BodyUint(c, "id")
 	if id == httpx.BodyUint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
 		return
 	}
 	if !platformMenuParentOK(httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
-		return
-	}
-	if msg := menuUniqueName(id, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
-		response.Fail(c, msg)
 		return
 	}
 	var exist model.SystemMenu
@@ -216,12 +212,10 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.RoleWriteCheck(p, false); msg != "" {
+	if msg := util.RoleWriteCheckTaken(p, false, func(name string) bool {
+		return roleNameTaken(0, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if roleNameTaken(0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "角色名称已存在")
 		return
 	}
 	menuIDs := httpx.BodyUints(c, "menu_id")
@@ -256,12 +250,10 @@ func RoleEdit(c *gin.Context) {
 		response.Fail(c, "角色不存在")
 		return
 	}
-	if msg := util.RoleWriteCheck(p, true); msg != "" {
+	if msg := util.RoleWriteCheckTaken(p, true, func(name string) bool {
+		return roleNameTaken(id, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if roleNameTaken(id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "角色名称已存在")
 		return
 	}
 	now := util.NowUnix()

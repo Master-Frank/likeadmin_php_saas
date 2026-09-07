@@ -411,23 +411,19 @@ func TenantAdminAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.TenantAdminAddCheck(p); msg != "" {
+	var tenant model.Tenant
+	if msg := util.TenantAdminAddCheckTaken(p, func(tid uint) bool {
+		return bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error == nil
+	}, func(tid uint, account string) bool {
+		var exist model.TenantAdmin
+		return tenantAdminDB(tenant).Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	tid := httpx.BodyUint(c, "tenant_id")
-	var tenant model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
-		response.Fail(c, "对应租户账号不存在")
-		return
-	}
 	adb := tenantAdminDB(tenant)
 	account := httpx.BodyStr(c, "account")
-	var exist model.TenantAdmin
-	if adb.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
-		response.Fail(c, "账号已存在")
-		return
-	}
 	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]

@@ -266,6 +266,12 @@ func TestDictTypeWriteCheck(t *testing.T) {
 	if DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 1}) != "" {
 		t.Fatal("expected ok")
 	}
+	if DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 2}) != "status必须在 0,1 范围内" {
+		t.Fatal(DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 2}))
+	}
+	if msg := DictTypeWriteCheckTaken(map[string]any{"name": "n", "type": "taken"}, func(string) bool { return true }); msg != "字典类型已存在" {
+		t.Fatal(msg)
+	}
 }
 
 func TestUploadExtCheck(t *testing.T) {
@@ -299,14 +305,29 @@ func TestMenuRoleDeptJobsCheck(t *testing.T) {
 	if MenuWriteCheck(map[string]any{}, false) != "请选择上级菜单" {
 		t.Fatal(MenuWriteCheck(map[string]any{}, false))
 	}
+	if msg := MenuWriteCheckTaken(map[string]any{"pid": 0, "type": "M", "name": "taken"}, false, func(string, string) bool { return true }); msg != "菜单名称已存在" {
+		t.Fatal(msg)
+	}
 	if RoleWriteCheck(map[string]any{}, false) != "请输入角色名称" {
 		t.Fatal(RoleWriteCheck(map[string]any{}, false))
+	}
+	if msg := RoleWriteCheckTaken(map[string]any{"name": "taken", "menu_id": "x"}, false, func(string) bool { return true }); msg != "角色名称已存在" {
+		t.Fatal(msg)
 	}
 	if DeptWriteCheck(map[string]any{}, false) != "请选择上级部门" {
 		t.Fatal(DeptWriteCheck(map[string]any{}, false))
 	}
+	if DeptWriteCheck(map[string]any{"pid": 1, "name": "n", "status": 2}, false) != "status必须在 0,1 范围内" {
+		t.Fatal(DeptWriteCheck(map[string]any{"pid": 1, "name": "n", "status": 2}, false))
+	}
 	if JobsWriteCheck(map[string]any{}, false) != "请填写岗位名称" {
 		t.Fatal(JobsWriteCheck(map[string]any{}, false))
+	}
+	if msg := JobsWriteCheckTaken(map[string]any{"name": "taken"}, false, func(string) bool { return true }, nil); msg != "岗位名称已存在" {
+		t.Fatal(msg)
+	}
+	if JobsWriteCheck(map[string]any{"name": "n", "code": "c", "status": 2}, false) != "岗位状态值错误" {
+		t.Fatal(JobsWriteCheck(map[string]any{"name": "n", "code": "c", "status": 2}, false))
 	}
 }
 
@@ -373,6 +394,21 @@ func TestAuthAdminAddCheck(t *testing.T) {
 	if AuthAdminAddCheck(base) != "确认密码不能为空" {
 		t.Fatal(AuthAdminAddCheck(base))
 	}
+	if msg := AuthAdminAddCheckTaken(map[string]any{"account": "admin"}, func(string) bool { return true }, nil); msg != "账号已存在" {
+		t.Fatal(msg)
+	}
+}
+
+func TestTenantAdminAddCheckTaken(t *testing.T) {
+	if TenantAdminAddCheck(map[string]any{}) != "请选择对应的租户" {
+		t.Fatal(TenantAdminAddCheck(map[string]any{}))
+	}
+	if msg := TenantAdminAddCheckTaken(map[string]any{"tenant_id": 999999}, func(uint) bool { return false }, nil); msg != "对应租户账号不存在" {
+		t.Fatal(msg)
+	}
+	if msg := TenantAdminAddCheckTaken(map[string]any{"tenant_id": 1, "account": "pair1"}, func(uint) bool { return true }, func(uint, string) bool { return true }); msg != "账号已存在" {
+		t.Fatal(msg)
+	}
 }
 
 func TestTenantAdminEditCheck(t *testing.T) {
@@ -408,6 +444,9 @@ func TestAuthAdminEditCheck(t *testing.T) {
 	p["disable"] = 0
 	if AuthAdminEditCheck(p, false) != "请选择角色" {
 		t.Fatal(AuthAdminEditCheck(p, false))
+	}
+	if msg := AuthAdminEditCheckTaken(map[string]any{"account": "admin"}, false, func(string) bool { return true }, nil); msg != "账号已存在" {
+		t.Fatal(msg)
 	}
 }
 

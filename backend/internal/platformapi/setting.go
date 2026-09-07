@@ -113,10 +113,9 @@ func UserSetRegisterConfig(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	// PHP UserLogic::setRegisterConfig always writes these six keys.
 	for _, k := range []string{"login_way", "coerce_mobile", "login_agreement", "third_auth", "wechat_auth", "qq_auth"} {
-		if v, ok := httpx.Body(c)[k]; ok {
-			cfgsvc.Set(c, "login", k, v)
-		}
+		cfgsvc.Set(c, "login", k, httpx.BodyAny(c, k))
 	}
 	response.SuccessNotice(c, "操作成功")
 }
@@ -306,14 +305,12 @@ func DictTypeAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DictTypeWriteCheck(p); msg != "" {
+	if msg := util.DictTypeWriteCheckTaken(p, func(typ string) bool {
+		var n int64
+		bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND delete_time IS NULL", typ).Count(&n)
+		return n > 0
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	var n int64
-	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND delete_time IS NULL", httpx.BodyStr(c, "type")).Count(&n)
-	if n > 0 {
-		response.Fail(c, "字典类型已存在")
 		return
 	}
 	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyStr(c, "name"), Type: httpx.BodyStr(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix()})
@@ -335,14 +332,12 @@ func DictTypeEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DictTypeWriteCheck(p); msg != "" {
+	if msg := util.DictTypeWriteCheckTaken(p, func(typ string) bool {
+		var n int64
+		bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND id <> ? AND delete_time IS NULL", typ, id).Count(&n)
+		return n > 0
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	var n int64
-	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND id <> ? AND delete_time IS NULL", httpx.BodyStr(c, "type"), id).Count(&n)
-	if n > 0 {
-		response.Fail(c, "字典类型已存在")
 		return
 	}
 	now := util.NowUnix()
@@ -366,6 +361,12 @@ func DictTypeDelete(c *gin.Context) {
 	var r model.DictType
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Fail(c, "字典类型不存在")
+		return
+	}
+	var used int64
+	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ? AND delete_time IS NULL", id).Count(&used)
+	if used > 0 {
+		response.Fail(c, "字典类型已被使用，请先删除绑定该字典类型的数据")
 		return
 	}
 	now := util.NowUnix()

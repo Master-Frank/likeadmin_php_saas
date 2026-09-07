@@ -284,6 +284,10 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 }
 
 func DictTypeWriteCheck(p map[string]any) string {
+	return DictTypeWriteCheckTaken(p, nil)
+}
+
+func DictTypeWriteCheckTaken(p map[string]any, typeTaken func(string) bool) string {
 	name := strings.TrimSpace(ToString(p["name"]))
 	if name == "" {
 		return "请填写字典名称"
@@ -294,12 +298,14 @@ func DictTypeWriteCheck(p map[string]any) string {
 	if strings.TrimSpace(ToString(p["type"])) == "" {
 		return "请填写字典类型"
 	}
+	if typeTaken != nil && typeTaken(strings.TrimSpace(ToString(p["type"]))) {
+		return "字典类型已存在"
+	}
 	if _, ok := p["status"]; !ok {
 		return "请选择状态"
 	}
-	st := ToInt(p["status"])
-	if st != 0 && st != 1 {
-		return "请选择状态"
+	if !inZeroOne(p["status"]) {
+		return "status必须在 0,1 范围内"
 	}
 	if n := len([]rune(ToString(p["remark"]))); n > 200 {
 		return "备注长度不能超过200"
@@ -567,14 +573,24 @@ func TenantAdminEditCheck(p map[string]any) string {
 }
 
 func TenantAdminAddCheck(p map[string]any) string {
+	return TenantAdminAddCheckTaken(p, nil, nil)
+}
+
+func TenantAdminAddCheckTaken(p map[string]any, tenantExists func(uint) bool, accountTaken func(tid uint, account string) bool) string {
 	if !phpRequired(p, "tenant_id") {
 		return "请选择对应的租户"
+	}
+	if tenantExists != nil && !tenantExists(uint(ToInt(p["tenant_id"]))) {
+		return "对应租户账号不存在"
 	}
 	if !phpRequired(p, "account") {
 		return "请输入账户"
 	}
 	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
 		return "账号长度须在1-32位字符"
+	}
+	if accountTaken != nil && accountTaken(uint(ToInt(p["tenant_id"])), ToString(p["account"])) {
+		return "账号已存在"
 	}
 	if !phpRequired(p, "name") {
 		return "请输入用户名"
@@ -996,6 +1012,10 @@ func AdminEditSelfCheck(p map[string]any) string {
 }
 
 func MenuWriteCheck(p map[string]any, needID bool) string {
+	return MenuWriteCheckTaken(p, needID, nil)
+}
+
+func MenuWriteCheckTaken(p map[string]any, needID bool, nameTaken func(typ, name string) bool) string {
 	if needID && !phpRequired(p, "id") {
 		return "参数缺失"
 	}
@@ -1014,6 +1034,9 @@ func MenuWriteCheck(p map[string]any, needID bool) string {
 	}
 	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 30 {
 		return "菜单名称长度需为1~30个字符"
+	}
+	if nameTaken != nil && nameTaken(typ, ToString(p["name"])) {
+		return "菜单名称已存在"
 	}
 	if n := len([]rune(ToString(p["icon"]))); n > 100 {
 		return "图标名称不能超过100个字符"
@@ -1061,6 +1084,10 @@ func MenuWriteCheck(p map[string]any, needID bool) string {
 }
 
 func RoleWriteCheck(p map[string]any, needID bool) string {
+	return RoleWriteCheckTaken(p, needID, nil)
+}
+
+func RoleWriteCheckTaken(p map[string]any, needID bool, nameTaken func(string) bool) string {
 	if needID && !phpRequired(p, "id") {
 		return "请选择角色"
 	}
@@ -1069,6 +1096,9 @@ func RoleWriteCheck(p map[string]any, needID bool) string {
 	}
 	if n := len([]rune(ToString(p["name"]))); n > 64 {
 		return "角色名称最长为16个字符"
+	}
+	if nameTaken != nil && nameTaken(ToString(p["name"])) {
+		return "角色名称已存在"
 	}
 	if v, ok := p["menu_id"]; ok && v != nil && !isArrayValue(v) {
 		return "权限格式错误"
@@ -1087,6 +1117,10 @@ func DeptPidCheck(p map[string]any) string {
 }
 
 func DeptWriteCheck(p map[string]any, needID bool) string {
+	return DeptWriteCheckTaken(p, needID, nil)
+}
+
+func DeptWriteCheckTaken(p map[string]any, needID bool, nameTaken func(string) bool) string {
 	if needID && !phpRequired(p, "id") {
 		return "参数缺失"
 	}
@@ -1099,6 +1133,9 @@ func DeptWriteCheck(p map[string]any, needID bool) string {
 	if !phpRequired(p, "name") {
 		return "请填写部门名称"
 	}
+	if nameTaken != nil && nameTaken(ToString(p["name"])) {
+		return "部门名称已存在"
+	}
 	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 30 {
 		return "部门名称长度须在1-30位字符"
 	}
@@ -1106,7 +1143,7 @@ func DeptWriteCheck(p map[string]any, needID bool) string {
 		return "请选择部门状态"
 	}
 	if !inZeroOne(p["status"]) {
-		return "部门状态值错误"
+		return "status必须在 0,1 范围内"
 	}
 	if _, ok := p["sort"]; ok && ToInt(p["sort"]) < 0 {
 		return "排序值不正确"
@@ -1115,17 +1152,27 @@ func DeptWriteCheck(p map[string]any, needID bool) string {
 }
 
 func JobsWriteCheck(p map[string]any, needID bool) string {
+	return JobsWriteCheckTaken(p, needID, nil, nil)
+}
+
+func JobsWriteCheckTaken(p map[string]any, needID bool, nameTaken, codeTaken func(string) bool) string {
 	if needID && !phpRequired(p, "id") {
 		return "参数缺失"
 	}
 	if !phpRequired(p, "name") {
 		return "请填写岗位名称"
 	}
+	if nameTaken != nil && nameTaken(ToString(p["name"])) {
+		return "岗位名称已存在"
+	}
 	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 50 {
 		return "岗位名称长度须在1-50位字符"
 	}
 	if !phpRequired(p, "code") {
 		return "请填写岗位编码"
+	}
+	if codeTaken != nil && codeTaken(ToString(p["code"])) {
+		return "岗位编码已存在"
 	}
 	if !phpRequired(p, "status") {
 		return "请选择岗位状态"
@@ -1305,17 +1352,27 @@ func LoginTerminalCheck(p map[string]any) string {
 
 // AuthAdminAddCheck mirrors PHP tenant/platform AdminValidate sceneAdd.
 func AuthAdminAddCheck(p map[string]any) string {
+	return AuthAdminAddCheckTaken(p, nil, nil)
+}
+
+func AuthAdminAddCheckTaken(p map[string]any, accountTaken, nameTaken func(string) bool) string {
 	if !phpRequired(p, "account") {
 		return "账号不能为空"
 	}
 	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
 		return "账号长度须在1-32位字符"
 	}
+	if accountTaken != nil && accountTaken(ToString(p["account"])) {
+		return "账号已存在"
+	}
 	if !phpRequired(p, "name") {
 		return "名称不能为空"
 	}
 	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 16 {
 		return "名称须在1-16位字符"
+	}
+	if nameTaken != nil && nameTaken(ToString(p["name"])) {
+		return "名称已存在"
 	}
 	if !phpRequired(p, "password") {
 		return "密码不能为空"
@@ -1345,17 +1402,27 @@ func AuthAdminAddCheck(p map[string]any) string {
 // AuthAdminEditCheck mirrors PHP tenant/platform AdminValidate sceneEdit.
 // Caller must already reject missing/unknown id (管理员id不能为空 / 管理员不存在).
 func AuthAdminEditCheck(p map[string]any, isRoot bool) string {
+	return AuthAdminEditCheckTaken(p, isRoot, nil, nil)
+}
+
+func AuthAdminEditCheckTaken(p map[string]any, isRoot bool, accountTaken, nameTaken func(string) bool) string {
 	if !phpRequired(p, "account") {
 		return "账号不能为空"
 	}
 	if n := len([]rune(ToString(p["account"]))); n < 1 || n > 32 {
 		return "账号长度须在1-32位字符"
 	}
+	if accountTaken != nil && accountTaken(ToString(p["account"])) {
+		return "账号已存在"
+	}
 	if !phpRequired(p, "name") {
 		return "名称不能为空"
 	}
 	if n := len([]rune(ToString(p["name"]))); n < 1 || n > 16 {
 		return "名称须在1-16位字符"
+	}
+	if nameTaken != nil && nameTaken(ToString(p["name"])) {
+		return "名称已存在"
 	}
 	pwd := ToString(p["password"])
 	confirm := ToString(p["password_confirm"])

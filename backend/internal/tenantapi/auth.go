@@ -88,18 +88,14 @@ func AdminAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.AuthAdminAddCheck(p); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
 	account := httpx.BodyStr(c, "account")
 	name := httpx.BodyStr(c, "name")
-	if tenantAdminAccountTaken(c, account, 0) {
-		response.Fail(c, "账号已存在")
-		return
-	}
-	if tenantAdminNameTaken(c, name, 0) {
-		response.Fail(c, "名称已存在")
+	if msg := util.AuthAdminAddCheckTaken(p, func(s string) bool {
+		return tenantAdminAccountTaken(c, s, 0)
+	}, func(s string) bool {
+		return tenantAdminNameTaken(c, s, 0)
+	}); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
@@ -149,18 +145,14 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, "管理员不存在")
 		return
 	}
-	if msg := util.AuthAdminEditCheck(p, admin.Root == 1); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
 	account := httpx.BodyStr(c, "account")
 	name := httpx.BodyStr(c, "name")
-	if tenantAdminAccountTaken(c, account, id) {
-		response.Fail(c, "账号已存在")
-		return
-	}
-	if tenantAdminNameTaken(c, name, id) {
-		response.Fail(c, "名称已存在")
+	if msg := util.AuthAdminEditCheckTaken(p, admin.Root == 1, func(s string) bool {
+		return tenantAdminAccountTaken(c, s, id)
+	}, func(s string) bool {
+		return tenantAdminNameTaken(c, s, id)
+	}); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	avatar := ""
@@ -359,11 +351,9 @@ func MenuAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.MenuWriteCheck(p, false); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
-	if msg := tenantMenuUniqueName(c, 0, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
+	if msg := util.MenuWriteCheckTaken(p, false, func(typ, name string) bool {
+		return tenantMenuUniqueName(c, 0, typ, name) != ""
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -384,21 +374,19 @@ func MenuEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.MenuWriteCheck(p, true); msg != "" {
+	id := httpx.BodyUint(c, "id")
+	if msg := util.MenuWriteCheckTaken(p, true, func(typ, name string) bool {
+		return tenantMenuUniqueName(c, id, typ, name) != ""
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.BodyUint(c, "id")
 	if id == httpx.BodyUint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
 		return
 	}
 	if !tenantMenuParentOK(c, httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
-		return
-	}
-	if msg := tenantMenuUniqueName(c, id, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
-		response.Fail(c, msg)
 		return
 	}
 	var exist model.TenantSystemMenu
@@ -522,12 +510,10 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.RoleWriteCheck(p, false); msg != "" {
+	if msg := util.RoleWriteCheckTaken(p, false, func(name string) bool {
+		return tenantRoleNameTaken(c, 0, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if tenantRoleNameTaken(c, 0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "角色名称已存在")
 		return
 	}
 	menuIDs := httpx.BodyUints(c, "menu_id")
@@ -558,12 +544,10 @@ func RoleEdit(c *gin.Context) {
 		response.Fail(c, "角色不存在")
 		return
 	}
-	if msg := util.RoleWriteCheck(p, true); msg != "" {
+	if msg := util.RoleWriteCheckTaken(p, true, func(name string) bool {
+		return tenantRoleNameTaken(c, id, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if tenantRoleNameTaken(c, id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "角色名称已存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(map[string]any{

@@ -65,12 +65,10 @@ func DeptAdd(c *gin.Context) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if msg := util.DeptWriteCheck(p, false); msg != "" {
+	if msg := util.DeptWriteCheckTaken(p, false, func(name string) bool {
+		return tenantDeptNameTaken(c, 0, name)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if tenantDeptNameTaken(c, 0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "部门名称已存在")
 		return
 	}
 	tdb(c).Create(&model.TenantDept{
@@ -96,7 +94,9 @@ func DeptEdit(c *gin.Context) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if msg := util.DeptWriteCheck(p, true); msg != "" {
+	if msg := util.DeptWriteCheckTaken(p, true, func(name string) bool {
+		return tenantDeptNameTaken(c, id, name)
+	}); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -112,10 +112,6 @@ func DeptEdit(c *gin.Context) {
 			response.Fail(c, "部门不存在")
 			return
 		}
-	}
-	if tenantDeptNameTaken(c, id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "部门名称已存在")
-		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
@@ -229,16 +225,12 @@ func JobsAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.JobsWriteCheck(p, false); msg != "" {
+	if msg := util.JobsWriteCheckTaken(p, false, func(name string) bool {
+		return tenantJobsNameTaken(c, 0, name)
+	}, func(code string) bool {
+		return tenantJobsCodeTaken(c, 0, code)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if tenantJobsNameTaken(c, 0, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "岗位名称已存在")
-		return
-	}
-	if tenantJobsCodeTaken(c, 0, httpx.BodyStr(c, "code")) {
-		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	tdb(c).Create(&model.TenantJobs{
@@ -263,16 +255,12 @@ func JobsEdit(c *gin.Context) {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	if msg := util.JobsWriteCheck(p, true); msg != "" {
+	if msg := util.JobsWriteCheckTaken(p, true, func(name string) bool {
+		return tenantJobsNameTaken(c, id, name)
+	}, func(code string) bool {
+		return tenantJobsCodeTaken(c, id, code)
+	}); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if tenantJobsNameTaken(c, id, httpx.BodyStr(c, "name")) {
-		response.Fail(c, "岗位名称已存在")
-		return
-	}
-	if tenantJobsCodeTaken(c, id, httpx.BodyStr(c, "code")) {
-		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(map[string]any{

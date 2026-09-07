@@ -367,6 +367,12 @@ func UserEdit(c *gin.Context) {
 		response.Fail(c, "请选择用户")
 		return
 	}
+	// PHP UserValidate: id require|checkUser before field/value.
+	var user model.User
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&user).Error != nil {
+		response.Fail(c, "用户不存在！")
+		return
+	}
 	if field == "" {
 		response.Fail(c, "请选择操作")
 		return
@@ -378,11 +384,6 @@ func UserEdit(c *gin.Context) {
 	allow := map[string]bool{"account": true, "sex": true, "mobile": true, "real_name": true}
 	if !allow[field] {
 		response.Fail(c, "用户信息不允许更新")
-		return
-	}
-	var user model.User
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&user).Error != nil {
-		response.Fail(c, "用户不存在！")
 		return
 	}
 	switch field {
