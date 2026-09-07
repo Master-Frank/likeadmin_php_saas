@@ -24,7 +24,7 @@ func FileLists(c *gin.Context) {
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
-	db = filesvc.ApplyFileCID(db, &model.FileCate{}, q.Params)
+	db = filesvc.ApplyFileCID(db, &model.FileCate{}, q.Params, 0)
 	var count int64
 	db.Count(&count)
 	var rows []model.File
@@ -163,7 +163,12 @@ func FileDelCate(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	ids := filesvc.CateIDsInclusive(bootstrap.DB, &model.FileCate{}, id)
+	var cate model.FileCate
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cate).Error != nil {
+		response.Fail(c, "文件分类不存在")
+		return
+	}
+	ids := filesvc.CateIDsInclusive(bootstrap.DB, &model.FileCate{}, id, 0)
 	var files []model.File
 	bootstrap.DB.Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
 	fileIDs := make([]uint, 0, len(files))

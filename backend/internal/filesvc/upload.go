@@ -76,18 +76,22 @@ func cateDB(db *gorm.DB) *gorm.DB {
 	return db.Session(&gorm.Session{NewDB: true})
 }
 
-func CateChildIDs(db *gorm.DB, model any, parent uint) []uint {
+func CateChildIDs(db *gorm.DB, model any, parent uint, tenantID uint) []uint {
 	var children []uint
-	cateDB(db).Model(model).Where("pid = ? AND delete_time IS NULL", parent).Pluck("id", &children)
+	q := cateDB(db).Model(model).Where("pid = ? AND delete_time IS NULL", parent)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	q.Pluck("id", &children)
 	out := append([]uint{}, children...)
 	for _, id := range children {
-		out = append(out, CateChildIDs(db, model, id)...)
+		out = append(out, CateChildIDs(db, model, id, tenantID)...)
 	}
 	return out
 }
 
-func CateIDsInclusive(db *gorm.DB, model any, id uint) []uint {
-	return append(CateChildIDs(db, model, id), id)
+func CateIDsInclusive(db *gorm.DB, model any, id uint, tenantID uint) []uint {
+	return append(CateChildIDs(db, model, id, tenantID), id)
 }
 
 // FileIDsExist reports whether every id is a live (not soft-deleted) file row.
@@ -112,7 +116,7 @@ func FileIDsExist(db *gorm.DB, ids []uint) bool {
 	return int(n) == len(uniq)
 }
 
-func ApplyFileCID(db *gorm.DB, cateModel any, params map[string]any) *gorm.DB {
+func ApplyFileCID(db *gorm.DB, cateModel any, params map[string]any, tenantID uint) *gorm.DB {
 	v, ok := params["cid"]
 	if !ok {
 		return db
@@ -127,7 +131,7 @@ func ApplyFileCID(db *gorm.DB, cateModel any, params map[string]any) *gorm.DB {
 	if cid == 0 {
 		return db
 	}
-	ids := CateIDsInclusive(db, cateModel, cid)
+	ids := CateIDsInclusive(db, cateModel, cid, tenantID)
 	return db.Where("cid IN ?", ids)
 }
 

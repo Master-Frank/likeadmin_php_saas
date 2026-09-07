@@ -8,6 +8,15 @@ import (
 	"likeadmin/backend/internal/config"
 )
 
+func TestApplyFileCIDMissingCid(t *testing.T) {
+	if ApplyFileCID(nil, nil, map[string]any{}, 7) != nil {
+		t.Fatal("missing cid should leave db unchanged")
+	}
+	if ApplyFileCID(nil, nil, map[string]any{"cid": ""}, 7) != nil {
+		t.Fatal("empty cid should leave db unchanged")
+	}
+}
+
 func TestFileIDsExistEmpty(t *testing.T) {
 	if FileIDsExist(nil, nil) || FileIDsExist(nil, []uint{}) {
 		t.Fatal("empty ids")

@@ -838,6 +838,18 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_fec=${go_fec:0:200}"
     fail=$((fail + 1))
   fi
+  go_fdc="$(curl -sS -X POST "$GO/tenantapi/file/delCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "file_del_cate_missing go_msg=$(jget msg <<<"$go_fdc")"
+  if [[ "$(jget msg <<<"$go_fdc")" != *文件分类不存在* ]]; then
+    echo "  go_fdc=${go_fdc:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_pfdc="$(curl -sS -X POST "$GO/platformapi/file/delCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "platform_file_del_cate_missing go_msg=$(jget msg <<<"$go_pfdc")"
+  if [[ "$(jget msg <<<"$go_pfdc")" != *文件分类不存在* ]]; then
+    echo "  go_pfdc=${go_pfdc:0:200}"
+    fail=$((fail + 1))
+  fi
 
   nlist="$(curl -sS "$GO/tenantapi/notice.notice/settingLists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   nid="$(python3 -c '
@@ -2315,6 +2327,19 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
   menu_id="$(mysqlq "SELECT id FROM la_tenant_system_menu WHERE tenant_id=999 AND name='pairleakmenu' ORDER BY id DESC LIMIT 1")"
   role_id="$(mysqlq "SELECT id FROM la_tenant_system_role WHERE tenant_id=999 AND name='leakrole' ORDER BY id DESC LIMIT 1")"
   user_id="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=999 AND account='leakuser$now' ORDER BY id DESC LIMIT 1")"
+  curl -sS -X POST "$GO/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"type\":10,\"pid\":0,\"name\":\"pairfc$now\"}" >/dev/null || true
+  fcid="$(mysqlq "SELECT id FROM la_tenant_file_cate WHERE tenant_id=1 AND name='pairfc$now' AND delete_time IS NULL ORDER BY id DESC LIMIT 1")"
+  if [[ -n "$fcid" && "$fcid" != "0" ]]; then
+    mysqlq "INSERT INTO la_tenant_file_cate (tenant_id,pid,type,name,create_time) VALUES (999,$fcid,10,'pairfcleak$now',$now)"
+    leak_fc="$(mysqlq "SELECT id FROM la_tenant_file_cate WHERE tenant_id=999 AND name='pairfcleak$now' ORDER BY id DESC LIMIT 1")"
+    curl -sS -X POST "$GO/tenantapi/file/delCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$fcid}" >/dev/null || true
+    leak_left="$(mysqlq "SELECT COUNT(*) FROM la_tenant_file_cate WHERE id=$leak_fc AND delete_time IS NULL")"
+    echo "file_cate_child_scope parent=$fcid leak=$leak_fc left=$leak_left"
+    if [[ "$leak_left" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_tenant_file_cate WHERE tenant_id=999 AND name='pairfcleak$now'"
+  fi
   if [[ -n "$cate_id" && "$cate_id" != "0" ]]; then
     go_cate="$(curl -sS "$GO/tenantapi/article.article_cate/detail?id=$cate_id" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     echo "cate_cross_tenant go_msg=$(jget msg <<<"$go_cate")"
