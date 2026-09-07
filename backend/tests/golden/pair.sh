@@ -3220,8 +3220,9 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   mysqlq "DELETE FROM la_article WHERE title='paircid0$ts' AND tenant_id=1"
-  php_ft0="$(curl -sS "$PHP/tenantapi/file/lists?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  go_ft0="$(curl -sS "$GO/tenantapi/file/lists?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  # PHP FileLists queryWhere reads cid without isset; omit cid and PHP 8 500s.
+  php_ft0="$(curl -sS "$PHP/tenantapi/file/lists?type=0&cid=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ft0="$(curl -sS "$GO/tenantapi/file/lists?type=0&cid=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   php_ft0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$php_ft0")"
   go_ft0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$go_ft0")"
   echo "file_type0 php_n=$php_ft0n go_n=$go_ft0n php_code=$(jcode <<<"$php_ft0") go_code=$(jcode <<<"$go_ft0")"
