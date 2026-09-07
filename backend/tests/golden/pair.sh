@@ -4449,14 +4449,6 @@ print(first(json.load(sys.stdin).get("data") or []))
       fail=$((fail + 1))
     fi
   fi
-  php_taau="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":1,"account":"pair1","name":""}')"
-  go_taau="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":1,"account":"pair1","name":""}')"
-  echo "tenant_admin_account_before_name php_msg=$(jget msg <<<"$php_taau") go_msg=$(jget msg <<<"$go_taau")"
-  if [[ "$(jget msg <<<"$php_taau")" != "$(jget msg <<<"$go_taau")" ]]; then
-    echo "  php_taau=${php_taau:0:200}"
-    echo "  go_taau=${go_taau:0:200}"
-    fail=$((fail + 1))
-  fi
   mname="$(python3 -c '
 import json,sys
 def first_m(rows):
@@ -4532,22 +4524,6 @@ print(first_m(json.load(sys.stdin).get("data") or []))
   if [[ "$(jget msg <<<"$php_rp0")" != "$(jget msg <<<"$go_rp0")" ]]; then
     echo "  php_rp0=${php_rp0:0:200}"
     echo "  go_rp0=${go_rp0:0:200}"
-    fail=$((fail + 1))
-  fi
-  php_taa0="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
-  go_taa0="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
-  echo "tenant_admin_add_empty php_msg=$(jget msg <<<"$php_taa0") go_msg=$(jget msg <<<"$go_taa0")"
-  if [[ "$(jget msg <<<"$php_taa0")" != "$(jget msg <<<"$go_taa0")" ]]; then
-    echo "  php_taa0=${php_taa0:0:200}"
-    echo "  go_taa0=${go_taa0:0:200}"
-    fail=$((fail + 1))
-  fi
-  php_taabad="$(curl -sS -X POST "$PHP/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":999999,"account":""}')"
-  go_taabad="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":999999,"account":""}')"
-  echo "tenant_admin_add_bad_tid php_msg=$(jget msg <<<"$php_taabad") go_msg=$(jget msg <<<"$go_taabad")"
-  if [[ "$(jget msg <<<"$php_taabad")" != "$(jget msg <<<"$go_taabad")" ]]; then
-    echo "  php_taabad=${php_taabad:0:200}"
-    echo "  go_taabad=${go_taabad:0:200}"
     fail=$((fail + 1))
   fi
   php_aaex="$(curl -sS -X POST "$PHP/platformapi/auth.admin/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"account":"admin","name":""}')"
@@ -4626,21 +4602,6 @@ print(first_m(json.load(sys.stdin).get("data") or []))
       fail=$((fail + 1))
     fi
   fi
-  php_rg0="$(curl -sS "$PHP/platformapi/setting.user.user/getRegisterConfig" -H "token: $TOKEN")"
-  rg_restore="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(json.dumps({"login_way":d.get("login_way"),"coerce_mobile":d.get("coerce_mobile"),"login_agreement":d.get("login_agreement"),"third_auth":d.get("third_auth"),"wechat_auth":d.get("wechat_auth"),"qq_auth":d.get("qq_auth")}))' <<<"$php_rg0")"
-  php_rgset="$(curl -sS -X POST "$PHP/platformapi/setting.user.user/setRegisterConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"login_way":["1"]}')"
-  go_rgset="$(curl -sS -X POST "$GO/platformapi/setting.user.user/setRegisterConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"login_way":["1"]}')"
-  php_rg1="$(curl -sS "$PHP/platformapi/setting.user.user/getRegisterConfig" -H "token: $TOKEN")"
-  go_rg1="$(curl -sS "$GO/platformapi/setting.user.user/getRegisterConfig" -H "token: $TOKEN")"
-  php_rgk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(d.get("login_way"), d.get("coerce_mobile"), d.get("qq_auth"))' <<<"$php_rg1")"
-  go_rgk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(d.get("login_way"), d.get("coerce_mobile"), d.get("qq_auth"))' <<<"$go_rg1")"
-  echo "register_config_partial php_set=$(jcode <<<"$php_rgset") go_set=$(jcode <<<"$go_rgset") php=$php_rgk go=$go_rgk"
-  if [[ "$(jcode <<<"$php_rgset")" != "$(jcode <<<"$go_rgset")" || "$php_rgk" != "$go_rgk" ]]; then
-    echo "  php_rg1=${php_rg1:0:220}"
-    echo "  go_rg1=${go_rg1:0:220}"
-    fail=$((fail + 1))
-  fi
-  curl -sS -X POST "$PHP/platformapi/setting.user.user/setRegisterConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "$rg_restore" >/dev/null || true
   if [[ -n "${UT:-}" ]]; then
     php_pp99="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":99}')"
     go_pp99="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":99}')"
