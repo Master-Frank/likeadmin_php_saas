@@ -3912,6 +3912,67 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   mysqlq "DROP TABLE IF EXISTS la_pair_gencrud_item"
   mysqlq "DROP TABLE IF EXISTS la_pair_gencrud"
 
+  if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
+    mysqlq "CREATE TABLE IF NOT EXISTS la_pair_tenant_crud (
+      id int unsigned NOT NULL AUTO_INCREMENT,
+      tenant_id int unsigned NOT NULL DEFAULT 0,
+      name varchar(64) NOT NULL DEFAULT '',
+      status int NOT NULL DEFAULT 0,
+      delete_time int DEFAULT NULL,
+      PRIMARY KEY (id)
+    )"
+    mysqlq "DELETE FROM la_generate_column WHERE table_id IN (SELECT id FROM la_generate_table WHERE table_name='la_pair_tenant_crud')"
+    mysqlq "DELETE FROM la_generate_table WHERE table_name='la_pair_tenant_crud'"
+    mysqlq "INSERT INTO la_generate_table (table_name,table_comment,template_type,author,generate_type,module_name,class_dir,class_comment,menu,\`delete\`,tree,relations,create_time) VALUES ('la_pair_tenant_crud','租户对拍生成器',0,'likeadmin',1,'tenant','','租户对拍生成器','{\"pid\":0,\"type\":0,\"name\":\"租户对拍生成器\"}','{\"type\":1,\"name\":\"delete_time\"}','{}','[]',UNIX_TIMESTAMP())"
+    tgid="$(mysqlq "SELECT id FROM la_generate_table WHERE table_name='la_pair_tenant_crud' ORDER BY id DESC LIMIT 1")"
+    if [[ -n "$tgid" && "$tgid" != "0" ]]; then
+      mysqlq "INSERT INTO la_generate_column (table_id,column_name,column_comment,column_type,is_required,is_pk,is_insert,is_update,is_lists,is_query,query_type,view_type,create_time) VALUES
+        ($tgid,'id','主键','int',0,1,0,0,1,0,'=','input',UNIX_TIMESTAMP()),
+        ($tgid,'tenant_id','租户','int',0,0,0,0,0,0,'=','input',UNIX_TIMESTAMP()),
+        ($tgid,'name','名称','string',1,0,1,1,1,1,'like','input',UNIX_TIMESTAMP()),
+        ($tgid,'status','状态','int',0,0,1,1,1,1,'=','select',UNIX_TIMESTAMP()),
+        ($tgid,'delete_time','删除时间','int',0,0,0,0,0,0,'=','datetime',UNIX_TIMESTAMP())"
+      go_tgn="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$tgid]}")"
+      echo "gencrud_tenant_generate go_code=$(jcode <<<"$go_tgn")"
+      if [[ "$(jcode <<<"$go_tgn")" != "1" ]]; then
+        echo "  go_tgn=${go_tgn:0:240}"
+        fail=$((fail + 1))
+      fi
+      go_tadd="$(curl -sS -X POST "$GO/tenantapi/pair_tenant_crud/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"tn$ts\",\"status\":1}")"
+      echo "gencrud_tenant_add go_code=$(jcode <<<"$go_tadd") go_msg=$(jget msg <<<"$go_tadd")"
+      if [[ "$(jcode <<<"$go_tadd")" != "1" ]]; then
+        echo "  go_tadd=${go_tadd:0:240}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "INSERT INTO la_pair_tenant_crud (tenant_id,name,status) VALUES (2,'other$ts',1)"
+      go_tls="$(curl -sS "$GO/tenantapi/pair_tenant_crud/lists?name=tn$ts" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      go_tc="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(d.get("count"), ",".join(str(x.get("name") or "") for x in (d.get("lists") or [])))' <<<"$go_tls")"
+      echo "gencrud_tenant_lists $go_tc"
+      if [[ "$go_tc" != "1 tn$ts" ]]; then
+        echo "  go_tls=${go_tls:0:240}"
+        fail=$((fail + 1))
+      fi
+      if [[ -n "${ST:-}" ]]; then
+        go_xls="$(curl -sS "$GO/tenantapi/pair_tenant_crud/lists" -H "Host: $SHARD_HOST" -H "token: $ST")"
+        go_xnames="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(",".join(str(x.get("name") or "") for x in ls))' <<<"$go_xls")"
+        echo "gencrud_tenant_cross names=$go_xnames"
+        if [[ "$go_xnames" == *"tn$ts"* ]]; then
+          echo "  go_xls=${go_xls:0:240}"
+          fail=$((fail + 1))
+        fi
+      fi
+      curl -sS -X POST "$GO/platformapi/tools.generator/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$tgid]}" >/dev/null || true
+      rm -f /workspace/backend/internal/generated/tenant_pair_tenant_crud.go \
+        /workspace/server/app/tenant/controller/PairTenantCrudController.php \
+        /workspace/admin/src/api/pair_tenant_crud.ts
+      rm -rf /workspace/admin/src/views/pair_tenant_crud
+    else
+      echo "gencrud_tenant_table insert failed"
+      fail=$((fail + 1))
+    fi
+    mysqlq "DROP TABLE IF EXISTS la_pair_tenant_crud"
+  fi
+
   now="$(date +%s)"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
   mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
