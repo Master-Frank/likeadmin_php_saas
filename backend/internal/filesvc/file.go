@@ -44,6 +44,7 @@ func RewriteContentDomains(c *gin.Context, content string) string {
 
 var (
 	imgSrcRe   = regexp.MustCompile(`(?is)(<img\s+[^>]*src=")([^"]*)(")`)
+	imgSrcSQRe = regexp.MustCompile(`(?is)(<img\s+[^>]*src=')([^']*)(')`)
 	videoSrcRe = regexp.MustCompile(`(?is)(<video\s+[^>]*src=")([^"]*)(")`)
 )
 
@@ -65,10 +66,12 @@ func ClearContentDomains(c *gin.Context, content string) string {
 	if content == "" {
 		return content
 	}
-	return imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
-		return rewriteMediaSrc(imgSrcRe, m, func(src string) string {
-			return SetFileURL(c, src)
-		})
+	strip := func(src string) string { return SetFileURL(c, src) }
+	content = imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
+		return rewriteMediaSrc(imgSrcRe, m, strip)
+	})
+	return imgSrcSQRe.ReplaceAllStringFunc(content, func(m string) string {
+		return rewriteMediaSrc(imgSrcSQRe, m, strip)
 	})
 }
 

@@ -8,18 +8,24 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
 
+// demoMaskURIs is PHP EncryDemoDataMiddleware::$needCheck after lower_uri().
 var demoMaskURIs = map[string]bool{
-	"setting.storage/detail":                     true,
-	"notice.smsconfig/detail":                    true,
-	"notice.sms_config/detail":                   true,
-	"channel.official_account_setting/getconfig": true,
-	"channel.mnp_settings/getconfig":             true,
-	"channel.open_setting/getconfig":             true,
-	"setting.pay.pay_config/getconfig":           true,
+	"setting.storage/detail":                   true,
+	"notice.smsconfig/detail":                  true,
+	"channel.officialaccountsetting/getconfig": true,
+	"channel.mnpsettings/getconfig":            true,
+	"channel.opensetting/getconfig":            true,
+	"setting.pay.payconfig/getconfig":          true,
+}
+
+func demoMaskMatch(controller, action string) bool {
+	uri := strings.ToLower(strings.Trim(controller+"/"+action, "/"))
+	return demoMaskURIs[uri] || demoMaskURIs[util.LowerURI(uri)]
 }
 
 var demoMaskExclude = map[string]bool{
@@ -47,8 +53,7 @@ func DemoMask() gin.HandlerFunc {
 			return
 		}
 		meta := ctxutil.Get(c)
-		uri := strings.ToLower(meta.Controller + "/" + meta.Action)
-		if !demoMaskURIs[uri] {
+		if !demoMaskMatch(meta.Controller, meta.Action) {
 			c.Next()
 			return
 		}

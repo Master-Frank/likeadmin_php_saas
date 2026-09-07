@@ -2,6 +2,29 @@ package middleware
 
 import "testing"
 
+func TestDemoMaskMatchLowerURI(t *testing.T) {
+	cases := []struct {
+		ctrl, action string
+		want         bool
+	}{
+		{"channel.official_account_setting", "getConfig", true},
+		{"channel.official_account_setting", "getconfig", true},
+		{"channel.mnp_settings", "getConfig", true},
+		{"channel.open_setting", "getConfig", true},
+		{"setting.pay.pay_config", "getConfig", true},
+		{"notice.smsConfig", "detail", true},
+		{"notice.sms_config", "detail", true},
+		{"setting.storage", "detail", true},
+		{"setting.storage", "lists", false},
+		{"auth.admin", "lists", false},
+	}
+	for _, tc := range cases {
+		if got := demoMaskMatch(tc.ctrl, tc.action); got != tc.want {
+			t.Fatalf("%s/%s got %v want %v", tc.ctrl, tc.action, got, tc.want)
+		}
+	}
+}
+
 func TestMaskDemoValue(t *testing.T) {
 	in := map[string]any{
 		"name": "local", "access_key": "secret", "domain": "https://cdn.example",

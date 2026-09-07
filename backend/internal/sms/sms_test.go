@@ -3,13 +3,36 @@ package sms
 import (
 	"fmt"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
+	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/tenantdb"
 
 	"github.com/gin-gonic/gin"
 )
+
+func initSMSDB(t *testing.T) bool {
+	t.Helper()
+	if bootstrap.DB != nil {
+		return true
+	}
+	cfg := os.Getenv("LIKEADMIN_CONFIG")
+	if cfg == "" {
+		cfg = "/workspace/backend/configs/config.yaml"
+	}
+	if err := bootstrap.Init(cfg); err != nil {
+		t.Log(err)
+		return false
+	}
+	if bootstrap.DB != nil {
+		tenantdb.Register(bootstrap.DB)
+	}
+	return bootstrap.DB != nil
+}
 
 func TestSceneByTag(t *testing.T) {
 	cases := map[string]int{
@@ -30,6 +53,21 @@ func TestSceneByTag(t *testing.T) {
 		if got := SceneByTag(in); got != want {
 			t.Fatalf("SceneByTag(%q)=%d want %d", in, got, want)
 		}
+	}
+}
+
+func TestVerifyIgnoresCacheWhenDBMiss(t *testing.T) {
+	if !initSMSDB(t) {
+		t.Skip("no database")
+	}
+	mobile := fmt.Sprintf("136%08d", time.Now().UnixNano()%100000000)
+	cache.Set(cacheKey(LoginCaptcha, mobile), "9999", time.Minute)
+	t.Cleanup(func() { cache.Del(cacheKey(LoginCaptcha, mobile)) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceUser, TenantID: 1, App: "api"})
+	if Verify(c, mobile, "9999", "YZMDL") {
+		t.Fatal("PHP SmsDriver::verify must not accept a cache-only code when DB is up")
 	}
 }
 

@@ -145,10 +145,7 @@ func verifyScene(c *gin.Context, mobile, code string, scene int) bool {
 		Code     string `gorm:"column:code"`
 	}
 	if q.Select("id, check_num, code").Order("send_time desc, id desc").First(&row).Error != nil {
-		if got, ok := cache.Get(cacheKey(scene, mobile)); ok && got == code {
-			cache.Del(cacheKey(scene, mobile))
-			return true
-		}
+		// PHP SmsDriver::verify is DB-only; cache is write-side for send, not a verify fallback.
 		return false
 	}
 	fields := map[string]any{"check_num": row.CheckNum + 1}

@@ -102,6 +102,38 @@ func TestDecryptWechatV3(t *testing.T) {
 	}
 }
 
+func TestDecryptWechatV3RefundSuccess(t *testing.T) {
+	key := "12345678901234567890123456789012"
+	plain := []byte(`{"out_refund_no":"RF1788810001","refund_id":"501refund","refund_status":"SUCCESS","transaction_id":"wx-rf-1"}`)
+	nonce := "refundnonce1"
+	aad := "refund"
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct := gcm.Seal(nil, []byte(nonce), plain, []byte(aad))
+	env := map[string]any{
+		"event_type": "REFUND.SUCCESS",
+		"resource": map[string]any{
+			"ciphertext":      base64.StdEncoding.EncodeToString(ct),
+			"associated_data": aad,
+			"nonce":           nonce,
+		},
+	}
+	raw, _ := json.Marshal(env)
+	n, ok := DecryptWechatV3OK(raw, key)
+	if !ok || !n.RefundOK || n.OutRefundNo != "RF1788810001" || n.TransactionID != "wx-rf-1" {
+		t.Fatalf("encrypted refund %+v ok=%v", n, ok)
+	}
+	if n.EventType != "REFUND.SUCCESS" {
+		t.Fatalf("event %s", n.EventType)
+	}
+}
+
 func TestNormalizePEM(t *testing.T) {
 	got := normalizePEM("abcd", "PUBLIC KEY")
 	if got == "" || got[:10] != "-----BEGIN" {

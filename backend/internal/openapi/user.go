@@ -171,6 +171,10 @@ func LoginRegister(c *gin.Context) {
 		Avatar: avatar, SN: sn, LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
 	}
 	if err := tdb(c).Create(&u).Error; err != nil {
+		if util.IsDuplicateKey(err) {
+			response.Fail(c, "账号已存在")
+			return
+		}
 		response.Fail(c, err.Error())
 		return
 	}
