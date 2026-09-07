@@ -1118,8 +1118,18 @@ func applyTenantSQLPlaceholders(content, sn string, tenantID uint) string {
 	if tenantID > 0 {
 		content = strings.ReplaceAll(content, "{tenantId}", util.ToString(tenantID))
 	}
+	content = strings.ReplaceAll(content, "`la_", tenantSQLDatabase()+".`la_")
 	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
 	return content
+}
+
+// tenantSQLDatabase mirrors PHP env('database.database', 'likeadmin_saas')
+// used when TenantCreatService qualifies `la_*` as db.`la_*.
+func tenantSQLDatabase() string {
+	if db := strings.TrimSpace(config.C.Database.Database); db != "" {
+		return db
+	}
+	return "likeadmin_saas"
 }
 
 func execSQLScript(db *gorm.DB, content string) error {

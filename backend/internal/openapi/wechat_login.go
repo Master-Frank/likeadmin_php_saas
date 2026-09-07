@@ -237,6 +237,8 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+	now := util.NowUnix()
+	ip := ctxutil.ClientIP(c)
 	if user.ID == 0 {
 		if !create {
 			return map[string]any{}, nil
@@ -245,7 +247,6 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			sn := util.CreateUserSN(func(v int) bool {
 				return userSNTaken(c, tx, v)
 			})
-			now := util.NowUnix()
 			avatar := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)
 			nickname := "用户" + util.ToString(sn)
 			if terminal != wechat.TerminalMNP && sess.Nickname != "" {
@@ -259,9 +260,12 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			if err := tx.Create(&user).Error; err != nil {
 				return err
 			}
-			return tx.Create(&model.UserAuth{
+			if err := tx.Create(&model.UserAuth{
 				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
-			}).Error
+			}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ip, "update_time": now}).Error
 		}); err != nil {
 			return nil, err
 		}
@@ -269,23 +273,32 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		if user.IsDisable == 1 {
 			return nil, fmt.Errorf("您的账号异常，请联系客服。")
 		}
-		if user.Avatar == "" && sess.Headimgurl != "" {
-			if av := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl); av != "" {
-				user.Avatar = av
-				tdb(c).Model(&user).Update("avatar", av)
+		if err := tdb(c).Transaction(func(tx *gorm.DB) error {
+			if user.Avatar == "" && sess.Headimgurl != "" {
+				if av := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl); av != "" {
+					user.Avatar = av
+					if err := tx.Model(&user).Update("avatar", av).Error; err != nil {
+						return err
+					}
+				}
 			}
-		}
-		var auth model.UserAuth
-		if userAuthQ(c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
-			tdb(c).Create(&model.UserAuth{
-				TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: util.NowUnix(),
-			})
-		} else if auth.Unionid == "" && sess.Unionid != "" {
-			tdb(c).Model(&auth).Update("unionid", sess.Unionid)
+			var auth model.UserAuth
+			if scopeTenant(tx.Model(&model.UserAuth{}), c).Where("user_id = ? AND openid = ?", user.ID, sess.Openid).First(&auth).Error != nil {
+				if err := tx.Create(&model.UserAuth{
+					TenantID: tid, UserID: user.ID, Openid: sess.Openid, Unionid: sess.Unionid, Terminal: terminal, CreateTime: now,
+				}).Error; err != nil {
+					return err
+				}
+			} else if auth.Unionid == "" && sess.Unionid != "" {
+				if err := tx.Model(&auth).Update("unionid", sess.Unionid).Error; err != nil {
+					return err
+				}
+			}
+			return tx.Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ip, "update_time": now}).Error
+		}); err != nil {
+			return nil, err
 		}
 	}
-	now := util.NowUnix()
-	tdb(c).Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
 	info := authsvc.SetUserToken(c, user.ID, terminal)
 	return wechatUserInfo(c, user, util.ToString(info["token"])), nil
 }

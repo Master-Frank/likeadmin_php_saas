@@ -54,33 +54,61 @@ func backendRoot() string {
 	return candidate
 }
 
-// GetRemoteVersion mirrors UpgradeLogic::getRemoteVersion.
-func GetRemoteVersion(pageNo, pageSize int) map[string]any {
-	key := fmt.Sprintf("version_lists%d", pageNo)
+func versionListsKey(pageNo, pageSize int) string {
 	if pageNo == 0 && pageSize == 0 {
-		key = "version_lists"
+		return "version_lists"
 	}
+	return fmt.Sprintf("version_lists%d", pageNo)
+}
+
+func versionListsURL(pageNo, pageSize int) string {
+	if pageNo == 0 || pageSize == 0 {
+		return fmt.Sprintf("%s/indexapi/version/lists?type=2&page=1&action=lists&product_code=%s", upgradeBase(), ProductCode)
+	}
+	return fmt.Sprintf("%s/indexapi/version/lists?type=2&page_no=%d&page_size=%d&page=1&action=lists&product_code=%s",
+		upgradeBase(), pageNo, pageSize, ProductCode)
+}
+
+func hasVersionLists(payload map[string]any) bool {
+	if payload == nil {
+		return false
+	}
+	lists, _ := payload["lists"].([]any)
+	return len(lists) > 0
+}
+
+// GetRemoteVersion mirrors UpgradeLogic::getRemoteVersion.
+// Empty remote payloads are not cached and are retried so a single
+// timeout does not stick for 30 minutes or fail a later request.
+func GetRemoteVersion(pageNo, pageSize int) map[string]any {
+	key := versionListsKey(pageNo, pageSize)
 	if raw, ok := cache.Get(key); ok && raw != "" {
 		var payload map[string]any
-		if json.Unmarshal([]byte(raw), &payload) == nil && payload != nil {
+		if json.Unmarshal([]byte(raw), &payload) == nil && hasVersionLists(payload) {
 			return payload
 		}
 	}
-	var remote string
-	if pageNo == 0 || pageSize == 0 {
-		remote = fmt.Sprintf("%s/indexapi/version/lists?type=2&page=1&action=lists&product_code=%s", upgradeBase(), ProductCode)
-	} else {
-		remote = fmt.Sprintf("%s/indexapi/version/lists?type=2&page_no=%d&page_size=%d&page=1&action=lists&product_code=%s",
-			upgradeBase(), pageNo, pageSize, ProductCode)
+	remote := versionListsURL(pageNo, pageSize)
+	var last map[string]any
+	for attempt := 0; attempt < 3; attempt++ {
+		payload := getJSON(remote)
+		if hasVersionLists(payload) {
+			if b, err := json.Marshal(payload); err == nil {
+				cache.Set(key, string(b), 30*time.Minute)
+			}
+			return payload
+		}
+		if payload != nil {
+			last = payload
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
+		}
 	}
-	payload := getJSON(remote)
-	if payload == nil {
-		return map[string]any{}
+	if last != nil {
+		return last
 	}
-	if b, err := json.Marshal(payload); err == nil {
-		cache.Set(key, string(b), 30*time.Minute)
-	}
-	return payload
+	return map[string]any{}
 }
 
 // VersionByID mirrors getVersionDataById.

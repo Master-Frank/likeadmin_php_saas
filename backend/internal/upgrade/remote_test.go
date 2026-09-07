@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"likeadmin/backend/internal/cache"
 )
@@ -35,6 +36,32 @@ func TestFixtureListsAndVerify(t *testing.T) {
 		t.Fatalf("verify %+v", got)
 	}
 	AddLog("pair1.likeadmin.test", 2, 1, true, "")
+}
+
+func TestGetRemoteVersionSkipsEmptyCache(t *testing.T) {
+	t.Setenv("LIKEADMIN_UPGRADE_FIXTURE", "")
+	cache.Del("version_lists1")
+	cache.Set("version_lists1", `{"count":0,"lists":[]}`, time.Hour)
+	dir := t.TempDir()
+	body := `{"code":1,"data":{"count":1,"lists":[{"id":9,"version_no":"9.9.9"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "lists.json"), []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIKEADMIN_UPGRADE_FIXTURE", dir)
+	payload := GetRemoteVersion(1, 25)
+	rows, _ := payload["lists"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("should refetch after empty cache: %+v", payload)
+	}
+}
+
+func TestHasVersionLists(t *testing.T) {
+	if hasVersionLists(nil) || hasVersionLists(map[string]any{}) || hasVersionLists(map[string]any{"lists": []any{}}) {
+		t.Fatal("empty payload treated as ready")
+	}
+	if !hasVersionLists(map[string]any{"lists": []any{map[string]any{"id": 1}}}) {
+		t.Fatal("non-empty lists rejected")
+	}
 }
 
 func TestUpgradeBaseOverride(t *testing.T) {

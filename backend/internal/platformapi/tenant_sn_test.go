@@ -43,12 +43,26 @@ func TestCleanTenantScopedRowsSkipsZero(t *testing.T) {
 }
 
 func TestApplyTenantSQLPlaceholders(t *testing.T) {
-	old := config.C.Database.Prefix
+	oldPrefix := config.C.Database.Prefix
+	oldDB := config.C.Database.Database
 	config.C.Database.Prefix = "lk_"
-	defer func() { config.C.Database.Prefix = old }()
+	config.C.Database.Database = "testdb"
+	defer func() {
+		config.C.Database.Prefix = oldPrefix
+		config.C.Database.Database = oldDB
+	}()
 	got := applyTenantSQLPlaceholders("INSERT INTO `la_article_{tenantSn}` VALUES ({tenantId});", "pair2", 9)
-	if got != "INSERT INTO `lk_article_pair2` VALUES (9);" {
+	if got != "INSERT INTO testdb.`lk_article_pair2` VALUES (9);" {
 		t.Fatalf("%s", got)
+	}
+}
+
+func TestTenantSQLDatabaseDefault(t *testing.T) {
+	old := config.C.Database.Database
+	config.C.Database.Database = ""
+	defer func() { config.C.Database.Database = old }()
+	if tenantSQLDatabase() != "likeadmin_saas" {
+		t.Fatalf("%s", tenantSQLDatabase())
 	}
 }
 

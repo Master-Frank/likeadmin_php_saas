@@ -177,6 +177,18 @@ func TestUpgradeFileBackend(t *testing.T) {
 	if err := upgradeFile(filepath.Join(t.TempDir(), "missing"), dst); err != nil {
 		t.Fatalf("missing backend dir: %v", err)
 	}
+	// Unchanged dest (same MD5) must stay put.
+	same := filepath.Join(dst, "internal", "pkg", "x.go")
+	if err := os.WriteFile(same, []byte("package pkg\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := upgradeFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	got, err = os.ReadFile(same)
+	if err != nil || string(got) != "package pkg\n" {
+		t.Fatalf("md5 skip wrote %q", got)
+	}
 }
 
 func TestUpgradeMenuMissingDir(t *testing.T) {

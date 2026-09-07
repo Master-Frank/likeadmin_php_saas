@@ -3,6 +3,7 @@ package upgrade
 import (
 	"archive/zip"
 	"context"
+	"crypto/md5"
 	"database/sql"
 	"fmt"
 	"io"
@@ -358,7 +359,8 @@ func upgradeFile(tempFile, oldFile string) error {
 			return applyError("更新文件失败")
 		}
 		if cur, err := os.ReadFile(dest); err == nil {
-			if string(src) == string(cur) {
+			// PHP UpgradeLogic::upgradeFile skips when md5(src)==md5(dest).
+			if md5.Sum(src) == md5.Sum(cur) {
 				return nil
 			}
 		}
