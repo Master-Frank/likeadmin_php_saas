@@ -339,6 +339,10 @@ func MenuAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	if !tenantMenuParentOK(c, httpx.Uint(c, "pid")) {
+		response.Fail(c, "上级菜单不存在")
+		return
+	}
 	m := tenantMenuFromReq(c)
 	m.TenantID = tenantDB(c)
 	m.CreateTime = util.NowUnix()
@@ -356,6 +360,10 @@ func MenuEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	if id == httpx.Uint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
+		return
+	}
+	if !tenantMenuParentOK(c, httpx.Uint(c, "pid")) {
+		response.Fail(c, "上级菜单不存在")
 		return
 	}
 	if msg := tenantMenuUniqueName(c, id, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
@@ -726,6 +734,14 @@ func joinNames(names []string) string {
 		s += n
 	}
 	return s
+}
+
+func tenantMenuParentOK(c *gin.Context, pid uint) bool {
+	if pid == 0 {
+		return true
+	}
+	var parent model.TenantSystemMenu
+	return scopeTID(tdb(c).Where("id = ?", pid), c).First(&parent).Error == nil
 }
 
 func tenantMenuUniqueName(c *gin.Context, id uint, typ, name string) string {

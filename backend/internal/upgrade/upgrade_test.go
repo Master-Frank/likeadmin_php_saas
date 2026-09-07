@@ -168,6 +168,12 @@ func TestUpgradeFileBackend(t *testing.T) {
 	}
 }
 
+func TestUpgradeMenuMissingDir(t *testing.T) {
+	if err := upgradeMenu(nil, filepath.Join(t.TempDir(), "missing-menu")); err != nil {
+		t.Fatalf("missing menu dir: %v", err)
+	}
+}
+
 func TestUpgradePgSQL(t *testing.T) {
 	if err := upgradePgSQL(filepath.Join(t.TempDir(), "missing")); err != nil {
 		t.Fatalf("missing: %v", err)

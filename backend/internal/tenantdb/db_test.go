@@ -10,3 +10,12 @@ func TestForTenantNilDB(t *testing.T) {
 		t.Fatal("zero tenant without DB")
 	}
 }
+
+func TestWithSNNilAndEmpty(t *testing.T) {
+	if WithSN(nil, "pair2") != nil {
+		t.Fatal("nil db")
+	}
+	if ForTenantOn(nil, 2) != nil {
+		t.Fatal("nil ForTenantOn")
+	}
+}

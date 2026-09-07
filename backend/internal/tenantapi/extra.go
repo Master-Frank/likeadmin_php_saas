@@ -303,6 +303,15 @@ func GetUmChangeType(c *gin.Context) {
 
 func FinanceRefundLog(c *gin.Context) {
 	recordID := httpx.Uint(c, "record_id")
+	var rec model.RefundRecord
+	rq := tdb(c).Where("id = ?", recordID)
+	if tid := tenantDB(c); tid > 0 {
+		rq = rq.Where("tenant_id = ?", tid)
+	}
+	if rq.First(&rec).Error != nil {
+		response.Fail(c, "退款记录不存在")
+		return
+	}
 	var rows []model.RefundLog
 	q := tdb(c).Where("record_id = ?", recordID)
 	if tid := tenantDB(c); tid > 0 {

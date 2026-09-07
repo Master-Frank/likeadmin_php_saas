@@ -65,6 +65,10 @@ func MenuAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	if !platformMenuParentOK(httpx.Uint(c, "pid")) {
+		response.Fail(c, "上级菜单不存在")
+		return
+	}
 	m := menuFromReq(c)
 	m.CreateTime = util.NowUnix()
 	if err := bootstrap.DB.Create(&m).Error; err != nil {
@@ -84,6 +88,10 @@ func MenuEdit(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	if id == httpx.Uint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
+		return
+	}
+	if !platformMenuParentOK(httpx.Uint(c, "pid")) {
+		response.Fail(c, "上级菜单不存在")
 		return
 	}
 	if msg := menuUniqueName(id, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
@@ -386,6 +394,14 @@ func platformMenuPerms(menuIDs []uint, filterIDs bool) []string {
 
 func mustAdminID(c *gin.Context) uint {
 	return ctxutil.Get(c).AdminID
+}
+
+func platformMenuParentOK(pid uint) bool {
+	if pid == 0 {
+		return true
+	}
+	var parent model.SystemMenu
+	return bootstrap.DB.Where("id = ?", pid).First(&parent).Error == nil
 }
 
 func menuUniqueName(id uint, typ, name string) string {

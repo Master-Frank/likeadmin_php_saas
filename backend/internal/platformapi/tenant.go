@@ -378,6 +378,10 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
+	if a.Root == 1 && httpx.Int(c, "disable") == 1 {
+		response.Fail(c, "超级管理员不允许被禁用")
+		return
+	}
 	now := util.NowUnix()
 	data := map[string]any{
 		"name":             httpx.Str(c, "name"),

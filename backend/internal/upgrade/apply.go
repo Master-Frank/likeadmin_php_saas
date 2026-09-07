@@ -14,6 +14,7 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"gorm.io/gorm"
@@ -198,17 +199,18 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 	var tenants []model.Tenant
 	db.Where("delete_time IS NULL").Find(&tenants)
 	for _, t := range tenants {
-		if err := db.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
+		tdb := tenantdb.ForTenantOn(db, t.ID)
+		if err := tdb.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
 			return applyError("更新菜单信息失败")
 		}
 		var roleIDs []uint
-		db.Model(&model.TenantSystemRole{}).Where("tenant_id = ?", t.ID).Pluck("id", &roleIDs)
+		tdb.Model(&model.TenantSystemRole{}).Where("tenant_id = ?", t.ID).Pluck("id", &roleIDs)
 		if len(roleIDs) > 0 {
-			if err := db.Where("role_id IN ?", roleIDs).Delete(&model.TenantSystemRoleMenu{}).Error; err != nil {
+			if err := tdb.Where("role_id IN ?", roleIDs).Delete(&model.TenantSystemRoleMenu{}).Error; err != nil {
 				return applyError("更新菜单信息失败")
 			}
 		}
-		if err := reinitTenantMenus(db, t.ID); err != nil {
+		if err := reinitTenantMenus(db, tdb, t.ID); err != nil {
 			return applyError("更新菜单信息失败")
 		}
 	}
@@ -216,12 +218,17 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 	return nil
 }
 
-func reinitTenantMenus(tx *gorm.DB, tenantID uint) error {
+// reinitTenantMenus copies tenant_id=0 templates from the shared DB onto dest
+// (shared or la_tenant_system_menu_{sn} when tactics=1).
+func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
+	if dest == nil {
+		dest = shared
+	}
 	var tpls []model.TenantSystemMenu
-	tx.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
+	shared.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
 	if len(tpls) == 0 {
 		var plat []model.SystemMenu
-		tx.Order("pid, id").Find(&plat)
+		shared.Order("pid, id").Find(&plat)
 		idMap := map[uint]uint{}
 		for _, m := range plat {
 			old := m.ID
@@ -231,17 +238,17 @@ func reinitTenantMenus(tx *gorm.DB, tenantID uint) error {
 				IsCache: m.IsCache, IsShow: m.IsShow, IsDisable: m.IsDisable, TenantID: tenantID,
 				CreateTime: util.NowUnix(),
 			}
-			if err := tx.Create(&row).Error; err != nil {
+			if err := dest.Create(&row).Error; err != nil {
 				return err
 			}
 			idMap[old] = row.ID
 		}
 		var created []model.TenantSystemMenu
-		tx.Where("tenant_id = ?", tenantID).Find(&created)
+		dest.Where("tenant_id = ?", tenantID).Find(&created)
 		for _, item := range created {
 			if item.Pid != 0 {
 				if nid, ok := idMap[item.Pid]; ok {
-					tx.Model(&item).Update("pid", nid)
+					dest.Model(&item).Update("pid", nid)
 				}
 			}
 		}
@@ -254,17 +261,17 @@ func reinitTenantMenus(tx *gorm.DB, tenantID uint) error {
 		row.ID = 0
 		row.TenantID = tenantID
 		row.CreateTime = util.NowUnix()
-		if err := tx.Create(&row).Error; err != nil {
+		if err := dest.Create(&row).Error; err != nil {
 			return err
 		}
 		idMap[old] = row.ID
 	}
 	var created []model.TenantSystemMenu
-	tx.Where("tenant_id = ?", tenantID).Find(&created)
+	dest.Where("tenant_id = ?", tenantID).Find(&created)
 	for _, item := range created {
 		if item.Pid != 0 {
 			if nid, ok := idMap[item.Pid]; ok {
-				tx.Model(&item).Update("pid", nid)
+				dest.Model(&item).Update("pid", nid)
 			}
 		}
 	}

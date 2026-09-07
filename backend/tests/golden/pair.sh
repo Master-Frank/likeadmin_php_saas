@@ -1140,6 +1140,12 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   if [[ "$(jcode <<<"$php_ae")" != "$(jcode <<<"$go_ae")" || "$(jget msg <<<"$php_ae")" != "$(jget msg <<<"$go_ae")" ]]; then
     fail=$((fail + 1))
   fi
+  go_rd="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":1,"tenant_id":1,"name":"超级管理员","disable":1,"multipoint_login":1,"role_id":[],"account":"pair1"}')"
+  echo "platform_root_disable go_msg=$(jget msg <<<"$go_rd")"
+  if [[ "$(jget msg <<<"$go_rd")" != *超级管理员不允许被禁用* ]]; then
+    echo "  go_rd=${go_rd:0:200}"
+    fail=$((fail + 1))
+  fi
   php_ge="$(curl -sS -X POST "$PHP/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_ge="$(curl -sS -X POST "$GO/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "generator_edit_bad php_msg=$(jget msg <<<"$php_ge") go_msg=$(jget msg <<<"$go_ge")"
@@ -1467,6 +1473,24 @@ print(json.dumps({
   go_ma="$(curl -sS -X POST "$GO/tenantapi/auth.menu/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "menu_add_bad php_msg=$(jget msg <<<"$php_ma") go_msg=$(jget msg <<<"$go_ma")"
   if [[ "$(jget msg <<<"$php_ma")" != "$(jget msg <<<"$go_ma")" ]]; then
+    fail=$((fail + 1))
+  fi
+  go_mpid="$(curl -sS -X POST "$GO/tenantapi/auth.menu/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"pid":99999999,"type":"M","name":"pairpid","sort":0,"is_cache":0,"is_show":1,"is_disable":0}')"
+  echo "menu_parent go_msg=$(jget msg <<<"$go_mpid")"
+  if [[ "$(jget msg <<<"$go_mpid")" != *上级菜单不存在* ]]; then
+    echo "  go_mpid=${go_mpid:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_pmpid="$(curl -sS -X POST "$GO/platformapi/auth.menu/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"pid":99999999,"type":"M","name":"pairpid","sort":0,"is_cache":0,"is_show":1,"is_disable":0}')"
+  echo "platform_menu_parent go_msg=$(jget msg <<<"$go_pmpid")"
+  if [[ "$(jget msg <<<"$go_pmpid")" != *上级菜单不存在* ]]; then
+    echo "  go_pmpid=${go_pmpid:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_rlog="$(curl -sS "$GO/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "refund_log_missing go_msg=$(jget msg <<<"$go_rlog")"
+  if [[ "$(jget msg <<<"$go_rlog")" != *退款记录不存在* ]]; then
+    echo "  go_rlog=${go_rlog:0:200}"
     fail=$((fail + 1))
   fi
   php_ra="$(curl -sS -X POST "$PHP/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"

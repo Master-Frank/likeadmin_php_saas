@@ -80,13 +80,43 @@ func ForTenant(tenantID uint) *gorm.DB {
 }
 
 func UseSN(sn string) *gorm.DB {
-	if bootstrap.DB == nil {
+	return WithSN(bootstrap.DB, sn)
+}
+
+// WithSN applies shard rewriting to an existing session (including a transaction).
+func WithSN(db *gorm.DB, sn string) *gorm.DB {
+	if db == nil {
 		return nil
 	}
 	if sn == "" {
-		return bootstrap.DB
+		return db
 	}
-	return bootstrap.DB.WithContext(context.WithValue(context.Background(), ctxKey{}, sn))
+	ctx := context.Background()
+	if db.Statement != nil && db.Statement.Context != nil {
+		ctx = db.Statement.Context
+	}
+	return db.WithContext(context.WithValue(ctx, ctxKey{}, sn))
+}
+
+// ForTenantOn is ForTenant but keeps the caller's session/transaction.
+func ForTenantOn(db *gorm.DB, tenantID uint) *gorm.DB {
+	if db == nil {
+		return nil
+	}
+	if tenantID == 0 {
+		return db
+	}
+	if bootstrap.DB == nil {
+		return db
+	}
+	var t model.Tenant
+	if err := bootstrap.DB.Select("id", "sn", "tactics").Where("id = ?", tenantID).First(&t).Error; err != nil {
+		return db
+	}
+	if t.Tactics == 1 && t.SN != "" {
+		return WithSN(db, t.SN)
+	}
+	return db
 }
 
 // Table returns la_{base} or la_{base}_{sn} when the current request is a tactics=1 tenant.
