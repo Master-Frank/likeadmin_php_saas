@@ -28,6 +28,10 @@ func TestRunCommandUnknown(t *testing.T) {
 	}
 }
 
+func TestEnsureNativeJobsNilDB(t *testing.T) {
+	EnsureNativeJobs()
+}
+
 func TestRunNamed(t *testing.T) {
 	if RunNamed("not_a_real_command") != "未定义的定时任务命令: not_a_real_command" {
 		t.Fatal(RunNamed("not_a_real_command"))

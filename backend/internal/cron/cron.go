@@ -24,6 +24,7 @@ func RunOnce() {
 	if bootstrap.DB == nil {
 		return
 	}
+	EnsureNativeJobs()
 	var rows []model.Crontab
 	bootstrap.DB.Where("status = 1 AND delete_time IS NULL").Find(&rows)
 	now := util.NowUnix()
@@ -333,6 +334,36 @@ func cancelUnpaidForTenant(tenantID uint, enabled, minutes int, now int64) {
 		q = q.Where("tenant_id = ?", tenantID)
 	}
 	q.Update("delete_time", now)
+}
+
+// EnsureNativeJobs inserts the Go-only system jobs a PHP install never shipped,
+// so cmd/crontab still queries refunds and cancels stale unpaid orders after
+// php-fpm is stopped.
+func EnsureNativeJobs() {
+	if bootstrap.DB == nil {
+		return
+	}
+	now := util.NowUnix()
+	last := now - 90
+	for _, job := range []model.Crontab{
+		{Name: "查询退款状态", Command: "query_refund", Remark: "查询微信/支付宝退款结果"},
+		{Name: "取消超时未支付订单", Command: "cancel_unpaid_orders", Remark: "按交易设置取消超时未支付充值单"},
+	} {
+		var n int64
+		bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", job.Command).Count(&n)
+		if n > 0 {
+			continue
+		}
+		job.Type = 1
+		job.System = 1
+		job.Status = 1
+		job.Expression = "* * * * *"
+		job.LastTime = &last
+		job.Time = "0"
+		job.MaxTime = "0"
+		job.CreateTime = now
+		_ = bootstrap.DB.Create(&job).Error
+	}
 }
 
 func Loop(interval time.Duration) {

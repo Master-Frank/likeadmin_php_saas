@@ -3981,6 +3981,12 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
   mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
   curl -sS "$GO/crontab" >/dev/null || true
+  native_qr="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='query_refund' AND delete_time IS NULL")"
+  native_cu="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='cancel_unpaid_orders' AND system=1 AND delete_time IS NULL")"
+  echo "crontab_native query_refund=$native_qr cancel_unpaid=$native_cu"
+  if [[ "$native_qr" -lt 1 || "$native_cu" -lt 1 ]]; then
+    fail=$((fail + 1))
+  fi
   cron_err="$(mysqlq "SELECT error FROM la_dev_crontab WHERE name='pair-unknown'")"
   cron_st="$(mysqlq "SELECT status FROM la_dev_crontab WHERE name='pair-unknown'")"
   echo "crontab_unknown status=$cron_st error=$cron_err"
