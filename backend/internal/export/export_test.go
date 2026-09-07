@@ -2,9 +2,18 @@ package export
 
 import (
 	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestLookupLogFields(t *testing.T) {
@@ -69,6 +78,67 @@ func TestExcelLongNumericTab(t *testing.T) {
 	}
 	if out[2][0] != "abc" {
 		t.Fatalf("text %q", out[2][0])
+	}
+}
+
+func TestExportRangeError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldSize, oldMax := config.C.Project.Lists.PageSize, config.C.Project.Lists.PageSizeMax
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	t.Cleanup(func() {
+		config.C.Project.Lists.PageSize = oldSize
+		config.C.Project.Lists.PageSizeMax = oldMax
+	})
+
+	ctx := func(raw string) *gin.Context {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		return c
+	}
+
+	if msg := exportRangeError(ctx("?export=2&page_start=999&page_end=999"), 10); msg != "第999页到第999页没有数据，无法导出" {
+		t.Fatalf("paged empty %q", msg)
+	}
+	if msg := exportRangeError(ctx("?export=2&page_type=0"), 0); msg != "没有数据,无法导出" {
+		t.Fatalf("unpaged empty %q", msg)
+	}
+	if msg := exportRangeError(ctx("?export=2&page_start=1&page_end=1"), 10); msg != "" {
+		t.Fatalf("has data %q", msg)
+	}
+}
+
+func TestMaybeIgnoresBodyExport(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/setting.system.log/lists?page_size=1", bytes.NewBufferString(`{"export":2,"file_name":"hack"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists", App: "platformapi"})
+	if Maybe(c, "export", []map[string]any{{"id": 1}}) {
+		t.Fatal("body export=2 must be ignored")
+	}
+}
+
+func TestMaybeQueryFileName(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?export=1&file_name=自定义导出", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists"})
+	c.Set("likeadmin.export_count", int64(3))
+	if !Maybe(c, "export", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=1")
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["file_name"] != "自定义导出" {
+		t.Fatalf("file_name %v", env.Data["file_name"])
 	}
 }
 

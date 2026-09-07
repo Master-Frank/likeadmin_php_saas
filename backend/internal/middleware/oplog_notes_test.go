@@ -1,6 +1,12 @@
 package middleware
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
 
 func TestActionNotesPHPNotes(t *testing.T) {
 	got := ActionNotes("setting.system.log", "lists")
@@ -21,6 +27,25 @@ func TestActionNotesFallback(t *testing.T) {
 	got := ActionNotes("unknown.ctrl", "foo")
 	if got != "unknown.ctrl/foo" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestRequestAbsoluteURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/auth.admin/detail?id=1", nil)
+	c.Request.Host = "127.0.0.1:8080"
+	got := requestAbsoluteURL(c)
+	if got != "http://127.0.0.1:8080/platformapi/auth.admin/detail?id=1" {
+		t.Fatalf("%q", got)
+	}
+	if requestLogType(c) != "GET" {
+		t.Fatal(requestLogType(c))
+	}
+	c.Request.Method = http.MethodPut
+	if requestLogType(c) != "POST" {
+		t.Fatal("PHP only records GET/POST")
 	}
 }
 

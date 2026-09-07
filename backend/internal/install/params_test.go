@@ -1,9 +1,15 @@
 package install
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/util"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestCheckParams(t *testing.T) {
@@ -28,6 +34,26 @@ func TestCheckParams(t *testing.T) {
 		"prefix": "la_", "admin_user": "admin", "admin_password": "a", "admin_confirm_password": "a",
 	}) != "" {
 		t.Fatal("ok")
+	}
+}
+
+func TestInstallReadsBodyOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost,
+		"/install?prefix=la_&admin_user=hack&admin_password=likeadmin&admin_confirm_password=likeadmin",
+		bytes.NewBufferString(`{"prefix":"xx_"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	p := httpx.Body(c)
+	if pick(p, "prefix") != "xx_" {
+		t.Fatalf("body prefix %v", p)
+	}
+	if pick(p, "admin_user") != "" {
+		t.Fatalf("query admin_user must be ignored, got %v", p)
+	}
+	if CheckParams(p) != "请填写管理员用户名" {
+		t.Fatalf("query-only install fields must not pass CheckParams: %s", CheckParams(p))
 	}
 }
 

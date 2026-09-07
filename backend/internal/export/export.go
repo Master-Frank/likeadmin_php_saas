@@ -29,10 +29,13 @@ type fileInfo struct {
 
 func Maybe(c *gin.Context, fileName string, rows any) bool {
 	spec := Lookup(ctxutil.Get(c).Controller, ctxutil.Get(c).Action)
-	if spec.FileName != "" {
+	// PHP initExport: request()->get('file_name') ?: setFileName()
+	if name := httpx.QueryStr(c, "file_name"); name != "" {
+		fileName = name
+	} else if spec.FileName != "" {
 		fileName = spec.FileName
 	}
-	exp := httpx.Int(c, "export")
+	exp := httpx.QueryInt(c, "export")
 	if exp == 1 {
 		n := rowCount(rows)
 		if v, ok := c.Get("likeadmin.export_count"); ok {
@@ -40,10 +43,7 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 				n = int(cnt)
 			}
 		}
-		pageSize := httpx.Int(c, "page_size")
-		if pageSize <= 0 {
-			pageSize = config.C.Project.Lists.PageSize
-		}
+		pageSize := exportPageSize(c)
 		if pageSize <= 0 {
 			pageSize = 25
 		}
@@ -67,6 +67,16 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 	}
 	if exp != 2 {
 		return false
+	}
+	count := int64(rowCount(rows))
+	if v, ok := c.Get("likeadmin.export_count"); ok {
+		if cnt, ok := v.(int64); ok {
+			count = cnt
+		}
+	}
+	if msg := exportRangeError(c, count); msg != "" {
+		response.Fail(c, msg)
+		return true
 	}
 	key, err := SaveXLSX(fileName, rows, spec.Fields)
 	if err != nil {
@@ -131,10 +141,7 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 }
 
 func Serve(c *gin.Context) {
-	key := c.Query("file")
-	if key == "" {
-		key = httpx.Str(c, "file")
-	}
+	key := httpx.QueryStr(c, "file")
 	var info fileInfo
 	if !cache.GetJSON("export_file_"+key, &info) || info.Name == "" {
 		response.Fail(c, "下载文件不存在")
@@ -222,6 +229,69 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func exportPageType(c *gin.Context) int {
+	if httpx.QueryStr(c, "page_type") == "" {
+		return 1
+	}
+	return httpx.QueryInt(c, "page_type")
+}
+
+func exportPageSize(c *gin.Context) int {
+	if exportPageType(c) != 1 {
+		max := config.C.Project.Lists.PageSizeMax
+		if max <= 0 {
+			return 10000
+		}
+		return max
+	}
+	pageSize := httpx.QueryInt(c, "page_size")
+	if pageSize <= 0 {
+		pageSize = config.C.Project.Lists.PageSize
+	}
+	if pageSize <= 0 {
+		return 25
+	}
+	return pageSize
+}
+
+func exportPageStart(c *gin.Context) int {
+	n := httpx.QueryInt(c, "page_start")
+	if n == 0 && httpx.QueryStr(c, "page_start") == "" {
+		return 1
+	}
+	return n
+}
+
+func exportPageEnd(c *gin.Context) int {
+	n := httpx.QueryInt(c, "page_end")
+	if n == 0 && httpx.QueryStr(c, "page_end") == "" {
+		return 200
+	}
+	return n
+}
+
+// exportRangeError matches PHP BaseDataLists::initExport empty-range throw.
+func exportRangeError(c *gin.Context, count int64) string {
+	pageType := exportPageType(c)
+	pageStart := exportPageStart(c)
+	pageEnd := exportPageEnd(c)
+	pageSize := exportPageSize(c)
+	if pageSize <= 0 {
+		pageSize = 25
+	}
+	pages := int(count) / pageSize
+	if int(count)%pageSize != 0 {
+		pages++
+	}
+	if count == 0 || pages < pageStart {
+		if pageType != 0 {
+			return fmt.Sprintf("第%d页到第%d页没有数据，无法导出", pageStart, pageEnd)
+		}
+		return "没有数据,无法导出"
+	}
+	return ""
 }
 
 func formatCell(key string, v any) string {

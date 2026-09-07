@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -73,12 +74,45 @@ func OperationLog() gin.HandlerFunc {
 		}
 		row := model.OperationLog{
 			AdminID: adminID, AdminName: name, Account: account,
-			Action: action, Type: c.Request.Method, URL: c.Request.URL.String(),
+			Action: action, Type: requestLogType(c), URL: requestAbsoluteURL(c),
 			Params: string(raw), Result: result, IP: ctxutil.ClientIP(c),
 			CreateTime: util.NowUnix(),
 		}
 		_ = bootstrap.DB.Create(&row).Error
 	}
+}
+
+func requestLogType(c *gin.Context) string {
+	if c != nil && c.Request != nil && (c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead) {
+		return "GET"
+	}
+	return "POST"
+}
+
+// requestAbsoluteURL matches PHP $request->url(true): scheme://host + REQUEST_URI.
+func requestAbsoluteURL(c *gin.Context) string {
+	path := ""
+	if c != nil && c.Request != nil {
+		if c.Request.URL != nil {
+			path = c.Request.URL.RequestURI()
+			if path == "" {
+				path = c.Request.URL.Path
+				if c.Request.URL.RawQuery != "" {
+					path += "?" + c.Request.URL.RawQuery
+				}
+			}
+		}
+		if path == "" {
+			path = c.Request.RequestURI
+		}
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	if path != "" && !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return ctxutil.Domain(c) + path
 }
 
 func ReadBody(c *gin.Context) []byte {

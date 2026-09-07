@@ -17,6 +17,8 @@ type Query struct {
 	PageNo    int
 	PageSize  int
 	PageType  int
+	PageStart int
+	PageEnd   int
 	Offset    int
 	Export    int
 	Field     string
@@ -70,6 +72,23 @@ func Parse(c *gin.Context) Query {
 	q.Offset = (q.PageNo - 1) * q.PageSize
 	if q.Offset < 0 {
 		q.Offset = 0
+	}
+	// PHP ListsExcelTrait defaults; applied only for export=2 + page_type=1.
+	q.PageStart = 1
+	q.PageEnd = 200
+	if v, ok := query["page_start"]; ok && strings.TrimSpace(util.ToString(v)) != "" {
+		q.PageStart = util.ToInt(v)
+	}
+	if v, ok := query["page_end"]; ok && strings.TrimSpace(util.ToString(v)) != "" {
+		q.PageEnd = util.ToInt(v)
+	}
+	if q.Export == 2 && q.PageType == 1 {
+		perPage := q.PageSize
+		q.Offset = (q.PageStart - 1) * perPage
+		q.PageSize = (q.PageEnd - q.PageStart + 1) * perPage
+		if q.Offset < 0 {
+			q.Offset = 0
+		}
 	}
 	return q
 }

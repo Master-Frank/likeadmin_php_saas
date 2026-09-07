@@ -39,7 +39,7 @@ func Run(c *gin.Context) {
 			return
 		}
 	}
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if msg := CheckParams(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -49,12 +49,12 @@ func Run(c *gin.Context) {
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	port := httpx.Int(c, "port")
+	port := httpx.BodyInt(c, "port")
 	if port == 0 {
-		port = httpx.Int(c, "hostport")
+		port = httpx.BodyInt(c, "hostport")
 	}
 	if port == 0 {
-		port = httpx.Int(c, "db_port")
+		port = httpx.BodyInt(c, "db_port")
 	}
 	if port == 0 {
 		port = 3306
@@ -117,7 +117,7 @@ func Run(c *gin.Context) {
 
 	imported := 0
 	salt := ""
-	if httpx.Int(c, "skip_sql") != 1 {
+	if httpx.BodyInt(c, "skip_sql") != 1 {
 		sqlPath := FindLikeSQL(config.C.App.PublicDir)
 		if sqlPath == "" {
 			response.Fail(c, "创建表格失败")
@@ -153,11 +153,11 @@ func Run(c *gin.Context) {
 		return
 	}
 	envPath := filepath.Join(filepath.Dir(lock), "..", ".env")
-	if httpx.Str(c, "env_path") != "" {
-		envPath = httpx.Str(c, "env_path")
+	if httpx.BodyStr(c, "env_path") != "" {
+		envPath = httpx.BodyStr(c, "env_path")
 	}
 	_ = WriteEnv(envPath, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
-	goCfg := httpx.Str(c, "go_config_path")
+	goCfg := httpx.BodyStr(c, "go_config_path")
 	_ = WriteGoConfig(goCfg, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
 	// PHP install uses touch() so the lock file is empty.
 	if err := os.WriteFile(lock, []byte{}, 0o644); err != nil {

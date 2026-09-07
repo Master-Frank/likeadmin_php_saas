@@ -94,6 +94,46 @@ func TestParseIgnoresJSONPageNo(t *testing.T) {
 	}
 }
 
+func TestParseExportWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldSize, oldMax := config.C.Project.Lists.PageSize, config.C.Project.Lists.PageSizeMax
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	t.Cleanup(func() {
+		config.C.Project.Lists.PageSize = oldSize
+		config.C.Project.Lists.PageSizeMax = oldMax
+	})
+
+	parse := func(raw string) Query {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		return Parse(c)
+	}
+
+	q := parse("?export=2&page_start=2&page_end=4&page_size=10")
+	if q.Export != 2 || q.PageType != 1 || q.PageStart != 2 || q.PageEnd != 4 {
+		t.Fatalf("meta %+v", q)
+	}
+	if q.Offset != 10 || q.PageSize != 30 {
+		t.Fatalf("window offset=%d size=%d", q.Offset, q.PageSize)
+	}
+
+	q = parse("?export=2&page_type=0&page_start=2&page_end=4&page_size=10")
+	if q.Offset != 0 || q.PageSize != 25000 {
+		t.Fatalf("unpaged export %+v", q)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?page_size=15", bytes.NewBufferString(`{"export":2,"page_start":2,"page_end":4}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	q = Parse(c)
+	if q.Export != 0 || q.Offset != 0 || q.PageSize != 15 {
+		t.Fatalf("export window must ignore JSON body, got %+v", q)
+	}
+}
+
 func TestParseGETRejectsPOST(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

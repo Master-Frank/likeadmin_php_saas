@@ -3037,6 +3037,42 @@ echo "log_export_file php_code=$(jcode <<<"$php_lex2") go_code=$(jcode <<<"$go_l
 if [[ "$(jcode <<<"$php_lex2")" != "$(jcode <<<"$go_lex2")" ]]; then
   fail=$((fail + 1))
 fi
+php_lex3="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=2&page_start=99999&page_end=99999" -H "token: $TOKEN")"
+go_lex3="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=2&page_start=99999&page_end=99999" -H "token: $TOKEN")"
+echo "log_export_empty_range php_msg=$(jget msg <<<"$php_lex3") go_msg=$(jget msg <<<"$go_lex3")"
+if [[ "$(jget msg <<<"$php_lex3")" != "$(jget msg <<<"$go_lex3")" || "$(jget msg <<<"$go_lex3")" != *没有数据，无法导出* ]]; then
+  echo "  php_lex3=${php_lex3:0:200}"
+  echo "  go_lex3=${go_lex3:0:200}"
+  fail=$((fail + 1))
+fi
+php_lexb="$(curl -sS "$PHP/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
+go_lexb="$(curl -sS "$GO/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
+echo "log_export_body_ignored php_code=$(jcode <<<"$php_lexb") go_code=$(jcode <<<"$go_lexb") php_url=$(jget data.url <<<"$php_lexb") go_url=$(jget data.url <<<"$go_lexb")"
+if [[ "$(jcode <<<"$php_lexb")" != "1" || "$(jcode <<<"$go_lexb")" != "1" || -n "$(jget data.url <<<"$php_lexb")" || -n "$(jget data.url <<<"$go_lexb")" ]]; then
+  echo "  php_lexb=${php_lexb:0:200}"
+  echo "  go_lexb=${go_lexb:0:200}"
+  fail=$((fail + 1))
+fi
+php_lexn="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=1&file_name=自定义导出" -H "token: $TOKEN")"
+go_lexn="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=1&file_name=自定义导出" -H "token: $TOKEN")"
+echo "log_export_file_name php_file=$(jget data.file_name <<<"$php_lexn") go_file=$(jget data.file_name <<<"$go_lexn")"
+if [[ "$(jget data.file_name <<<"$php_lexn")" != "自定义导出" || "$(jget data.file_name <<<"$go_lexn")" != "自定义导出" ]]; then
+  echo "  php_lexn=${php_lexn:0:200}"
+  echo "  go_lexn=${go_lexn:0:200}"
+  fail=$((fail + 1))
+fi
+if command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  curl -sS "$GO/platformapi/auth.admin/detail?id=1" -H "token: $TOKEN" >/dev/null
+  go_logu="$(mysqlq "SELECT url FROM la_operation_log WHERE url LIKE '%/platformapi/auth.admin/detail%' ORDER BY id DESC LIMIT 1")"
+  echo "oplog_abs_url=$go_logu"
+  if [[ "$go_logu" != http://* && "$go_logu" != https://* ]]; then
+    fail=$((fail + 1))
+  fi
+  if [[ "$go_logu" != *"/platformapi/auth.admin/detail?id=1"* ]]; then
+    fail=$((fail + 1))
+  fi
+fi
 php_pcp="$(curl -sS -X POST "$PHP/platformapi/setting.web.web_setting/setcopyright" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
 go_pcp="$(curl -sS -X POST "$GO/platformapi/setting.web.web_setting/setcopyright" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"config":"bad"}')"
 echo "platform_copyright_bad php_msg=$(jget msg <<<"$php_pcp") go_msg=$(jget msg <<<"$go_pcp")"
@@ -3253,6 +3289,16 @@ fi
 go_iw="$(curl -sS -o /dev/null -w '%{http_code}' "$GO/install")"
 echo "install_wizard http=$go_iw"
 if [[ "$go_iw" != "200" ]]; then
+  fail=$((fail + 1))
+fi
+go_iq="$(curl -sS -X POST "$GO/install?prefix=la_&admin_user=hack&admin_password=likeadmin&admin_confirm_password=likeadmin" -H 'Content-Type: application/json' -d '{}')"
+echo "install_query_ignored go_code=$(jcode <<<"$go_iq") go_msg=$(jget msg <<<"$go_iq")"
+if [[ "$(jcode <<<"$go_iq")" == "1" ]]; then
+  echo "  go_iq=${go_iq:0:200}"
+  fail=$((fail + 1))
+fi
+if [[ "$(jget msg <<<"$go_iq")" != *已经安装* && "$(jget msg <<<"$go_iq")" != *数据表前缀不能为空* ]]; then
+  echo "  go_iq=${go_iq:0:200}"
   fail=$((fail + 1))
 fi
 
