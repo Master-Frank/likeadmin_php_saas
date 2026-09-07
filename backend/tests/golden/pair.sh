@@ -3501,8 +3501,8 @@ print(",".join(sorted(ls[0])) if ls else "")
     echo "  go_rd0=${go_rd0:0:200}"
     fail=$((fail + 1))
   fi
-  php_aca="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscate","abstract":"a","is_show":1}')"
-  go_aca="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscateg","abstract":"a","is_show":1}')"
+  php_aca="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscate","abstract":"a","image":"/uploads/x.png","is_show":1}')"
+  go_aca="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscateg","abstract":"a","image":"/uploads/x.png","is_show":1}')"
   echo "article_add_missing_cate php_code=$(jcode <<<"$php_aca") go_code=$(jcode <<<"$go_aca") php_msg=$(jget msg <<<"$php_aca") go_msg=$(jget msg <<<"$go_aca")"
   if [[ "$(jcode <<<"$php_aca")" != "$(jcode <<<"$go_aca")" || "$(jget msg <<<"$php_aca")" != "$(jget msg <<<"$go_aca")" ]]; then
     echo "  php_aca=${php_aca:0:200}"
