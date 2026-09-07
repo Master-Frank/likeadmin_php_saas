@@ -312,11 +312,7 @@ func FinanceRefundLog(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		statusText := map[int]string{0: "退款中", 1: "退款成功", 2: "退款失败"}[r.RefundStatus]
-		handler := ""
-		var admin model.TenantAdmin
-		if r.HandleID > 0 && scopeTID(tdb(c).Where("id = ?", r.HandleID), c).First(&admin).Error == nil {
-			handler = admin.Name
-		}
+		handler := refundHandlerName(c, r.HandleID)
 		out = append(out, map[string]any{
 			"id": r.ID, "sn": r.SN, "record_id": r.RecordID, "user_id": r.UserID,
 			"handle_id": r.HandleID, "handler": handler, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
@@ -325,6 +321,26 @@ func FinanceRefundLog(c *gin.Context) {
 		})
 	}
 	response.Success(c, "", out)
+}
+
+// refundHandlerName prefers the current tenant admin (who actually issues tenant
+// refunds), then falls back to platform la_admin like PHP RefundLog::getHandlerAttr.
+func refundHandlerName(c *gin.Context, handleID uint) string {
+	if handleID == 0 {
+		return ""
+	}
+	var tenantAdmin model.TenantAdmin
+	if scopeTID(tdb(c).Where("id = ?", handleID), c).First(&tenantAdmin).Error == nil && tenantAdmin.Name != "" {
+		return tenantAdmin.Name
+	}
+	if bootstrap.DB == nil {
+		return ""
+	}
+	var admin model.Admin
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", handleID).First(&admin).Error == nil {
+		return admin.Name
+	}
+	return ""
 }
 
 func FinanceRefundStat(c *gin.Context) {

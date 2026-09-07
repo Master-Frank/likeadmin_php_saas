@@ -1,11 +1,13 @@
 package filesvc
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/cfgsvc"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 
 	"github.com/gin-gonic/gin"
@@ -116,6 +118,22 @@ func storageEngine(c *gin.Context, def string) map[string]any {
 		return m
 	}
 	return nil
+}
+
+// PublicPath mirrors PHP FileService::getFileUrl($uri, 'public_path').
+func PublicPath(uri string) string {
+	root := strings.TrimRight(filepath.ToSlash(config.C.App.PublicDir), "/")
+	uri = strings.TrimLeft(filepath.ToSlash(uri), "/")
+	if root == "" {
+		if uri == "" {
+			return ""
+		}
+		return uri
+	}
+	if uri == "" {
+		return root + "/"
+	}
+	return root + "/" + uri
 }
 
 func Format(domain, uri string) string {

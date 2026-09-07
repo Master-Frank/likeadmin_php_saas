@@ -53,6 +53,17 @@ func TestMatchReply(t *testing.T) {
 	}
 }
 
+func TestCodeURLEmptyRedirect(t *testing.T) {
+	u := CodeURL("wxapp", "")
+	if !strings.Contains(u, "appid=wxapp") || !strings.Contains(u, "redirect_uri=") {
+		t.Fatalf("%s", u)
+	}
+	scan := ScanCodeURL("wxapp", "", "st")
+	if !strings.Contains(scan, "state=st") || !strings.Contains(scan, "redirect_uri=") {
+		t.Fatalf("%s", scan)
+	}
+}
+
 func TestJSSDKConfig(t *testing.T) {
 	cfg := jsSDKConfig("wxapp", 1, "n", "sig")
 	if cfg["appId"] != "wxapp" || cfg["debug"] != false {

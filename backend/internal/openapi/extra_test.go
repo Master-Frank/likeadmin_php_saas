@@ -90,6 +90,25 @@ func TestUserTerminalFromToken(t *testing.T) {
 	}
 }
 
+func TestWechatUserInfoFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	info := wechatUserInfo(c, model.User{
+		ID: 9, SN: 1001, Mobile: "13800000000", Nickname: "n",
+		Avatar: "uploads/a.png", IsDisable: 0, IsNewUser: 1,
+	}, "tok")
+	for _, key := range []string{"id", "sn", "mobile", "nickname", "avatar", "is_disable", "is_new_user", "token"} {
+		if _, ok := info[key]; !ok {
+			t.Fatalf("missing %s in %v", key, info)
+		}
+	}
+	if info["is_disable"] != 0 || info["token"] != "tok" || info["id"] != uint(9) {
+		t.Fatalf("%v", info)
+	}
+}
+
 func TestUserCollectsArticleEmpty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

@@ -32,11 +32,8 @@ func LoginCodeURL(c *gin.Context) {
 		response.Fail(c, "请先完成微信公众号配置")
 		return
 	}
-	redirect := httpx.Str(c, "url")
-	if redirect == "" {
-		redirect = ctxutil.Domain(c)
-	}
-	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, redirect)})
+	// PHP LoginController::codeUrl passes request url as-is (may be empty).
+	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, httpx.Str(c, "url"))})
 }
 
 func LoginOALogin(c *gin.Context) {
@@ -83,10 +80,8 @@ func LoginGetScanCode(c *gin.Context) {
 		response.Fail(c, "请先完成微信开放平台配置")
 		return
 	}
+	// PHP LoginLogic::getScanCode UrlEncodes the request url as-is (may be empty).
 	redirect := httpx.Str(c, "url")
-	if redirect == "" {
-		redirect = ctxutil.Domain(c) + "/pc"
-	}
 	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), time.Now().UnixNano()%100000))
 	cache.Set("web_scan_"+state, state, 10*time.Minute)
 	response.Data(c, gin.H{"url": wechat.ScanCodeURL(appID, redirect, state)})
@@ -265,11 +260,16 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	now := util.NowUnix()
 	tdb(c).Model(&user).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
 	info := authsvc.SetUserToken(c, user.ID, terminal)
-	avatar := filesvc.GetFileURL(c, firstNonEmpty(user.Avatar, config.C.Project.DefaultImage["user_avatar"]))
+	return wechatUserInfo(c, user, util.ToString(info["token"])), nil
+}
+
+// wechatUserInfo matches PHP WechatUserService::getUserInfo field() + token.
+func wechatUserInfo(c *gin.Context, user model.User, token string) gin.H {
 	return gin.H{
-		"id": user.ID, "nickname": user.Nickname, "sn": user.SN, "mobile": user.Mobile,
-		"avatar": avatar, "token": info["token"], "is_new_user": user.IsNewUser,
-	}, nil
+		"id": user.ID, "sn": user.SN, "mobile": user.Mobile, "nickname": user.Nickname,
+		"avatar":     filesvc.GetFileURL(c, firstNonEmpty(user.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"is_disable": user.IsDisable, "is_new_user": user.IsNewUser, "token": token,
+	}
 }
 
 func handlePayNotify(c *gin.Context) {

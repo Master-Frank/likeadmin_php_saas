@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"likeadmin/backend/internal/cache"
+	"likeadmin/backend/internal/config"
 )
 
 func TestRewriteContentDomains(t *testing.T) {
@@ -48,5 +49,20 @@ func TestStorageCache(t *testing.T) {
 	}
 	if got := GetFileURL(nil, "uploads/a.png"); got != "https://cdn.example/uploads/a.png" {
 		t.Fatalf("url=%s", got)
+	}
+}
+
+func TestPublicPath(t *testing.T) {
+	old := config.C.App.PublicDir
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	config.C.App.PublicDir = "/var/www/public"
+	if got := PublicPath("uploads/a.png"); got != "/var/www/public/uploads/a.png" {
+		t.Fatalf("%s", got)
+	}
+	if got := PublicPath("/uploads/a.png"); got != "/var/www/public/uploads/a.png" {
+		t.Fatalf("%s", got)
+	}
+	if got := PublicPath(""); got != "/var/www/public/" {
+		t.Fatalf("%s", got)
 	}
 }
