@@ -18,8 +18,8 @@ func FileLists(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	if t := lists.ParamInt(q, "type"); t > 0 {
-		db = db.Where("type = ?", t)
+	if lists.HasParam(q, "type") {
+		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
 	if lists.Param(q, "source") != "" {
 		db = db.Where("source = ?", lists.ParamInt(q, "source"))
@@ -114,8 +114,8 @@ func FileListCate(c *gin.Context) {
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	if t := lists.ParamInt(q, "type"); t > 0 {
-		db = db.Where("type = ?", t)
+	if lists.HasParam(q, "type") {
+		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
 	var rows []model.TenantFileCate
 	db.Order("id desc").Find(&rows)

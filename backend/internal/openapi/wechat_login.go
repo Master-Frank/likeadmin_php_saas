@@ -26,10 +26,18 @@ import (
 	"gorm.io/gorm"
 )
 
+func requireWechatCode(c *gin.Context) bool {
+	if !phpRequiredParam(httpx.Params(c), "code") {
+		response.Fail(c, "code缺少")
+		return false
+	}
+	return true
+}
+
 func LoginCodeURL(c *gin.Context) {
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信公众号配置")
+		response.Fail(c, "请先设置公众号配置")
 		return
 	}
 	// PHP LoginController::codeUrl passes request url as-is (may be empty).
@@ -37,9 +45,12 @@ func LoginCodeURL(c *gin.Context) {
 }
 
 func LoginOALogin(c *gin.Context) {
+	if !requireWechatCode(c) {
+		return
+	}
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信公众号配置")
+		response.Fail(c, "请先设置公众号配置")
 		return
 	}
 	sess, err := wechat.OAuthByCode(appID, secret, httpx.Str(c, "code"))
@@ -56,9 +67,12 @@ func LoginOALogin(c *gin.Context) {
 }
 
 func LoginMnpLogin(c *gin.Context) {
+	if !requireWechatCode(c) {
+		return
+	}
 	appID, secret := wechat.MnpConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信小程序配置")
+		response.Fail(c, "请先设置小程序配置")
 		return
 	}
 	sess, err := wechat.Code2Session(appID, secret, httpx.Str(c, "code"))
@@ -75,12 +89,8 @@ func LoginMnpLogin(c *gin.Context) {
 }
 
 func LoginGetScanCode(c *gin.Context) {
-	appID, secret := wechat.OpenConfig(c)
-	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信开放平台配置")
-		return
-	}
-	// PHP LoginLogic::getScanCode UrlEncodes the request url as-is (may be empty).
+	// PHP getScanCode never checks app_id/secret; empty config still returns qrconnect URL.
+	appID, _ := wechat.OpenConfig(c)
 	redirect := httpx.Str(c, "url")
 	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), time.Now().UnixNano()%100000))
 	cache.Set("web_scan_"+state, state, 10*time.Minute)
@@ -150,19 +160,22 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 		response.Fail(c, "请先登录")
 		return
 	}
+	if !requireWechatCode(c) {
+		return
+	}
 	var sess wechat.Session
 	var err error
 	if terminal == wechat.TerminalMNP {
 		appID, secret := wechat.MnpConfig(c)
 		if appID == "" || secret == "" {
-			response.Fail(c, "请先完成微信小程序配置")
+			response.Fail(c, "请先设置小程序配置")
 			return
 		}
 		sess, err = wechat.Code2Session(appID, secret, httpx.Str(c, "code"))
 	} else {
 		appID, secret, _ := wechat.OAConfig(c)
 		if appID == "" || secret == "" {
-			response.Fail(c, "请先完成微信公众号配置")
+			response.Fail(c, "请先设置公众号配置")
 			return
 		}
 		sess, err = wechat.OAuthByCode(appID, secret, httpx.Str(c, "code"))
@@ -357,7 +370,7 @@ func WechatJsConfigReal(c *gin.Context) {
 	}
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "获取jssdk失败:请先完成微信公众号配置")
+		response.Fail(c, "获取jssdk失败:请先设置公众号配置")
 		return
 	}
 	cfg, err := wechat.JsConfig(appID, secret, httpx.Str(c, "url"))
@@ -371,7 +384,7 @@ func WechatJsConfigReal(c *gin.Context) {
 func UserGetMobileByMnpReal(c *gin.Context) {
 	appID, secret := wechat.MnpConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信小程序配置")
+		response.Fail(c, "请先设置小程序配置")
 		return
 	}
 	phone, err := wechat.PhoneNumber(appID, secret, httpx.Str(c, "code"))

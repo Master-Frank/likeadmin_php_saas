@@ -422,8 +422,8 @@ func ArticleLists(c *gin.Context) {
 	if title := lists.Param(q, "title"); title != "" {
 		db = db.Where("title LIKE ?", "%"+title+"%")
 	}
-	if cid := lists.ParamInt(q, "cid"); cid > 0 {
-		db = db.Where("cid = ?", cid)
+	if lists.HasParam(q, "cid") {
+		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
 	}
 	if lists.Param(q, "is_show") != "" {
 		db = db.Where("is_show = ?", lists.ParamInt(q, "is_show"))

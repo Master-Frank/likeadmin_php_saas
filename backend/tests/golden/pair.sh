@@ -3174,6 +3174,84 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('ali$now','alg$now')"
+  if [[ -n "${UT:-}" ]]; then
+    php_wcb="$(curl -sS -X POST "$PHP/api/login/mnpAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_wcb="$(curl -sS -X POST "$GO/api/login/mnpAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "wechat_bind_nocode php_msg=$(jget msg <<<"$php_wcb") go_msg=$(jget msg <<<"$go_wcb")"
+    if [[ "$(jget msg <<<"$php_wcb")" != "$(jget msg <<<"$go_wcb")" ]]; then
+      echo "  php_wcb=${php_wcb:0:200}"
+      echo "  go_wcb=${go_wcb:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_wcb2="$(curl -sS -X POST "$PHP/api/login/mnpAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    go_wcb2="$(curl -sS -X POST "$GO/api/login/mnpAuthBind" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"x"}')"
+    echo "wechat_bind_noconfig php_msg=$(jget msg <<<"$php_wcb2") go_msg=$(jget msg <<<"$go_wcb2")"
+    if [[ "$(jget msg <<<"$php_wcb2")" != "$(jget msg <<<"$go_wcb2")" ]]; then
+      echo "  php_wcb2=${php_wcb2:0:200}"
+      echo "  go_wcb2=${go_wcb2:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_mnp="$(curl -sS -X POST "$PHP/api/login/mnpLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+  go_mnp="$(curl -sS -X POST "$GO/api/login/mnpLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+  echo "mnp_login_nocode php_msg=$(jget msg <<<"$php_mnp") go_msg=$(jget msg <<<"$go_mnp")"
+  if [[ "$(jget msg <<<"$php_mnp")" != "$(jget msg <<<"$go_mnp")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_sc="$(curl -sS "$PHP/api/login/getScanCode?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  go_sc="$(curl -sS "$GO/api/login/getScanCode?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  php_scu="$(jget data.url <<<"$php_sc")"
+  go_scu="$(jget data.url <<<"$go_sc")"
+  echo "scan_code php_code=$(jcode <<<"$php_sc") go_code=$(jcode <<<"$go_sc") php_qr=$([[ "$php_scu" == *qrconnect* ]] && echo 1 || echo 0) go_qr=$([[ "$go_scu" == *qrconnect* ]] && echo 1 || echo 0)"
+  if [[ "$(jcode <<<"$php_sc")" != "$(jcode <<<"$go_sc")" || "$go_scu" != *qrconnect* ]]; then
+    echo "  php_sc=${php_sc:0:200}"
+    echo "  go_sc=${go_sc:0:200}"
+    fail=$((fail + 1))
+  fi
+  mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (1,0,'paircid0$ts','pair','','','',1,0,$now)"
+  php_cid0="$(curl -sS "$PHP/api/article/lists?cid=0" -H "Host: $TENANT_HOST")"
+  go_cid0="$(curl -sS "$GO/api/article/lists?cid=0" -H "Host: $TENANT_HOST")"
+  php_cid0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$php_cid0")"
+  go_cid0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$go_cid0")"
+  echo "article_cid0 php_n=$php_cid0n go_n=$go_cid0n"
+  if [[ "$php_cid0n" != "$go_cid0n" ]]; then
+    echo "  php_cid0=${php_cid0:0:200}"
+    echo "  go_cid0=${go_cid0:0:200}"
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_article WHERE title='paircid0$ts' AND tenant_id=1"
+  php_ft0="$(curl -sS "$PHP/tenantapi/file/lists?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ft0="$(curl -sS "$GO/tenantapi/file/lists?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_ft0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$php_ft0")"
+  go_ft0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$go_ft0")"
+  echo "file_type0 php_n=$php_ft0n go_n=$go_ft0n php_code=$(jcode <<<"$php_ft0") go_code=$(jcode <<<"$go_ft0")"
+  if [[ "$php_ft0n" != "$go_ft0n" || "$(jcode <<<"$php_ft0")" != "$(jcode <<<"$go_ft0")" ]]; then
+    echo "  php_ft0=${php_ft0:0:200}"
+    echo "  go_ft0=${go_ft0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_fct0="$(curl -sS "$PHP/tenantapi/file/listCate?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_fct0="$(curl -sS "$GO/tenantapi/file/listCate?type=0" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_fct0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$php_fct0")"
+  go_fct0n="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("count") or 0)' <<<"$go_fct0")"
+  echo "file_cate_type0 php_n=$php_fct0n go_n=$go_fct0n"
+  if [[ "$php_fct0n" != "$go_fct0n" ]]; then
+    fail=$((fail + 1))
+  fi
+  mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('rf0p$now',1,2,1,0,1,0,1,$now),('rf0g$now',1,2,1,0,1,0,1,$now)"
+  php_rf0id="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='rf0p$now'")"
+  go_rf0id="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='rf0g$now'")"
+  php_rf0="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"recharge_id\":$php_rf0id}")"
+  go_rf0="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"recharge_id\":$go_rf0id}")"
+  php_rf0s="$(mysqlq "SELECT refund_status FROM la_recharge_order WHERE sn='rf0p$now'")"
+  go_rf0s="$(mysqlq "SELECT refund_status FROM la_recharge_order WHERE sn='rf0g$now'")"
+  echo "refund_zero php_msg=$(jget msg <<<"$php_rf0") go_msg=$(jget msg <<<"$go_rf0") php_st=$php_rf0s go_st=$go_rf0s"
+  if [[ "$(jget msg <<<"$php_rf0")" != "$(jget msg <<<"$go_rf0")" || "$php_rf0s" != "0" || "$go_rf0s" != "0" ]]; then
+    echo "  php_rf0=${php_rf0:0:200}"
+    echo "  go_rf0=${go_rf0:0:200}"
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('rf0p$now','rf0g$now')"
 fi
 
 if [[ -n "$GO" ]]; then

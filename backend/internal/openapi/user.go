@@ -354,8 +354,8 @@ func ArticleLists(c *gin.Context) {
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	if cid := lists.ParamInt(q, "cid"); cid > 0 {
-		db = db.Where("cid = ?", cid)
+	if lists.HasParam(q, "cid") {
+		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
 	}
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		db = db.Where("title LIKE ?", "%"+kw+"%")

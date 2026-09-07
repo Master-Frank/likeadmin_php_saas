@@ -78,6 +78,15 @@ func ParamInt(q Query, key string) int {
 	return util.ToInt(q.Params[key])
 }
 
+// HasParam matches PHP ListsSearchTrait '=' filters: skip only when missing or ”.
+func HasParam(q Query, key string) bool {
+	v, ok := q.Params[key]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
 // Ident returns a SQL identifier or empty if the name is unsafe.
 func Ident(name string) string {
 	name = strings.TrimSpace(name)

@@ -419,6 +419,11 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	udb := tenantdb.ForTenant(order.TenantID)
+	if order.OrderAmount <= 0 {
+		// PHP RefundLogic::refundBeforeCheck throws before any writes; the outer txn rolls back.
+		response.Fail(c, "订单金额异常")
+		return
+	}
 	if !rechargeUserMoneyEnough(udb, order.UserID, order.TenantID, order.OrderAmount) {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
@@ -622,6 +627,10 @@ func RechargeRefundAgain(c *gin.Context) {
 		oq = oq.Where("tenant_id = ?", tid)
 	}
 	oq.First(&againOrder)
+	if againOrder.OrderAmount <= 0 {
+		response.Fail(c, "订单金额异常")
+		return
+	}
 	if !rechargeUserMoneyEnough(tenantdb.ForTenant(rec.TenantID), rec.UserID, rec.TenantID, againOrder.OrderAmount) {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
@@ -898,7 +907,7 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 	}
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "请先完成微信公众号配置")
+		response.Fail(c, "请先设置公众号配置")
 		return
 	}
 	if err := wechat.PublishMenu(appID, secret, menu); err != nil {
