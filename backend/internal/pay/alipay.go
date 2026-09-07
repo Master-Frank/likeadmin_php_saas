@@ -95,7 +95,10 @@ func AliVerifyNotify(c *gin.Context, form map[string][]string) bool {
 }
 
 func AliVerifyNotifyByTenant(tenantID uint, form map[string][]string) bool {
-	cfg := AliCfgByTenant(tenantID)
+	return aliVerifyForm(AliCfgByTenant(tenantID), form)
+}
+
+func aliVerifyForm(cfg AliPayCfg, form map[string][]string) bool {
 	pub := resolveAliPublicKey(cfg)
 	if pub == nil {
 		// PHP AliPayService::notify always verifyNotify(); missing public key fails.

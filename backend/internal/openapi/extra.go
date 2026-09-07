@@ -1,7 +1,6 @@
 package openapi
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -268,7 +267,7 @@ func PayPrepay(c *gin.Context) {
 	terminal := userTerminal(c)
 	paySN := order.SN
 	if payWay == 2 {
-		paySN = fmt.Sprintf("%s%d%s", order.SN, terminal, fmt.Sprintf("%04d", util.NowUnix()%10000))
+		paySN = pay.FormatPaySN(order.SN, terminal, util.NowUnix())
 	}
 	tdb(c).Model(&order).Updates(map[string]any{"pay_way": payWay, "pay_sn": paySN})
 	order.PayWay = payWay

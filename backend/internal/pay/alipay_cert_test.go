@@ -55,7 +55,7 @@ func TestAliVerifyNotifyRejectsBadSign(t *testing.T) {
 	pubPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: mustPKIX(&key.PublicKey)}))
 	cfg := AliPayCfg{AliPublicKey: pubPEM}
 	pub := resolveAliPublicKey(cfg)
-	params := map[string]string{"out_trade_no": "SN1", "trade_status": "TRADE_SUCCESS"}
+	params := map[string]string{"out_trade_no": "SN1", "passback_params": "recharge", "trade_status": "TRADE_SUCCESS"}
 	sig, err := rsaSHA256Base64(key, aliSignContent(params))
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +65,20 @@ func TestAliVerifyNotifyRejectsBadSign(t *testing.T) {
 	}
 	if verifyRSA2(pub, aliSignContent(params), "bad") {
 		t.Fatal("bad sign accepted")
+	}
+	form := map[string][]string{
+		"out_trade_no":    {"SN1"},
+		"trade_status":    {"TRADE_SUCCESS"},
+		"passback_params": {"recharge"},
+		"sign":            {sig},
+		"sign_type":       {"RSA2"},
+	}
+	if !aliVerifyForm(cfg, form) {
+		t.Fatal("signed notify should pass")
+	}
+	form["sign"] = []string{"bad"}
+	if aliVerifyForm(cfg, form) {
+		t.Fatal("tampered notify accepted")
 	}
 }
 

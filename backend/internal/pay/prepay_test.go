@@ -54,6 +54,34 @@ func TestWechatV3NativePrepayFixture(t *testing.T) {
 	}
 }
 
+func TestJSAPIBridgeShapeAndSign(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := jsapiBridge(key, "wxapp", "prepay123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"appId", "timeStamp", "nonceStr", "package", "signType", "paySign"} {
+		if utilToString(got[k]) == "" {
+			t.Fatalf("missing %s: %+v", k, got)
+		}
+	}
+	if got["appId"] != "wxapp" || got["package"] != "prepay_id=prepay123" || got["signType"] != "RSA" {
+		t.Fatalf("%+v", got)
+	}
+	msg := got["appId"].(string) + "\n" + got["timeStamp"].(string) + "\n" + got["nonceStr"].(string) + "\n" + got["package"].(string) + "\n"
+	if !verifyRSA2(&key.PublicKey, msg, got["paySign"].(string)) {
+		t.Fatal("paySign does not match WeChat JSAPI RSA string")
+	}
+}
+
+func utilToString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
 func TestAliFormGatewayAndOrder(t *testing.T) {
 	html := aliForm(map[string]string{
 		"app_id": "2021000000000000", "method": "alipay.trade.page.pay",
