@@ -579,6 +579,27 @@ func TestWebScanLoginCheck(t *testing.T) {
 	}
 }
 
+func TestUintSlicesChanged(t *testing.T) {
+	if UintSlicesChanged([]uint{1, 2}, []uint{1, 2}) {
+		t.Fatal("same order should be unchanged")
+	}
+	if !UintSlicesChanged([]uint{1, 2}, []uint{2, 1}) {
+		t.Fatal("reordered roles should count as changed")
+	}
+	if !UintSlicesChanged([]uint{1}, []uint{1, 2}) {
+		t.Fatal("added role should count as changed")
+	}
+	if !UintSlicesChanged([]uint{1, 2}, []uint{1}) {
+		t.Fatal("removed role should count as changed")
+	}
+	if !UintSlicesChanged([]uint{1}, []uint{2}) {
+		t.Fatal("replaced role should count as changed")
+	}
+	if UintSlicesChanged(nil, nil) {
+		t.Fatal("empty should be unchanged")
+	}
+}
+
 func TestWechatJsConfigCheck(t *testing.T) {
 	if WechatJsConfigCheck(map[string]any{}) != "请提供url" {
 		t.Fatal(WechatJsConfigCheck(map[string]any{}))

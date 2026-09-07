@@ -56,6 +56,9 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "资讯分类id不能为空")
 		return
@@ -75,6 +78,9 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 
 func ArticleUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -145,6 +151,9 @@ func DecorateDataPC(c *gin.Context) {
 }
 
 func DecorateTabbarSave(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	tid, ok := requireTenant(c)
 	if !ok {
 		response.Fail(c, "参数缺失")
@@ -216,6 +225,9 @@ func SettingGetCopyright(c *gin.Context) {
 }
 
 func SettingSetCopyright(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	cfg := httpx.BodyAny(c, "config")
 	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
 		response.Fail(c, msg)
@@ -235,6 +247,9 @@ func SettingGetAgreement(c *gin.Context) {
 }
 
 func SettingSetAgreement(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
 	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
@@ -250,12 +265,18 @@ func SettingSetSiteStatistics(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.BodyStr(c, "clarity_code"))
 	response.SuccessNotice(c, "设置成功")
 }
 
 func UserAdjustMoney(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyPresent(c, "user_id") {
@@ -418,6 +439,9 @@ func rechargeUserMoneyEnough(db *gorm.DB, userID, tenantID uint, amount float64)
 
 func RechargeRefund(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyHas(c, "recharge_id") {
@@ -592,6 +616,9 @@ func RechargeRefundAgain(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if !httpx.BodyHas(c, "record_id") {
 		response.Fail(c, "参数缺失")
 		return
@@ -670,6 +697,9 @@ func OAReplyAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.OAReplyWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
@@ -708,9 +738,16 @@ func OAReplyEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.OAReplyWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	if httpx.BodyInt(c, "reply_type") == 2 && httpx.BodyInt(c, "sort") < 0 {
+		response.Fail(c, "排序值须大于或等于0")
 		return
 	}
 	tid, ok := requireTenant(c)
@@ -749,6 +786,9 @@ func oaReplyByID(c *gin.Context, id uint) (model.OfficialAccountReply, bool) {
 
 func OAReplyDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
@@ -801,6 +841,9 @@ func OAReplyStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -822,6 +865,9 @@ func OAReplyStatus(c *gin.Context) {
 
 func OAReplySort(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
@@ -974,6 +1020,9 @@ func TenantNoticeDetail(c *gin.Context) {
 }
 
 func TenantNoticeSet(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	id := httpx.BodyUint(c, "id")
 	_, exists := tenantNoticeByID(c, id)
 	updates, err := biz.ApplyNoticeSet(exists, id, httpx.BodyAny(c, "template"))

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -43,6 +44,9 @@ func Env(c *gin.Context) {
 func CollectEnv() []envItem {
 	out := []envItem{
 		{Name: "Go", Status: "ok", Value: runtime.Version()},
+		{Name: "服务器操作系统", Status: "ok", Value: runtime.GOOS + "/" + runtime.GOARCH},
+		{Name: "web服务器环境", Status: "ok", Value: "Go net/http"},
+		{Name: "程序安装目录", Status: "ok", Value: installRoot()},
 	}
 	out = append(out, probeMySQL())
 	out = append(out, probeRedis())
@@ -55,7 +59,29 @@ func CollectEnv() []envItem {
 	out = append(out, probeDir("config", configDir()))
 	out = append(out, probeWritableFile(".env", envFilePath()))
 	out = append(out, probeDiskSpace())
+	out = append(out, probeUploadLimit())
 	return out
+}
+
+func installRoot() string {
+	dir := config.C.App.PublicDir
+	if dir == "" {
+		dir = "."
+	} else {
+		dir = filepath.Dir(dir)
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
+}
+
+func probeUploadLimit() envItem {
+	item := envItem{Name: "上传限制", Status: "ok", Value: "由反向代理与应用配置决定"}
+	if v := strings.TrimSpace(os.Getenv("LIKEADMIN_UPLOAD_MAX")); v != "" {
+		item.Value = v
+	}
+	return item
 }
 
 func probeMySQL() envItem {

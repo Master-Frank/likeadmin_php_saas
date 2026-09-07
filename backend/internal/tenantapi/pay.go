@@ -71,6 +71,9 @@ func PayConfigSet(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	p := httpx.Body(c)
 	id := httpx.BodyUint(c, "id")
 	r, exists := tenantPayConfigByID(c, id)
@@ -147,6 +150,9 @@ func PayWayGet(c *gin.Context) {
 
 func PayWaySet(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	tid, ok := requireTenant(c)

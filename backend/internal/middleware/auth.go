@@ -148,7 +148,7 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 			response.AbortFail(c, "非该站点成员禁止访问", response.CodeLoginExpire, 1)
 			return
 		}
-		if !renewIfNeed(c, "tenant", token, info, config.C.Project.AdminToken) {
+		if !renewIfNeed(c, "tenant", token, info, config.C.Project.TenantToken) {
 			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 1)
 			return
 		}

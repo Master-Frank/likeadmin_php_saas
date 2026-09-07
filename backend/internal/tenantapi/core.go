@@ -469,6 +469,9 @@ func ArticleAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if _, ok := requireTenant(c); !ok {
 		response.Fail(c, "参数缺失")
 		return
@@ -519,6 +522,9 @@ func ArticleEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if msg := articleWriteCheck(c, true); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -536,6 +542,9 @@ func ArticleEdit(c *gin.Context) {
 
 func ArticleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -623,6 +632,13 @@ func ArticleCateAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
+	if _, ok := requireTenant(c); !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	if msg := articleCateWriteCheck(c, false); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -633,6 +649,9 @@ func ArticleCateAdd(c *gin.Context) {
 
 func ArticleCateEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if msg := articleCateWriteCheck(c, true); msg != "" {
@@ -647,6 +666,9 @@ func ArticleCateEdit(c *gin.Context) {
 
 func ArticleCateDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -763,6 +785,9 @@ func DecoratePageSave(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !requirePlatformTenant(c) {
+		return
+	}
 	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
@@ -813,6 +838,9 @@ func SettingGetWebsite(c *gin.Context) {
 
 func SettingSetWebsite(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !requirePlatformTenant(c) {
 		return
 	}
 	if msg := util.TenantWebSettingCheck(httpx.Body(c)); msg != "" {

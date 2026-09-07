@@ -1501,22 +1501,14 @@ func ArticleCateShowCheck(p map[string]any) string {
 	return ""
 }
 
+// UintSlicesChanged is a positional compare (PHP array_diff_assoc plus length).
+// Reordering the same IDs counts as a change so tokens expire after role edits.
 func UintSlicesChanged(oldIDs, newIDs []uint) bool {
 	if len(oldIDs) != len(newIDs) {
 		return true
 	}
-	seen := map[uint]int{}
-	for _, id := range oldIDs {
-		seen[id]++
-	}
-	for _, id := range newIDs {
-		seen[id]--
-		if seen[id] < 0 {
-			return true
-		}
-	}
-	for _, n := range seen {
-		if n != 0 {
+	for i := range oldIDs {
+		if oldIDs[i] != newIDs[i] {
 			return true
 		}
 	}

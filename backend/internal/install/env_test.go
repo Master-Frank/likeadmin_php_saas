@@ -78,6 +78,22 @@ func TestProbeDiskSpace(t *testing.T) {
 	}
 }
 
+func TestCollectEnvServerInfo(t *testing.T) {
+	items := CollectEnv()
+	names := map[string]string{}
+	for _, it := range items {
+		names[it.Name] = it.Value
+	}
+	for _, name := range []string{"服务器操作系统", "web服务器环境", "程序安装目录", "上传限制", "public/uploads", "public/mobile", ".env"} {
+		if _, ok := names[name]; !ok {
+			t.Fatalf("missing %s in %+v", name, names)
+		}
+	}
+	if names["服务器操作系统"] == "" || names["程序安装目录"] == "" {
+		t.Fatalf("empty server info %+v", names)
+	}
+}
+
 func TestPublicSub(t *testing.T) {
 	if got := publicSub("uploads"); !strings.HasSuffix(got, "uploads") {
 		t.Fatalf("got %s", got)

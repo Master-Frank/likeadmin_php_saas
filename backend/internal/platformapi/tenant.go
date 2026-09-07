@@ -549,7 +549,7 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	if httpx.BodyInt(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
+	if httpx.BodyInt(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireTenantAdminTokens(adb, id)
 	}
 	cache.ClearAdminAuthCache(id)
@@ -710,28 +710,6 @@ func expireTenantAdminTokens(db *gorm.DB, adminID uint) {
 		db.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
 		cache.DeleteTenantAdminInfo(s.Token)
 	}
-}
-
-func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
-	if len(oldRoles) != len(newRoles) {
-		return true
-	}
-	seen := map[uint]int{}
-	for _, id := range oldRoles {
-		seen[id]++
-	}
-	for _, id := range newRoles {
-		seen[id]--
-		if seen[id] < 0 {
-			return true
-		}
-	}
-	for _, n := range seen {
-		if n != 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func TenantUserLists(c *gin.Context) {
