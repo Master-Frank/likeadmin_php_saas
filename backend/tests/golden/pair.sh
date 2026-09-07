@@ -2261,17 +2261,44 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
   if [[ -z "$got_dept" || "$got_dept" != "$tpl_dept" ]]; then
     fail=$((fail + 1))
   fi
+  now="$(date +%s)"
+  mysqlq "INSERT INTO la_refund_log (tenant_id,sn,record_id,user_id,handle_id,order_amount,refund_amount,refund_status,create_time) VALUES ($gid,'pairrl$now',1,1,1,1.00,1.00,0,$now)"
+  mysqlq "INSERT INTO la_tenant_sms_log (tenant_id,scene_id,mobile,content,code,send_status,send_time,create_time) VALUES ($gid,101,'13800000000','pair','1234',1,$now,$now)"
+  mysqlq "INSERT INTO la_sms_log (tenant_id,scene_id,mobile,content,code,send_status,send_time,create_time) VALUES ($gid,101,'13800000000','pair','1234',1,$now,$now)"
   curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}" >/dev/null || true
   left_admin="$(mysqlq "SELECT COUNT(*) FROM la_tenant_admin WHERE tenant_id=$gid AND delete_time IS NULL")"
   left_dept="$(mysqlq "SELECT COUNT(*) FROM la_tenant_dept WHERE tenant_id=$gid AND delete_time IS NULL")"
   left_menu="$(mysqlq "SELECT COUNT(*) FROM la_tenant_system_menu WHERE tenant_id=$gid")"
-  echo "shared_tenant_cleanup admin=$left_admin dept=$left_dept menu=$left_menu"
-  if [[ "$left_admin" != "0" || "$left_dept" != "0" || "$left_menu" != "0" ]]; then
+  left_rlog="$(mysqlq "SELECT COUNT(*) FROM la_refund_log WHERE tenant_id=$gid")"
+  left_tsms="$(mysqlq "SELECT COUNT(*) FROM la_tenant_sms_log WHERE tenant_id=$gid AND delete_time IS NULL")"
+  left_sms="$(mysqlq "SELECT COUNT(*) FROM la_sms_log WHERE tenant_id=$gid AND delete_time IS NULL")"
+  echo "shared_tenant_cleanup admin=$left_admin dept=$left_dept menu=$left_menu refund_log=$left_rlog sms=$left_tsms/$left_sms"
+  if [[ "$left_admin" != "0" || "$left_dept" != "0" || "$left_menu" != "0" || "$left_rlog" != "0" || "$left_tsms" != "0" || "$left_sms" != "0" ]]; then
     fail=$((fail + 1))
   fi
 elif [[ "$(jcode <<<"$go_gta")" != "1" ]]; then
   echo "  go_gta=${go_gta:0:240}"
   fail=$((fail + 1))
+fi
+
+ea1="ea${ts: -6}"
+ea2="eb${ts: -6}"
+go_ea1="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$ea1\",\"host_name\":\"$ea1\",\"account\":\"$ea1\",\"password\":\"likeadmin\",\"avatar\":\"\",\"tel\":\"13800000000\",\"domain_alias\":\"\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0,\"notes\":\"\"}")"
+go_ea2="$(curl -sS -X POST "$GO/platformapi/tenant.tenant/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$ea2\",\"host_name\":\"$ea2\",\"account\":\"$ea2\",\"password\":\"likeadmin\",\"avatar\":\"\",\"tel\":\"13800000000\",\"domain_alias\":\"\",\"domain_alias_enable\":1,\"tactics\":0,\"disable\":0,\"notes\":\"\"}")"
+echo "empty_alias_unique go1=$(jcode <<<"$go_ea1") go2=$(jcode <<<"$go_ea2") msg2=$(jget msg <<<"$go_ea2")"
+if [[ "$(jcode <<<"$go_ea1")" != "1" || "$(jcode <<<"$go_ea2")" != "1" ]]; then
+  echo "  go_ea1=${go_ea1:0:200}"
+  echo "  go_ea2=${go_ea2:0:200}"
+  fail=$((fail + 1))
+fi
+if command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  for sn in "$ea1" "$ea2"; do
+    eid="$(mysqlq "SELECT id FROM la_tenant WHERE sn='$sn' AND delete_time IS NULL LIMIT 1")"
+    if [[ -n "$eid" && "$eid" != "0" ]]; then
+      curl -sS -X POST "$GO/platformapi/tenant.tenant/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$eid}" >/dev/null || true
+    fi
+  done
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then

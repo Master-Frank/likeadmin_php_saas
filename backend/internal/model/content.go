@@ -322,6 +322,7 @@ type SmsLog struct {
 	SendStatus int    `gorm:"column:send_status" json:"send_status"`
 	SendTime   *int64 `gorm:"column:send_time" json:"send_time"`
 	Results    string `gorm:"column:results" json:"results"`
+	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	UpdateTime *int64 `gorm:"column:update_time" json:"update_time"`
 	DeleteTime *int64 `gorm:"column:delete_time" json:"delete_time"`

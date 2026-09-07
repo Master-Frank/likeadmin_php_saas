@@ -112,8 +112,7 @@ func TenantAdd(c *gin.Context) {
 		return
 	}
 	alias := stripHost(httpx.Str(c, "domain_alias"))
-	var aliasRow model.Tenant
-	if bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", alias).First(&aliasRow).Error == nil {
+	if tenantAliasTaken(alias, 0) {
 		response.Fail(c, "租户别名已存在")
 		return
 	}
@@ -171,19 +170,22 @@ func TenantEdit(c *gin.Context) {
 		return
 	}
 	alias := stripHost(httpx.Str(c, "domain_alias"))
-	var aliasRow model.Tenant
-	if bootstrap.DB.Where("domain_alias = ? AND id <> ? AND delete_time IS NULL", alias, id).First(&aliasRow).Error == nil {
+	if tenantAliasTaken(alias, id) {
 		response.Fail(c, "租户别名已存在")
 		return
 	}
 	now := util.NowUnix()
+	disable := httpx.Int(c, "disable")
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
-		"disable": httpx.Int(c, "disable"), "tel": httpx.Str(c, "tel"),
+		"disable": disable, "tel": httpx.Str(c, "tel"),
 		"domain_alias":        alias,
 		"domain_alias_enable": httpx.Int(c, "domain_alias_enable"),
 		"notes":               httpx.Str(c, "notes"), "update_time": now,
 	})
+	if disable == 1 {
+		expireTenantAdmins(cur)
+	}
 	response.Result(c, 1, 1, "操作成功", []any{})
 }
 
@@ -294,6 +296,7 @@ func cleanTenantScopedRows(tid uint) {
 		&model.TenantFile{}, &model.TenantFileCate{}, &model.TenantSystemRole{},
 		&model.User{}, &model.UserAccountLog{}, &model.Article{}, &model.ArticleCate{},
 		&model.ArticleCollect{}, &model.OfficialAccountReply{}, &model.RechargeOrder{},
+		&model.TenantSmsLog{}, &model.SmsLog{},
 	}
 	for _, m := range soft {
 		db.Model(m).Where("tenant_id = ? AND delete_time IS NULL", tid).Update("delete_time", now)
@@ -303,6 +306,7 @@ func cleanTenantScopedRows(tid uint) {
 		&model.TenantNoticeSetting{}, &model.TenantNoticeRecord{},
 		&model.TenantSystemMenu{}, &model.DecoratePage{}, &model.DecorateTabbar{},
 		&model.HotSearch{}, &model.UserAuth{}, &model.UserSession{}, &model.RefundRecord{},
+		&model.RefundLog{},
 	}
 	for _, m := range hard {
 		db.Where("tenant_id = ?", tid).Delete(m)
@@ -1096,6 +1100,20 @@ func tenantUserCount(t model.Tenant) int64 {
 func stripHost(s string) string {
 	re := regexp.MustCompile(`^https?://|/$`)
 	return re.ReplaceAllString(s, "")
+}
+
+// tenantAliasTaken mirrors PHP TenantValidate::checkDomainAlias / checkDomainAliasEdit.
+// ThinkPHP skips the custom rule when domain_alias is empty (no require).
+func tenantAliasTaken(alias string, excludeID uint) bool {
+	if alias == "" || bootstrap.DB == nil {
+		return false
+	}
+	q := bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", alias)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	var row model.Tenant
+	return q.First(&row).Error == nil
 }
 
 func rootDomain(c *gin.Context) string {

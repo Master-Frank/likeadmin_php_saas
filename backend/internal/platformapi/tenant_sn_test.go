@@ -39,3 +39,12 @@ func TestCleanTenantScopedRowsSkipsZero(t *testing.T) {
 	cleanTenantScopedRows(0)
 	expireTenantAdmins(model.Tenant{})
 }
+
+func TestTenantAliasTakenSkipsEmpty(t *testing.T) {
+	if tenantAliasTaken("", 0) {
+		t.Fatal("empty alias must skip uniqueness like PHP TenantValidate")
+	}
+	if tenantAliasTaken("", 7) {
+		t.Fatal("empty alias with exclude must still skip")
+	}
+}
