@@ -1138,6 +1138,14 @@ print(json.dumps(data, ensure_ascii=False))
     echo "  go_oa=${go_oa:0:200}"
     fail=$((fail + 1))
   fi
+  php_oaabc="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":"abc"}')"
+  go_oaabc="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":"abc"}')"
+  echo "oa_edit_idabc php_msg=$(jget msg <<<"$php_oaabc") go_msg=$(jget msg <<<"$go_oaabc")"
+  if [[ "$(jget msg <<<"$php_oaabc")" != "$(jget msg <<<"$go_oaabc")" ]]; then
+    echo "  php_oaabc=${php_oaabc:0:200}"
+    echo "  go_oaabc=${go_oaabc:0:200}"
+    fail=$((fail + 1))
+  fi
   oaname="pairoa$(date +%s)"
   oa_body="{\"reply_type\":2,\"name\":\"$oaname\",\"content_type\":1,\"content\":\"hi\",\"status\":0,\"keyword\":\"$oaname\",\"matching_type\":1,\"sort\":0,\"reply_num\":1}"
   php_oa2="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$oa_body")"
@@ -4022,6 +4030,38 @@ print(",".join(sorted(ls[0])) if ls else "")
     echo "  go_fm0=${go_fm0:0:200}"
     fail=$((fail + 1))
   fi
+  php_fmc="$(curl -sS -X POST "$PHP/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":"abc","ids":[1]}')"
+  go_fmc="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":"abc","ids":[1]}')"
+  echo "file_move_cidabc php_msg=$(jget msg <<<"$php_fmc") go_msg=$(jget msg <<<"$go_fmc")"
+  if [[ "$(jget msg <<<"$php_fmc")" != "$(jget msg <<<"$go_fmc")" ]]; then
+    echo "  php_fmc=${php_fmc:0:200}"
+    echo "  go_fmc=${go_fmc:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_fms="$(curl -sS -X POST "$PHP/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":0,"ids":"1"}')"
+  go_fms="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":0,"ids":"1"}')"
+  echo "file_move_idsstr php_msg=$(jget msg <<<"$php_fms") go_msg=$(jget msg <<<"$go_fms")"
+  if [[ "$(jget msg <<<"$php_fms")" != "$(jget msg <<<"$go_fms")" ]]; then
+    echo "  php_fms=${php_fms:0:200}"
+    echo "  go_fms=${go_fms:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_fra="$(curl -sS -X POST "$PHP/platformapi/file/rename" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":"abc","name":"x"}')"
+  go_fra="$(curl -sS -X POST "$GO/platformapi/file/rename" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":"abc","name":"x"}')"
+  echo "file_rename_idabc php_msg=$(jget msg <<<"$php_fra") go_msg=$(jget msg <<<"$go_fra")"
+  if [[ "$(jget msg <<<"$php_fra")" != "$(jget msg <<<"$go_fra")" ]]; then
+    echo "  php_fra=${php_fra:0:200}"
+    echo "  go_fra=${go_fra:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_fpid="$(curl -sS -X POST "$PHP/platformapi/file/addCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":"abc","name":"x"}')"
+  go_fpid="$(curl -sS -X POST "$GO/platformapi/file/addCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":"abc","name":"x"}')"
+  echo "file_addcate_pidabc php_msg=$(jget msg <<<"$php_fpid") go_msg=$(jget msg <<<"$go_fpid")"
+  if [[ "$(jget msg <<<"$php_fpid")" != "$(jget msg <<<"$go_fpid")" ]]; then
+    echo "  php_fpid=${php_fpid:0:200}"
+    echo "  go_fpid=${go_fpid:0:200}"
+    fail=$((fail + 1))
+  fi
   php_dap0="$(curl -sS -X POST "$PHP/platformapi/dept.dept/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"pid":0}')"
   go_dap0="$(curl -sS -X POST "$GO/platformapi/dept.dept/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"pid":0}')"
   echo "dept_add_pid0 php_msg=$(jget msg <<<"$php_dap0") go_msg=$(jget msg <<<"$go_dap0")"
@@ -4088,6 +4128,14 @@ print(first_id(ls))')"
     if [[ "$(jget msg <<<"$php_ms")" != "$(jget msg <<<"$go_ms")" ]]; then
       echo "  php_ms=${php_ms:0:200}"
       echo "  go_ms=${go_ms:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_msb="$(curl -sS -X POST "$PHP/platformapi/auth.menu/updateStatus" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$mid,\"is_disable\":2}")"
+    go_msb="$(curl -sS -X POST "$GO/platformapi/auth.menu/updateStatus" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$mid,\"is_disable\":2}")"
+    echo "menu_update_badstatus php_msg=$(jget msg <<<"$php_msb") go_msg=$(jget msg <<<"$go_msb")"
+    if [[ "$(jget msg <<<"$php_msb")" != "$(jget msg <<<"$go_msb")" ]]; then
+      echo "  php_msb=${php_msb:0:200}"
+      echo "  go_msb=${go_msb:0:200}"
       fail=$((fail + 1))
     fi
   fi

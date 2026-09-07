@@ -748,8 +748,8 @@ func OAReplyDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
-		response.Fail(c, "参数缺失")
+	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	tid, ok := requireTenant(c)
@@ -762,8 +762,8 @@ func OAReplyDelete(c *gin.Context) {
 }
 
 func OAReplyDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
-		response.Fail(c, "参数缺失")
+	if msg := util.OAReplyIDCheck(httpx.Query(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	row, ok := oaReplyByID(c, httpx.QueryUint(c, "id"))
@@ -798,8 +798,8 @@ func OAReplyStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
-		response.Fail(c, "参数缺失")
+	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	row, ok := oaReplyByID(c, httpx.BodyUint(c, "id"))
@@ -821,8 +821,8 @@ func OAReplySort(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
-		response.Fail(c, "参数缺失")
+	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if msg := util.OAReplySortCheck(httpx.Body(c)); msg != "" {

@@ -489,7 +489,7 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if httpx.BodyStr(c, "title") == "" {
 		return "标题不能为空"
 	}
-	if len(httpx.BodyStr(c, "title")) > 255 {
+	if len([]rune(httpx.BodyStr(c, "title"))) > 255 {
 		return "标题长度须在1-255位字符"
 	}
 	if httpx.BodyUint(c, "cid") == 0 {

@@ -106,6 +106,24 @@ func TestFileMoveCheck(t *testing.T) {
 	if FileMoveCheck(map[string]any{"ids": []any{1}, "cid": 0}, []uint{1}) != "" {
 		t.Fatal("cid 0 should be allowed")
 	}
+	if FileMoveCheck(map[string]any{"cid": "abc", "ids": []any{1}}, []uint{1}) != "cid必须是数字" {
+		t.Fatal(FileMoveCheck(map[string]any{"cid": "abc", "ids": []any{1}}, []uint{1}))
+	}
+	if FileMoveCheck(map[string]any{"cid": 0, "ids": "1"}, nil) != "ids必须是数组" {
+		t.Fatal(FileMoveCheck(map[string]any{"cid": 0, "ids": "1"}, nil))
+	}
+}
+
+func TestFileIDCheck(t *testing.T) {
+	if FileIDCheck(map[string]any{}) != "缺少id参数" {
+		t.Fatal(FileIDCheck(map[string]any{}))
+	}
+	if FileIDCheck(map[string]any{"id": "abc"}) != "id必须是数字" {
+		t.Fatal(FileIDCheck(map[string]any{"id": "abc"}))
+	}
+	if FileIDCheck(map[string]any{"id": 0}) != "" {
+		t.Fatal("id 0 is a number")
+	}
 }
 
 func TestOAReplyWriteCheck(t *testing.T) {
@@ -125,6 +143,14 @@ func TestOAReplyWriteCheck(t *testing.T) {
 	}
 	p["sort"] = 0
 	if OAReplyWriteCheck(p, true) != "参数缺失" {
+		t.Fatal(OAReplyWriteCheck(p, true))
+	}
+	p["id"] = "abc"
+	if OAReplyWriteCheck(p, true) != "参数格式错误" {
+		t.Fatal(OAReplyWriteCheck(p, true))
+	}
+	p["id"] = 0
+	if OAReplyWriteCheck(p, true) != "" {
 		t.Fatal(OAReplyWriteCheck(p, true))
 	}
 	p["id"] = 1
@@ -228,8 +254,8 @@ func TestRechargeAPICheck(t *testing.T) {
 	if RechargeAPICheck(map[string]any{"money": 1}, 0, 0) != "充值功能已关闭" {
 		t.Fatal("closed")
 	}
-	if RechargeAPICheck(map[string]any{"money": 1}, 1, 10) != "最低充值金额10.00元" {
-		t.Fatal("min")
+	if RechargeAPICheck(map[string]any{"money": 1}, 1, 10) != "最低充值金额10元" {
+		t.Fatal(RechargeAPICheck(map[string]any{"money": 1}, 1, 10))
 	}
 }
 

@@ -113,26 +113,44 @@ func FileNameCheck(name string) string {
 }
 
 func FileMoveCheck(p map[string]any, ids []uint) string {
-	// PHP FileValidate $rule lists cid before ids.
+	// PHP FileValidate $rule lists cid before ids: require|number then require|array.
 	if _, ok := p["cid"]; !ok {
 		return "缺少cid参数"
 	}
-	if _, ok := p["ids"]; !ok || len(ids) == 0 {
+	if !isWholeNumber(p["cid"]) {
+		return "cid必须是数字"
+	}
+	if _, ok := p["ids"]; !ok {
+		return "缺少ids参数"
+	}
+	if !isArrayValue(p["ids"]) {
+		return "ids必须是数组"
+	}
+	if len(ids) == 0 {
 		return "缺少ids参数"
 	}
 	return ""
 }
 
 func FileDeleteCheck(p map[string]any, ids []uint) string {
-	if _, ok := p["ids"]; !ok || len(ids) == 0 {
+	if _, ok := p["ids"]; !ok {
+		return "缺少ids参数"
+	}
+	if !isArrayValue(p["ids"]) {
+		return "ids必须是数组"
+	}
+	if len(ids) == 0 {
 		return "缺少ids参数"
 	}
 	return ""
 }
 
 func FileIDCheck(p map[string]any) string {
-	if _, ok := p["id"]; !ok || ToInt(p["id"]) == 0 {
+	if _, ok := p["id"]; !ok {
 		return "缺少id参数"
+	}
+	if !isWholeNumber(p["id"]) {
+		return "id必须是数字"
 	}
 	return ""
 }
@@ -147,6 +165,9 @@ func FileAddCateCheck(p map[string]any) string {
 	}
 	if _, ok := p["pid"]; !ok {
 		return "缺少pid参数"
+	}
+	if !isWholeNumber(p["pid"]) {
+		return "pid必须是数字"
 	}
 	return FileNameCheck(ToString(p["name"]))
 }
@@ -193,10 +214,20 @@ func FileRenameCheck(p map[string]any) string {
 	return FileEditCateCheck(p)
 }
 
+func OAReplyIDCheck(p map[string]any) string {
+	if !phpRequired(p, "id") {
+		return "参数缺失"
+	}
+	if !isWholeNumber(p["id"]) {
+		return "参数格式错误"
+	}
+	return ""
+}
+
 func OAReplyWriteCheck(p map[string]any, needID bool) string {
 	if needID {
-		if _, ok := p["id"]; !ok || ToInt(p["id"]) == 0 {
-			return "参数缺失"
+		if msg := OAReplyIDCheck(p); msg != "" {
+			return msg
 		}
 	}
 	if _, ok := p["reply_type"]; !ok {
@@ -345,6 +376,10 @@ func isWholeNumber(v any) bool {
 	default:
 		return false
 	}
+}
+
+func InZeroOne(v any) bool {
+	return inZeroOne(v)
 }
 
 func inZeroOne(v any) bool {
@@ -618,7 +653,7 @@ func RechargeAPICheck(p map[string]any, status int, minAmount float64) string {
 		return "充值功能已关闭"
 	}
 	if money < minAmount {
-		return "最低充值金额" + MoneyString(minAmount) + "元"
+		return "最低充值金额" + ToString(FormatAmount(minAmount)) + "元"
 	}
 	return ""
 }

@@ -474,6 +474,10 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "请选择菜单状态")
 		return
 	}
+	if !util.InZeroOne(httpx.BodyAny(c, "is_disable")) {
+		response.Fail(c, "菜单状态参数值错误")
+		return
+	}
 	var exist model.TenantSystemMenu
 	if scopeTID(tdb(c).Where("id = ?", httpx.BodyUint(c, "id")), c).First(&exist).Error != nil {
 		response.Fail(c, "菜单不存在")

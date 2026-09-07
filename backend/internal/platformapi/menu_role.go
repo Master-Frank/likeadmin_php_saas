@@ -160,6 +160,10 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "请选择菜单状态")
 		return
 	}
+	if !util.InZeroOne(httpx.BodyAny(c, "is_disable")) {
+		response.Fail(c, "菜单状态参数值错误")
+		return
+	}
 	id := httpx.BodyUint(c, "id")
 	var exist model.SystemMenu
 	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
