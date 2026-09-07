@@ -106,15 +106,36 @@ func Del(key string) {
 	mem.Delete(key)
 }
 
-// Flush clears Redis DB and the in-memory fallback, matching PHP Cache::clear().
+// Flush clears this app's Redis keys (prefix + *) and the in-memory fallback.
+// ThinkPHP Cache::clear() is process-wide; we keep the same logical wipe
+// without FlushDB so a shared Redis is not emptied for other prefixes.
 func Flush() {
-	if bootstrap.RDB != nil {
-		_ = bootstrap.RDB.FlushDB(ctx()).Err()
-	}
+	flushPrefixedRedis()
 	mem.Range(func(k, _ any) bool {
 		mem.Delete(k)
 		return true
 	})
+}
+
+func flushPrefixedRedis() {
+	if bootstrap.RDB == nil {
+		return
+	}
+	match := bootstrap.RedisKey("") + "*"
+	var cursor uint64
+	for {
+		keys, next, err := bootstrap.RDB.Scan(ctx(), cursor, match, 200).Result()
+		if err != nil {
+			break
+		}
+		if len(keys) > 0 {
+			_ = bootstrap.RDB.Del(ctx(), keys...).Err()
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
 }
 
 func DelPrefix(prefix string) {

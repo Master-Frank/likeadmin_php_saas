@@ -3,8 +3,10 @@ package sms
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/tenantdb"
@@ -105,9 +107,24 @@ func NoticeByScene(c *gin.Context, sceneID int, params map[string]string) error 
 	if c != nil {
 		tid = ctxutil.Get(c).TenantID
 	}
+	now := util.NowUnix()
+	content := formatContent(util.ToString(smsNotice["content"]), params)
+	var logID uint
+	if bootstrap.DB != nil {
+		logID = createSMSLog(c, sceneID, params["mobile"], params["code"], content, now)
+	}
 	addNoticeRecord(c, sceneID, params, tid)
-	if err := maybeGatewaySend(c, params["mobile"], sceneID, params["code"], 0); err != nil {
+	if params["mobile"] != "" && params["code"] != "" {
+		cache.Set(cacheKey(sceneID, params["mobile"]), params["code"], 5*time.Minute)
+	}
+	if err := maybeGatewaySend(c, params["mobile"], sceneID, params["code"], logID); err != nil {
+		if params["mobile"] != "" && params["code"] != "" {
+			cache.Del(cacheKey(sceneID, params["mobile"]))
+		}
 		return err
+	}
+	if logID > 0 {
+		updateSMSLog(c, logID, map[string]any{"send_status": 1}, "send_status = 0")
 	}
 	return nil
 }

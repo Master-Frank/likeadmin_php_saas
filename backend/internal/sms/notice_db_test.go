@@ -61,3 +61,36 @@ func TestNoticeBySceneUnknown(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestNoticeBySceneWritesSMSLog(t *testing.T) {
+	if !initNoticeDB(t) {
+		t.Skip("no database")
+	}
+	var setting model.NoticeSetting
+	if bootstrap.DB.Where("scene_id = ?", LoginCaptcha).First(&setting).Error != nil {
+		t.Skip("no platform login captcha scene")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	meta := ctxutil.Get(c)
+	meta.App = "platformapi"
+	meta.Source = ctxutil.SourcePlatform
+	mobile := "13800009991"
+	bootstrap.DB.Where("mobile = ? AND scene_id = ?", mobile, LoginCaptcha).Delete(&model.SmsLog{})
+	err := NoticeByScene(c, LoginCaptcha, map[string]string{"mobile": mobile, "code": "2468"})
+	var row model.SmsLog
+	if bootstrap.DB.Where("mobile = ? AND scene_id = ?", mobile, LoginCaptcha).
+		Order("id desc").First(&row).Error != nil {
+		t.Fatalf("NoticeByScene should write sms_log before gateway: %v", err)
+	}
+	if row.Code != "2468" {
+		t.Fatalf("code=%s", row.Code)
+	}
+	if err != nil && row.SendStatus != 2 {
+		t.Fatalf("gateway fail send_status=%d want 2 err=%v", row.SendStatus, err)
+	}
+	if err == nil && row.SendStatus != 1 {
+		t.Fatalf("gateway ok send_status=%d want 1", row.SendStatus)
+	}
+	bootstrap.DB.Delete(&row)
+}

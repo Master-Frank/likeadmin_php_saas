@@ -1,7 +1,6 @@
 package cron
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 	paycfg "likeadmin/backend/internal/pay"
@@ -127,11 +127,7 @@ func normalizeCommand(raw string) string {
 }
 
 func flushCache() string {
-	if bootstrap.RDB != nil {
-		if err := bootstrap.RDB.FlushDB(context.Background()).Err(); err != nil {
-			return err.Error()
-		}
-	}
+	cache.Flush()
 	return ""
 }
 
