@@ -150,10 +150,10 @@ func DecorateTabbarSave(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if style := httpx.Any(c, "style"); style != nil {
+	if style := httpx.BodyAny(c, "style"); style != nil {
 		cfgsvc.Set(c, "tabbar", "style", style)
 	}
-	list := httpx.Any(c, "list")
+	list := httpx.BodyAny(c, "list")
 	arr, _ := list.([]any)
 	if arr == nil {
 		arr = httpx.List(c)
@@ -848,7 +848,7 @@ func OAMenuDetail(c *gin.Context) {
 func OAMenuSave(c *gin.Context) {
 	menu := httpx.List(c)
 	if menu == nil {
-		if v := httpx.Any(c, "menu"); v != nil {
+		if v := httpx.BodyAny(c, "menu"); v != nil {
 			if arr, ok := v.([]any); ok {
 				menu = arr
 			}
@@ -869,7 +869,7 @@ func OAMenuSave(c *gin.Context) {
 func OAMenuSaveAndPublish(c *gin.Context) {
 	menu := httpx.List(c)
 	if menu == nil {
-		if v := httpx.Any(c, "menu"); v != nil {
+		if v := httpx.BodyAny(c, "menu"); v != nil {
 			if arr, ok := v.([]any); ok {
 				menu = arr
 			}
@@ -971,9 +971,9 @@ func TenantNoticeDetail(c *gin.Context) {
 }
 
 func TenantNoticeSet(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	_, exists := tenantNoticeByID(c, id)
-	updates, err := biz.ApplyNoticeSet(exists, id, httpx.Any(c, "template"))
+	updates, err := biz.ApplyNoticeSet(exists, id, httpx.BodyAny(c, "template"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return

@@ -1229,6 +1229,14 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   if [[ "$(jget msg <<<"$php_cbad")" != "$(jget msg <<<"$go_cbad")" ]]; then
     fail=$((fail + 1))
   fi
+  php_cag="$(curl -sS "$PHP/platformapi/crontab.crontab/add?name=hack&type=1&command=x&status=2&expression=0+*+*+*+*" -H "token: $TOKEN")"
+  go_cag="$(curl -sS "$GO/platformapi/crontab.crontab/add?name=hack&type=1&command=x&status=2&expression=0+*+*+*+*" -H "token: $TOKEN")"
+  echo "crontab_add_get_method php_msg=$(jget msg <<<"$php_cag") go_msg=$(jget msg <<<"$go_cag")"
+  if [[ "$(jget msg <<<"$php_cag")" != "$(jget msg <<<"$go_cag")" ]]; then
+    echo "  php_cag=${php_cag:0:200}"
+    echo "  go_cag=${go_cag:0:200}"
+    fail=$((fail + 1))
+  fi
   cname="paircron$(date +%s)"
   php_ca="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$cname\",\"type\":1,\"command\":\"crontab cache\",\"status\":2,\"expression\":\"0 * * * *\",\"params\":\"\",\"remark\":\"pair\"}")"
   echo "crontab_add php_code=$(jcode <<<"$php_ca")"
@@ -1910,6 +1918,30 @@ print(json.dumps({
   go_da="$(curl -sS -X POST "$GO/tenantapi/dept.dept/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "dept_add_bad php_msg=$(jget msg <<<"$php_da") go_msg=$(jget msg <<<"$go_da")"
   if [[ "$(jget msg <<<"$php_da")" != "$(jget msg <<<"$go_da")" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_daq="$(curl -sS -X POST "$PHP/tenantapi/dept.dept/add?name=hack&pid=1&status=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_daq="$(curl -sS -X POST "$GO/tenantapi/dept.dept/add?name=hack&pid=1&status=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "dept_add_query_ignored php_msg=$(jget msg <<<"$php_daq") go_msg=$(jget msg <<<"$go_daq")"
+  if [[ "$(jget msg <<<"$php_daq")" != "$(jget msg <<<"$go_daq")" ]]; then
+    echo "  php_daq=${php_daq:0:200}"
+    echo "  go_daq=${go_daq:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_dag="$(curl -sS "$PHP/tenantapi/dept.dept/add?name=hack&pid=1&status=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_dag="$(curl -sS "$GO/tenantapi/dept.dept/add?name=hack&pid=1&status=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "dept_add_get_method php_msg=$(jget msg <<<"$php_dag") go_msg=$(jget msg <<<"$go_dag")"
+  if [[ "$(jget msg <<<"$php_dag")" != "$(jget msg <<<"$go_dag")" ]]; then
+    echo "  php_dag=${php_dag:0:200}"
+    echo "  go_dag=${go_dag:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_fnq="$(curl -sS -X POST "$PHP/tenantapi/file.file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_fnq="$(curl -sS -X POST "$GO/tenantapi/file.file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "file_rename_query_ignored php_msg=$(jget msg <<<"$php_fnq") go_msg=$(jget msg <<<"$go_fnq")"
+  if [[ "$(jget msg <<<"$php_fnq")" != "$(jget msg <<<"$go_fnq")" ]]; then
+    echo "  php_fnq=${php_fnq:0:200}"
+    echo "  go_fnq=${go_fnq:0:200}"
     fail=$((fail + 1))
   fi
   php_ja="$(curl -sS -X POST "$PHP/tenantapi/dept.jobs/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"

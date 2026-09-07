@@ -47,8 +47,11 @@ func FileLists(c *gin.Context) {
 }
 
 func FileMove(c *gin.Context) {
-	p := httpx.Params(c)
-	ids := httpx.Uints(c, "ids")
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
+	ids := httpx.BodyUints(c, "ids")
 	if msg := util.FileMoveCheck(p, ids); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -56,27 +59,33 @@ func FileMove(c *gin.Context) {
 	// PHP FileLogic::move updates by id list and does not check file/cate existence.
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(map[string]any{
-		"cid": httpx.Uint(c, "cid"), "update_time": now,
+		"cid": httpx.BodyUint(c, "cid"), "update_time": now,
 	})
 	response.SuccessNotice(c, "移动成功")
 }
 
 func FileRename(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.FileRenameCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "update_time": now,
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"name": httpx.BodyStr(c, "name"), "update_time": now,
 	})
 	response.SuccessNotice(c, "重命名成功")
 }
 
 func FileDelete(c *gin.Context) {
-	p := httpx.Params(c)
-	ids := httpx.Uints(c, "ids")
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
+	ids := httpx.BodyUints(c, "ids")
 	if msg := util.FileDeleteCheck(p, ids); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -115,7 +124,10 @@ func FileListCate(c *gin.Context) {
 }
 
 func FileAddCate(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.FileAddCateCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -125,7 +137,7 @@ func FileAddCate(c *gin.Context) {
 		return
 	}
 	row := model.TenantFileCate{
-		Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"),
+		Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyStr(c, "name"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&row)
@@ -133,24 +145,30 @@ func FileAddCate(c *gin.Context) {
 }
 
 func FileEditCate(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.FileEditCateCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "update_time": util.NowUnix(),
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"name": httpx.BodyStr(c, "name"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func FileDelCate(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.FileIDCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	// PHP FileLogic::delCate updates by id with no existence check.
 	ids := filesvc.CateIDsInclusive(tdb(c), &model.TenantFileCate{}, id, tenantDB(c))
 	var files []model.TenantFile

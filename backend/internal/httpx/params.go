@@ -157,7 +157,7 @@ func BodyUints(c *gin.Context, key string) []uint {
 }
 
 func List(c *gin.Context) []any {
-	v := Params(c)["_list"]
+	v := Body(c)["_list"]
 	if arr, ok := v.([]any); ok {
 		return arr
 	}

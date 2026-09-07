@@ -36,18 +36,21 @@ func ChannelOAGet(c *gin.Context) {
 }
 
 func ChannelOASet(c *gin.Context) {
-	if msg := util.ChannelOASetCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.ChannelOASetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "oa_setting", "name", httpx.Str(c, "name"))
-	cfgsvc.Set(c, "oa_setting", "original_id", httpx.Str(c, "original_id"))
-	cfgsvc.Set(c, "oa_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
-	cfgsvc.Set(c, "oa_setting", "app_id", httpx.Str(c, "app_id"))
-	cfgsvc.Set(c, "oa_setting", "app_secret", httpx.Str(c, "app_secret"))
-	cfgsvc.Set(c, "oa_setting", "token", httpx.Str(c, "token"))
-	cfgsvc.Set(c, "oa_setting", "encoding_aes_key", httpx.Str(c, "encoding_aes_key"))
-	cfgsvc.Set(c, "oa_setting", "encryption_type", httpx.Int(c, "encryption_type"))
+	cfgsvc.Set(c, "oa_setting", "name", httpx.BodyStr(c, "name"))
+	cfgsvc.Set(c, "oa_setting", "original_id", httpx.BodyStr(c, "original_id"))
+	cfgsvc.Set(c, "oa_setting", "qr_code", filesvc.SetFileURL(c, httpx.BodyStr(c, "qr_code")))
+	cfgsvc.Set(c, "oa_setting", "app_id", httpx.BodyStr(c, "app_id"))
+	cfgsvc.Set(c, "oa_setting", "app_secret", httpx.BodyStr(c, "app_secret"))
+	cfgsvc.Set(c, "oa_setting", "token", httpx.BodyStr(c, "token"))
+	cfgsvc.Set(c, "oa_setting", "encoding_aes_key", httpx.BodyStr(c, "encoding_aes_key"))
+	cfgsvc.Set(c, "oa_setting", "encryption_type", httpx.BodyInt(c, "encryption_type"))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -74,15 +77,18 @@ func ChannelMnpGet(c *gin.Context) {
 }
 
 func ChannelMnpSet(c *gin.Context) {
-	if msg := util.ChannelMnpSetCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.ChannelMnpSetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "mnp_setting", "name", httpx.Str(c, "name"))
-	cfgsvc.Set(c, "mnp_setting", "original_id", httpx.Str(c, "original_id"))
-	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.Str(c, "qr_code")))
-	cfgsvc.Set(c, "mnp_setting", "app_id", httpx.Str(c, "app_id"))
-	cfgsvc.Set(c, "mnp_setting", "app_secret", httpx.Str(c, "app_secret"))
+	cfgsvc.Set(c, "mnp_setting", "name", httpx.BodyStr(c, "name"))
+	cfgsvc.Set(c, "mnp_setting", "original_id", httpx.BodyStr(c, "original_id"))
+	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.BodyStr(c, "qr_code")))
+	cfgsvc.Set(c, "mnp_setting", "app_id", httpx.BodyStr(c, "app_id"))
+	cfgsvc.Set(c, "mnp_setting", "app_secret", httpx.BodyStr(c, "app_secret"))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -94,12 +100,15 @@ func ChannelOpenGet(c *gin.Context) {
 }
 
 func ChannelOpenSet(c *gin.Context) {
-	if msg := util.ChannelOpenSetCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.ChannelOpenSetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "open_platform", "app_id", httpx.Str(c, "app_id"))
-	cfgsvc.Set(c, "open_platform", "app_secret", httpx.Str(c, "app_secret"))
+	cfgsvc.Set(c, "open_platform", "app_id", httpx.BodyStr(c, "app_id"))
+	cfgsvc.Set(c, "open_platform", "app_secret", httpx.BodyStr(c, "app_secret"))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -113,13 +122,16 @@ func ChannelH5Get(c *gin.Context) {
 }
 
 func ChannelH5Set(c *gin.Context) {
-	if msg := util.ChannelH5SetCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.ChannelH5SetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "web_page", "status", httpx.Int(c, "status"))
-	cfgsvc.Set(c, "web_page", "page_status", httpx.Int(c, "page_status"))
-	cfgsvc.Set(c, "web_page", "page_url", httpx.Str(c, "page_url"))
+	cfgsvc.Set(c, "web_page", "status", httpx.BodyInt(c, "status"))
+	cfgsvc.Set(c, "web_page", "page_status", httpx.BodyInt(c, "page_status"))
+	cfgsvc.Set(c, "web_page", "page_url", httpx.BodyStr(c, "page_url"))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -132,9 +144,9 @@ func ChannelAppGet(c *gin.Context) {
 }
 
 func ChannelAppSet(c *gin.Context) {
-	cfgsvc.Set(c, "app", "ios_download_url", httpx.Str(c, "ios_download_url"))
-	cfgsvc.Set(c, "app", "android_download_url", httpx.Str(c, "android_download_url"))
-	cfgsvc.Set(c, "app", "download_title", httpx.Str(c, "download_title"))
+	cfgsvc.Set(c, "app", "ios_download_url", httpx.BodyStr(c, "ios_download_url"))
+	cfgsvc.Set(c, "app", "android_download_url", httpx.BodyStr(c, "android_download_url"))
+	cfgsvc.Set(c, "app", "download_title", httpx.BodyStr(c, "download_title"))
 	response.SuccessNotice(c, "操作成功")
 }
 

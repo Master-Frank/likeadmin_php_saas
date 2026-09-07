@@ -406,35 +406,38 @@ func TenantAdminDetail(c *gin.Context) {
 }
 
 func TenantAdminAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.TenantAdminAddCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	tid := httpx.Uint(c, "tenant_id")
+	tid := httpx.BodyUint(c, "tenant_id")
 	var tenant model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
 		response.Fail(c, "对应租户账号不存在")
 		return
 	}
 	adb := tenantAdminDB(tenant)
-	account := httpx.Str(c, "account")
+	account := httpx.BodyStr(c, "account")
 	var exist model.TenantAdmin
 	if adb.Where("account = ? AND tenant_id = ? AND delete_time IS NULL", account, tid).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
-	avatar := filesvc.SetFileURL(c, httpx.Str(c, "avatar"))
+	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
 	admin := model.TenantAdmin{
-		TenantID: tid, Account: account, Name: httpx.Str(c, "name"),
-		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
-		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
+		TenantID: tid, Account: account, Name: httpx.BodyStr(c, "name"),
+		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
+		Disable:  httpx.BodyInt(c, "disable"), MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
-	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAdminLinksCheck(adb, tid, roles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -454,14 +457,17 @@ func TenantAdminAdd(c *gin.Context) {
 }
 
 func TenantAdminEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.TenantAdminEditCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var tenant model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "tenant_id")).First(&tenant).Error != nil {
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "tenant_id")).First(&tenant).Error != nil {
 		response.Fail(c, "对应租户账号不存在")
 		return
 	}
@@ -475,11 +481,11 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
-	if a.Root == 1 && httpx.Int(c, "disable") == 1 {
+	if a.Root == 1 && httpx.BodyInt(c, "disable") == 1 {
 		response.Fail(c, "超级管理员不允许被禁用")
 		return
 	}
-	if account := httpx.Str(c, "account"); account != "" {
+	if account := httpx.BodyStr(c, "account"); account != "" {
 		var taken model.TenantAdmin
 		tq := adb.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id)
 		if tenant.ID > 0 {
@@ -492,24 +498,24 @@ func TenantAdminEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	data := map[string]any{
-		"name":             httpx.Str(c, "name"),
-		"account":          httpx.Str(c, "account"),
-		"disable":          httpx.Int(c, "disable"),
-		"multipoint_login": httpx.Int(c, "multipoint_login"),
+		"name":             httpx.BodyStr(c, "name"),
+		"account":          httpx.BodyStr(c, "account"),
+		"disable":          httpx.BodyInt(c, "disable"),
+		"multipoint_login": httpx.BodyInt(c, "multipoint_login"),
 		"update_time":      now,
 	}
-	if avatar := httpx.Str(c, "avatar"); avatar != "" {
+	if avatar := httpx.BodyStr(c, "avatar"); avatar != "" {
 		data["avatar"] = filesvc.SetFileURL(c, avatar)
 	} else if _, ok := p["avatar"]; ok {
 		data["avatar"] = ""
 	}
-	if pwd := httpx.Str(c, "password"); pwd != "" {
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
 	adb.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
-	newRoles := httpx.Uints(c, "role_id")
-	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	newRoles := httpx.BodyUints(c, "role_id")
+	depts, jobs := httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAdminLinksCheck(adb, tenant.ID, newRoles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -527,7 +533,7 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	if httpx.Int(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
+	if httpx.BodyInt(c, "disable") == 1 || tenantAdminRolesChanged(oldRoles, newRoles) {
 		expireTenantAdminTokens(adb, id)
 	}
 	cache.ClearAdminAuthCache(id)
@@ -535,12 +541,15 @@ func TenantAdminEdit(c *gin.Context) {
 }
 
 func TenantAdminDelete(c *gin.Context) {
-	if !phpRequiredParam(httpx.Params(c), "id") {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !phpRequiredParam(httpx.Body(c), "id") {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	id := httpx.Uint(c, "id")
-	adb, a, ok := resolveTenantAdmin(httpx.Uint(c, "tenant_id"), id)
+	id := httpx.BodyUint(c, "id")
+	adb, a, ok := resolveTenantAdmin(httpx.BodyUint(c, "tenant_id"), id)
 	if !ok {
 		response.Fail(c, "租户管理员不存在")
 		return
@@ -785,11 +794,11 @@ func TenantUserDetail(c *gin.Context) {
 }
 
 func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
-	pwd := httpx.Str(c, "password")
+	pwd := httpx.BodyStr(c, "password")
 	if pwd == "" {
 		pwd = config.C.Project.DefaultPassword
 	}
-	account := httpx.Str(c, "account")
+	account := httpx.BodyStr(c, "account")
 	if account == "" {
 		account = tenant.SN
 	}
@@ -825,11 +834,11 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		return err
 	}
 	sdb := tenantdb.UseSN(tenant.SN)
-	pwd := httpx.Str(c, "password")
+	pwd := httpx.BodyStr(c, "password")
 	if pwd == "" {
 		pwd = config.C.Project.DefaultPassword
 	}
-	account := httpx.Str(c, "account")
+	account := httpx.BodyStr(c, "account")
 	if account == "" {
 		account = "admin"
 	}

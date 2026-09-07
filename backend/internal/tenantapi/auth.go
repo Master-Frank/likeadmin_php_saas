@@ -84,13 +84,16 @@ func tenantAdminListItem(c *gin.Context, a model.TenantAdmin) map[string]any {
 }
 
 func AdminAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.AuthAdminAddCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
+	account := httpx.BodyStr(c, "account")
+	name := httpx.BodyStr(c, "name")
 	if tenantAdminAccountTaken(c, account, 0) {
 		response.Fail(c, "账号已存在")
 		return
@@ -99,21 +102,21 @@ func AdminAdd(c *gin.Context) {
 		response.Fail(c, "名称已存在")
 		return
 	}
-	avatar := filesvc.SetFileURL(c, httpx.Str(c, "avatar"))
+	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
 	disable := 0
 	if _, ok := p["disable"]; ok {
-		disable = httpx.Int(c, "disable")
+		disable = httpx.BodyInt(c, "disable")
 	}
 	admin := model.TenantAdmin{
 		TenantID: tenantDB(c), Name: name, Account: account,
-		Password: util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification),
-		Disable:  disable, MultipointLogin: httpx.Int(c, "multipoint_login"),
+		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
+		Disable:  disable, MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
-	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAuthLinksCheck(c, roles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -132,12 +135,15 @@ func AdminAdd(c *gin.Context) {
 }
 
 func AdminEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if !authAdminIDPresent(p) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	admin, ok := tenantAdminByID(c, id)
 	if !ok {
 		response.Fail(c, "管理员不存在")
@@ -147,8 +153,8 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
+	account := httpx.BodyStr(c, "account")
+	name := httpx.BodyStr(c, "name")
 	if tenantAdminAccountTaken(c, account, id) {
 		response.Fail(c, "账号已存在")
 		return
@@ -158,24 +164,24 @@ func AdminEdit(c *gin.Context) {
 		return
 	}
 	avatar := ""
-	if v := httpx.Str(c, "avatar"); v != "" {
+	if v := httpx.BodyStr(c, "avatar"); v != "" {
 		avatar = filesvc.SetFileURL(c, v)
 	}
 	data := map[string]any{
 		"name":             name,
 		"account":          account,
-		"disable":          httpx.Int(c, "disable"),
-		"multipoint_login": httpx.Int(c, "multipoint_login"),
+		"disable":          httpx.BodyInt(c, "disable"),
+		"multipoint_login": httpx.BodyInt(c, "multipoint_login"),
 		"avatar":           avatar,
 		"update_time":      util.NowUnix(),
 	}
-	if pwd := httpx.Str(c, "password"); pwd != "" {
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
 	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
-	newRoles := httpx.Uints(c, "role_id")
-	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	newRoles := httpx.BodyUints(c, "role_id")
+	depts, jobs := httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := tenantAuthLinksCheck(c, newRoles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -199,7 +205,7 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
+	if httpx.BodyInt(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireTenantAuthTokens(c, id)
 	}
 	cache.ClearAdminAuthCache(id)
@@ -207,7 +213,10 @@ func AdminEdit(c *gin.Context) {
 }
 
 func AdminEditSelf(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.AdminEditSelfCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -219,10 +228,10 @@ func AdminEditSelf(c *gin.Context) {
 		return
 	}
 	data := map[string]any{
-		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")), "update_time": util.NowUnix(),
+		"name": httpx.BodyStr(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")), "update_time": util.NowUnix(),
 	}
-	if pwd := httpx.Str(c, "password"); pwd != "" {
-		old := httpx.Str(c, "password_old")
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+		old := httpx.BodyStr(c, "password_old")
 		if admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
 			response.Fail(c, "当前密码错误")
 			return
@@ -230,7 +239,7 @@ func AdminEditSelf(c *gin.Context) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	tdb(c).Model(&admin).Updates(data)
-	if pwd := httpx.Str(c, "password"); pwd != "" {
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
 		expireTenantAuthTokens(c, id)
 	}
 	cache.ClearAdminAuthCache(id)
@@ -238,12 +247,15 @@ func AdminEditSelf(c *gin.Context) {
 }
 
 func AdminDelete(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if !authAdminIDPresent(p) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	a, ok := tenantAdminByID(c, id)
 	if !ok {
 		response.Fail(c, "管理员不存在")
@@ -343,16 +355,19 @@ func MenuAll(c *gin.Context) {
 }
 
 func MenuAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.MenuWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if msg := tenantMenuUniqueName(c, 0, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+	if msg := tenantMenuUniqueName(c, 0, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if !tenantMenuParentOK(c, httpx.Uint(c, "pid")) {
+	if !tenantMenuParentOK(c, httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
@@ -365,21 +380,24 @@ func MenuAdd(c *gin.Context) {
 }
 
 func MenuEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.MenuWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
-	if id == httpx.Uint(c, "pid") {
+	id := httpx.BodyUint(c, "id")
+	if id == httpx.BodyUint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
 		return
 	}
-	if !tenantMenuParentOK(c, httpx.Uint(c, "pid")) {
+	if !tenantMenuParentOK(c, httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
-	if msg := tenantMenuUniqueName(c, id, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+	if msg := tenantMenuUniqueName(c, id, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -400,7 +418,10 @@ func MenuEdit(c *gin.Context) {
 }
 
 func MenuDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -442,16 +463,19 @@ func MenuDetail(c *gin.Context) {
 }
 
 func MenuUpdateStatus(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var exist model.TenantSystemMenu
-	if scopeTID(tdb(c).Where("id = ?", httpx.Uint(c, "id")), c).First(&exist).Error != nil {
+	if scopeTID(tdb(c).Where("id = ?", httpx.BodyUint(c, "id")), c).First(&exist).Error != nil {
 		response.Fail(c, "菜单不存在")
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_disable", httpx.Int(c, "is_disable"))
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_disable", httpx.BodyInt(c, "is_disable"))
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
@@ -486,21 +510,24 @@ func RoleLists(c *gin.Context) {
 }
 
 func RoleAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.RoleWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if tenantRoleNameTaken(c, 0, httpx.Str(c, "name")) {
+	if tenantRoleNameTaken(c, 0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
-	menuIDs := httpx.Uints(c, "menu_id")
+	menuIDs := httpx.BodyUints(c, "menu_id")
 	if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
 		response.Fail(c, "菜单不存在")
 		return
 	}
-	r := model.TenantSystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), TenantID: tenantDB(c), CreateTime: util.NowUnix()}
+	r := model.TenantSystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: util.NowUnix()}
 	tdb(c).Create(&r)
 	for _, id := range menuIDs {
 		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
@@ -509,25 +536,28 @@ func RoleAdd(c *gin.Context) {
 }
 
 func RoleEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.RoleWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var exist model.TenantSystemRole
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
-	if tenantRoleNameTaken(c, id, httpx.Str(c, "name")) {
+	if tenantRoleNameTaken(c, id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"),
+		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
 	})
-	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
 		if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
 			response.Fail(c, "菜单不存在")
 			return
@@ -542,7 +572,10 @@ func RoleEdit(c *gin.Context) {
 }
 
 func RoleDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "请选择角色")
 		return
@@ -826,11 +859,11 @@ func tenantRoleNameTaken(c *gin.Context, id uint, name string) bool {
 
 func tenantMenuFromReq(c *gin.Context) model.TenantSystemMenu {
 	return model.TenantSystemMenu{
-		Pid: httpx.Uint(c, "pid"), Type: httpx.Str(c, "type"), Name: httpx.Str(c, "name"),
-		Icon: httpx.Str(c, "icon"), Sort: httpx.Int(c, "sort"), Perms: httpx.Str(c, "perms"),
-		Paths: httpx.Str(c, "paths"), Component: httpx.Str(c, "component"), Selected: httpx.Str(c, "selected"),
-		Params: httpx.Str(c, "params"), IsCache: httpx.Int(c, "is_cache"), IsShow: httpx.Int(c, "is_show"),
-		IsDisable: httpx.Int(c, "is_disable"),
+		Pid: httpx.BodyUint(c, "pid"), Type: httpx.BodyStr(c, "type"), Name: httpx.BodyStr(c, "name"),
+		Icon: httpx.BodyStr(c, "icon"), Sort: httpx.BodyInt(c, "sort"), Perms: httpx.BodyStr(c, "perms"),
+		Paths: httpx.BodyStr(c, "paths"), Component: httpx.BodyStr(c, "component"), Selected: httpx.BodyStr(c, "selected"),
+		Params: httpx.BodyStr(c, "params"), IsCache: httpx.BodyInt(c, "is_cache"), IsShow: httpx.BodyInt(c, "is_show"),
+		IsDisable: httpx.BodyInt(c, "is_disable"),
 	}
 }
 

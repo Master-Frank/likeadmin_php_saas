@@ -106,12 +106,15 @@ func UserGetRegisterConfig(c *gin.Context) {
 }
 
 func UserSetRegisterConfig(c *gin.Context) {
-	if msg := util.UserRegisterConfigCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.UserRegisterConfigCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	for _, k := range []string{"login_way", "coerce_mobile", "login_agreement", "third_auth", "wechat_auth", "qq_auth"} {
-		if v, ok := httpx.Params(c)[k]; ok {
+		if v, ok := httpx.Body(c)[k]; ok {
 			cfgsvc.Set(c, "login", k, v)
 		}
 	}
@@ -128,17 +131,20 @@ func TransactionGet(c *gin.Context) {
 }
 
 func TransactionSet(c *gin.Context) {
-	if msg := util.TransactionSettingCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.TransactionSettingCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders", httpx.Int(c, "cancel_unpaid_orders"))
-	cfgsvc.Set(c, "transaction", "verification_orders", httpx.Int(c, "verification_orders"))
-	if _, ok := httpx.Params(c)["cancel_unpaid_orders_times"]; ok {
-		cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.Int(c, "cancel_unpaid_orders_times"))
+	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders", httpx.BodyInt(c, "cancel_unpaid_orders"))
+	cfgsvc.Set(c, "transaction", "verification_orders", httpx.BodyInt(c, "verification_orders"))
+	if _, ok := httpx.Body(c)["cancel_unpaid_orders_times"]; ok {
+		cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.BodyInt(c, "cancel_unpaid_orders_times"))
 	}
-	if _, ok := httpx.Params(c)["verification_orders_times"]; ok {
-		cfgsvc.Set(c, "transaction", "verification_orders_times", httpx.Int(c, "verification_orders_times"))
+	if _, ok := httpx.Body(c)["verification_orders_times"]; ok {
+		cfgsvc.Set(c, "transaction", "verification_orders_times", httpx.BodyInt(c, "verification_orders_times"))
 	}
 	response.SuccessNotice(c, "操作成功")
 }
@@ -157,7 +163,10 @@ func CustomerGet(c *gin.Context) {
 }
 
 func CustomerSet(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	for _, k := range []string{"qr_code", "wechat", "phone", "service_time"} {
 		v, ok := p[k]
 		if !ok {
@@ -295,23 +304,29 @@ func DictTypeLists(c *gin.Context) {
 }
 
 func DictTypeAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DictTypeWriteCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	var n int64
-	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND delete_time IS NULL", httpx.Str(c, "type")).Count(&n)
+	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND delete_time IS NULL", httpx.BodyStr(c, "type")).Count(&n)
 	if n > 0 {
 		response.Fail(c, "字典类型已存在")
 		return
 	}
-	bootstrap.DB.Create(&model.DictType{Name: httpx.Str(c, "name"), Type: httpx.Str(c, "type"), Status: httpx.Int(c, "status"), Remark: httpx.Str(c, "remark"), CreateTime: util.NowUnix()})
+	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyStr(c, "name"), Type: httpx.BodyStr(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix()})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func DictTypeEdit(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -321,28 +336,31 @@ func DictTypeEdit(c *gin.Context) {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if msg := util.DictTypeWriteCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	var n int64
-	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND id <> ? AND delete_time IS NULL", httpx.Str(c, "type"), id).Count(&n)
+	bootstrap.DB.Model(&model.DictType{}).Where("type = ? AND id <> ? AND delete_time IS NULL", httpx.BodyStr(c, "type"), id).Count(&n)
 	if n > 0 {
 		response.Fail(c, "字典类型已存在")
 		return
 	}
 	now := util.NowUnix()
-	typ := httpx.Str(c, "type")
+	typ := httpx.BodyStr(c, "type")
 	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "type": typ, "status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"), "update_time": now,
+		"name": httpx.BodyStr(c, "name"), "type": typ, "status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
 	})
 	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ?", id).Update("type_value", typ)
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func DictTypeDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -411,30 +429,36 @@ func DictDataLists(c *gin.Context) {
 }
 
 func DictDataAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DictDataWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	var typ model.DictType
-	if bootstrap.DB.Where("delete_time IS NULL").First(&typ, httpx.Uint(c, "type_id")).Error != nil {
+	if bootstrap.DB.Where("delete_time IS NULL").First(&typ, httpx.BodyUint(c, "type_id")).Error != nil {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	typeVal := httpx.Str(c, "type_value")
+	typeVal := httpx.BodyStr(c, "type_value")
 	if typeVal == "" {
 		typeVal = typ.Type
 	}
 	bootstrap.DB.Create(&model.DictData{
-		Name: httpx.Str(c, "name"), Value: httpx.Str(c, "value"), TypeID: typ.ID,
-		TypeValue: typeVal, Sort: httpx.Int(c, "sort"), Status: httpx.Int(c, "status"),
-		Remark: httpx.Str(c, "remark"), CreateTime: util.NowUnix(),
+		Name: httpx.BodyStr(c, "name"), Value: httpx.BodyStr(c, "value"), TypeID: typ.ID,
+		TypeValue: typeVal, Sort: httpx.BodyInt(c, "sort"), Status: httpx.BodyInt(c, "status"),
+		Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix(),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func DictDataEdit(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -444,22 +468,25 @@ func DictDataEdit(c *gin.Context) {
 		response.Fail(c, "字典数据不存在")
 		return
 	}
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if msg := util.DictDataWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "value": httpx.Str(c, "value"),
-		"sort": httpx.Int(c, "sort"), "status": httpx.Int(c, "status"),
-		"remark": httpx.Str(c, "remark"), "update_time": now,
+		"name": httpx.BodyStr(c, "name"), "value": httpx.BodyStr(c, "value"),
+		"sort": httpx.BodyInt(c, "sort"), "status": httpx.BodyInt(c, "status"),
+		"remark": httpx.BodyStr(c, "remark"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func DictDataDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -577,16 +604,19 @@ func StorageDetail(c *gin.Context) {
 }
 
 func StorageSetup(c *gin.Context) {
-	engine := httpx.Str(c, "engine")
+	if !response.RequirePOST(c) {
+		return
+	}
+	engine := httpx.BodyStr(c, "engine")
 	if engine == "" {
 		response.Fail(c, "engine不能为空")
 		return
 	}
-	if _, ok := httpx.Params(c)["status"]; !ok {
+	if _, ok := httpx.Body(c)["status"]; !ok {
 		response.Fail(c, "status不能为空")
 		return
 	}
-	status := httpx.Int(c, "status")
+	status := httpx.BodyInt(c, "status")
 	if status == 1 {
 		cfgsvc.Set(c, "storage", "default", engine)
 	} else {
@@ -597,14 +627,14 @@ func StorageSetup(c *gin.Context) {
 		cfgsvc.Set(c, "storage", "local", map[string]any{})
 	case "qiniu", "aliyun":
 		cfgsvc.Set(c, "storage", engine, map[string]any{
-			"bucket": httpx.Str(c, "bucket"), "access_key": httpx.Str(c, "access_key"),
-			"secret_key": httpx.Str(c, "secret_key"), "domain": httpx.Str(c, "domain"),
+			"bucket": httpx.BodyStr(c, "bucket"), "access_key": httpx.BodyStr(c, "access_key"),
+			"secret_key": httpx.BodyStr(c, "secret_key"), "domain": httpx.BodyStr(c, "domain"),
 		})
 	case "qcloud":
 		cfgsvc.Set(c, "storage", engine, map[string]any{
-			"bucket": httpx.Str(c, "bucket"), "region": httpx.Str(c, "region"),
-			"access_key": httpx.Str(c, "access_key"), "secret_key": httpx.Str(c, "secret_key"),
-			"domain": httpx.Str(c, "domain"),
+			"bucket": httpx.BodyStr(c, "bucket"), "region": httpx.BodyStr(c, "region"),
+			"access_key": httpx.BodyStr(c, "access_key"), "secret_key": httpx.BodyStr(c, "secret_key"),
+			"domain": httpx.BodyStr(c, "domain"),
 		})
 	}
 	cache.Del("STORAGE_DEFAULT")
@@ -617,7 +647,10 @@ func StorageSetup(c *gin.Context) {
 }
 
 func StorageChange(c *gin.Context) {
-	engine := httpx.Str(c, "engine")
+	if !response.RequirePOST(c) {
+		return
+	}
+	engine := httpx.BodyStr(c, "engine")
 	if engine == "" {
 		response.Fail(c, "engine不能为空")
 		return

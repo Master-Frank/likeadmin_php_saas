@@ -53,40 +53,46 @@ func DeptLeader(c *gin.Context) {
 }
 
 func DeptAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DeptWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if !tenantDeptExists(c, httpx.Uint(c, "pid")) {
+	if !tenantDeptExists(c, httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if tenantDeptNameTaken(c, 0, httpx.Str(c, "name")) {
+	if tenantDeptNameTaken(c, 0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "部门名称已存在")
 		return
 	}
 	tdb(c).Create(&model.TenantDept{
-		Name: httpx.Str(c, "name"), Pid: httpx.Uint(c, "pid"), Sort: httpx.Int(c, "sort"),
-		Leader: httpx.Str(c, "leader"), Mobile: httpx.Str(c, "mobile"), Status: httpx.Int(c, "status"),
+		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
+		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
 		TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func DeptEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DeptWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var cur model.TenantDept
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&cur).Error != nil {
 		response.Fail(c, "当前部门信息缺失")
 		return
 	}
-	pid := httpx.Uint(c, "pid")
+	pid := httpx.BodyUint(c, "pid")
 	if cur.Pid == 0 {
 		pid = 0
 	} else {
@@ -99,19 +105,22 @@ func DeptEdit(c *gin.Context) {
 			return
 		}
 	}
-	if tenantDeptNameTaken(c, id, httpx.Str(c, "name")) {
+	if tenantDeptNameTaken(c, id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "部门名称已存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "pid": pid, "sort": httpx.Int(c, "sort"),
-		"leader": httpx.Str(c, "leader"), "mobile": httpx.Str(c, "mobile"), "status": httpx.Int(c, "status"),
+		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
+		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func DeptDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -208,55 +217,64 @@ func JobsLists(c *gin.Context) {
 }
 
 func JobsAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.JobsWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if tenantJobsNameTaken(c, 0, httpx.Str(c, "name")) {
+	if tenantJobsNameTaken(c, 0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "岗位名称已存在")
 		return
 	}
-	if tenantJobsCodeTaken(c, 0, httpx.Str(c, "code")) {
+	if tenantJobsCodeTaken(c, 0, httpx.BodyStr(c, "code")) {
 		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	tdb(c).Create(&model.TenantJobs{
-		Name: httpx.Str(c, "name"), Code: httpx.Str(c, "code"), Sort: httpx.Int(c, "sort"),
-		Status: httpx.Int(c, "status"), Remark: httpx.Str(c, "remark"), TenantID: tenantDB(c), CreateTime: util.NowUnix(),
+		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), TenantID: tenantDB(c), CreateTime: util.NowUnix(),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func JobsEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.JobsWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var exist model.TenantJobs
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	if tenantJobsNameTaken(c, id, httpx.Str(c, "name")) {
+	if tenantJobsNameTaken(c, id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "岗位名称已存在")
 		return
 	}
-	if tenantJobsCodeTaken(c, id, httpx.Str(c, "code")) {
+	if tenantJobsCodeTaken(c, id, httpx.BodyStr(c, "code")) {
 		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "code": httpx.Str(c, "code"), "sort": httpx.Int(c, "sort"),
-		"status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"),
+		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
+		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func JobsDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return

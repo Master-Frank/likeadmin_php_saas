@@ -44,22 +44,25 @@ func DeptLeader(c *gin.Context) {
 }
 
 func DeptAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DeptWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if !deptExists(httpx.Uint(c, "pid")) {
+	if !deptExists(httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	if deptNameTaken(0, httpx.Str(c, "name")) {
+	if deptNameTaken(0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "部门名称已存在")
 		return
 	}
 	d := model.Dept{
-		Name: httpx.Str(c, "name"), Pid: httpx.Uint(c, "pid"), Sort: httpx.Int(c, "sort"),
-		Leader: httpx.Str(c, "leader"), Mobile: httpx.Str(c, "mobile"), Status: httpx.Int(c, "status"),
+		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
+		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
 		CreateTime: util.NowUnix(),
 	}
 	if err := bootstrap.DB.Create(&d).Error; err != nil {
@@ -70,18 +73,21 @@ func DeptAdd(c *gin.Context) {
 }
 
 func DeptEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.DeptWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var cur model.Dept
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
 		response.Fail(c, "当前部门信息缺失")
 		return
 	}
-	pid := httpx.Uint(c, "pid")
+	pid := httpx.BodyUint(c, "pid")
 	if cur.Pid == 0 {
 		pid = 0
 	} else {
@@ -94,21 +100,24 @@ func DeptEdit(c *gin.Context) {
 			return
 		}
 	}
-	if deptNameTaken(id, httpx.Str(c, "name")) {
+	if deptNameTaken(id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "部门名称已存在")
 		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "pid": pid, "sort": httpx.Int(c, "sort"),
-		"leader": httpx.Str(c, "leader"), "mobile": httpx.Str(c, "mobile"), "status": httpx.Int(c, "status"),
+		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
+		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 		"update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func DeptDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -225,22 +234,25 @@ func JobsLists(c *gin.Context) {
 }
 
 func JobsAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.JobsWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if jobsNameTaken(0, httpx.Str(c, "name")) {
+	if jobsNameTaken(0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "岗位名称已存在")
 		return
 	}
-	if jobsCodeTaken(0, httpx.Str(c, "code")) {
+	if jobsCodeTaken(0, httpx.BodyStr(c, "code")) {
 		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	j := model.Jobs{
-		Name: httpx.Str(c, "name"), Code: httpx.Str(c, "code"), Sort: httpx.Int(c, "sort"),
-		Status: httpx.Int(c, "status"), Remark: httpx.Str(c, "remark"), CreateTime: util.NowUnix(),
+		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: util.NowUnix(),
 	}
 	if err := bootstrap.DB.Create(&j).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -250,35 +262,41 @@ func JobsAdd(c *gin.Context) {
 }
 
 func JobsEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.JobsWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var exist model.Jobs
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	if jobsNameTaken(id, httpx.Str(c, "name")) {
+	if jobsNameTaken(id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "岗位名称已存在")
 		return
 	}
-	if jobsCodeTaken(id, httpx.Str(c, "code")) {
+	if jobsCodeTaken(id, httpx.BodyStr(c, "code")) {
 		response.Fail(c, "岗位编码已存在")
 		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "code": httpx.Str(c, "code"), "sort": httpx.Int(c, "sort"),
-		"status": httpx.Int(c, "status"), "remark": httpx.Str(c, "remark"), "update_time": now,
+		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
+		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func JobsDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return

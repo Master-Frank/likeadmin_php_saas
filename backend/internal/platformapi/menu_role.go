@@ -57,16 +57,19 @@ func MenuDetail(c *gin.Context) {
 }
 
 func MenuAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.MenuWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if msg := menuUniqueName(0, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+	if msg := menuUniqueName(0, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if !platformMenuParentOK(httpx.Uint(c, "pid")) {
+	if !platformMenuParentOK(httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
@@ -81,21 +84,24 @@ func MenuAdd(c *gin.Context) {
 }
 
 func MenuEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.MenuWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
-	if id == httpx.Uint(c, "pid") {
+	id := httpx.BodyUint(c, "id")
+	if id == httpx.BodyUint(c, "pid") {
 		response.Fail(c, "上级菜单不能选择自己")
 		return
 	}
-	if !platformMenuParentOK(httpx.Uint(c, "pid")) {
+	if !platformMenuParentOK(httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
-	if msg := menuUniqueName(id, httpx.Str(c, "type"), httpx.Str(c, "name")); msg != "" {
+	if msg := menuUniqueName(id, httpx.BodyStr(c, "type"), httpx.BodyStr(c, "name")); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -116,11 +122,14 @@ func MenuEdit(c *gin.Context) {
 }
 
 func MenuDelete(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var child int64
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("pid = ?", id).Count(&child)
 	if child > 0 {
@@ -140,11 +149,14 @@ func MenuDelete(c *gin.Context) {
 }
 
 func MenuUpdateStatus(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var exist model.SystemMenu
 	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
 		response.Fail(c, "菜单不存在")
@@ -152,7 +164,7 @@ func MenuUpdateStatus(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("id = ?", id).Updates(map[string]any{
-		"is_disable":  httpx.Int(c, "is_disable"),
+		"is_disable":  httpx.BodyInt(c, "is_disable"),
 		"update_time": now,
 	})
 	cache.ClearAdminAuthCache(0)
@@ -192,22 +204,25 @@ func RoleLists(c *gin.Context) {
 }
 
 func RoleAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.RoleWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if roleNameTaken(0, httpx.Str(c, "name")) {
+	if roleNameTaken(0, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
-	menuIDs := httpx.Uints(c, "menu_id")
+	menuIDs := httpx.BodyUints(c, "menu_id")
 	if !platformMenuIDsOwned(menuIDs) {
 		response.Fail(c, "菜单不存在")
 		return
 	}
 	now := util.NowUnix()
-	r := model.SystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), CreateTime: now}
+	r := model.SystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now}
 	if err := bootstrap.DB.Create(&r).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -219,26 +234,29 @@ func RoleAdd(c *gin.Context) {
 }
 
 func RoleEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.RoleWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var exist model.SystemRole
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
-	if roleNameTaken(id, httpx.Str(c, "name")) {
+	if roleNameTaken(id, httpx.BodyStr(c, "name")) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"), "update_time": now,
+		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"), "update_time": now,
 	})
-	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
 		if !platformMenuIDsOwned(menuIDs) {
 			response.Fail(c, "菜单不存在")
 			return
@@ -253,7 +271,10 @@ func RoleEdit(c *gin.Context) {
 }
 
 func RoleDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "请选择角色")
 		return
@@ -332,19 +353,19 @@ func RoleAll(c *gin.Context) {
 
 func menuFromReq(c *gin.Context) model.SystemMenu {
 	return model.SystemMenu{
-		Pid:       httpx.Uint(c, "pid"),
-		Type:      httpx.Str(c, "type"),
-		Name:      httpx.Str(c, "name"),
-		Icon:      httpx.Str(c, "icon"),
-		Sort:      httpx.Int(c, "sort"),
-		Perms:     httpx.Str(c, "perms"),
-		Paths:     httpx.Str(c, "paths"),
-		Component: httpx.Str(c, "component"),
-		Selected:  httpx.Str(c, "selected"),
-		Params:    httpx.Str(c, "params"),
-		IsCache:   httpx.Int(c, "is_cache"),
-		IsShow:    httpx.Int(c, "is_show"),
-		IsDisable: httpx.Int(c, "is_disable"),
+		Pid:       httpx.BodyUint(c, "pid"),
+		Type:      httpx.BodyStr(c, "type"),
+		Name:      httpx.BodyStr(c, "name"),
+		Icon:      httpx.BodyStr(c, "icon"),
+		Sort:      httpx.BodyInt(c, "sort"),
+		Perms:     httpx.BodyStr(c, "perms"),
+		Paths:     httpx.BodyStr(c, "paths"),
+		Component: httpx.BodyStr(c, "component"),
+		Selected:  httpx.BodyStr(c, "selected"),
+		Params:    httpx.BodyStr(c, "params"),
+		IsCache:   httpx.BodyInt(c, "is_cache"),
+		IsShow:    httpx.BodyInt(c, "is_show"),
+		IsDisable: httpx.BodyInt(c, "is_disable"),
 	}
 }
 

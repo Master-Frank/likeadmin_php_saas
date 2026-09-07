@@ -55,19 +55,22 @@ func PayConfigGet(c *gin.Context) {
 }
 
 func PayConfigSet(c *gin.Context) {
-	p := httpx.Params(c)
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
+	id := httpx.BodyUint(c, "id")
 	var r model.PayConfig
 	exists := bootstrap.DB.First(&r, id).Error == nil && r.ID > 0
 	var taken int64
-	if name := httpx.Str(c, "name"); name != "" {
+	if name := httpx.BodyStr(c, "name"); name != "" {
 		bootstrap.DB.Model(&model.PayConfig{}).Where("name = ? AND id <> ?", name, id).Count(&taken)
 	}
 	_, sortOK := p["sort"]
 	_, cfgOK := p["config"]
 	in := biz.PayConfigInput{
-		ID: id, Name: httpx.Str(c, "name"), Icon: httpx.Str(c, "icon"), Remark: httpx.Str(c, "remark"),
-		Sort: httpx.Any(c, "sort"), SortPresent: sortOK, Config: httpx.Any(c, "config"), ConfigPresent: cfgOK,
+		ID: id, Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
+		Sort: httpx.BodyAny(c, "sort"), SortPresent: sortOK, Config: httpx.BodyAny(c, "config"), ConfigPresent: cfgOK,
 		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
 	}
 	if msg := biz.CheckPayConfig(in); msg != "" {
@@ -75,7 +78,7 @@ func PayConfigSet(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Model(&model.PayConfig{}).Where("id = ?", id).Updates(map[string]any{
-		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
+		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.BodyInt(c, "sort"),
 		"config": biz.BuildPayConfigJSON(r.PayWay, in.Config), "remark": in.Remark,
 	})
 	response.SuccessNotice(c, "设置成功")
@@ -111,7 +114,10 @@ func PayWayGet(c *gin.Context) {
 }
 
 func PayWaySet(c *gin.Context) {
-	data := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	data := httpx.Body(c)
 	if msg := util.PayWaySetCheck(data); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -229,38 +235,47 @@ func CrontabLists(c *gin.Context) {
 }
 
 func CrontabAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := crontabWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Create(&model.Crontab{
-		Name: httpx.Str(c, "name"), Type: httpx.Int(c, "type"), Command: httpx.Str(c, "command"),
-		Params: httpx.Str(c, "params"), Status: httpx.Int(c, "status"), Expression: httpx.Str(c, "expression"),
-		Remark: httpx.Str(c, "remark"), System: httpx.Int(c, "system"), LastTime: &now, CreateTime: now,
+		Name: httpx.BodyStr(c, "name"), Type: httpx.BodyInt(c, "type"), Command: httpx.BodyStr(c, "command"),
+		Params: httpx.BodyStr(c, "params"), Status: httpx.BodyInt(c, "status"), Expression: httpx.BodyStr(c, "expression"),
+		Remark: httpx.BodyStr(c, "remark"), System: httpx.BodyInt(c, "system"), LastTime: &now, CreateTime: now,
 	})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func CrontabEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := crontabWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
 	// PHP CrontabLogic::edit updates by id with no existence check.
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "command": httpx.Str(c, "command"), "params": httpx.Str(c, "params"),
-		"status": httpx.Int(c, "status"), "expression": httpx.Str(c, "expression"), "remark": httpx.Str(c, "remark"),
-		"type": httpx.Int(c, "type"), "system": httpx.Int(c, "system"), "update_time": now,
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.BodyUint(c, "id")).Updates(map[string]any{
+		"name": httpx.BodyStr(c, "name"), "command": httpx.BodyStr(c, "command"), "params": httpx.BodyStr(c, "params"),
+		"status": httpx.BodyInt(c, "status"), "expression": httpx.BodyStr(c, "expression"), "remark": httpx.BodyStr(c, "remark"),
+		"type": httpx.BodyInt(c, "type"), "system": httpx.BodyInt(c, "system"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func CrontabDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -272,12 +287,15 @@ func CrontabDelete(c *gin.Context) {
 }
 
 func CrontabOperate(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	operate := httpx.Str(c, "operate")
+	operate := httpx.BodyStr(c, "operate")
 	if operate == "" {
 		response.Fail(c, "请选择操作")
 		return
@@ -377,10 +395,13 @@ func NoticeDetail(c *gin.Context) {
 }
 
 func NoticeSet(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	var r model.NoticeSetting
 	exists := bootstrap.DB.First(&r, id).Error == nil && r.ID > 0
-	updates, err := biz.ApplyNoticeSet(exists, id, httpx.Any(c, "template"))
+	updates, err := biz.ApplyNoticeSet(exists, id, httpx.BodyAny(c, "template"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -397,7 +418,10 @@ func SmsConfigGet(c *gin.Context) {
 }
 
 func SmsConfigSet(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.SmsConfigWriteCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -489,7 +513,10 @@ func upgradeAuthMsg(result map[string]any) string {
 }
 
 func UpgradeDo(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.UpgradeCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -523,7 +550,10 @@ func UpgradeDo(c *gin.Context) {
 }
 
 func UpgradeDownloadPkg(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.UpgradeDownloadCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return

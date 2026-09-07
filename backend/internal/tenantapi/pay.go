@@ -68,11 +68,14 @@ func PayConfigGet(c *gin.Context) {
 }
 
 func PayConfigSet(c *gin.Context) {
-	p := httpx.Params(c)
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
+	id := httpx.BodyUint(c, "id")
 	r, exists := tenantPayConfigByID(c, id)
 	var taken int64
-	if name := httpx.Str(c, "name"); name != "" {
+	if name := httpx.BodyStr(c, "name"); name != "" {
 		q := tdb(c).Model(&model.TenantPayConfig{}).Where("name = ? AND id <> ?", name, id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
@@ -84,8 +87,8 @@ func PayConfigSet(c *gin.Context) {
 	_, sortOK := p["sort"]
 	_, cfgOK := p["config"]
 	in := biz.PayConfigInput{
-		ID: id, Name: httpx.Str(c, "name"), Icon: httpx.Str(c, "icon"), Remark: httpx.Str(c, "remark"),
-		Sort: httpx.Any(c, "sort"), SortPresent: sortOK, Config: httpx.Any(c, "config"), ConfigPresent: cfgOK,
+		ID: id, Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
+		Sort: httpx.BodyAny(c, "sort"), SortPresent: sortOK, Config: httpx.BodyAny(c, "config"), ConfigPresent: cfgOK,
 		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
 	}
 	if msg := biz.CheckPayConfig(in); msg != "" {
@@ -100,7 +103,7 @@ func PayConfigSet(c *gin.Context) {
 		return
 	}
 	q.Updates(map[string]any{
-		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
+		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.BodyInt(c, "sort"),
 		"config": biz.BuildPayConfigJSON(r.PayWay, in.Config), "remark": in.Remark,
 	})
 	response.SuccessNotice(c, "设置成功")
@@ -143,12 +146,15 @@ func PayWayGet(c *gin.Context) {
 }
 
 func PayWaySet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	tid, ok := requireTenant(c)
 	if !ok {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	params := httpx.Params(c)
+	params := httpx.Body(c)
 	if msg := util.PayWaySetCheck(params); msg != "" {
 		response.Fail(c, msg)
 		return

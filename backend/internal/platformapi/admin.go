@@ -91,14 +91,17 @@ func AdminAll(c *gin.Context) {
 }
 
 func AdminAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.AuthAdminAddCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
-	password := httpx.Str(c, "password")
+	account := httpx.BodyStr(c, "account")
+	name := httpx.BodyStr(c, "name")
+	password := httpx.BodyStr(c, "password")
 	var exist model.Admin
 	if bootstrap.DB.Where("account = ? AND delete_time IS NULL", account).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
@@ -109,7 +112,7 @@ func AdminAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	avatar := filesvc.SetFileURL(c, httpx.Str(c, "avatar"))
+	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
@@ -120,9 +123,9 @@ func AdminAdd(c *gin.Context) {
 		Password:        util.CreatePassword(password, config.C.Project.UniqueIdentification),
 		CreateTime:      now,
 		Disable:         adminAddDisable(p),
-		MultipointLogin: httpx.Int(c, "multipoint_login"),
+		MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 	}
-	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := platformAdminLinksCheck(roles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -141,12 +144,15 @@ func AdminAdd(c *gin.Context) {
 }
 
 func AdminEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if !authAdminIDPresent(p) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
@@ -156,8 +162,8 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	name := httpx.Str(c, "name")
+	account := httpx.BodyStr(c, "account")
+	name := httpx.BodyStr(c, "name")
 	var exist model.Admin
 	if bootstrap.DB.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
@@ -169,24 +175,24 @@ func AdminEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	avatar := ""
-	if v := httpx.Str(c, "avatar"); v != "" {
+	if v := httpx.BodyStr(c, "avatar"); v != "" {
 		avatar = filesvc.SetFileURL(c, v)
 	}
 	data := map[string]any{
 		"name":             name,
 		"account":          account,
-		"disable":          httpx.Int(c, "disable"),
-		"multipoint_login": httpx.Int(c, "multipoint_login"),
+		"disable":          httpx.BodyInt(c, "disable"),
+		"multipoint_login": httpx.BodyInt(c, "multipoint_login"),
 		"avatar":           avatar,
 		"update_time":      now,
 	}
-	if pwd := httpx.Str(c, "password"); pwd != "" {
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
 	bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
-	newRoles := httpx.Uints(c, "role_id")
-	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	newRoles := httpx.BodyUints(c, "role_id")
+	depts, jobs := httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
 	if msg := platformAdminLinksCheck(newRoles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -204,7 +210,7 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	if httpx.Int(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
+	if httpx.BodyInt(c, "disable") == 1 || util.UintSlicesChanged(oldRoles, newRoles) {
 		expireAdminTokens(id)
 	}
 	cache.ClearAdminAuthCache(id)
@@ -212,11 +218,14 @@ func AdminEdit(c *gin.Context) {
 }
 
 func AdminDelete(c *gin.Context) {
-	if !authAdminIDPresent(httpx.Params(c)) {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !authAdminIDPresent(httpx.Body(c)) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
@@ -291,7 +300,10 @@ func AdminMySelf(c *gin.Context) {
 }
 
 func AdminEditSelf(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.AdminEditSelfCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -303,12 +315,12 @@ func AdminEditSelf(c *gin.Context) {
 		return
 	}
 	data := map[string]any{
-		"name":        httpx.Str(c, "name"),
-		"avatar":      filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
+		"name":        httpx.BodyStr(c, "name"),
+		"avatar":      filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		"update_time": util.NowUnix(),
 	}
-	if pwd := httpx.Str(c, "password"); pwd != "" {
-		old := httpx.Str(c, "password_old")
+	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+		old := httpx.BodyStr(c, "password_old")
 		if admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
 			response.Fail(c, "当前密码错误")
 			return
