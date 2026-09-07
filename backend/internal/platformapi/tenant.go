@@ -701,13 +701,15 @@ func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
 }
 
 func TenantUserLists(c *gin.Context) {
-	q, ok := lists.ParseGET(c)
-	if !ok {
-		return
-	}
+	// PHP TenantUserController::lists validates sceneManager before dataLists,
+	// so a POST without query tenant_id is 请选择租户标识, not 请求方式错误.
 	tid := httpx.QueryInt(c, "tenant_id")
 	if tid <= 0 {
 		response.Fail(c, "请选择租户标识")
+		return
+	}
+	q, ok := lists.ParseGET(c)
+	if !ok {
 		return
 	}
 	db := tenantdb.ForTenant(uint(tid))
