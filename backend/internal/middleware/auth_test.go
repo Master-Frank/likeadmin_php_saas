@@ -37,6 +37,32 @@ func TestRejectWrongTenant(t *testing.T) {
 	}
 }
 
+func TestPermsFingerprint(t *testing.T) {
+	a := permsFingerprint([]string{"b", "a"})
+	b := permsFingerprint([]string{"a", "b"})
+	if a != b || a == "" {
+		t.Fatalf("fingerprint should be order-stable: %s %s", a, b)
+	}
+	if permsFingerprint([]string{"a"}) == permsFingerprint([]string{"a", "b"}) {
+		t.Fatal("different perms should change fingerprint")
+	}
+}
+
+func TestCachedURIListInvalidates(t *testing.T) {
+	cache.DelPrefix("admin_auth_")
+	t.Cleanup(func() { cache.DelPrefix("admin_auth_") })
+	storeURIList("admin_auth_all", []string{"old/path"})
+	cache.Set("admin_auth_all_md5", "stale", 0)
+	storeURIList("admin_auth_url_9", []string{"old/url"})
+	got := cachedURIList("admin_auth_all", func() []string { return []string{"auth.admin/lists"} })
+	if len(got) != 1 || got[0] != "auth.admin/lists" {
+		t.Fatalf("live perms=%v", got)
+	}
+	if loadURIList("admin_auth_url_9") != nil {
+		t.Fatal("stale admin url cache should drop when perms fingerprint changes")
+	}
+}
+
 func TestAuthURIListCache(t *testing.T) {
 	key := "admin_auth_url_test"
 	cache.Del(key)

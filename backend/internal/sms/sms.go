@@ -75,7 +75,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if mobile == "" {
 		return 0, "", fmt.Errorf("请输入手机号")
 	}
-	if bootstrap.DB != nil && tooFrequent(c, mobile, scene) {
+	if bootstrap.DB != nil && tooFrequent(c, mobile) {
 		return 0, "", fmt.Errorf("同一手机号1分钟只能发送1条短信")
 	}
 	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
@@ -88,6 +88,9 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	content := "验证码" + code
 	if c != nil {
 		if notice := loadNoticeSMS(c, scene); len(notice) > 0 {
+			if _, ok := notice["status"]; ok && util.ToInt(notice["status"]) != 1 {
+				return 0, "", fmt.Errorf("发送通知失败")
+			}
 			if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {
 				content = formatted
 			}
@@ -126,43 +129,46 @@ func Verify(c *gin.Context, mobile, code, sceneTag string) bool {
 }
 
 func verifyScene(c *gin.Context, mobile, code string, scene int) bool {
-	if got, ok := cache.Get(cacheKey(scene, mobile)); ok && got == code {
+	if bootstrap.DB == nil {
+		if got, ok := cache.Get(cacheKey(scene, mobile)); ok && got == code {
+			cache.Del(cacheKey(scene, mobile))
+			return true
+		}
+		return false
+	}
+	now := util.NowUnix()
+	q := scopeSmsTenant(c, smsLogModel(c)).
+		Where("mobile = ? AND scene_id = ? AND is_verify = 0 AND send_status = 1 AND send_time >= ?",
+			mobile, scene, now-5*60)
+	var row struct {
+		ID       uint   `gorm:"column:id"`
+		CheckNum int    `gorm:"column:check_num"`
+		Code     string `gorm:"column:code"`
+	}
+	if q.Select("id, check_num, code").Order("send_time desc, id desc").First(&row).Error != nil {
+		if got, ok := cache.Get(cacheKey(scene, mobile)); ok && got == code {
+			cache.Del(cacheKey(scene, mobile))
+			return true
+		}
+		return false
+	}
+	fields := map[string]any{"check_num": row.CheckNum + 1}
+	if row.Code == code {
+		fields["is_verify"] = 1
 		cache.Del(cacheKey(scene, mobile))
-		markLogVerified(c, mobile, code, scene)
+		updateSMSLog(c, row.ID, fields, "")
 		return true
 	}
-	if bootstrap.DB == nil {
-		return false
-	}
-	now := util.NowUnix()
-	q := scopeSmsTenant(c, smsLogModel(c)).
-		Where("mobile = ? AND scene_id = ? AND code = ? AND is_verify = 0 AND send_status = 1 AND send_time >= ?",
-			mobile, scene, code, now-5*60)
-	var row struct {
-		ID       uint `gorm:"column:id"`
-		CheckNum int  `gorm:"column:check_num"`
-	}
-	if q.Select("id, check_num").Order("id desc").First(&row).Error != nil {
-		return false
-	}
-	updateSMSLog(c, row.ID, map[string]any{"is_verify": 1, "check_num": row.CheckNum + 1}, "")
-	cache.Del(cacheKey(scene, mobile))
-	return true
+	updateSMSLog(c, row.ID, fields, "")
+	return false
 }
 
-func markLogVerified(c *gin.Context, mobile, code string, scene int) {
-	if bootstrap.DB == nil {
-		return
-	}
-	scopeSmsTenant(c, smsLogModel(c)).
-		Where("mobile = ? AND scene_id = ? AND code = ? AND is_verify = 0", mobile, scene, code).
-		Updates(map[string]any{"is_verify": 1})
-}
+var captchaScenes = []int{LoginCaptcha, BindMobileCaptcha, ChangeMobileCaptcha, FindPasswordCaptcha}
 
-func tooFrequent(c *gin.Context, mobile string, scene int) bool {
+func tooFrequent(c *gin.Context, mobile string) bool {
 	now := util.NowUnix()
 	q := scopeSmsTenant(c, smsLogModel(c)).
-		Where("mobile = ? AND send_status IN (0,1) AND scene_id = ? AND send_time >= ?", mobile, scene, now-60)
+		Where("mobile = ? AND send_status = 1 AND scene_id IN ? AND send_time >= ?", mobile, captchaScenes, now-60)
 	var n int64
 	q.Count(&n)
 	return n > 0

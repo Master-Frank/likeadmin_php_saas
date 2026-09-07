@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -311,12 +314,33 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 }
 
 func cachedURIList(key string, load func() []string) []string {
+	live := load()
+	md5Key := key + "_md5"
+	fp := permsFingerprint(live)
+	cachedFp, _ := cache.Get(md5Key)
+	if cachedFp != fp {
+		cache.Del(key)
+		if strings.HasPrefix(key, "admin_auth_all") {
+			cache.DelPrefix("admin_auth_url_")
+		} else if strings.HasPrefix(key, "tenant_auth_all") {
+			cache.DelPrefix("tenant_auth_url_")
+		}
+		cache.Set(md5Key, fp, time.Hour)
+		storeURIList(key, live)
+		return live
+	}
 	if cached := loadURIList(key); cached != nil {
 		return cached
 	}
-	out := load()
-	storeURIList(key, out)
-	return out
+	storeURIList(key, live)
+	return live
+}
+
+func permsFingerprint(uris []string) string {
+	cp := append([]string(nil), uris...)
+	sort.Strings(cp)
+	sum := md5.Sum([]byte(strings.Join(cp, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
 func loadURIList(key string) []string {

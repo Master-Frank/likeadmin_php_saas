@@ -106,6 +106,17 @@ func Del(key string) {
 	mem.Delete(key)
 }
 
+// Flush clears Redis DB and the in-memory fallback, matching PHP Cache::clear().
+func Flush() {
+	if bootstrap.RDB != nil {
+		_ = bootstrap.RDB.FlushDB(ctx()).Err()
+	}
+	mem.Range(func(k, _ any) bool {
+		mem.Delete(k)
+		return true
+	})
+}
+
 func DelPrefix(prefix string) {
 	if prefix == "" {
 		return

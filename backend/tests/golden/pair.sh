@@ -2662,6 +2662,14 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   if [[ "$(jcode <<<"$go_sms")" == "1" && "$plat_sms" != "0" ]]; then
     fail=$((fail + 1))
   fi
+  if [[ "$(jcode <<<"$go_sms")" == "1" ]]; then
+    go_sms_rate="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"mobile\":\"$mobile\",\"scene\":\"BDSJHM\"}")"
+    echo "sms_rate go_msg=$(jget msg <<<"$go_sms_rate")"
+    if [[ "$(jget msg <<<"$go_sms_rate")" != "同一手机号1分钟只能发送1条短信" ]]; then
+      echo "  go_sms_rate=${go_sms_rate:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
 fi
 
 if [[ -n "$GO" ]]; then

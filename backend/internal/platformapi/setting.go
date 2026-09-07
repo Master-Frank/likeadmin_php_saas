@@ -1,7 +1,6 @@
 package platformapi
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -168,9 +167,7 @@ func CustomerSet(c *gin.Context) {
 }
 
 func CacheClear(c *gin.Context) {
-	if bootstrap.RDB != nil {
-		_ = bootstrap.RDB.FlushDB(context.Background()).Err()
-	}
+	cache.Flush()
 	clearRuntimeFileCache()
 	response.Success(c, "清除成功", nil)
 }
