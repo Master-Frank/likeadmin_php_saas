@@ -3045,16 +3045,16 @@ if [[ "$(jget msg <<<"$php_lex3")" != "$(jget msg <<<"$go_lex3")" || "$(jget msg
   echo "  go_lex3=${go_lex3:0:200}"
   fail=$((fail + 1))
 fi
-php_lexb="$(curl -sS "$PHP/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
-go_lexb="$(curl -sS "$GO/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
+php_lexb="$(curl -sS -X GET "$PHP/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' --data-raw '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
+go_lexb="$(curl -sS -X GET "$GO/platformapi/setting.system.log/lists?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' --data-raw '{"export":2,"file_name":"hack","page_start":1,"page_end":1}')"
 echo "log_export_body_ignored php_code=$(jcode <<<"$php_lexb") go_code=$(jcode <<<"$go_lexb") php_url=$(jget data.url <<<"$php_lexb") go_url=$(jget data.url <<<"$go_lexb")"
 if [[ "$(jcode <<<"$php_lexb")" != "1" || "$(jcode <<<"$go_lexb")" != "1" || -n "$(jget data.url <<<"$php_lexb")" || -n "$(jget data.url <<<"$go_lexb")" ]]; then
   echo "  php_lexb=${php_lexb:0:200}"
   echo "  go_lexb=${go_lexb:0:200}"
   fail=$((fail + 1))
 fi
-php_lexn="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=1&file_name=自定义导出" -H "token: $TOKEN")"
-go_lexn="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=1&file_name=自定义导出" -H "token: $TOKEN")"
+php_lexn="$(curl -sS -G "$PHP/platformapi/setting.system.log/lists" --data-urlencode "export=1" --data-urlencode "file_name=自定义导出" -H "token: $TOKEN")"
+go_lexn="$(curl -sS -G "$GO/platformapi/setting.system.log/lists" --data-urlencode "export=1" --data-urlencode "file_name=自定义导出" -H "token: $TOKEN")"
 echo "log_export_file_name php_file=$(jget data.file_name <<<"$php_lexn") go_file=$(jget data.file_name <<<"$go_lexn")"
 if [[ "$(jget data.file_name <<<"$php_lexn")" != "自定义导出" || "$(jget data.file_name <<<"$go_lexn")" != "自定义导出" ]]; then
   echo "  php_lexn=${php_lexn:0:200}"
