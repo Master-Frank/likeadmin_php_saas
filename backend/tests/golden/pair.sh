@@ -250,7 +250,7 @@ fi
 
 if [[ -n "$TENANT_HOST" ]]; then
   ts="$(date +%s)"
-  acc="u1${ts: -4}"
+  acc="u${ts}"
   pwd="Likeadmin1"
   body="{\"account\":\"$acc\",\"password\":\"$pwd\",\"password_confirm\":\"$pwd\",\"channel\":1}"
   php_reg="$(curl -sS -X POST "$PHP/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$body")"
