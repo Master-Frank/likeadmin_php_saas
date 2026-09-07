@@ -7,6 +7,7 @@ import (
 
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -169,6 +170,35 @@ func TestRequiredMsgUsesColumnComment(t *testing.T) {
 	}
 	if got := requiredMsg(sp, map[string]any{"name": ""}, true); got != "名称" {
 		t.Fatalf("empty edit %q", got)
+	}
+}
+
+func TestCoerceColumnValueDatetime(t *testing.T) {
+	col := model.GenerateColumn{ColumnName: "event_time", ColumnType: "int", ViewType: "datetime"}
+	got := coerceColumnValue(col, "2024-06-01 10:00:00")
+	want := util.ParseDateTime("2024-06-01 10:00:00")
+	if got != want || want == 0 {
+		t.Fatalf("datetime string => %v want %d", got, want)
+	}
+	if coerceColumnValue(col, want) != want {
+		t.Fatalf("unix passthrough %v", coerceColumnValue(col, want))
+	}
+	plain := model.GenerateColumn{ColumnName: "name", ColumnType: "string", ViewType: "input"}
+	if coerceColumnValue(plain, "2024-06-01 10:00:00") != "2024-06-01 10:00:00" {
+		t.Fatal("non-datetime should stay string")
+	}
+}
+
+func TestParseSearchTimeRange(t *testing.T) {
+	start, end, ok := parseSearchTimeRange("2024-06-01", "2024-06-02")
+	if !ok || start != util.ParseDateTime("2024-06-01") || end != util.ParseDateTime("2024-06-02") {
+		t.Fatalf("range %d %d ok=%v", start, end, ok)
+	}
+	if _, _, ok := parseSearchTimeRange("", "2024-06-02"); ok {
+		t.Fatal("empty start")
+	}
+	if _, _, ok := parseSearchTimeRange("nope", "2024-06-02"); ok {
+		t.Fatal("bad start")
 	}
 }
 

@@ -71,6 +71,19 @@ func TestClearContentDomains(t *testing.T) {
 	}
 }
 
+func TestClearContentDomainsImgOnly(t *testing.T) {
+	in := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video></p>`
+	got := imgSrcRe.ReplaceAllStringFunc(in, func(m string) string {
+		return rewriteMediaSrc(imgSrcRe, m, func(src string) string {
+			return strings.ReplaceAll(src, "http://pair1.likeadmin.test/", "")
+		})
+	})
+	want := `<p><img src="uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestStorageCache(t *testing.T) {
 	cache.Del("STORAGE_DEFAULT")
 	cache.Del("STORAGE_ENGINE")

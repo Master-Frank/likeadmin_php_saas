@@ -391,8 +391,8 @@ func applySearch(db *gorm.DB, sp *spec, q lists.Query) *gorm.DB {
 			}
 		case "between":
 			if col.ViewType == "datetime" {
-				if q.StartTime != "" && q.EndTime != "" {
-					db = db.Where(name+" BETWEEN ? AND ?", q.StartTime, q.EndTime)
+				if start, end, ok := parseSearchTimeRange(q.StartTime, q.EndTime); ok {
+					db = db.Where(name+" BETWEEN ? AND ?", start, end)
 				}
 			} else {
 				start := lists.Param(q, "start")
@@ -402,8 +402,8 @@ func applySearch(db *gorm.DB, sp *spec, q lists.Query) *gorm.DB {
 				}
 			}
 		case "between_time":
-			if q.StartTime != "" && q.EndTime != "" {
-				db = db.Where(name+" BETWEEN ? AND ?", q.StartTime, q.EndTime)
+			if start, end, ok := parseSearchTimeRange(q.StartTime, q.EndTime); ok {
+				db = db.Where(name+" BETWEEN ? AND ?", start, end)
 			}
 		case "find_in_set":
 			if v := lists.Param(q, param); v != "" {
@@ -443,6 +443,23 @@ func selectCols(sp *spec) []string {
 	return out
 }
 
+// coerceColumnValue mirrors PHP LogicGenerator: int+datetime columns use strtotime.
+func coerceColumnValue(col model.GenerateColumn, val any) any {
+	if col.ColumnType == "int" && col.ViewType == "datetime" {
+		return util.ParseDateTime(util.ToString(val))
+	}
+	return val
+}
+
+// parseSearchTimeRange mirrors PHP BaseDataLists::initSearch strtotime + between_time.
+func parseSearchTimeRange(start, end string) (int64, int64, bool) {
+	s, e := util.ParseDateTime(start), util.ParseDateTime(end)
+	if s == 0 || e == 0 {
+		return 0, 0, false
+	}
+	return s, e, true
+}
+
 func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[string]any {
 	now := util.NowUnix()
 	data := map[string]any{}
@@ -459,10 +476,7 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 		if _, ok := p[col.ColumnName]; !ok {
 			continue
 		}
-		val := p[col.ColumnName]
-		if col.ColumnType == "int" && col.ViewType == "datetime" {
-			val = util.ToInt(val)
-		}
+		val := coerceColumnValue(col, p[col.ColumnName])
 		if col.ColumnName == "image" {
 			val = filesvc.SetFileURL(c, util.ToString(val))
 		}

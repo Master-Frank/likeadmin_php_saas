@@ -59,13 +59,16 @@ func rewriteContent(fileURL, content string) string {
 	})
 }
 
-// ClearContentDomains strips the file domain from img/video src, matching PHP clear_file_domain().
+// ClearContentDomains strips the file domain from img src only, matching PHP
+// clear_file_domain() (video tags are left as-is; get_file_domain still rewrites both).
 func ClearContentDomains(c *gin.Context, content string) string {
 	if content == "" {
 		return content
 	}
-	return mapMediaSrc(content, func(src string) string {
-		return SetFileURL(c, src)
+	return imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
+		return rewriteMediaSrc(imgSrcRe, m, func(src string) string {
+			return SetFileURL(c, src)
+		})
 	})
 }
 
