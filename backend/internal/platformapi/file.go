@@ -54,8 +54,12 @@ func FileMove(c *gin.Context) {
 			return
 		}
 	}
+	if !filesvc.FileIDsExist(bootstrap.DB.Model(&model.File{}), ids) {
+		response.Fail(c, "文件不存在")
+		return
+	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Updates(map[string]any{
+	bootstrap.DB.Model(&model.File{}).Where("id IN ? AND delete_time IS NULL", ids).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "update_time": now,
 	})
 	response.SuccessNotice(c, "移动成功")
@@ -84,6 +88,10 @@ func FileDelete(c *gin.Context) {
 	ids := httpx.Uints(c, "ids")
 	if msg := util.FileDeleteCheck(p, ids); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	if !filesvc.FileIDsExist(bootstrap.DB.Model(&model.File{}), ids) {
+		response.Fail(c, "文件不存在")
 		return
 	}
 	var rows []model.File

@@ -8,6 +8,15 @@ import (
 	"likeadmin/backend/internal/config"
 )
 
+func TestFileIDsExistEmpty(t *testing.T) {
+	if FileIDsExist(nil, nil) || FileIDsExist(nil, []uint{}) {
+		t.Fatal("empty ids")
+	}
+	if FileIDsExist(nil, []uint{0, 1}) {
+		t.Fatal("zero id")
+	}
+}
+
 func TestRewriteContentDomains(t *testing.T) {
 	in := `<p><img src="uploads/images/a.png"><video src="uploads/video/b.mp4"></video><img src="https://cdn.example/c.png"></p>`
 	got := rewriteContent("http://pair1.likeadmin.test/", in)

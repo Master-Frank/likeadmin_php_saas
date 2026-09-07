@@ -90,6 +90,28 @@ func CateIDsInclusive(db *gorm.DB, model any, id uint) []uint {
 	return append(CateChildIDs(db, model, id), id)
 }
 
+// FileIDsExist reports whether every id is a live (not soft-deleted) file row.
+func FileIDsExist(db *gorm.DB, ids []uint) bool {
+	if len(ids) == 0 {
+		return false
+	}
+	seen := map[uint]struct{}{}
+	uniq := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			return false
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	var n int64
+	db.Where("id IN ? AND delete_time IS NULL", uniq).Count(&n)
+	return int(n) == len(uniq)
+}
+
 func ApplyFileCID(db *gorm.DB, cateModel any, params map[string]any) *gorm.DB {
 	v, ok := params["cid"]
 	if !ok {

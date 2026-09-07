@@ -808,6 +808,24 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_pfe=${go_pfe:0:200}"
     fail=$((fail + 1))
   fi
+  go_fmv="$(curl -sS -X POST "$GO/tenantapi/file/move" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
+  echo "file_move_missing go_msg=$(jget msg <<<"$go_fmv")"
+  if [[ "$(jget msg <<<"$go_fmv")" != *文件不存在* ]]; then
+    echo "  go_fmv=${go_fmv:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_pfmv="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
+  echo "platform_file_move_missing go_msg=$(jget msg <<<"$go_pfmv")"
+  if [[ "$(jget msg <<<"$go_pfmv")" != *文件不存在* ]]; then
+    echo "  go_pfmv=${go_pfmv:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_fdel="$(curl -sS -X POST "$GO/tenantapi/file/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999]}')"
+  echo "file_delete_missing go_msg=$(jget msg <<<"$go_fdel")"
+  if [[ "$(jget msg <<<"$go_fdel")" != *文件不存在* ]]; then
+    echo "  go_fdel=${go_fdel:0:200}"
+    fail=$((fail + 1))
+  fi
   go_frn="$(curl -sS -X POST "$GO/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
   echo "file_rename_missing go_msg=$(jget msg <<<"$go_frn")"
   if [[ "$(jget msg <<<"$go_frn")" != *文件不存在* ]]; then
@@ -1838,6 +1856,13 @@ php_tct="$(jget data.create_time <<<"$php_tad")"
 go_tct="$(jget data.create_time <<<"$go_tad")"
 echo "tenant_admin_detail_time php=$php_tct go=$go_tct"
 if [[ -n "$php_tct" && "$php_tct" != "$go_tct" ]]; then
+  fail=$((fail + 1))
+fi
+go_tav="$(jget data.avatar <<<"$go_tad")"
+php_tav="$(jget data.avatar <<<"$php_tad")"
+echo "tenant_admin_avatar php_empty=$([[ -z "$php_tav" ]] && echo 1 || echo 0) go_empty=$([[ -z "$go_tav" ]] && echo 1 || echo 0)"
+if [[ -z "$go_tav" ]]; then
+  echo "  go_tad=${go_tad:0:200}"
   fail=$((fail + 1))
 fi
 go_prm="$(curl -sS -X POST "$GO/platformapi/auth.role/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"fkplat$ts\",\"sort\":0,\"menu_id\":[99999999]}")"

@@ -146,6 +146,9 @@ func TenantAdd(c *gin.Context) {
 		return initSharedTenant(tx, tenant, c)
 	})
 	if err != nil {
+		if tactics == 1 && sn != "" {
+			dropShardedTenantTables(sn)
+		}
 		response.Fail(c, "新增失败："+err.Error())
 		return
 	}
@@ -267,7 +270,7 @@ func TenantAdminLists(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "root": a.Root, "name": a.Name,
-			"avatar": filesvc.GetFileURL(c, a.Avatar), "account": a.Account,
+			"avatar": filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])), "account": a.Account,
 			"multipoint_login": a.MultipointLogin, "disable": a.Disable,
 			"create_time": util.FormatDateTime(a.CreateTime),
 		})
@@ -302,7 +305,8 @@ func TenantAdminDetail(c *gin.Context) {
 		return
 	}
 	response.Success(c, "获取成功", gin.H{
-		"id": a.ID, "root": a.Root, "name": a.Name, "avatar": filesvc.GetFileURL(c, a.Avatar),
+		"id": a.ID, "root": a.Root, "name": a.Name,
+		"avatar":  filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
 		"account": a.Account, "multipoint_login": a.MultipointLogin, "disable": a.Disable,
 		"create_time": util.FormatDateTime(a.CreateTime),
 	})
@@ -945,10 +949,15 @@ func runTenantDataSQL(tenantID uint, sn string) error {
 	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	content = strings.ReplaceAll(content, "{tenantSn}", sn)
 	content = strings.ReplaceAll(content, "{tenantId}", util.ToString(tenantID))
-	return execSQLScript(content)
+	return bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		return execSQLScript(tx, content)
+	})
 }
 
-func execSQLScript(content string) error {
+func execSQLScript(db *gorm.DB, content string) error {
+	if db == nil {
+		db = bootstrap.DB
+	}
 	parts := strings.Split(content, ";\n")
 	for _, sql := range parts {
 		sql = strings.TrimSpace(sql)
@@ -959,7 +968,7 @@ func execSQLScript(content string) error {
 		if strings.HasPrefix(up, "SET ") || strings.HasPrefix(up, "BEGIN") || strings.HasPrefix(up, "COMMIT") {
 			continue
 		}
-		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+		if err := db.Exec(sql).Error; err != nil {
 			return err
 		}
 	}
@@ -985,7 +994,7 @@ func runTenantSQL(sn string) error {
 	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	content = strings.ReplaceAll(content, "{tenantSn}", sn)
 	content = strings.ReplaceAll(content, "`la_", "`"+config.Prefix())
-	return execSQLScript(content)
+	return execSQLScript(bootstrap.DB, content)
 }
 
 func randomSN() string {

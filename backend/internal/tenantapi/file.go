@@ -57,6 +57,10 @@ func FileMove(c *gin.Context) {
 			return
 		}
 	}
+	if !filesvc.FileIDsExist(scopeTID(tdb(c).Model(&model.TenantFile{}), c), ids) {
+		response.Fail(c, "文件不存在")
+		return
+	}
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "update_time": now,
@@ -87,6 +91,10 @@ func FileDelete(c *gin.Context) {
 	ids := httpx.Uints(c, "ids")
 	if msg := util.FileDeleteCheck(p, ids); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	if !filesvc.FileIDsExist(scopeTID(tdb(c).Model(&model.TenantFile{}), c), ids) {
+		response.Fail(c, "文件不存在")
 		return
 	}
 	var rows []model.TenantFile
