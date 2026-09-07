@@ -142,6 +142,15 @@ func MoneyString(v float64) string {
 	return strconv.FormatFloat(v, 'f', 2, 64)
 }
 
+// EmptyToNil matches ThinkPHP JSON encoding of empty varchar/decimal-adjacent
+// columns that come out as null rather than "".
+func EmptyToNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // FormatAmount mirrors PHP format_amount(): strip trailing zeros down to
 // integer, one decimal, or the original float.
 func FormatAmount(v float64) any {

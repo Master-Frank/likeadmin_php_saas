@@ -983,6 +983,16 @@ print(ls[0]["id"] if ls else 0)
     echo "  go_nd=${go_nd:0:300}"
     fail=$((fail + 1))
   fi
+  php_ntpl="$(curl -sS "$PHP/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ntpl="$(curl -sS "$GO/tenantapi/notice.notice/detail?id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_ntpl_t="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, (d.get("data") or {}).get("id") if isinstance(d.get("data"), dict) else len(d.get("data") or []))' <<<"$php_ntpl")"
+  go_ntpl_t="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, (d.get("data") or {}).get("id") if isinstance(d.get("data"), dict) else len(d.get("data") or []))' <<<"$go_ntpl")"
+  echo "notice_template_row php=$php_ntpl_t go=$go_ntpl_t"
+  if [[ "$php_ntpl_t" != "$go_ntpl_t" ]]; then
+    echo "  php_ntpl=${php_ntpl:0:200}"
+    echo "  go_ntpl=${go_ntpl:0:200}"
+    fail=$((fail + 1))
+  fi
   save_notice="$(python3 -c '
 import json,sys
 d=json.loads(sys.stdin.read())
@@ -1766,8 +1776,8 @@ print(json.dumps({
   fi
   php_rlog="$(curl -sS "$PHP/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_rlog="$(curl -sS "$GO/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  echo "refund_log_missing php_code=$(jcode <<<"$php_rlog") go_code=$(jcode <<<"$go_rlog") php_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$php_rlog") go_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$go_rlog")"
-  if [[ "$(jcode <<<"$php_rlog")" != "$(jcode <<<"$go_rlog")" ]]; then
+  echo "refund_log_missing php_code=$(jcode <<<"$php_rlog") go_code=$(jcode <<<"$go_rlog") php_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$php_rlog") go_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$go_rlog") php_msg=$(jget msg <<<"$php_rlog") go_msg=$(jget msg <<<"$go_rlog")"
+  if [[ "$(jcode <<<"$php_rlog")" != "$(jcode <<<"$go_rlog")" || "$(jget msg <<<"$php_rlog")" != "$(jget msg <<<"$go_rlog")" ]]; then
     echo "  php_rlog=${php_rlog:0:200}"
     echo "  go_rlog=${go_rlog:0:200}"
     fail=$((fail + 1))
@@ -2058,6 +2068,46 @@ print(next((x.get("id") for x in ls if x.get("name")==sys.argv[1]), 0))
   echo "refund_record php_code=$(jcode <<<"$php_rr") go_code=$(jcode <<<"$go_rr") php_ext=$(jget data.extend.total <<<"$php_rr") go_ext=$(jget data.extend.total <<<"$go_rr")"
   if [[ "$(jcode <<<"$php_rr")" != "$(jcode <<<"$go_rr")" ]]; then
     fail=$((fail + 1))
+  fi
+  php_rl="$(curl -sS "$PHP/tenantapi/recharge.recharge/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rl="$(curl -sS "$GO/tenantapi/recharge.recharge/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_amt="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(repr(ls[0].get("order_amount")) if ls else "")' <<<"$php_rl")"
+  go_amt="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(repr(ls[0].get("order_amount")) if ls else "")' <<<"$go_rl")"
+  echo "recharge_order_amount php=$php_amt go=$go_amt"
+  if [[ -n "$php_amt" && "$php_amt" != "$go_amt" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_rramt="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(repr((ls[0].get("order_amount"), ls[0].get("refund_amount"), ls[0].get("tenant_id") is not None)) if ls else "")' <<<"$php_rr")"
+  go_rramt="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or []); print(repr((ls[0].get("order_amount"), ls[0].get("refund_amount"), ls[0].get("tenant_id") is not None)) if ls else "")' <<<"$go_rr")"
+  echo "refund_record_fields php=$php_rramt go=$go_rramt"
+  if [[ -n "$php_rramt" && "$php_rramt" != "$go_rramt" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_ss="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ss="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getSiteStatistics" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_cc="$(python3 -c 'import json,sys; print(repr((json.load(sys.stdin).get("data") or {}).get("clarity_code")))' <<<"$php_ss")"
+  go_cc="$(python3 -c 'import json,sys; print(repr((json.load(sys.stdin).get("data") or {}).get("clarity_code")))' <<<"$go_ss")"
+  echo "clarity_code php=$php_cc go=$go_cc"
+  if [[ "$php_cc" != "$go_cc" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_pccfg="$(curl -sS "$PHP/api/pc/config" -H "Host: $TENANT_HOST")"
+  go_pccfg="$(curl -sS "$GO/api/pc/config" -H "Host: $TENANT_HOST")"
+  php_pt="$(python3 -c 'import json,sys; w=(json.load(sys.stdin).get("data") or {}).get("website") or {}; print(repr((w.get("pc_title"), w.get("pc_desc"), w.get("pc_keywords"))))' <<<"$php_pccfg")"
+  go_pt="$(python3 -c 'import json,sys; w=(json.load(sys.stdin).get("data") or {}).get("website") or {}; print(repr((w.get("pc_title"), w.get("pc_desc"), w.get("pc_keywords"))))' <<<"$go_pccfg")"
+  echo "pc_titles php=$php_pt go=$go_pt"
+  if [[ "$php_pt" != "$go_pt" ]]; then
+    fail=$((fail + 1))
+  fi
+  if [[ -n "$php_aid" && "$php_aid" != "0" ]]; then
+    php_ad="$(curl -sS "$PHP/tenantapi/article.article/detail?id=$php_aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_ad="$(curl -sS "$GO/tenantapi/article.article/detail?id=$php_aid" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_click="$(python3 -c 'import json,sys; print("click" in ((json.load(sys.stdin).get("data") or {})))' <<<"$php_ad")"
+    go_click="$(python3 -c 'import json,sys; print("click" in ((json.load(sys.stdin).get("data") or {})))' <<<"$go_ad")"
+    echo "article_detail_click php=$php_click go=$go_click"
+    if [[ "$php_click" != "$go_click" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
 fi
 

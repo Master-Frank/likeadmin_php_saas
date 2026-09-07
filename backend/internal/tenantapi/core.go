@@ -286,6 +286,13 @@ func scopeTID(db *gorm.DB, c *gin.Context) *gorm.DB {
 	return db
 }
 
+// requireTenant fails closed for tenantapi writes/lookups that PHP BaseModel
+// would always scope. A missing tenant must not see or mutate shared rows.
+func requireTenant(c *gin.Context) (uint, bool) {
+	tid := tenantDB(c)
+	return tid, tid > 0
+}
+
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -548,7 +555,7 @@ func ArticleDetail(c *gin.Context) {
 		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
 		"content": filesvc.RewriteContentDomains(c, a.Content),
 		"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
-		"click": a.ClickActual + a.ClickVirtual, "tenant_id": a.TenantID,
+		"tenant_id":   a.TenantID,
 		"create_time": util.FormatDateTime(a.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(a.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(a.DeleteTime),
@@ -855,7 +862,7 @@ func RechargeLists(c *gin.Context) {
 			payTime = util.FormatDateTime(*r.PayTime)
 		}
 		out = append(out, map[string]any{
-			"id": r.ID, "sn": r.SN, "order_amount": r.OrderAmount, "pay_way": r.PayWay,
+			"id": r.ID, "sn": r.SN, "order_amount": util.MoneyString(r.OrderAmount), "pay_way": r.PayWay,
 			"pay_time": payTime, "pay_status": r.PayStatus, "refund_status": r.RefundStatus,
 			"create_time": util.FormatDateTime(r.CreateTime),
 			"avatar":      filesvc.GetFileURL(c, r.Avatar), "nickname": r.Nickname, "account": r.Account,
@@ -994,9 +1001,10 @@ func FinanceRefundRecord(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, map[string]any{
 			"id": r.ID, "sn": r.SN, "user_id": r.UserID, "order_id": r.OrderID, "order_sn": r.OrderSN,
-			"order_type": r.OrderType, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
-			"refund_type": r.RefundType, "transaction_id": r.TransactionID, "refund_way": r.RefundWay,
-			"refund_status": r.RefundStatus, "create_time": util.FormatDateTime(r.CreateTime),
+			"order_type": r.OrderType, "order_amount": util.MoneyString(r.OrderAmount), "refund_amount": util.MoneyString(r.RefundAmount),
+			"refund_type": r.RefundType, "transaction_id": util.EmptyToNil(r.TransactionID), "refund_way": r.RefundWay,
+			"refund_status": r.RefundStatus, "tenant_id": r.TenantID,
+			"create_time": util.FormatDateTime(r.CreateTime), "update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 			"nickname": r.Nickname, "avatar": filesvc.GetFileURL(c, r.Avatar),
 			"refund_type_text":   util.RefundTypeText(r.RefundType),
 			"refund_status_text": util.RefundStatusText(r.RefundStatus),
@@ -1040,10 +1048,12 @@ func OAReplyIndex(c *gin.Context) {
 		writeOA("success")
 		return
 	}
-	q := tdb(c).Where("delete_time IS NULL AND status = 1")
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		writeOA("success")
+		return
 	}
+	q := tdb(c).Where("delete_time IS NULL AND status = 1 AND tenant_id = ?", tid)
 	var rows []model.OfficialAccountReply
 	q.Order("sort asc, id asc").Find(&rows)
 	mapped := make([]wechat.ReplyRow, 0, len(rows))

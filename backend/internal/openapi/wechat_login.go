@@ -209,14 +209,14 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		return nil, fmt.Errorf("获取openID失败")
 	}
 	tid := ctxutil.Get(c).TenantID
+	if tid == 0 {
+		return nil, fmt.Errorf("接口域名错误或租户不存在")
+	}
 	var user model.User
 	q := tdb(c).Table(tenantdb.Table(c, model.User{}.TableName())+" u").
 		Select("u.*").
 		Joins("JOIN "+tenantdb.Table(c, model.UserAuth{}.TableName())+" au ON au.user_id = u.id").
-		Where("u.delete_time IS NULL AND (au.openid = ? OR (au.unionid <> '' AND au.unionid = ?))", sess.Openid, sess.Unionid)
-	if tid > 0 {
-		q = q.Where("u.tenant_id = ? AND au.tenant_id = ?", tid, tid)
-	}
+		Where("u.delete_time IS NULL AND u.tenant_id = ? AND au.tenant_id = ? AND (au.openid = ? OR (au.unionid <> '' AND au.unionid = ?))", tid, tid, sess.Openid, sess.Unionid)
 	err := q.First(&user).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err

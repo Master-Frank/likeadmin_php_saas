@@ -449,6 +449,9 @@ func TestSexChannelMoney(t *testing.T) {
 	if MoneyString(0) != "0.00" || MoneyString(1.5) != "1.50" {
 		t.Fatal(MoneyString(0), MoneyString(1.5))
 	}
+	if EmptyToNil("") != nil || EmptyToNil("tx") != "tx" {
+		t.Fatal(EmptyToNil(""), EmptyToNil("tx"))
+	}
 }
 
 func TestUpgradeCheck(t *testing.T) {

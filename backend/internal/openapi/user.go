@@ -430,7 +430,7 @@ func RechargeLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, map[string]any{
-			"order_amount": r.OrderAmount,
+			"order_amount": util.MoneyString(r.OrderAmount),
 			"create_time":  util.FormatDateTime(r.CreateTime),
 			"tips":         "充值" + util.ToString(util.FormatAmount(r.OrderAmount)) + "元",
 		})

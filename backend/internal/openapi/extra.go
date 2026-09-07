@@ -205,7 +205,7 @@ func PayWay(c *gin.Context) {
 		})
 	}
 	sortPayWayItems(out)
-	response.Data(c, gin.H{"lists": out, "order_amount": order.OrderAmount})
+	response.Data(c, gin.H{"lists": out, "order_amount": util.MoneyString(order.OrderAmount)})
 }
 
 func sortPayWayItems(out []map[string]any) {
@@ -270,7 +270,7 @@ func PayPrepay(c *gin.Context) {
 			response.FailWithData(c, err.Error(), p)
 			return
 		}
-		response.Success(c, "", gin.H{"pay_way": 1})
+		response.SuccessSilent(c, "", gin.H{"pay_way": 1})
 		return
 	}
 	if payWay == 1 {
@@ -298,7 +298,7 @@ func PayPrepay(c *gin.Context) {
 		response.FailWithData(c, err.Error(), p)
 		return
 	}
-	response.Success(c, "", data)
+	response.SuccessSilent(c, "", data)
 }
 
 func PayStatus(c *gin.Context) {
@@ -323,7 +323,7 @@ func PayStatus(c *gin.Context) {
 	response.Data(c, gin.H{
 		"pay_status": order.PayStatus, "pay_way": order.PayWay,
 		"order": gin.H{
-			"order_id": order.ID, "order_sn": order.SN, "order_amount": order.OrderAmount,
+			"order_id": order.ID, "order_sn": order.SN, "order_amount": util.MoneyString(order.OrderAmount),
 			"pay_way": payDesc[order.PayWay], "pay_status": statusDesc[order.PayStatus],
 			"pay_time": util.FormatDateTimePtr(order.PayTime),
 		},
@@ -519,10 +519,10 @@ func PcConfig(c *gin.Context) {
 			"shop_name":   cfgsvc.GetString(c, "website", "shop_name", ""),
 			"shop_logo":   filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
 			"pc_logo":     filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_logo", "")),
-			"pc_title":    cfgsvc.Get(c, "website", "pc_title", nil),
+			"pc_title":    cfgsvc.GetString(c, "website", "pc_title", ""),
 			"pc_ico":      filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_ico", "")),
-			"pc_desc":     cfgsvc.Get(c, "website", "pc_desc", nil),
-			"pc_keywords": cfgsvc.Get(c, "website", "pc_keywords", nil),
+			"pc_desc":     cfgsvc.GetString(c, "website", "pc_desc", ""),
+			"pc_keywords": cfgsvc.GetString(c, "website", "pc_keywords", ""),
 		},
 		"siteStatistics": gin.H{"clarity_code": cfgsvc.Get(c, "siteStatistics", "clarity_code", nil)},
 		"version":        config.C.Project.Version,

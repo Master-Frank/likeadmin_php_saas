@@ -206,9 +206,9 @@ func SettingSetCopyright(c *gin.Context) {
 
 func SettingGetAgreement(c *gin.Context) {
 	response.Data(c, gin.H{
-		"service_title":   cfgsvc.GetString(c, "agreement", "service_title", "服务协议"),
+		"service_title":   cfgsvc.Get(c, "agreement", "service_title", nil),
 		"service_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "service_content", "")),
-		"privacy_title":   cfgsvc.GetString(c, "agreement", "privacy_title", "隐私政策"),
+		"privacy_title":   cfgsvc.Get(c, "agreement", "privacy_title", nil),
 		"privacy_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "privacy_content", "")),
 	})
 }
@@ -222,7 +222,7 @@ func SettingSetAgreement(c *gin.Context) {
 }
 
 func SettingGetSiteStatistics(c *gin.Context) {
-	response.Data(c, gin.H{"clarity_code": cfgsvc.GetString(c, "siteStatistics", "clarity_code", "")})
+	response.Data(c, gin.H{"clarity_code": cfgsvc.Get(c, "siteStatistics", "clarity_code", nil)})
 }
 
 func SettingSetSiteStatistics(c *gin.Context) {
@@ -320,12 +320,14 @@ func FinanceRefundLog(c *gin.Context) {
 		handler := refundHandlerName(c, r.HandleID)
 		out = append(out, map[string]any{
 			"id": r.ID, "sn": r.SN, "record_id": r.RecordID, "user_id": r.UserID,
-			"handle_id": r.HandleID, "handler": handler, "order_amount": r.OrderAmount, "refund_amount": r.RefundAmount,
+			"handle_id": r.HandleID, "handler": handler,
+			"order_amount": util.MoneyString(r.OrderAmount), "refund_amount": util.MoneyString(r.RefundAmount),
 			"refund_status": r.RefundStatus, "refund_status_text": statusText,
-			"create_time": util.FormatDateTime(r.CreateTime),
+			"tenant_id": r.TenantID, "create_time": util.FormatDateTime(r.CreateTime),
+			"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 		})
 	}
-	response.Success(c, "", out)
+	response.SuccessSilent(c, "", out)
 }
 
 // refundHandlerName prefers the current tenant admin (who actually issues tenant
@@ -660,10 +662,12 @@ func RechargeRefundAgain(c *gin.Context) {
 
 func OAReplyLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.OfficialAccountReply{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Lists(c, []map[string]any{}, 0, q.PageNo, q.PageSize, nil)
+		return
 	}
+	db := tdb(c).Model(&model.OfficialAccountReply{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	if t := lists.ParamInt(q, "reply_type"); t > 0 {
 		db = db.Where("reply_type = ?", t)
 	}
@@ -694,6 +698,10 @@ func OAReplyAdd(c *gin.Context) {
 		ContentType: httpx.Int(c, "content_type"), Content: httpx.Str(c, "content"),
 		Status: httpx.Int(c, "status"), Sort: httpx.Int(c, "sort"), CreateTime: util.NowUnix(),
 	}
+	if row.TenantID == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	if row.MatchingType == 0 {
 		row.MatchingType = 1
 	}
@@ -701,11 +709,9 @@ func OAReplyAdd(c *gin.Context) {
 		row.ContentType = 1
 	}
 	if row.ReplyType != 2 && row.Status == 1 {
-		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND delete_time IS NULL", row.ReplyType)
-		if tid := tenantDB(c); tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		q.Update("status", 0)
+		tdb(c).Model(&model.OfficialAccountReply{}).
+			Where("reply_type = ? AND tenant_id = ? AND delete_time IS NULL", row.ReplyType, row.TenantID).
+			Update("status", 0)
 	}
 	tdb(c).Create(&row)
 	response.SuccessNotice(c, "操作成功")
@@ -717,19 +723,19 @@ func OAReplyEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	replyType := httpx.Int(c, "reply_type")
 	status := httpx.Int(c, "status")
 	if replyType != 2 && status == 1 {
-		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"))
-		if tid := tenantDB(c); tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		q.Update("status", 0)
+		tdb(c).Model(&model.OfficialAccountReply{}).
+			Where("reply_type = ? AND id <> ? AND tenant_id = ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"), tid).
+			Update("status", 0)
 	}
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid)
 	q.Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "keyword": httpx.Str(c, "keyword"),
 		"reply_type": replyType, "matching_type": httpx.Int(c, "matching_type"),
@@ -741,11 +747,11 @@ func OAReplyEdit(c *gin.Context) {
 
 func oaReplyByID(c *gin.Context, id uint) (model.OfficialAccountReply, bool) {
 	var row model.OfficialAccountReply
-	q := tdb(c).Where("id = ? AND delete_time IS NULL", id)
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok || id == 0 {
+		return row, false
 	}
-	if q.First(&row).Error != nil || row.ID == 0 {
+	if tdb(c).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", id, tid).First(&row).Error != nil || row.ID == 0 {
 		return row, false
 	}
 	return row, true
@@ -756,11 +762,12 @@ func OAReplyDelete(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	q := tdb(c).Unscoped().Where("id = ?", httpx.Uint(c, "id"))
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.SuccessNotice(c, "操作成功")
+		return
 	}
-	q.Delete(&model.OfficialAccountReply{})
+	tdb(c).Unscoped().Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid).Delete(&model.OfficialAccountReply{})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -807,18 +814,9 @@ func OAReplyStatus(c *gin.Context) {
 	if row.Status == 0 {
 		status = 1
 	}
-	if row.ReplyType != 2 && status == 1 {
-		q := tdb(c).Model(&model.OfficialAccountReply{}).Where("reply_type = ? AND id <> ? AND delete_time IS NULL", row.ReplyType, row.ID)
-		if tid := tenantDB(c); tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		q.Update("status", 0)
-	}
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", row.ID)
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	q.Update("status", status)
+	// PHP OfficialAccountReplyLogic::status only flips this row.
+	tid := tenantDB(c)
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", row.ID, tid).Update("status", status)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -831,14 +829,14 @@ func OAReplySort(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	sort := httpx.Int(c, "new_sort")
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ?", httpx.Uint(c, "id"))
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.SuccessNotice(c, "操作成功")
+		return
 	}
-	q.Updates(map[string]any{
-		"sort": sort, "update_time": util.NowUnix(),
-	})
+	sort := httpx.Int(c, "new_sort")
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid).
+		Updates(map[string]any{"sort": sort, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -901,9 +899,12 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 func TenantNoticeLists(c *gin.Context) {
 	q := lists.Parse(c)
 	db := tdb(c).Model(&model.TenantNoticeSetting{})
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid := tenantDB(c)
+	if tid == 0 {
+		response.Lists(c, []map[string]any{}, 0, q.PageNo, q.PageSize, nil)
+		return
 	}
+	db = db.Where("tenant_id = ?", tid)
 	if lists.Param(q, "recipient") != "" {
 		db = db.Where("recipient = ?", lists.ParamInt(q, "recipient"))
 	}
@@ -936,14 +937,14 @@ func TenantNoticeLists(c *gin.Context) {
 
 func tenantNoticeByID(c *gin.Context, id uint) (model.TenantNoticeSetting, bool) {
 	var r model.TenantNoticeSetting
-	if id == 0 {
+	// PHP TenantNoticeSetting::findOrEmpty is scoped to the current tenant.
+	// Template rows (tenant_id=0) must stay invisible. Fail closed if the
+	// request has no tenant, instead of leaking platform templates.
+	tid := tenantDB(c)
+	if id == 0 || tid == 0 {
 		return r, false
 	}
-	q := tdb(c).Where("id = ?", id)
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	if q.First(&r).Error != nil || r.ID == 0 {
+	if tdb(c).Where("id = ? AND tenant_id = ?", id, tid).First(&r).Error != nil || r.ID == 0 || r.TenantID != tid {
 		return r, false
 	}
 	return r, true
@@ -977,6 +978,9 @@ func TenantNoticeSet(c *gin.Context) {
 	q := tdb(c).Model(&model.TenantNoticeSetting{}).Where("id = ?", id)
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
+	} else {
+		response.Fail(c, "通知配置不存在")
+		return
 	}
 	q.Updates(updates)
 	response.Success(c, "设置成功", nil)
