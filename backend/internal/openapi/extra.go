@@ -118,17 +118,20 @@ func userTerminal(c *gin.Context) int {
 }
 
 func RechargeCreate(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	if uid == 0 {
 		response.FailSilent(c, "请求参数缺token")
 		return
 	}
 	minAmt := util.ToFloat(cfgsvc.Get(c, "recharge", "min_amount", 0))
-	if msg := util.RechargeAPICheck(httpx.Params(c), cfgsvc.GetInt(c, "recharge", "status", 0), minAmt); msg != "" {
+	if msg := util.RechargeAPICheck(httpx.Body(c), cfgsvc.GetInt(c, "recharge", "status", 0), minAmt); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	money := httpx.Float(c, "money")
+	money := httpx.BodyFloat(c, "money")
 	terminal := userTerminal(c)
 	tid := ctxutil.Get(c).TenantID
 	if tid == 0 {
@@ -225,7 +228,10 @@ func sortPayWayItems(out []map[string]any) {
 }
 
 func PayPrepay(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if _, ok := p["from"]; !ok || strings.TrimSpace(util.ToString(p["from"])) == "" {
 		response.Fail(c, "参数缺失")
 		return
@@ -234,7 +240,7 @@ func PayPrepay(c *gin.Context) {
 		response.Fail(c, "支付方式参数缺失")
 		return
 	}
-	payWay := httpx.Int(c, "pay_way")
+	payWay := httpx.BodyInt(c, "pay_way")
 	if payWay != 1 && payWay != 2 && payWay != 3 {
 		response.Fail(c, "支付方式参数错误")
 		return
@@ -243,8 +249,8 @@ func PayPrepay(c *gin.Context) {
 		response.Fail(c, "订单参数缺失")
 		return
 	}
-	from := httpx.Str(c, "from")
-	orderID := httpx.Uint(c, "order_id")
+	from := httpx.BodyStr(c, "from")
+	orderID := httpx.BodyUint(c, "order_id")
 	if from != "recharge" {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
@@ -279,7 +285,7 @@ func PayPrepay(c *gin.Context) {
 		response.FailWithData(c, "充值不支持余额支付", p)
 		return
 	}
-	redirect := httpx.Str(c, "redirect")
+	redirect := httpx.BodyStr(c, "redirect")
 	if redirect == "" {
 		redirect = "/pages/payment/payment"
 	}
@@ -365,6 +371,9 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 }
 
 func UserChangePassword(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	u := currentUser(c)
 	if u.ID == 0 {
 		response.Fail(c, "请先登录")
@@ -372,12 +381,12 @@ func UserChangePassword(c *gin.Context) {
 	}
 	salt := config.C.Project.UniqueIdentification
 	// PHP PasswordValidate runs before UserLogic::changePassword.
-	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
+	if msg := util.UserPasswordCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	if u.Password != "" {
-		old := httpx.Str(c, "old_password")
+		old := httpx.BodyStr(c, "old_password")
 		if old == "" {
 			response.Fail(c, "请填写旧密码")
 			return
@@ -387,14 +396,17 @@ func UserChangePassword(c *gin.Context) {
 			return
 		}
 	}
-	pwd := httpx.Str(c, "password")
+	pwd := httpx.BodyStr(c, "password")
 	tdb(c).Model(&u).Update("password", util.CreatePassword(pwd, salt))
 	response.SuccessNotice(c, "操作成功")
 }
 
 func UserResetPassword(c *gin.Context) {
-	mobile := httpx.Str(c, "mobile")
-	code := httpx.Str(c, "code")
+	if !response.RequirePOST(c) {
+		return
+	}
+	mobile := httpx.BodyStr(c, "mobile")
+	code := httpx.BodyStr(c, "code")
 	if msg := util.ValidChinaMobile(mobile); msg != "" {
 		if mobile == "" {
 			response.Fail(c, "请输入手机号")
@@ -407,7 +419,7 @@ func UserResetPassword(c *gin.Context) {
 		response.Fail(c, "请填写验证码")
 		return
 	}
-	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
+	if msg := util.UserPasswordCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -415,18 +427,21 @@ func UserResetPassword(c *gin.Context) {
 		response.Fail(c, "验证码错误")
 		return
 	}
-	hashed := util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification)
+	hashed := util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification)
 	scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c).Update("password", hashed)
 	response.SuccessNotice(c, "操作成功")
 }
 
 func UserBindMobile(c *gin.Context) {
-	if !phpRequiredParam(httpx.Params(c), "code") {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !phpRequiredParam(httpx.Body(c), "code") {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	u := currentUser(c)
-	mobile := httpx.Str(c, "mobile")
+	mobile := httpx.BodyStr(c, "mobile")
 	if msg := util.ValidChinaMobile(mobile); msg != "" {
 		if mobile == "" {
 			response.Fail(c, "请输入手机号")
@@ -435,8 +450,8 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "请输入正确手机号")
 		return
 	}
-	code := httpx.Str(c, "code")
-	typ := httpx.Str(c, "type")
+	code := httpx.BodyStr(c, "code")
+	typ := httpx.BodyStr(c, "type")
 	scene := "BGSJHM"
 	if typ == "bind" {
 		scene = "BDSJHM"

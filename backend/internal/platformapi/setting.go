@@ -32,15 +32,18 @@ func WebGetWebsite(c *gin.Context) {
 }
 
 func WebSetWebsite(c *gin.Context) {
-	if msg := util.PlatformWebSettingCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.PlatformWebSettingCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "platform", "name", httpx.Str(c, "name"))
-	cfgsvc.Set(c, "platform", "web_favicon", filesvc.SetFileURL(c, httpx.Str(c, "web_favicon")))
-	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.Str(c, "web_logo_light")))
-	cfgsvc.Set(c, "platform", "web_logo_dark", filesvc.SetFileURL(c, httpx.Str(c, "web_logo_dark")))
-	cfgsvc.Set(c, "platform", "login_image", filesvc.SetFileURL(c, httpx.Str(c, "login_image")))
+	cfgsvc.Set(c, "platform", "name", httpx.BodyStr(c, "name"))
+	cfgsvc.Set(c, "platform", "web_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_favicon")))
+	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo_light")))
+	cfgsvc.Set(c, "platform", "web_logo_dark", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo_dark")))
+	cfgsvc.Set(c, "platform", "login_image", filesvc.SetFileURL(c, httpx.BodyStr(c, "login_image")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -49,7 +52,7 @@ func WebGetCopyright(c *gin.Context) {
 }
 
 func WebSetCopyright(c *gin.Context) {
-	cfg := httpx.Any(c, "config")
+	cfg := httpx.BodyAny(c, "config")
 	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -68,10 +71,10 @@ func WebGetAgreement(c *gin.Context) {
 }
 
 func WebSetAgreement(c *gin.Context) {
-	cfgsvc.Set(c, "agreement", "service_title", httpx.Str(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.Str(c, "service_content")))
-	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.Str(c, "privacy_content")))
+	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
+	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -80,11 +83,14 @@ func UserGetConfig(c *gin.Context) {
 }
 
 func UserSetConfig(c *gin.Context) {
-	if msg := util.UserAvatarCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.UserAvatarCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.Str(c, "default_avatar")))
+	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.BodyStr(c, "default_avatar")))
 	response.SuccessNotice(c, "操作成功")
 }
 

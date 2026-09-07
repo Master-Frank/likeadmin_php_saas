@@ -1538,6 +1538,22 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
   php_rf="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_rf="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  php_rfq="$(curl -sS -X POST "$PHP/tenantapi/recharge.recharge/refund?recharge_id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_rfq="$(curl -sS -X POST "$GO/tenantapi/recharge.recharge/refund?recharge_id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "refund_post_query_ignored php_msg=$(jget msg <<<"$php_rfq") go_msg=$(jget msg <<<"$go_rfq")"
+  if [[ "$(jget msg <<<"$php_rfq")" != "$(jget msg <<<"$go_rfq")" ]]; then
+    echo "  php_rfq=${php_rfq:0:200}"
+    echo "  go_rfq=${go_rfq:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rfg="$(curl -sS "$PHP/tenantapi/recharge.recharge/refund?recharge_id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rfg="$(curl -sS "$GO/tenantapi/recharge.recharge/refund?recharge_id=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "refund_get_method php_msg=$(jget msg <<<"$php_rfg") go_msg=$(jget msg <<<"$go_rfg")"
+  if [[ "$(jget msg <<<"$php_rfg")" != "$(jget msg <<<"$go_rfg")" ]]; then
+    echo "  php_rfg=${php_rfg:0:200}"
+    echo "  go_rfg=${go_rfg:0:200}"
+    fail=$((fail + 1))
+  fi
   echo "refund_bad php_msg=$(jget msg <<<"$php_rf") go_msg=$(jget msg <<<"$go_rf")"
   if [[ "$(jget msg <<<"$php_rf")" != "$(jget msg <<<"$go_rf")" ]]; then
     fail=$((fail + 1))
@@ -1608,6 +1624,38 @@ print(json.dumps({
     go_pay="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     echo "pay_prepay_bad php_msg=$(jget msg <<<"$php_pay") go_msg=$(jget msg <<<"$go_pay")"
     if [[ "$(jget msg <<<"$php_pay")" != "$(jget msg <<<"$go_pay")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_ppq="$(curl -sS -X POST "$PHP/api/pay/prepay?from=recharge&pay_way=2&order_id=1" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_ppq="$(curl -sS -X POST "$GO/api/pay/prepay?from=recharge&pay_way=2&order_id=1" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "prepay_post_query_ignored php_msg=$(jget msg <<<"$php_ppq") go_msg=$(jget msg <<<"$go_ppq")"
+    if [[ "$(jget msg <<<"$php_ppq")" != "$(jget msg <<<"$go_ppq")" ]]; then
+      echo "  php_ppq=${php_ppq:0:200}"
+      echo "  go_ppq=${go_ppq:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_ppg="$(curl -sS "$PHP/api/pay/prepay?from=recharge&pay_way=2&order_id=1" -H "Host: $TENANT_HOST" -H "token: $UT")"
+    go_ppg="$(curl -sS "$GO/api/pay/prepay?from=recharge&pay_way=2&order_id=1" -H "Host: $TENANT_HOST" -H "token: $UT")"
+    echo "prepay_get_method php_msg=$(jget msg <<<"$php_ppg") go_msg=$(jget msg <<<"$go_ppg")"
+    if [[ "$(jget msg <<<"$php_ppg")" != "$(jget msg <<<"$go_ppg")" ]]; then
+      echo "  php_ppg=${php_ppg:0:200}"
+      echo "  go_ppg=${go_ppg:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_rcq="$(curl -sS -X POST "$PHP/api/recharge/recharge?money=10" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_rcq="$(curl -sS -X POST "$GO/api/recharge/recharge?money=10" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "recharge_post_query_ignored php_msg=$(jget msg <<<"$php_rcq") go_msg=$(jget msg <<<"$go_rcq")"
+    if [[ "$(jget msg <<<"$php_rcq")" != "$(jget msg <<<"$go_rcq")" ]]; then
+      echo "  php_rcq=${php_rcq:0:200}"
+      echo "  go_rcq=${go_rcq:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_siq="$(curl -sS -X POST "$PHP/api/user/setInfo?field=nickname&value=hack" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_siq="$(curl -sS -X POST "$GO/api/user/setInfo?field=nickname&value=hack" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "setinfo_post_query_ignored php_msg=$(jget msg <<<"$php_siq") go_msg=$(jget msg <<<"$go_siq")"
+    if [[ "$(jget msg <<<"$php_siq")" != "$(jget msg <<<"$go_siq")" ]]; then
+      echo "  php_siq=${php_siq:0:200}"
+      echo "  go_siq=${go_siq:0:200}"
       fail=$((fail + 1))
     fi
     php_sms2="$(curl -sS -X POST "$PHP/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
@@ -2451,6 +2499,22 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
     if [[ "$(jget msg <<<"$php_pv0")" != "$(jget msg <<<"$go_pv0")" ]]; then
       echo "  php_pv0=${php_pv0:0:200}"
       echo "  go_pv0=${go_pv0:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pvq="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+    go_pvq="$(curl -sS -X POST "$GO/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+    echo "generator_preview_query_ignored php_msg=$(jget msg <<<"$php_pvq") go_msg=$(jget msg <<<"$go_pvq")"
+    if [[ "$(jget msg <<<"$php_pvq")" != "$(jget msg <<<"$go_pvq")" ]]; then
+      echo "  php_pvq=${php_pvq:0:200}"
+      echo "  go_pvq=${go_pvq:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pvg="$(curl -sS "$PHP/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
+    go_pvg="$(curl -sS "$GO/platformapi/tools.generator/preview?id=$gid" -H "token: $TOKEN")"
+    echo "generator_preview_get_method php_msg=$(jget msg <<<"$php_pvg") go_msg=$(jget msg <<<"$go_pvg")"
+    if [[ "$(jget msg <<<"$php_pvg")" != "$(jget msg <<<"$go_pvg")" ]]; then
+      echo "  php_pvg=${php_pvg:0:200}"
+      echo "  go_pvg=${go_pvg:0:200}"
       fail=$((fail + 1))
     fi
     php_pv="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}")"

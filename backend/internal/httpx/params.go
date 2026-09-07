@@ -107,8 +107,53 @@ func BodyStr(c *gin.Context, key string) string {
 	return strings.TrimSpace(util.ToString(Body(c)[key]))
 }
 
+func BodyInt(c *gin.Context, key string) int {
+	return util.ToInt(Body(c)[key])
+}
+
 func BodyUint(c *gin.Context, key string) uint {
 	return uint(util.ToInt(Body(c)[key]))
+}
+
+func BodyFloat(c *gin.Context, key string) float64 {
+	return util.ToFloat(Body(c)[key])
+}
+
+func BodyAny(c *gin.Context, key string) any {
+	return Body(c)[key]
+}
+
+func BodyHas(c *gin.Context, key string) bool {
+	_, ok := Body(c)[key]
+	return ok
+}
+
+func BodyInts(c *gin.Context, key string) []int {
+	v := Body(c)[key]
+	switch t := v.(type) {
+	case []any:
+		out := make([]int, 0, len(t))
+		for _, item := range t {
+			out = append(out, util.ToInt(item))
+		}
+		return out
+	case []int:
+		return t
+	default:
+		if util.ToString(v) == "" {
+			return nil
+		}
+		return []int{util.ToInt(v)}
+	}
+}
+
+func BodyUints(c *gin.Context, key string) []uint {
+	ints := BodyInts(c, key)
+	out := make([]uint, len(ints))
+	for i, n := range ints {
+		out[i] = uint(n)
+	}
+	return out
 }
 
 func List(c *gin.Context) []any {

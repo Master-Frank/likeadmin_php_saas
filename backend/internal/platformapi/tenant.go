@@ -110,17 +110,20 @@ func TenantDetail(c *gin.Context) {
 }
 
 func TenantAdd(c *gin.Context) {
-	name := httpx.Str(c, "name")
+	if !response.RequirePOST(c) {
+		return
+	}
+	name := httpx.BodyStr(c, "name")
 	if name == "" {
 		response.Fail(c, "请输入用户名")
 		return
 	}
-	alias := stripHost(httpx.Str(c, "domain_alias"))
+	alias := stripHost(httpx.BodyStr(c, "domain_alias"))
 	if tenantAliasTaken(alias, 0) {
 		response.Fail(c, "租户别名已存在")
 		return
 	}
-	sn := httpx.Str(c, "host_name")
+	sn := httpx.BodyStr(c, "host_name")
 	if sn == "" {
 		sn = randomSN()
 	}
@@ -129,12 +132,12 @@ func TenantAdd(c *gin.Context) {
 		response.Fail(c, "主机名已被占用，请更换")
 		return
 	}
-	tactics := httpx.Int(c, "tactics")
+	tactics := httpx.BodyInt(c, "tactics")
 	now := util.NowUnix()
 	tenant := model.Tenant{
-		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
-		Tel: httpx.Str(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.Int(c, "domain_alias_enable"),
-		Disable: httpx.Int(c, "disable"), Notes: httpx.Str(c, "notes"), Tactics: tactics, CreateTime: now,
+		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
+		Tel: httpx.BodyStr(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.BodyInt(c, "domain_alias_enable"),
+		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyStr(c, "notes"), Tactics: tactics, CreateTime: now,
 	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&tenant).Error; err != nil {
@@ -159,12 +162,15 @@ func TenantAdd(c *gin.Context) {
 }
 
 func TenantEdit(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	if httpx.Str(c, "name") == "" {
+	if httpx.BodyStr(c, "name") == "" {
 		response.Fail(c, "请输入用户名")
 		return
 	}
@@ -173,19 +179,19 @@ func TenantEdit(c *gin.Context) {
 		response.Fail(c, "租户不存在")
 		return
 	}
-	alias := stripHost(httpx.Str(c, "domain_alias"))
+	alias := stripHost(httpx.BodyStr(c, "domain_alias"))
 	if tenantAliasTaken(alias, id) {
 		response.Fail(c, "租户别名已存在")
 		return
 	}
 	now := util.NowUnix()
-	disable := httpx.Int(c, "disable")
+	disable := httpx.BodyInt(c, "disable")
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
-		"disable": disable, "tel": httpx.Str(c, "tel"),
+		"name": httpx.BodyStr(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
+		"disable": disable, "tel": httpx.BodyStr(c, "tel"),
 		"domain_alias":        alias,
-		"domain_alias_enable": httpx.Int(c, "domain_alias_enable"),
-		"notes":               httpx.Str(c, "notes"), "update_time": now,
+		"domain_alias_enable": httpx.BodyInt(c, "domain_alias_enable"),
+		"notes":               httpx.BodyStr(c, "notes"), "update_time": now,
 	})
 	if disable == 1 {
 		expireTenantAdmins(cur)
@@ -194,7 +200,10 @@ func TenantEdit(c *gin.Context) {
 }
 
 func TenantDelete(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "请选择用户")
 		return

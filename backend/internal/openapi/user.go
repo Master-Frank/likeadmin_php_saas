@@ -124,25 +124,28 @@ func IndexDecorate(c *gin.Context) {
 }
 
 func LoginRegister(c *gin.Context) {
-	if httpx.Any(c, "channel") == nil || httpx.Int(c, "channel") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyAny(c, "channel") == nil || httpx.BodyInt(c, "channel") == 0 {
 		response.Fail(c, "注册来源参数缺失")
 		return
 	}
-	account := httpx.Str(c, "account")
+	account := httpx.BodyStr(c, "account")
 	if msg := util.ValidRegisterAccount(account); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	password := httpx.Str(c, "password")
+	password := httpx.BodyStr(c, "password")
 	if msg := util.ValidRegisterPassword(password); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if httpx.Str(c, "password_confirm") == "" {
+	if httpx.BodyStr(c, "password_confirm") == "" {
 		response.Fail(c, "请确认密码")
 		return
 	}
-	if password != httpx.Str(c, "password_confirm") {
+	if password != httpx.BodyStr(c, "password_confirm") {
 		response.Fail(c, "两次输入的密码不一致")
 		return
 	}
@@ -164,7 +167,7 @@ func LoginRegister(c *gin.Context) {
 	u := model.User{
 		Account: account, Nickname: "用户" + util.ToString(sn),
 		Password: util.CreatePassword(password, config.C.Project.UniqueIdentification),
-		Channel:  httpx.Int(c, "channel"), TenantID: tid, CreateTime: now,
+		Channel:  httpx.BodyInt(c, "channel"), TenantID: tid, CreateTime: now,
 		Avatar: avatar, SN: sn, LoginTime: util.ZeroUnixPtr(), UpdateTime: util.ZeroUnixPtr(),
 	}
 	if err := tdb(c).Create(&u).Error; err != nil {
@@ -175,7 +178,10 @@ func LoginRegister(c *gin.Context) {
 }
 
 func LoginAccount(c *gin.Context) {
-	terminal := httpx.Int(c, "terminal")
+	if !response.RequirePOST(c) {
+		return
+	}
+	terminal := httpx.BodyInt(c, "terminal")
 	if terminal == 0 {
 		response.Fail(c, "终端参数缺失")
 		return
@@ -184,7 +190,7 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, "终端参数状态值不正确")
 		return
 	}
-	scene := httpx.Int(c, "scene")
+	scene := httpx.BodyInt(c, "scene")
 	if scene == 0 {
 		response.Fail(c, "场景不能为空")
 		return
@@ -197,7 +203,7 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, "不支持的登录方式")
 		return
 	}
-	account := httpx.Str(c, "account")
+	account := httpx.BodyStr(c, "account")
 	if account == "" {
 		response.Fail(c, "请输入账号")
 		return
@@ -208,18 +214,18 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, cache.UserLoginSafeHint())
 			return
 		}
-		if httpx.Str(c, "password") == "" {
+		if httpx.BodyStr(c, "password") == "" {
 			response.Fail(c, "请输入密码")
 			return
 		}
-	} else if httpx.Str(c, "code") == "" {
+	} else if httpx.BodyStr(c, "code") == "" {
 		response.Fail(c, "请输入手机验证码")
 		return
 	}
 	var u model.User
 	if scene == 2 {
 		// PHP checkCode verifies SMS before looking up the user and never checks is_disable.
-		if !verifySms(c, account, httpx.Str(c, "code"), "YZMDL") {
+		if !verifySms(c, account, httpx.BodyStr(c, "code"), "YZMDL") {
 			response.Fail(c, "验证码错误")
 			return
 		}
@@ -241,7 +247,7 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, "用户不存在")
 			return
 		}
-		if u.Password != util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification) {
+		if u.Password != util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification) {
 			cache.RecordUserLoginFail(ip)
 			response.Fail(c, "密码错误")
 			return
@@ -313,18 +319,21 @@ func UserInfo(c *gin.Context) {
 }
 
 func UserSetInfo(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	u := currentUser(c)
 	if u.ID == 0 {
 		response.Fail(c, "请先登录")
 		return
 	}
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if msg := util.UserSetInfoCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	field := httpx.Str(c, "field")
-	value := httpx.Any(c, "value")
+	field := httpx.BodyStr(c, "field")
+	value := httpx.BodyAny(c, "value")
 	if field == "account" {
 		var n int64
 		q := scopeTenant(tdb(c).Model(&model.User{}).Where("account = ? AND id <> ? AND delete_time IS NULL", util.ToString(value), u.ID), c)

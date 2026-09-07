@@ -53,38 +53,44 @@ func ArticleCateDetail(c *gin.Context) {
 }
 
 func ArticleCateUpdateStatus(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
 	var row model.ArticleCate
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
-	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+	if msg := util.ArticleCateShowCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_show", httpx.Int(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_show", httpx.BodyInt(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }
 
 func ArticleUpdateStatus(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}
 	var row model.Article
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
-	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+	if msg := util.ArticleCateShowCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_show", httpx.Int(c, "is_show"))
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_show", httpx.BodyInt(c, "is_show"))
 	response.SuccessNotice(c, "修改成功")
 }
 
@@ -171,11 +177,11 @@ func DecorateTabbarSave(c *gin.Context) {
 func HotSearchSet(c *gin.Context) {
 	// PHP: empty($params['status']) ? 0 : $params['status'] — keep values like 2.
 	status := 0
-	if _, ok := httpx.Params(c)["status"]; ok && strings.TrimSpace(httpx.Str(c, "status")) != "" && httpx.Int(c, "status") != 0 {
-		status = httpx.Int(c, "status")
+	if httpx.BodyHas(c, "status") && strings.TrimSpace(httpx.BodyStr(c, "status")) != "" && httpx.BodyInt(c, "status") != 0 {
+		status = httpx.BodyInt(c, "status")
 	}
 	cfgsvc.Set(c, "hot_search", "status", status)
-	data := httpx.Any(c, "data")
+	data := httpx.BodyAny(c, "data")
 	arr, _ := data.([]any)
 	if len(arr) > 0 {
 		tid, ok := requireTenant(c)
@@ -207,7 +213,7 @@ func SettingGetCopyright(c *gin.Context) {
 }
 
 func SettingSetCopyright(c *gin.Context) {
-	cfg := httpx.Any(c, "config")
+	cfg := httpx.BodyAny(c, "config")
 	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -226,10 +232,10 @@ func SettingGetAgreement(c *gin.Context) {
 }
 
 func SettingSetAgreement(c *gin.Context) {
-	cfgsvc.Set(c, "agreement", "service_title", httpx.Str(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.Str(c, "service_content")))
-	cfgsvc.Set(c, "agreement", "privacy_title", httpx.Str(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.Str(c, "privacy_content")))
+	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
+	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -238,29 +244,35 @@ func SettingGetSiteStatistics(c *gin.Context) {
 }
 
 func SettingSetSiteStatistics(c *gin.Context) {
-	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.Str(c, "clarity_code"))
+	if !response.RequirePOST(c) {
+		return
+	}
+	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.BodyStr(c, "clarity_code"))
 	response.SuccessNotice(c, "设置成功")
 }
 
 func UserAdjustMoney(c *gin.Context) {
-	uid := httpx.Uint(c, "user_id")
-	action := httpx.Int(c, "action")
-	num := httpx.Float(c, "num")
-	remark := httpx.Str(c, "remark")
+	if !response.RequirePOST(c) {
+		return
+	}
+	uid := httpx.BodyUint(c, "user_id")
+	action := httpx.BodyInt(c, "action")
+	num := httpx.BodyFloat(c, "num")
+	remark := httpx.BodyStr(c, "remark")
 	if uid == 0 {
 		// PHP AdjustUserMoney rule key is user_id; ThinkPHP prints "user_id不能为空".
 		response.Fail(c, "user_id不能为空")
 		return
 	}
 	if action != biz.INC && action != biz.DEC {
-		if httpx.Str(c, "action") == "" {
+		if httpx.BodyStr(c, "action") == "" {
 			response.Fail(c, "请选择调整类型")
 			return
 		}
 		response.Fail(c, "调整类型错误")
 		return
 	}
-	if httpx.Str(c, "num") == "" && num == 0 {
+	if httpx.BodyStr(c, "num") == "" && num == 0 {
 		response.Fail(c, "请输入调整数量")
 		return
 	}
@@ -283,7 +295,7 @@ func UserAdjustMoney(c *gin.Context) {
 				return err
 			}
 			user.UserMoney += num
-			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", httpx.Str(c, "remark"))
+			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", httpx.BodyStr(c, "remark"))
 			return nil
 		}
 		if user.UserMoney < num {
@@ -293,7 +305,7 @@ func UserAdjustMoney(c *gin.Context) {
 			return err
 		}
 		user.UserMoney -= num
-		biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, user.UserMoney, "", httpx.Str(c, "remark"))
+		biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, user.UserMoney, "", httpx.BodyStr(c, "remark"))
 		return nil
 	})
 	if err != nil {
@@ -402,11 +414,14 @@ func rechargeUserMoneyEnough(db *gorm.DB, userID, tenantID uint, amount float64)
 }
 
 func RechargeRefund(c *gin.Context) {
-	if _, ok := httpx.Params(c)["recharge_id"]; !ok {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !httpx.BodyHas(c, "recharge_id") {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	id := httpx.Uint(c, "recharge_id")
+	id := httpx.BodyUint(c, "recharge_id")
 	var order model.RechargeOrder
 	oq := scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c)
 	if oq.First(&order).Error != nil {
@@ -571,12 +586,15 @@ func remoteRefund(c *gin.Context, order *model.RechargeOrder, refundSN string, r
 }
 
 func RechargeRefundAgain(c *gin.Context) {
-	if _, ok := httpx.Params(c)["record_id"]; !ok {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !httpx.BodyHas(c, "record_id") {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var rec model.RefundRecord
-	rq := scopeTID(tdb(c).Where("id = ?", httpx.Uint(c, "record_id")), c)
+	rq := scopeTID(tdb(c).Where("id = ?", httpx.BodyUint(c, "record_id")), c)
 	if rq.First(&rec).Error != nil {
 		response.Fail(c, "退款记录不存在")
 		return
@@ -646,20 +664,23 @@ func OAReplyLists(c *gin.Context) {
 }
 
 func OAReplyAdd(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.OAReplyWriteCheck(p, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	if httpx.Int(c, "reply_type") == 2 && httpx.Int(c, "sort") < 0 {
+	if httpx.BodyInt(c, "reply_type") == 2 && httpx.BodyInt(c, "sort") < 0 {
 		response.Fail(c, "排序值须大于或等于0")
 		return
 	}
 	row := model.OfficialAccountReply{
-		TenantID: tenantDB(c), Name: httpx.Str(c, "name"), Keyword: httpx.Str(c, "keyword"),
-		ReplyType: httpx.Int(c, "reply_type"), MatchingType: httpx.Int(c, "matching_type"),
-		ContentType: httpx.Int(c, "content_type"), Content: httpx.Str(c, "content"),
-		Status: httpx.Int(c, "status"), Sort: httpx.Int(c, "sort"), CreateTime: util.NowUnix(),
+		TenantID: tenantDB(c), Name: httpx.BodyStr(c, "name"), Keyword: httpx.BodyStr(c, "keyword"),
+		ReplyType: httpx.BodyInt(c, "reply_type"), MatchingType: httpx.BodyInt(c, "matching_type"),
+		ContentType: httpx.BodyInt(c, "content_type"), Content: httpx.BodyStr(c, "content"),
+		Status: httpx.BodyInt(c, "status"), Sort: httpx.BodyInt(c, "sort"), CreateTime: util.NowUnix(),
 	}
 	if row.TenantID == 0 {
 		response.Fail(c, "参数缺失")
@@ -681,7 +702,10 @@ func OAReplyAdd(c *gin.Context) {
 }
 
 func OAReplyEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.OAReplyWriteCheck(p, true); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -691,19 +715,19 @@ func OAReplyEdit(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	replyType := httpx.Int(c, "reply_type")
-	status := httpx.Int(c, "status")
+	replyType := httpx.BodyInt(c, "reply_type")
+	status := httpx.BodyInt(c, "status")
 	if replyType != 2 && status == 1 {
 		tdb(c).Model(&model.OfficialAccountReply{}).
-			Where("reply_type = ? AND id <> ? AND tenant_id = ? AND delete_time IS NULL", replyType, httpx.Uint(c, "id"), tid).
+			Where("reply_type = ? AND id <> ? AND tenant_id = ? AND delete_time IS NULL", replyType, httpx.BodyUint(c, "id"), tid).
 			Update("status", 0)
 	}
-	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid)
+	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.BodyUint(c, "id"), tid)
 	q.Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "keyword": httpx.Str(c, "keyword"),
-		"reply_type": replyType, "matching_type": httpx.Int(c, "matching_type"),
-		"content_type": httpx.Int(c, "content_type"), "content": httpx.Str(c, "content"),
-		"status": status, "sort": httpx.Int(c, "sort"), "update_time": util.NowUnix(),
+		"name": httpx.BodyStr(c, "name"), "keyword": httpx.BodyStr(c, "keyword"),
+		"reply_type": replyType, "matching_type": httpx.BodyInt(c, "matching_type"),
+		"content_type": httpx.BodyInt(c, "content_type"), "content": httpx.BodyStr(c, "content"),
+		"status": status, "sort": httpx.BodyInt(c, "sort"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "操作成功")
 }
@@ -721,7 +745,10 @@ func oaReplyByID(c *gin.Context, id uint) (model.OfficialAccountReply, bool) {
 }
 
 func OAReplyDelete(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -730,7 +757,7 @@ func OAReplyDelete(c *gin.Context) {
 		response.SuccessNotice(c, "操作成功")
 		return
 	}
-	tdb(c).Unscoped().Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid).Delete(&model.OfficialAccountReply{})
+	tdb(c).Unscoped().Where("id = ? AND tenant_id = ?", httpx.BodyUint(c, "id"), tid).Delete(&model.OfficialAccountReply{})
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -768,11 +795,14 @@ func oaReplyDetailMap(row model.OfficialAccountReply) map[string]any {
 }
 
 func OAReplyStatus(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	row, ok := oaReplyByID(c, httpx.Uint(c, "id"))
+	row, ok := oaReplyByID(c, httpx.BodyUint(c, "id"))
 	if !ok {
 		response.SuccessNotice(c, "操作成功")
 		return
@@ -788,11 +818,14 @@ func OAReplyStatus(c *gin.Context) {
 }
 
 func OAReplySort(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if msg := util.OAReplySortCheck(httpx.Params(c)); msg != "" {
+	if msg := util.OAReplySortCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -801,8 +834,8 @@ func OAReplySort(c *gin.Context) {
 		response.SuccessNotice(c, "操作成功")
 		return
 	}
-	sort := httpx.Int(c, "new_sort")
-	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.Uint(c, "id"), tid).
+	sort := httpx.BodyInt(c, "new_sort")
+	tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.BodyUint(c, "id"), tid).
 		Updates(map[string]any{"sort": sort, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "操作成功")
 }

@@ -4,7 +4,6 @@
 package gencrud
 
 import (
-	"net/http"
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -206,18 +205,14 @@ func doLists(c *gin.Context, sp *spec) {
 }
 
 func requirePOST(c *gin.Context) bool {
-	if c != nil && c.Request != nil && c.Request.Method != http.MethodPost {
-		response.Fail(c, "请求方式错误，请使用post请求方式")
-		return false
-	}
-	return true
+	return response.RequirePOST(c)
 }
 
 func doAdd(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
 		return
 	}
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if msg := requiredMsg(sp, p, false); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -234,8 +229,8 @@ func doEdit(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
 		return
 	}
-	p := httpx.Params(c)
-	id := httpx.Uint(c, sp.pk)
+	p := httpx.Body(c)
+	id := httpx.BodyUint(c, sp.pk)
 	if id == 0 {
 		response.Fail(c, sp.pk+"不能为空")
 		return
@@ -267,9 +262,9 @@ func doDelete(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
 		return
 	}
-	ids := httpx.Uints(c, sp.pk)
+	ids := httpx.BodyUints(c, sp.pk)
 	if len(ids) == 0 {
-		ids = httpx.Uints(c, "ids")
+		ids = httpx.BodyUints(c, "ids")
 	}
 	if len(ids) == 0 {
 		response.Fail(c, sp.pk+"不能为空")

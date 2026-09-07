@@ -32,13 +32,16 @@ func tdb(c *gin.Context) *gorm.DB {
 const tenantLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
-	if msg := util.LoginTerminalCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.LoginTerminalCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	password := httpx.Str(c, "password")
-	terminal := httpx.Int(c, "terminal")
+	account := httpx.BodyStr(c, "account")
+	password := httpx.BodyStr(c, "password")
+	terminal := httpx.BodyInt(c, "terminal")
 	if account == "" {
 		response.Fail(c, "请输入账号")
 		return
@@ -354,9 +357,12 @@ func UserDetail(c *gin.Context) {
 }
 
 func UserEdit(c *gin.Context) {
-	id := httpx.Uint(c, "id")
-	field := httpx.Str(c, "field")
-	value := httpx.Any(c, "value")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
+	field := httpx.BodyStr(c, "field")
+	value := httpx.BodyAny(c, "value")
 	if id == 0 {
 		response.Fail(c, "请选择用户")
 		return
@@ -447,6 +453,9 @@ func ArticleLists(c *gin.Context) {
 }
 
 func ArticleAdd(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if _, ok := requireTenant(c); !ok {
 		response.Fail(c, "参数缺失")
 		return
@@ -456,11 +465,11 @@ func ArticleAdd(c *gin.Context) {
 		return
 	}
 	a := model.Article{
-		Cid: httpx.Uint(c, "cid"), Title: httpx.Str(c, "title"), Desc: httpx.Str(c, "desc"),
-		Abstract: httpx.Str(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.Str(c, "image")),
-		Author: httpx.Str(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.Str(c, "content")),
-		IsShow: httpx.Int(c, "is_show"), Sort: httpx.Int(c, "sort"),
-		ClickVirtual: httpx.Int(c, "click_virtual"),
+		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyStr(c, "title"), Desc: httpx.BodyStr(c, "desc"),
+		Abstract: httpx.BodyStr(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
+		Author: httpx.BodyStr(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
+		IsShow: httpx.BodyInt(c, "is_show"), Sort: httpx.BodyInt(c, "sort"),
+		ClickVirtual: httpx.BodyInt(c, "click_virtual"),
 		TenantID:     tenantDB(c), CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&a)
@@ -468,61 +477,67 @@ func ArticleAdd(c *gin.Context) {
 }
 
 func articleWriteCheck(c *gin.Context, needID bool) string {
-	if needID && httpx.Uint(c, "id") == 0 {
+	if needID && httpx.BodyUint(c, "id") == 0 {
 		return "资讯id不能为空"
 	}
 	if needID {
 		var a model.Article
-		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
+		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&a).Error != nil {
 			return "资讯不存在"
 		}
 	}
-	if httpx.Str(c, "title") == "" {
+	if httpx.BodyStr(c, "title") == "" {
 		return "标题不能为空"
 	}
-	if len(httpx.Str(c, "title")) > 255 {
+	if len(httpx.BodyStr(c, "title")) > 255 {
 		return "标题长度须在1-255位字符"
 	}
-	if httpx.Uint(c, "cid") == 0 {
+	if httpx.BodyUint(c, "cid") == 0 {
 		return "所属栏目必须存在"
 	}
-	if raw := httpx.Any(c, "is_show"); raw == nil || util.ToString(raw) == "" {
+	if raw := httpx.BodyAny(c, "is_show"); raw == nil || util.ToString(raw) == "" {
 		return "是否显示必须存在"
 	}
-	if show := httpx.Int(c, "is_show"); show != 0 && show != 1 {
+	if show := httpx.BodyInt(c, "is_show"); show != 0 && show != 1 {
 		return "是否显示取值异常"
 	}
 	return ""
 }
 
 func ArticleEdit(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if msg := articleWriteCheck(c, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
-		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
-		"abstract": httpx.Str(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.Str(c, "image")),
-		"author": httpx.Str(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.Str(c, "content")),
-		"is_show": httpx.Int(c, "is_show"), "sort": httpx.Int(c, "sort"),
-		"click_virtual": httpx.Int(c, "click_virtual"), "update_time": now,
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyStr(c, "title"), "desc": httpx.BodyStr(c, "desc"),
+		"abstract": httpx.BodyStr(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
+		"author": httpx.BodyStr(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
+		"is_show": httpx.BodyInt(c, "is_show"), "sort": httpx.BodyInt(c, "sort"),
+		"click_virtual": httpx.BodyInt(c, "click_virtual"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func ArticleDelete(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}
 	var a model.Article
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&a).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -571,66 +586,75 @@ func ArticleCateLists(c *gin.Context) {
 
 func articleCateWriteCheck(c *gin.Context, needID bool) string {
 	if needID {
-		if httpx.Uint(c, "id") == 0 {
+		if httpx.BodyUint(c, "id") == 0 {
 			return "资讯分类id不能为空"
 		}
 		var row model.ArticleCate
-		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&row).Error != nil {
 			return "资讯分类不存在"
 		}
 	}
-	if name := httpx.Str(c, "name"); name == "" {
+	if name := httpx.BodyStr(c, "name"); name == "" {
 		return "资讯分类不能为空"
 	} else if n := len([]rune(name)); n < 1 || n > 90 {
 		return "资讯分类长度须在1-90位字符"
 	}
-	if msg := util.ArticleCateShowCheck(httpx.Params(c)); msg != "" {
+	if msg := util.ArticleCateShowCheck(httpx.Body(c)); msg != "" {
 		return msg
 	}
-	if sort := httpx.Int(c, "sort"); sort < 0 {
+	if sort := httpx.BodyInt(c, "sort"); sort < 0 {
 		return "排序值不正确"
 	}
 	return ""
 }
 
 func ArticleCateAdd(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if msg := articleCateWriteCheck(c, false); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	tdb(c).Create(&model.ArticleCate{Name: httpx.Str(c, "name"), Sort: httpx.Int(c, "sort"), IsShow: httpx.Int(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
+	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyStr(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: util.NowUnix()})
 	response.SuccessNotice(c, "添加成功")
 }
 
 func ArticleCateEdit(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if msg := articleCateWriteCheck(c, true); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
-		"name": httpx.Str(c, "name"), "sort": httpx.Int(c, "sort"), "is_show": httpx.Int(c, "is_show"),
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+		"name": httpx.BodyStr(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
 
 func ArticleCateDelete(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
 	var row model.ArticleCate
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
 	var n int64
-	scopeTID(tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).Count(&n)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("cid = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Count(&n)
 	if n > 0 {
 		response.Fail(c, "资讯分类已使用，请先删除绑定该资讯分类的资讯")
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -675,7 +699,7 @@ func articleCateRaw(r model.ArticleCate) map[string]any {
 }
 
 func decoratePayload(c *gin.Context, key string) string {
-	v := httpx.Any(c, key)
+	v := httpx.BodyAny(c, key)
 	if v == nil {
 		return ""
 	}
@@ -701,12 +725,15 @@ func DecoratePageDetail(c *gin.Context) {
 }
 
 func DecoratePageSave(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if _, ok := httpx.Params(c)["type"]; !ok || httpx.Int(c, "type") == 0 {
+	if !httpx.BodyHas(c, "type") || httpx.BodyInt(c, "type") == 0 {
 		response.Fail(c, "装修类型参数缺失")
 		return
 	}
@@ -722,7 +749,7 @@ func DecoratePageSave(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.DecoratePage{}).Where("id = ?", id), c).Updates(map[string]any{
-		"type": httpx.Int(c, "type"), "data": data,
+		"type": httpx.BodyInt(c, "type"), "data": data,
 		"meta": decoratePayload(c, "meta"), "update_time": now,
 	})
 	response.SuccessNotice(c, "操作成功")
@@ -750,22 +777,25 @@ func SettingGetWebsite(c *gin.Context) {
 }
 
 func SettingSetWebsite(c *gin.Context) {
-	if msg := util.TenantWebSettingCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.TenantWebSettingCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "tenant", "name", httpx.Str(c, "name"))
-	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.Str(c, "web_favicon")))
-	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.Str(c, "web_logo")))
-	cfgsvc.Set(c, "tenant", "login_image", filesvc.SetFileURL(c, httpx.Str(c, "login_image")))
-	cfgsvc.Set(c, "website", "shop_name", httpx.Str(c, "shop_name"))
-	cfgsvc.Set(c, "website", "shop_logo", filesvc.SetFileURL(c, httpx.Str(c, "shop_logo")))
-	cfgsvc.Set(c, "website", "pc_logo", filesvc.SetFileURL(c, httpx.Str(c, "pc_logo")))
-	cfgsvc.Set(c, "website", "pc_title", httpx.Str(c, "pc_title"))
-	cfgsvc.Set(c, "website", "pc_ico", filesvc.SetFileURL(c, httpx.Str(c, "pc_ico")))
-	cfgsvc.Set(c, "website", "pc_desc", httpx.Str(c, "pc_desc"))
-	cfgsvc.Set(c, "website", "pc_keywords", httpx.Str(c, "pc_keywords"))
-	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.Str(c, "h5_favicon")))
+	cfgsvc.Set(c, "tenant", "name", httpx.BodyStr(c, "name"))
+	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_favicon")))
+	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo")))
+	cfgsvc.Set(c, "tenant", "login_image", filesvc.SetFileURL(c, httpx.BodyStr(c, "login_image")))
+	cfgsvc.Set(c, "website", "shop_name", httpx.BodyStr(c, "shop_name"))
+	cfgsvc.Set(c, "website", "shop_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "shop_logo")))
+	cfgsvc.Set(c, "website", "pc_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "pc_logo")))
+	cfgsvc.Set(c, "website", "pc_title", httpx.BodyStr(c, "pc_title"))
+	cfgsvc.Set(c, "website", "pc_ico", filesvc.SetFileURL(c, httpx.BodyStr(c, "pc_ico")))
+	cfgsvc.Set(c, "website", "pc_desc", httpx.BodyStr(c, "pc_desc"))
+	cfgsvc.Set(c, "website", "pc_keywords", httpx.BodyStr(c, "pc_keywords"))
+	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "h5_favicon")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -787,12 +817,12 @@ func RechargeGetConfig(c *gin.Context) {
 }
 
 func RechargeSetConfig(c *gin.Context) {
-	p := httpx.Params(c)
+	p := httpx.Body(c)
 	if _, ok := p["status"]; ok {
-		cfgsvc.Set(c, "recharge", "status", httpx.Int(c, "status"))
+		cfgsvc.Set(c, "recharge", "status", httpx.BodyInt(c, "status"))
 	}
 	if _, ok := p["min_amount"]; ok {
-		cfgsvc.Set(c, "recharge", "min_amount", httpx.Any(c, "min_amount"))
+		cfgsvc.Set(c, "recharge", "min_amount", httpx.BodyAny(c, "min_amount"))
 	}
 	response.SuccessNotice(c, "操作成功")
 }

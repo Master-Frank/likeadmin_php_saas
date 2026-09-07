@@ -85,7 +85,10 @@ func GeneratorGenerateTable(c *gin.Context) {
 }
 
 func GeneratorSelectTable(c *gin.Context) {
-	tables := httpx.Any(c, "table")
+	if !response.RequirePOST(c) {
+		return
+	}
+	tables := httpx.BodyAny(c, "table")
 	if tables == nil {
 		response.Fail(c, "参数缺失")
 		return
@@ -167,11 +170,14 @@ func GeneratorDetail(c *gin.Context) {
 }
 
 func GeneratorSyncColumn(c *gin.Context) {
-	if _, ok := httpx.Params(c)["id"]; !ok || httpx.Uint(c, "id") == 0 {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !httpx.BodyHas(c, "id") || httpx.BodyUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
 		response.Fail(c, "信息不存在")
@@ -183,11 +189,14 @@ func GeneratorSyncColumn(c *gin.Context) {
 }
 
 func GeneratorDelete(c *gin.Context) {
-	ids := httpx.Uints(c, "id")
-	if len(ids) == 0 {
-		ids = httpx.Uints(c, "ids")
+	if !response.RequirePOST(c) {
+		return
 	}
-	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
+	ids := httpx.BodyUints(c, "id")
+	if len(ids) == 0 {
+		ids = httpx.BodyUints(c, "ids")
+	}
+	if id := httpx.BodyUint(c, "id"); id > 0 && len(ids) == 0 {
 		ids = []uint{id}
 	}
 	if len(ids) == 0 {
@@ -207,12 +216,15 @@ func GeneratorDelete(c *gin.Context) {
 }
 
 func GeneratorEdit(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.GeneratorEditCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.BodyUint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
 		response.Fail(c, "信息不存在")
@@ -220,25 +232,25 @@ func GeneratorEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	data := map[string]any{
-		"table_name": httpx.Str(c, "table_name"), "table_comment": httpx.Str(c, "table_comment"),
-		"template_type": httpx.Int(c, "template_type"), "author": httpx.Str(c, "author"),
-		"remark": httpx.Str(c, "remark"), "generate_type": httpx.Int(c, "generate_type"),
-		"module_name": httpx.Str(c, "module_name"), "class_dir": httpx.Str(c, "class_dir"),
-		"class_comment": httpx.Str(c, "class_comment"), "update_time": now,
+		"table_name": httpx.BodyStr(c, "table_name"), "table_comment": httpx.BodyStr(c, "table_comment"),
+		"template_type": httpx.BodyInt(c, "template_type"), "author": httpx.BodyStr(c, "author"),
+		"remark": httpx.BodyStr(c, "remark"), "generate_type": httpx.BodyInt(c, "generate_type"),
+		"module_name": httpx.BodyStr(c, "module_name"), "class_dir": httpx.BodyStr(c, "class_dir"),
+		"class_comment": httpx.BodyStr(c, "class_comment"), "update_time": now,
 	}
-	if v := httpx.Any(c, "menu"); v != nil {
+	if v := httpx.BodyAny(c, "menu"); v != nil {
 		data["menu"] = util.EncodeJSON(v)
 	}
-	if v := httpx.Any(c, "delete"); v != nil {
+	if v := httpx.BodyAny(c, "delete"); v != nil {
 		data["delete"] = util.EncodeJSON(v)
 	}
-	if v := httpx.Any(c, "tree"); v != nil {
+	if v := httpx.BodyAny(c, "tree"); v != nil {
 		data["tree"] = util.EncodeJSON(v)
 	}
-	if v := httpx.Any(c, "relations"); v != nil {
+	if v := httpx.BodyAny(c, "relations"); v != nil {
 		data["relations"] = util.EncodeJSON(v)
 	}
-	cols, _ := httpx.Any(c, "table_column").([]any)
+	cols, _ := httpx.BodyAny(c, "table_column").([]any)
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.GenerateTable{}).Where("id = ?", id).Updates(data).Error; err != nil {
 			return err
@@ -282,7 +294,14 @@ func GeneratorEdit(c *gin.Context) {
 }
 
 func GeneratorPreview(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	if !response.RequirePOST(c) {
+		return
+	}
+	id := httpx.BodyUint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
 		response.Fail(c, "信息不存在")
@@ -294,11 +313,14 @@ func GeneratorPreview(c *gin.Context) {
 }
 
 func GeneratorGenerate(c *gin.Context) {
-	ids := httpx.Uints(c, "id")
-	if len(ids) == 0 {
-		ids = httpx.Uints(c, "ids")
+	if !response.RequirePOST(c) {
+		return
 	}
-	if id := httpx.Uint(c, "id"); id > 0 && len(ids) == 0 {
+	ids := httpx.BodyUints(c, "id")
+	if len(ids) == 0 {
+		ids = httpx.BodyUints(c, "ids")
+	}
+	if id := httpx.BodyUint(c, "id"); id > 0 && len(ids) == 0 {
 		ids = []uint{id}
 	}
 	if len(ids) == 0 {

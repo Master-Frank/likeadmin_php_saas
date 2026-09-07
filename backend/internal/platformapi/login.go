@@ -18,13 +18,16 @@ import (
 const platformLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
-	if msg := util.LoginTerminalCheck(httpx.Params(c)); msg != "" {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if msg := util.LoginTerminalCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.Str(c, "account")
-	password := httpx.Str(c, "password")
-	terminal := httpx.Int(c, "terminal")
+	account := httpx.BodyStr(c, "account")
+	password := httpx.BodyStr(c, "password")
+	terminal := httpx.BodyInt(c, "terminal")
 	if account == "" {
 		response.Fail(c, "请输入账号")
 		return

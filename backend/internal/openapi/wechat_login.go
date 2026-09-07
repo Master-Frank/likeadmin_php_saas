@@ -27,7 +27,7 @@ import (
 )
 
 func requireWechatCode(c *gin.Context) bool {
-	if !phpRequiredParam(httpx.Params(c), "code") {
+	if !phpRequiredParam(httpx.Body(c), "code") {
 		response.Fail(c, "code缺少")
 		return false
 	}
@@ -45,6 +45,9 @@ func LoginCodeURL(c *gin.Context) {
 }
 
 func LoginOALogin(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !requireWechatCode(c) {
 		return
 	}
@@ -53,7 +56,7 @@ func LoginOALogin(c *gin.Context) {
 		response.Fail(c, "请先设置公众号配置")
 		return
 	}
-	sess, err := wechat.OAuthByCode(appID, secret, httpx.Str(c, "code"))
+	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -67,6 +70,9 @@ func LoginOALogin(c *gin.Context) {
 }
 
 func LoginMnpLogin(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !requireWechatCode(c) {
 		return
 	}
@@ -75,7 +81,7 @@ func LoginMnpLogin(c *gin.Context) {
 		response.Fail(c, "请先设置小程序配置")
 		return
 	}
-	sess, err := wechat.Code2Session(appID, secret, httpx.Str(c, "code"))
+	sess, err := wechat.Code2Session(appID, secret, httpx.BodyStr(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -98,7 +104,10 @@ func LoginGetScanCode(c *gin.Context) {
 }
 
 func LoginScanLogin(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if msg := util.WebScanLoginCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -113,7 +122,7 @@ func LoginScanLogin(c *gin.Context) {
 		response.Fail(c, "请先完成微信开放平台配置")
 		return
 	}
-	sess, err := wechat.OAuthByCode(appID, secret, httpx.Str(c, "code"))
+	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -135,19 +144,22 @@ func LoginOAAuthBind(c *gin.Context) {
 }
 
 func LoginUpdateUser(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	u := currentUser(c)
 	if u.ID == 0 {
 		response.Fail(c, "请先登录")
 		return
 	}
-	if msg := util.LoginUpdateUserCheck(httpx.Params(c)); msg != "" {
+	if msg := util.LoginUpdateUserCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
 	tdb(c).Model(&u).Updates(map[string]any{
-		"nickname":    httpx.Str(c, "nickname"),
-		"avatar":      filesvc.SetFileURL(c, httpx.Str(c, "avatar")),
+		"nickname":    httpx.BodyStr(c, "nickname"),
+		"avatar":      filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		"is_new_user": 0,
 		"update_time": now,
 	})
@@ -155,6 +167,9 @@ func LoginUpdateUser(c *gin.Context) {
 }
 
 func bindWechatAuth(c *gin.Context, terminal int) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	if uid == 0 {
 		response.Fail(c, "请先登录")
@@ -171,14 +186,14 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 			response.Fail(c, "请先设置小程序配置")
 			return
 		}
-		sess, err = wechat.Code2Session(appID, secret, httpx.Str(c, "code"))
+		sess, err = wechat.Code2Session(appID, secret, httpx.BodyStr(c, "code"))
 	} else {
 		appID, secret, _ := wechat.OAConfig(c)
 		if appID == "" || secret == "" {
 			response.Fail(c, "请先设置公众号配置")
 			return
 		}
-		sess, err = wechat.OAuthByCode(appID, secret, httpx.Str(c, "code"))
+		sess, err = wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
 	}
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -382,7 +397,10 @@ func WechatJsConfigReal(c *gin.Context) {
 }
 
 func UserGetMobileByMnpReal(c *gin.Context) {
-	if !phpRequiredParam(httpx.Params(c), "code") {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !phpRequiredParam(httpx.Body(c), "code") {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -391,7 +409,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		response.Fail(c, "请先设置小程序配置")
 		return
 	}
-	phone, err := wechat.PhoneNumber(appID, secret, httpx.Str(c, "code"))
+	phone, err := wechat.PhoneNumber(appID, secret, httpx.BodyStr(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -408,12 +426,15 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 }
 
 func SmsSendCodeReal(c *gin.Context) {
-	p := httpx.Params(c)
+	if !response.RequirePOST(c) {
+		return
+	}
+	p := httpx.Body(c)
 	if _, ok := p["mobile"]; !ok || strings.TrimSpace(util.ToString(p["mobile"])) == "" {
 		response.Fail(c, "请输入手机号")
 		return
 	}
-	mobile := httpx.Str(c, "mobile")
+	mobile := httpx.BodyStr(c, "mobile")
 	if util.ValidChinaMobile(mobile) != "" {
 		response.Fail(c, "请输入正确手机号")
 		return
@@ -422,7 +443,7 @@ func SmsSendCodeReal(c *gin.Context) {
 		response.Fail(c, "请输入场景值")
 		return
 	}
-	scene := httpx.Str(c, "scene")
+	scene := httpx.BodyStr(c, "scene")
 	if _, _, err := sms.Send(c, mobile, scene); err != nil {
 		response.Fail(c, err.Error())
 		return

@@ -119,3 +119,12 @@ func AbortFail(c *gin.Context, msg string, code, show int) {
 	FailCode(c, msg, code, show)
 	c.Abort()
 }
+
+// RequirePOST matches PHP BaseValidate::post(): reject non-POST before reading the body.
+func RequirePOST(c *gin.Context) bool {
+	if c != nil && c.Request != nil && c.Request.Method != http.MethodPost {
+		Fail(c, "请求方式错误，请使用post请求方式")
+		return false
+	}
+	return true
+}
