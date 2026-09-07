@@ -26,7 +26,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var gatewayClient = &http.Client{Timeout: 8 * time.Second}
+var (
+	gatewayClient = &http.Client{Timeout: 8 * time.Second}
+	aliSMSURL     = "https://dysmsapi.aliyuncs.com/"
+	tencentSMSURL = "https://sms.tencentcloudapi.com/"
+)
 
 type engineCfg struct {
 	Name      string
@@ -217,7 +221,7 @@ func sendAliyun(cfg engineCfg, mobile, templateID, code string) (any, error) {
 	for k, v := range params {
 		form.Set(k, v)
 	}
-	resp, err := gatewayClient.PostForm("https://dysmsapi.aliyuncs.com/", form)
+	resp, err := gatewayClient.PostForm(aliSMSURL, form)
 	if err != nil {
 		return nil, fmt.Errorf("阿里云短信错误：%s", err.Error())
 	}
@@ -243,7 +247,7 @@ func sendTencent(cfg engineCfg, mobile, templateID string, tplParams []string) (
 	}
 	payload, _ := json.Marshal(payloadMap)
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	req, err := http.NewRequest(http.MethodPost, "https://sms.tencentcloudapi.com/", strings.NewReader(string(payload)))
+	req, err := http.NewRequest(http.MethodPost, tencentSMSURL, strings.NewReader(string(payload)))
 	if err != nil {
 		return nil, err
 	}

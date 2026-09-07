@@ -4,6 +4,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -64,5 +67,59 @@ func TestTencentParams(t *testing.T) {
 	})
 	if len(ordered) != 2 || ordered[0] != "张三" || ordered[1] != "8888" {
 		t.Fatalf("order %v", ordered)
+	}
+}
+
+func TestSendAliyunFixture(t *testing.T) {
+	var phone, sign, tpl, signature string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		phone, sign, tpl, signature = r.Form.Get("PhoneNumbers"), r.Form.Get("SignName"), r.Form.Get("TemplateCode"), r.Form.Get("Signature")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"Code":"OK","Message":"OK","BizId":"1"}`)
+	}))
+	t.Cleanup(srv.Close)
+	old := aliSMSURL
+	aliSMSURL = srv.URL
+	t.Cleanup(func() { aliSMSURL = old })
+	got, err := sendAliyun(engineCfg{AppKey: "ak", SecretKey: "sk", Sign: "likeadmin"}, "13800000000", "SMS_123", "8888")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if phone != "13800000000" || sign != "likeadmin" || tpl != "SMS_123" || signature == "" {
+		t.Fatalf("form %s %s %s sig=%s", phone, sign, tpl, signature)
+	}
+	m, _ := got.(map[string]any)
+	if m["Code"] != "OK" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestSendTencentFixture(t *testing.T) {
+	var action, auth, body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action = r.Header.Get("X-TC-Action")
+		auth = r.Header.Get("Authorization")
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"Response":{"SendStatusSet":[{"Code":"Ok"}]}}`)
+	}))
+	t.Cleanup(srv.Close)
+	old := tencentSMSURL
+	tencentSMSURL = srv.URL
+	t.Cleanup(func() { tencentSMSURL = old })
+	got, err := sendTencent(engineCfg{SecretID: "id", SecretKey: "sk", Sign: "likeadmin", AppID: "1400000000"}, "13800000000", "123456", []string{"8888"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != "SendSms" || !strings.HasPrefix(auth, "TC3-HMAC-SHA256 ") {
+		t.Fatalf("action=%s auth=%s", action, auth)
+	}
+	if !strings.Contains(body, `"TemplateID":"123456"`) || !strings.Contains(body, "+8613800000000") {
+		t.Fatalf("body=%s", body)
+	}
+	if got == nil {
+		t.Fatal("empty result")
 	}
 }
