@@ -384,6 +384,9 @@ func UserEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择用户")
 		return
@@ -481,11 +484,7 @@ func ArticleAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
-		return
-	}
-	if _, ok := requireTenant(c); !ok {
-		response.Fail(c, "参数缺失")
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := articleWriteCheck(c, false); msg != "" {
@@ -534,7 +533,7 @@ func ArticleEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := articleWriteCheck(c, true); msg != "" {
@@ -556,7 +555,7 @@ func ArticleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -644,11 +643,7 @@ func ArticleCateAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
-		return
-	}
-	if _, ok := requireTenant(c); !ok {
-		response.Fail(c, "参数缺失")
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := articleCateWriteCheck(c, false); msg != "" {

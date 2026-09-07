@@ -117,7 +117,7 @@ func NoticeByScene(c *gin.Context, sceneID int, params map[string]string) error 
 	if params["mobile"] != "" && params["code"] != "" {
 		cache.Set(cacheKey(sceneID, params["mobile"]), params["code"], 5*time.Minute)
 	}
-	if err := maybeGatewaySend(c, params["mobile"], sceneID, params["code"], logID); err != nil {
+	if err := maybeGatewaySend(c, params["mobile"], sceneID, params, logID); err != nil {
 		if params["mobile"] != "" && params["code"] != "" {
 			cache.Del(cacheKey(sceneID, params["mobile"]))
 		}

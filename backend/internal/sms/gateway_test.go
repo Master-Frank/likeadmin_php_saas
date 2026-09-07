@@ -11,6 +11,17 @@ import (
 	"testing"
 )
 
+func TestAliTemplateParams(t *testing.T) {
+	got := aliTemplateParams(LoginCaptcha, map[string]string{"code": "1234", "mobile": "13800000000", "nickname": "n"})
+	if len(got) != 1 || got["code"] != "1234" {
+		t.Fatalf("captcha %+v", got)
+	}
+	full := aliTemplateParams(200, map[string]string{"nickname": "n", "order_sn": "SN1", "code": "x"})
+	if full["nickname"] != "n" || full["order_sn"] != "SN1" || full["code"] != "x" {
+		t.Fatalf("notice %+v", full)
+	}
+}
+
 func TestAliPercentEncode(t *testing.T) {
 	if got := aliPercentEncode("a b*c~"); got != "a%20b%2Ac~" {
 		t.Fatalf("got %s", got)
@@ -103,7 +114,7 @@ func TestSendAliyunFixture(t *testing.T) {
 	old := aliSMSURL
 	aliSMSURL = srv.URL
 	t.Cleanup(func() { aliSMSURL = old })
-	got, err := sendAliyun(engineCfg{AppKey: "ak", SecretKey: "sk", Sign: "likeadmin"}, "13800000000", "SMS_123", "8888")
+	got, err := sendAliyun(engineCfg{AppKey: "ak", SecretKey: "sk", Sign: "likeadmin"}, "13800000000", "SMS_123", map[string]string{"code": "8888"})
 	if err != nil {
 		t.Fatal(err)
 	}

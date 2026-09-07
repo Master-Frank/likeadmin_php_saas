@@ -86,6 +86,9 @@ func DeptEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
 		response.Fail(c, "参数缺失")
@@ -125,6 +128,9 @@ func DeptEdit(c *gin.Context) {
 
 func DeptDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -250,6 +256,9 @@ func JobsEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
 		response.Fail(c, "参数缺失")
@@ -278,6 +287,9 @@ func JobsEdit(c *gin.Context) {
 
 func JobsDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {

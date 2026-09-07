@@ -42,15 +42,19 @@ type engineCfg struct {
 	AppID     string
 }
 
-func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, logID uint) error {
+func maybeGatewaySend(c *gin.Context, mobile string, scene int, params map[string]string, logID uint) error {
 	if c == nil || bootstrap.DB == nil {
 		return nil
 	}
 	rawEngine := strings.TrimSpace(cfgsvc.GetString(c, "sms", "engine", ""))
 	cfg := loadEngine(c, rawEngine)
 	notice := loadNoticeSMS(c, scene)
+	if params == nil {
+		params = map[string]string{}
+	}
+	code := params["code"]
 	tplID := util.ToString(notice["template_id"])
-	content := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile})
+	content := formatContent(util.ToString(notice["content"]), params)
 	if err := gatewayConfigError(rawEngine, cfg, tplID); err != nil {
 		return gatewayFail(c, logID, content, err.Error())
 	}
@@ -64,7 +68,7 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, log
 	)
 	switch engine {
 	case "ALI":
-		result, err = sendAliyun(cfg, mobile, tplID, code)
+		result, err = sendAliyun(cfg, mobile, tplID, aliTemplateParams(scene, params))
 	case "TENCENT":
 		result, err = sendTencent(cfg, mobile, tplID, tencentParams(notice, code, mobile))
 	default:
@@ -238,8 +242,33 @@ func tencentParamsFrom(content string, params map[string]string) []string {
 	return out
 }
 
-func sendAliyun(cfg engineCfg, mobile, templateID, code string) (any, error) {
-	tpl, _ := json.Marshal(map[string]string{"code": code})
+// aliTemplateParams mirrors PHP SmsMessageService::setSmsParams for non-Tencent.
+// Captcha scenes send {code}; other scenes send the full merged param map.
+func aliTemplateParams(scene int, params map[string]string) map[string]string {
+	if isCaptchaScene(scene) {
+		return map[string]string{"code": params["code"]}
+	}
+	out := map[string]string{}
+	for k, v := range params {
+		out[k] = v
+	}
+	return out
+}
+
+func isCaptchaScene(scene int) bool {
+	for _, id := range captchaScenes {
+		if scene == id {
+			return true
+		}
+	}
+	return false
+}
+
+func sendAliyun(cfg engineCfg, mobile, templateID string, tplParams map[string]string) (any, error) {
+	if tplParams == nil {
+		tplParams = map[string]string{}
+	}
+	tpl, _ := json.Marshal(tplParams)
 	params := map[string]string{
 		"AccessKeyId":      cfg.AppKey,
 		"Action":           "SendSms",

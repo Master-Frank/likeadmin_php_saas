@@ -101,7 +101,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 		addNoticeRecord(c, scene, map[string]string{"code": code, "mobile": mobile}, tid)
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
-	if err := maybeGatewaySend(c, mobile, scene, code, logID); err != nil {
+	if err := maybeGatewaySend(c, mobile, scene, map[string]string{"code": code, "mobile": mobile}, logID); err != nil {
 		cache.Del(cacheKey(scene, mobile))
 		return 0, "", err
 	}

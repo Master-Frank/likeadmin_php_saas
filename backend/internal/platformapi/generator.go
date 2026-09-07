@@ -395,7 +395,11 @@ func GeneratorGenerate(c *gin.Context) {
 			return
 		}
 		cache.Set("curd_file_name"+fileName, fileName, time.Hour)
-		fileURL = ctxutil.Domain(c) + "/platformapi/tools.generator/download?file=" + fileName
+		app := "platformapi"
+		if meta := ctxutil.Get(c); meta != nil && meta.App != "" {
+			app = meta.App
+		}
+		fileURL = ctxutil.Domain(c) + "/" + app + "/tools.generator/download?file=" + fileName
 	}
 	response.Result(c, 1, 1, "操作成功", gin.H{"file": fileURL})
 }
@@ -421,20 +425,44 @@ func GeneratorDownload(c *gin.Context) {
 }
 
 func GeneratorGetModels(c *gin.Context) {
-	out := scanPHPModels(filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", "common", "model"))
-	if len(out) == 0 {
+	module := strings.TrimSpace(httpx.QueryStr(c, "module"))
+	if module == "" {
+		module = strings.TrimSpace(httpx.BodyStr(c, "module"))
+	}
+	if module == "" {
+		module = "common"
+	}
+	if !validModelModule(module) {
+		response.Result(c, 1, 1, "", []string{})
+		return
+	}
+	out := scanPHPModels(filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", module, "model"), module)
+	if len(out) == 0 && module == "common" {
 		// Go-only deploy: keep the relation picker usable without the PHP tree.
 		out = scanGoModels(filepath.Join(filepath.Dir(filepath.Dir(config.C.App.PublicDir)), "backend", "internal", "model"))
 	}
 	response.Result(c, 1, 1, "", out)
 }
 
-func scanPHPModels(root string) []string {
+func validModelModule(module string) bool {
+	if module == "" || strings.Contains(module, "..") || strings.ContainsAny(module, `/\`) {
+		return false
+	}
+	for _, r := range module {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func scanPHPModels(root, module string) []string {
 	out := []string{}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return out
 	}
+	prefix := `\app\` + module + `\model\`
 	for _, entry := range entries {
 		if entry.IsDir() {
 			sub, err := os.ReadDir(filepath.Join(root, entry.Name()))
@@ -445,7 +473,7 @@ func scanPHPModels(root string) []string {
 				if item.IsDir() || !strings.HasSuffix(item.Name(), ".php") {
 					continue
 				}
-				out = append(out, `\app\common\model\`+entry.Name()+`\`+strings.TrimSuffix(item.Name(), ".php"))
+				out = append(out, prefix+entry.Name()+`\`+strings.TrimSuffix(item.Name(), ".php"))
 			}
 			continue
 		}
@@ -453,7 +481,7 @@ func scanPHPModels(root string) []string {
 		if base == "BaseModel" || !strings.HasSuffix(entry.Name(), ".php") {
 			continue
 		}
-		out = append(out, `\app\common\model\`+base)
+		out = append(out, prefix+base)
 	}
 	return out
 }

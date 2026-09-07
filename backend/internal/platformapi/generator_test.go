@@ -95,3 +95,23 @@ func TestScanGoModelsNestedPHPPaths(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestValidModelModule(t *testing.T) {
+	if !validModelModule("common") || !validModelModule("tenant") {
+		t.Fatal("valid modules rejected")
+	}
+	if validModelModule("") || validModelModule("../common") || validModelModule("a/b") || validModelModule("a\\b") {
+		t.Fatal("unsafe module accepted")
+	}
+}
+
+func TestScanPHPModelsModule(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "User.php"), []byte("<?php"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := scanPHPModels(dir, "tenant")
+	if len(got) != 1 || got[0] != `\app\tenant\model\User` {
+		t.Fatalf("got %v", got)
+	}
+}

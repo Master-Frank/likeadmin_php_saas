@@ -137,6 +137,9 @@ func AdminEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if !authAdminIDPresent(p) {
 		response.Fail(c, "管理员id不能为空")
@@ -243,6 +246,9 @@ func AdminEditSelf(c *gin.Context) {
 
 func AdminDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -463,6 +469,9 @@ func MenuUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
@@ -542,6 +551,9 @@ func RoleEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
 		response.Fail(c, "请选择角色")
@@ -578,6 +590,9 @@ func RoleEdit(c *gin.Context) {
 
 func RoleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {

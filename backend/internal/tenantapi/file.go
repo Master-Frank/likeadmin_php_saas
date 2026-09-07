@@ -49,6 +49,9 @@ func FileMove(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	ids := httpx.BodyUints(c, "ids")
 	if msg := util.FileMoveCheck(p, ids); msg != "" {
@@ -67,6 +70,9 @@ func FileRename(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.FileRenameCheck(p); msg != "" {
 		response.Fail(c, msg)
@@ -81,6 +87,9 @@ func FileRename(c *gin.Context) {
 
 func FileDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -162,6 +171,9 @@ func FileEditCate(c *gin.Context) {
 
 func FileDelCate(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
