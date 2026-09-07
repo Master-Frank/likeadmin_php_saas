@@ -3640,14 +3640,18 @@ print(",".join(sorted(ls[0])) if ls else "")
   pdid="$(python3 -c '
 import json,sys
 def first(rows):
+    if isinstance(rows, dict):
+        rows = rows.get("lists") or []
     for r in rows or []:
+        if not isinstance(r, dict):
+            continue
         if r.get("id"):
             return r.get("id")
         if r.get("children"):
             x=first(r.get("children"))
             if x: return x
     return 0
-print(first((json.load(sys.stdin).get("data") or {}).get("lists") or []))
+print(first(json.load(sys.stdin).get("data") or []))
 ' <<<"$php_pdd")"
   if [[ "$pdid" != "0" && -n "$pdid" ]]; then
     php_pdd2="$(curl -sS "$PHP/platformapi/dept.dept/detail?id=$pdid" -H "token: $TOKEN")"

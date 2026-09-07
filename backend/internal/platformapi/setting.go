@@ -498,6 +498,7 @@ func dictDataRaw(r model.DictData) map[string]any {
 		"sort": r.Sort, "status": r.Status, "remark": r.Remark,
 		"create_time": util.FormatDateTime(r.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
 	}
 }
 

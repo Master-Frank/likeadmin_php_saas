@@ -355,6 +355,7 @@ func tenantJobsRaw(j model.TenantJobs) map[string]any {
 		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
 		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(j.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(j.DeleteTime),
 	}
 }
 
