@@ -231,6 +231,25 @@ try:
 except Exception:
     print("")
 ')"
+php_wn="$(python3 -c 'import json; print((json.load(open("/tmp/likeadmin-golden/php_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
+go_wn="$(python3 -c 'import json; print((json.load(open("/tmp/likeadmin-golden/go_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
+echo "website_name php=$php_wn go=$go_wn"
+if [[ -n "$php_wn" && "$php_wn" != "$go_wn" ]]; then
+  fail=$((fail + 1))
+fi
+pay_cfg_eq="$(python3 -c '
+import json
+try:
+    p=(json.load(open("/tmp/likeadmin-golden/php_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
+    g=(json.load(open("/tmp/likeadmin-golden/go_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
+    print("1" if p==g else "0")
+except Exception:
+    print("")
+' 2>/dev/null || true)"
+echo "pay_config_eq=$pay_cfg_eq"
+if [[ "$pay_cfg_eq" == "0" ]]; then
+  fail=$((fail + 1))
+fi
 echo "upgrade_lists_keys php=$php_uk go=$go_uk"
 if [[ -n "$php_uk" && "$php_uk" != "$go_uk" ]]; then
   fail=$((fail + 1))

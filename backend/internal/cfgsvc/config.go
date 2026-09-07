@@ -64,7 +64,13 @@ func Get(c *gin.Context, typ, name string, defaultValue any) any {
 }
 
 func GetString(c *gin.Context, typ, name, def string) string {
-	v := Get(c, typ, name, def)
+	// Empty def means PHP ConfigService::get($type, $name) with null default,
+	// which falls through to config('project.{type}.{name}').
+	var defaultValue any
+	if def != "" {
+		defaultValue = def
+	}
+	v := Get(c, typ, name, defaultValue)
 	if v == nil {
 		return def
 	}

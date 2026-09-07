@@ -4,6 +4,15 @@ import (
 	"testing"
 )
 
+func TestDecodePayConfigEmptyIsNull(t *testing.T) {
+	if DecodePayConfig("") != nil || DecodePayConfig("   ") != nil {
+		t.Fatal("empty pay config should be JSON null")
+	}
+	if DecodePayConfig("not-json") != nil {
+		t.Fatal("invalid json should be JSON null")
+	}
+}
+
 func TestCheckPayConfigBalance(t *testing.T) {
 	in := PayConfigInput{
 		ID: 1, Name: "余额支付", Icon: "/icon.png", Sort: 1, SortPresent: true,

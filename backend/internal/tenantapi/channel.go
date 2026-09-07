@@ -26,7 +26,7 @@ func ChannelOAGet(c *gin.Context) {
 		"app_id":           cfgsvc.GetString(c, "oa_setting", "app_id", ""),
 		"app_secret":       cfgsvc.GetString(c, "oa_setting", "app_secret", ""),
 		"url":              ctxutil.Domain(c) + "/tenantapi/channel.official_account_reply/index",
-		"token":            cfgsvc.GetString(c, "oa_setting", "token", ""),
+		"token":            cfgsvc.Get(c, "oa_setting", "token", nil),
 		"encoding_aes_key": cfgsvc.GetString(c, "oa_setting", "encoding_aes_key", ""),
 		"encryption_type":  enc,
 		"business_domain":  host,

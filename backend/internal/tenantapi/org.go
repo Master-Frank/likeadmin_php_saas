@@ -31,7 +31,7 @@ func DeptLists(c *gin.Context) {
 			root = int(d.Pid)
 		}
 	}
-	response.Success(c, "", util.DeptTree(maps, root))
+	response.SuccessSilent(c, "", util.DeptTree(maps, root))
 }
 
 func DeptLeader(c *gin.Context) {
@@ -335,8 +335,8 @@ func tenantDeptRaw(d model.TenantDept) map[string]any {
 		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
 		"mobile": d.Mobile, "status": d.Status, "tenant_id": d.TenantID,
 		"create_time": util.FormatDateTime(d.CreateTime),
-		"update_time": util.FormatDateTimePtr(d.UpdateTime),
-		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
+		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
 	}
 }
 

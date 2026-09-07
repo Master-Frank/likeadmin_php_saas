@@ -152,14 +152,11 @@ func BuildPayConfigJSON(payWay int, raw any) string {
 
 func DecodePayConfig(raw string) any {
 	if strings.TrimSpace(raw) == "" {
-		return []any{}
+		return nil
 	}
 	var v any
 	if json.Unmarshal([]byte(raw), &v) != nil {
-		return []any{}
-	}
-	if v == nil {
-		return []any{}
+		return nil
 	}
 	return v
 }

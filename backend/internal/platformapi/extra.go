@@ -82,7 +82,7 @@ func PayWayGet(c *gin.Context) {
 	var rows []model.PayWay
 	bootstrap.DB.Find(&rows)
 	if len(rows) == 0 {
-		response.Success(c, "", []any{})
+		response.SuccessSilent(c, "", []any{})
 		return
 	}
 	maxScene := 0

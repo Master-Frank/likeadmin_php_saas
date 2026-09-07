@@ -497,6 +497,13 @@ func PcIndex(c *gin.Context) {
 	})
 }
 
+func qrFileURL(c *gin.Context, uri string) any {
+	if uri == "" {
+		return ""
+	}
+	return filesvc.GetFileURL(c, uri)
+}
+
 func PcConfig(c *gin.Context) {
 	response.Data(c, gin.H{
 		"domain": filesvc.GetFileURL(c, ""),
@@ -509,21 +516,21 @@ func PcConfig(c *gin.Context) {
 			"qq_auth":         cfgsvc.GetInt(c, "login", "qq_auth", 0),
 		},
 		"website": gin.H{
-			"shop_name":   cfgsvc.GetString(c, "website", "shop_name", "likeadmin"),
+			"shop_name":   cfgsvc.GetString(c, "website", "shop_name", ""),
 			"shop_logo":   filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "shop_logo", "")),
 			"pc_logo":     filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_logo", "")),
-			"pc_title":    cfgsvc.GetString(c, "website", "pc_title", "likeadmin"),
+			"pc_title":    cfgsvc.Get(c, "website", "pc_title", nil),
 			"pc_ico":      filesvc.GetFileURL(c, cfgsvc.GetString(c, "website", "pc_ico", "")),
-			"pc_desc":     cfgsvc.GetString(c, "website", "pc_desc", ""),
-			"pc_keywords": cfgsvc.GetString(c, "website", "pc_keywords", ""),
+			"pc_desc":     cfgsvc.Get(c, "website", "pc_desc", nil),
+			"pc_keywords": cfgsvc.Get(c, "website", "pc_keywords", nil),
 		},
-		"siteStatistics": gin.H{"clarity_code": cfgsvc.GetString(c, "siteStatistics", "clarity_code", "")},
+		"siteStatistics": gin.H{"clarity_code": cfgsvc.Get(c, "siteStatistics", "clarity_code", nil)},
 		"version":        config.C.Project.Version,
 		"copyright":      cfgsvc.Get(c, "copyright", "config", []any{}),
 		"admin_url":      ctxutil.Domain(c) + "/admin",
 		"qrcode": gin.H{
-			"oa":  filesvc.GetFileURL(c, cfgsvc.GetString(c, "oa_setting", "qr_code", "")),
-			"mnp": filesvc.GetFileURL(c, cfgsvc.GetString(c, "mnp_setting", "qr_code", "")),
+			"oa":  qrFileURL(c, cfgsvc.GetString(c, "oa_setting", "qr_code", "")),
+			"mnp": qrFileURL(c, cfgsvc.GetString(c, "mnp_setting", "qr_code", "")),
 		},
 	})
 }
@@ -661,9 +668,21 @@ func IndexIndex(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	_ = db.First(&page)
+	articles := limitArticles(c, "new", 20, 0, 0)
+	out := make([]map[string]any, 0, len(articles))
+	for _, a := range articles {
+		item := make(map[string]any, len(a))
+		for k, v := range a {
+			if k == "cid" {
+				continue
+			}
+			item[k] = v
+		}
+		out = append(out, item)
+	}
 	response.Data(c, gin.H{
 		"page":    decoratePageValue(page),
-		"article": limitArticles(c, "new", 20, 0, 0),
+		"article": out,
 	})
 }
 

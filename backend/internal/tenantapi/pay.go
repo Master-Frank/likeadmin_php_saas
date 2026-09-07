@@ -105,7 +105,7 @@ func PayWayGet(c *gin.Context) {
 	}
 	db.Find(&rows)
 	if len(rows) == 0 {
-		response.Success(c, "", []any{})
+		response.SuccessSilent(c, "", []any{})
 		return
 	}
 	maxScene := 0

@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"math/rand"
 	"time"
 
 	"likeadmin/backend/internal/cfgsvc"
@@ -57,7 +58,8 @@ func Series(now time.Time, days int, minN, maxN int) (dates []string, nums []int
 	for i := 0; i < days; i++ {
 		d := now.AddDate(0, 0, -i)
 		dates = append(dates, d.Format("01/02"))
-		nums = append(nums, minN+(int(d.Unix())%span))
+		// PHP WorkbenchLogic::visitor/sale uses rand($min, $max) inclusive.
+		nums = append(nums, minN+rand.Intn(span+1))
 	}
 	return
 }
