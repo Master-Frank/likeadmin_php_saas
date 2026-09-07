@@ -418,6 +418,16 @@ print((ls[0] if ls else {}).get("id") or 0)
         fail=$((fail + 1))
       fi
     fi
+    php_adm="$(curl -sS "$PHP/api/article/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $UT")"
+    go_adm="$(curl -sS "$GO/api/article/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $UT")"
+    php_admk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data"); print(",".join(sorted(d)) if isinstance(d,dict) else type(d).__name__)' <<<"$php_adm")"
+    go_admk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data"); print(",".join(sorted(d)) if isinstance(d,dict) else type(d).__name__)' <<<"$go_adm")"
+    echo "article_detail_missing php=$php_admk go=$go_admk"
+    if [[ "$php_admk" != "$go_admk" ]]; then
+      echo "  php_adm=${php_adm:0:180}"
+      echo "  go_adm=${go_adm:0:180}"
+      fail=$((fail + 1))
+    fi
     go_miss="$(curl -sS "$GO/api/pc/articleDetail?id=999999999" -H "Host: $TENANT_HOST" -H "token: $UT")"
     go_mk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(d.get("code"), int(isinstance(data,dict) and {"last","next","new","collect","cate_name"} <= set(data)))' <<<"$go_miss")"
     echo "pc_article_missing go=$go_mk"
