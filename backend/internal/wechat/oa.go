@@ -3,6 +3,7 @@ package wechat
 import (
 	"encoding/xml"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -45,6 +46,7 @@ const (
 )
 
 type ReplyRow struct {
+	ID           uint
 	Keyword      string
 	ReplyType    int
 	MatchingType int
@@ -54,34 +56,48 @@ type ReplyRow struct {
 }
 
 func MatchReply(msg OAMessage, rows []ReplyRow) string {
-	if strings.EqualFold(msg.MsgType, "event") && strings.EqualFold(msg.Event, "subscribe") {
+	sorted := append([]ReplyRow(nil), rows...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].Sort != sorted[j].Sort {
+			return sorted[i].Sort < sorted[j].Sort
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+	pickByID := func(typ int) string {
+		found := false
+		bestID := uint(0)
+		content := ""
 		for _, r := range rows {
-			if r.Status == 1 && r.ReplyType == ReplyFollow && r.Content != "" {
-				return r.Content
+			if r.Status != 1 || r.ReplyType != typ || r.Content == "" {
+				continue
+			}
+			if !found || r.ID < bestID {
+				found = true
+				bestID = r.ID
+				content = r.Content
 			}
 		}
+		return content
+	}
+	if strings.EqualFold(msg.MsgType, "event") && strings.EqualFold(msg.Event, "subscribe") {
+		// PHP follow uses value('content') (lowest id), and does not fall through to default.
+		return pickByID(ReplyFollow)
 	}
 	if strings.EqualFold(msg.MsgType, "text") {
 		text := msg.Content
-		for _, r := range rows {
+		for _, r := range sorted {
 			if r.Status != 1 || r.ReplyType != ReplyKeyword || r.Content == "" {
 				continue
 			}
-			ok := false
+			ok := r.Keyword == text
 			if r.MatchingType == MatchFuzzy {
 				ok = strings.Contains(strings.ToLower(text), strings.ToLower(r.Keyword))
-			} else {
-				ok = r.Keyword == text
 			}
 			if ok {
 				return r.Content
 			}
 		}
-		for _, r := range rows {
-			if r.Status == 1 && r.ReplyType == ReplyDefault && r.Content != "" {
-				return r.Content
-			}
-		}
+		return pickByID(ReplyDefault)
 	}
 	return ""
 }

@@ -18,6 +18,8 @@ import (
 	paycfg "likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
+
+	"gorm.io/gorm"
 )
 
 func RunOnce() {
@@ -136,9 +138,7 @@ func expireSessions() {
 	if bootstrap.DB == nil {
 		return
 	}
-	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.AdminSession{})
-	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
-	bootstrap.DB.Where("expire_time < ?", now).Delete(&model.UserSession{})
+	purgeExpiredSessions(bootstrap.DB, now, true)
 	var tenants []model.Tenant
 	bootstrap.DB.Where("tactics = 1 AND delete_time IS NULL AND sn <> ''").Find(&tenants)
 	for _, t := range tenants {
@@ -146,8 +146,44 @@ func expireSessions() {
 		if db == nil {
 			continue
 		}
-		db.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
-		db.Where("expire_time < ?", now).Delete(&model.UserSession{})
+		purgeExpiredSessions(db, now, false)
+	}
+}
+
+func purgeExpiredSessions(db *gorm.DB, now int64, includePlatform bool) {
+	if db == nil {
+		return
+	}
+	if includePlatform {
+		var admins []model.AdminSession
+		db.Where("expire_time < ?", now).Find(&admins)
+		dropSessionTokens(admins, nil, nil)
+		db.Where("expire_time < ?", now).Delete(&model.AdminSession{})
+	}
+	var tenants []model.TenantAdminSession
+	db.Where("expire_time < ?", now).Find(&tenants)
+	var users []model.UserSession
+	db.Where("expire_time < ?", now).Find(&users)
+	dropSessionTokens(nil, tenants, users)
+	db.Where("expire_time < ?", now).Delete(&model.TenantAdminSession{})
+	db.Where("expire_time < ?", now).Delete(&model.UserSession{})
+}
+
+func dropSessionTokens(admins []model.AdminSession, tenants []model.TenantAdminSession, users []model.UserSession) {
+	for _, s := range admins {
+		if s.Token != "" {
+			cache.DeleteAdminInfo(s.Token)
+		}
+	}
+	for _, s := range tenants {
+		if s.Token != "" {
+			cache.DeleteTenantAdminInfo(s.Token)
+		}
+	}
+	for _, s := range users {
+		if s.Token != "" {
+			cache.DeleteUserInfo(s.Token)
+		}
 	}
 }
 
@@ -175,7 +211,7 @@ func clearRuntime() string {
 		if strings.HasPrefix(name, "curd-") && strings.HasSuffix(name, ".zip") {
 			return nil
 		}
-		if d.IsDir() && (name == "cache" || name == "temp" || name == "log") {
+		if d.IsDir() && (name == "cache" || name == "temp" || name == "log" || name == "file") {
 			_ = os.RemoveAll(path)
 			_ = os.MkdirAll(path, 0755)
 			return fs.SkipDir

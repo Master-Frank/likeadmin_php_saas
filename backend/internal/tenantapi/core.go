@@ -1111,7 +1111,7 @@ func OAReplyIndex(c *gin.Context) {
 	mapped := make([]wechat.ReplyRow, 0, len(rows))
 	for _, r := range rows {
 		mapped = append(mapped, wechat.ReplyRow{
-			Keyword: r.Keyword, ReplyType: r.ReplyType, MatchingType: r.MatchingType,
+			ID: r.ID, Keyword: r.Keyword, ReplyType: r.ReplyType, MatchingType: r.MatchingType,
 			Content: r.Content, Status: r.Status, Sort: r.Sort,
 		})
 	}

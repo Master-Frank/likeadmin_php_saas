@@ -359,7 +359,10 @@ func GeneratorGenerate(c *gin.Context) {
 		if generator.IsAutoMenu(t) {
 			for _, f := range files {
 				if f.Name == "menu.sql" {
-					_ = generator.ApplyMenuSQL(bootstrap.DB, f.Content)
+					if err := generator.ApplyMenuSQL(bootstrap.DB, f.Content); err != nil {
+						response.Fail(c, err.Error())
+						return
+					}
 				}
 			}
 		}

@@ -267,3 +267,12 @@ func TestWriteModuleWritesPHP(t *testing.T) {
 		t.Fatalf("go metadata should mention gencrud: %s", goFiles[0].Content)
 	}
 }
+
+func TestApplyMenuSQLEmpty(t *testing.T) {
+	if err := ApplyMenuSQL(nil, "INSERT INTO x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyMenuSQL(nil, ""); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -51,6 +51,21 @@ func TestMatchReply(t *testing.T) {
 	if got := MatchReply(OAMessage{MsgType: "text", Content: "hi"}, tied); got != "先" {
 		t.Fatalf("first match=%s", got)
 	}
+	reversed := []ReplyRow{
+		{ID: 2, ReplyType: ReplyKeyword, MatchingType: MatchFull, Keyword: "hi", Content: "后", Status: 1, Sort: 2},
+		{ID: 1, ReplyType: ReplyKeyword, MatchingType: MatchFull, Keyword: "hi", Content: "先", Status: 1, Sort: 1},
+	}
+	if got := MatchReply(OAMessage{MsgType: "text", Content: "hi"}, reversed); got != "先" {
+		t.Fatalf("sort asc=%s", got)
+	}
+	follows := []ReplyRow{
+		{ID: 2, ReplyType: ReplyFollow, Status: 1, Content: "新", Sort: 1},
+		{ID: 1, ReplyType: ReplyFollow, Status: 1, Content: "旧", Sort: 9},
+		{ID: 3, ReplyType: ReplyDefault, Status: 1, Content: "默认"},
+	}
+	if got := MatchReply(OAMessage{MsgType: "event", Event: "subscribe"}, follows); got != "旧" {
+		t.Fatalf("follow value()=%s", got)
+	}
 }
 
 func TestCodeURLEmptyRedirect(t *testing.T) {
