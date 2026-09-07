@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"likeadmin/backend/internal/bootstrap"
 )
 
 func writeZip(t *testing.T, entries map[string]string) string {
@@ -150,6 +152,60 @@ func TestVersionFromFilename(t *testing.T) {
 	}
 	if got := versionFromFilename("pkg.zip"); got != "" {
 		t.Fatalf("empty %q", got)
+	}
+}
+
+func TestResolvePackageEmptyHTTPBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := resolvePackage(srv.URL+"/empty.zip", t.TempDir()); err == nil || !strings.Contains(err.Error(), "获取文件错误") {
+		t.Fatalf("empty 200: %v", err)
+	}
+}
+
+func TestApplyExtractedSQLDataAndStructure(t *testing.T) {
+	cfg := os.Getenv("LIKEADMIN_CONFIG")
+	if cfg == "" {
+		cfg = "/workspace/backend/configs/config.yaml"
+	}
+	if bootstrap.DB == nil {
+		if err := bootstrap.Init(cfg); err != nil {
+			t.Skip(err)
+		}
+	}
+	if bootstrap.DB == nil {
+		t.Skip("no database")
+	}
+	src := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "project", "sql", "data"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "project", "sql", "structure"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	dataSQL := "CREATE TABLE IF NOT EXISTS `la_pair_upgrade_probe` (`id` int NOT NULL);\nINSERT INTO `la_pair_upgrade_probe` (`id`) VALUES (46);"
+	structSQL := "CREATE TABLE IF NOT EXISTS `la_pair_upgrade_probe_s` (`id` int NOT NULL);"
+	if err := os.WriteFile(filepath.Join(src, "project", "sql", "data", "001.sql"), []byte(dataSQL), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "project", "sql", "structure", "001.sql"), []byte(structSQL), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = bootstrap.DB.Exec("DROP TABLE IF EXISTS la_pair_upgrade_probe").Error
+		_ = bootstrap.DB.Exec("DROP TABLE IF EXISTS la_pair_upgrade_probe_s").Error
+	})
+	if err := applyExtracted(src, t.TempDir(), t.TempDir(), bootstrap.DB); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := bootstrap.DB.Raw("SELECT COUNT(*) FROM la_pair_upgrade_probe WHERE id = 46").Scan(&n).Error; err != nil || n != 1 {
+		t.Fatalf("data sql n=%d err=%v", n, err)
+	}
+	if err := bootstrap.DB.Raw("SELECT COUNT(*) FROM la_pair_upgrade_probe_s").Scan(&n).Error; err != nil {
+		t.Fatalf("structure sql: %v", err)
 	}
 }
 

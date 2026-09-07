@@ -342,7 +342,7 @@ func handlePayNotify(c *gin.Context) {
 		}
 		dec, ok := pay.DecryptWechatV3WithKeys(raw, pay.CollectWechatSignKeys(ctxutil.Get(c).TenantID))
 		if !ok {
-			c.JSON(200, gin.H{"code": "FAIL", "message": "验签失败"})
+			c.JSON(200, gin.H{"code": "FAIL", "message": "解密失败"})
 			return
 		}
 		n = dec

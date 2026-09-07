@@ -176,10 +176,15 @@ func downFile(remote, saveDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(f, resp.Body)
+	n, err := io.Copy(f, resp.Body)
 	_ = f.Close()
 	if err != nil {
 		return "", err
+	}
+	// PHP file_put_contents on an empty 200 body returns 0 → false → 获取文件错误.
+	if n == 0 {
+		_ = os.Remove(path)
+		return "", errStatus("获取文件错误")
 	}
 	return path, nil
 }
@@ -306,6 +311,7 @@ func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
 		row.ID = 0
 		row.TenantID = tenantID
 		row.CreateTime = util.NowUnix()
+		row.UpdateTime = nil
 		if err := dest.Create(&row).Error; err != nil {
 			return err
 		}

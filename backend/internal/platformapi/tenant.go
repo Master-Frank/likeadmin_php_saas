@@ -1026,6 +1026,7 @@ func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 		row.ID = 0
 		row.TenantID = tenantID
 		row.CreateTime = util.NowUnix()
+		row.UpdateTime = nil
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}

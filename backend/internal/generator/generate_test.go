@@ -117,6 +117,36 @@ func TestTreePreview(t *testing.T) {
 	}
 }
 
+func TestPreviewRelationsCheckboxAndBetweenTime(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.Relations = `[{"name":"items","model":"PairItem","type":"has_many","local_key":"id","foreign_key":"pid"}]`
+	cols = append(cols,
+		model.GenerateColumn{ColumnName: "tags", ColumnComment: "标签", ColumnType: "string", IsInsert: 1, IsUpdate: 1, IsLists: 1, ViewType: "checkbox"},
+		model.GenerateColumn{ColumnName: "create_time", ColumnComment: "创建时间", ColumnType: "int", IsLists: 1, IsQuery: 1, QueryType: "between", ViewType: "datetime"},
+	)
+	files := Build(tbl, cols)
+	var modelPHP, listsPHP, editVue string
+	for _, f := range files {
+		switch f.Name {
+		case "Config.php":
+			modelPHP = f.Content
+		case "ConfigLists.php":
+			listsPHP = f.Content
+		case "edit.vue":
+			editVue = f.Content
+		}
+	}
+	if !strings.Contains(modelPHP, "hasMany") || !strings.Contains(modelPHP, "PairItem::class") || !strings.Contains(modelPHP, "function items") {
+		t.Fatalf("has_many stub missing: %s", modelPHP)
+	}
+	if !strings.Contains(listsPHP, "'between_time' => ['create_time']") {
+		t.Fatalf("between_time missing: %s", listsPHP)
+	}
+	if !strings.Contains(editVue, `split(",")`) || !strings.Contains(editVue, "formData.tags") {
+		t.Fatalf("checkbox split missing: %s", editVue)
+	}
+}
+
 func TestClearRuntimeKeepsCurdZip(t *testing.T) {
 	root := RuntimeDir()
 	if err := os.MkdirAll(filepath.Join(root, "generate", "php"), 0755); err != nil {

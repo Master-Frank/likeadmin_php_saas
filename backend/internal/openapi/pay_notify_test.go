@@ -29,8 +29,20 @@ func TestHandlePayNotifyRejectsBadSign(t *testing.T) {
 		[]byte(`{"event_type":"TRANSACTION.SUCCESS","resource":{"ciphertext":"x","nonce":"n","associated_data":"transaction"}}`)))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `"code":"FAIL"`) {
-		t.Fatalf("v3 unsigned: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"code":"FAIL"`) || !strings.Contains(rec.Body.String(), "解密失败") {
+		t.Fatalf("v3 decrypt: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/pay/notifyOa", bytes.NewReader(
+		[]byte(`{"event_type":"TRANSACTION.SUCCESS","resource":{"ciphertext":"x","nonce":"n","associated_data":"transaction"}}`)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Wechatpay-Signature", "bad")
+	req.Header.Set("Wechatpay-Timestamp", "1")
+	req.Header.Set("Wechatpay-Nonce", "n")
+	r.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "验签失败") {
+		t.Fatalf("v3 bad sign: %s", rec.Body.String())
 	}
 }
 

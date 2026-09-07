@@ -36,6 +36,9 @@ func TestValidRegisterPassword(t *testing.T) {
 		{"!!!!!!", "密码须为数字,字母或符号组合"},
 		{"likeadmin1", ""},
 		{"Likeadmin1", ""},
+		{"ab!@#$", ""},
+		{"123!@#", ""},
+		{"Pass word", ""},
 	}
 	for _, c := range cases {
 		if got := ValidRegisterPassword(c.in); got != c.want {
