@@ -57,6 +57,9 @@ func TestArticleDetailMapFields(t *testing.T) {
 	if out["click"] != 11 || out["is_show"] != 1 || out["tenant_id"] != uint(1) {
 		t.Fatalf("%+v", out)
 	}
+	if out["image"] != "" {
+		t.Fatalf("empty image must stay empty, got %q", out["image"])
+	}
 }
 
 func TestPcArticleMissingShape(t *testing.T) {

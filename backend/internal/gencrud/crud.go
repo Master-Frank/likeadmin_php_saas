@@ -4,6 +4,7 @@
 package gencrud
 
 import (
+	"net/http"
 	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -204,7 +205,18 @@ func doLists(c *gin.Context, sp *spec) {
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
+func requirePOST(c *gin.Context) bool {
+	if c != nil && c.Request != nil && c.Request.Method != http.MethodPost {
+		response.Fail(c, "请求方式错误，请使用post请求方式")
+		return false
+	}
+	return true
+}
+
 func doAdd(c *gin.Context, sp *spec) {
+	if !requirePOST(c) {
+		return
+	}
 	p := httpx.Params(c)
 	if msg := requiredMsg(sp, p, false); msg != "" {
 		response.Fail(c, msg)
@@ -219,10 +231,13 @@ func doAdd(c *gin.Context, sp *spec) {
 }
 
 func doEdit(c *gin.Context, sp *spec) {
+	if !requirePOST(c) {
+		return
+	}
 	p := httpx.Params(c)
 	id := httpx.Uint(c, sp.pk)
 	if id == 0 {
-		response.Fail(c, "参数缺失")
+		response.Fail(c, sp.pk+"不能为空")
 		return
 	}
 	if msg := requiredMsg(sp, p, true); msg != "" {
@@ -249,12 +264,15 @@ func doEdit(c *gin.Context, sp *spec) {
 }
 
 func doDelete(c *gin.Context, sp *spec) {
+	if !requirePOST(c) {
+		return
+	}
 	ids := httpx.Uints(c, sp.pk)
 	if len(ids) == 0 {
 		ids = httpx.Uints(c, "ids")
 	}
 	if len(ids) == 0 {
-		response.Fail(c, "参数缺失")
+		response.Fail(c, sp.pk+"不能为空")
 		return
 	}
 	q := scoped(c, sp).Where(sp.pk+" IN ?", ids)
@@ -273,9 +291,9 @@ func doDelete(c *gin.Context, sp *spec) {
 }
 
 func doDetail(c *gin.Context, sp *spec) {
-	id := httpx.Uint(c, sp.pk)
+	id := httpx.QueryUint(c, sp.pk)
 	if id == 0 {
-		response.Fail(c, "参数缺失")
+		response.Fail(c, sp.pk+"不能为空")
 		return
 	}
 	row := map[string]any{}
@@ -424,6 +442,9 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 		if col.ColumnType == "int" && col.ViewType == "datetime" {
 			val = util.ToInt(val)
 		}
+		if col.ColumnName == "image" {
+			val = filesvc.SetFileURL(c, util.ToString(val))
+		}
 		data[col.ColumnName] = val
 	}
 	if !update && sp.allowed["create_time"] {
@@ -472,8 +493,8 @@ func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
 			out[k] = util.FormatDateTime(util.ToInt64(v))
 			continue
 		}
-		if isImageCol(sp, k) {
-			out[k] = filesvc.GetFileURL(c, util.ToString(v))
+		if k == "image" {
+			out[k] = filesvc.GetImageAttr(c, util.ToString(v))
 			continue
 		}
 		out[k] = v

@@ -13,6 +13,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetImageAttr matches PHP BaseModel::getImageAttr: empty stays "", else getFileUrl.
+func GetImageAttr(c *gin.Context, uri string) string {
+	if strings.TrimSpace(uri) == "" {
+		return ""
+	}
+	return GetFileURL(c, uri)
+}
+
 func GetFileURL(c *gin.Context, uri string) string {
 	if strings.Contains(uri, "http://") || strings.Contains(uri, "https://") {
 		return uri

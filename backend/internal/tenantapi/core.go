@@ -435,7 +435,7 @@ func ArticleLists(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
+			"image": filesvc.GetImageAttr(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
 			"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
 			"click": a.ClickActual + a.ClickVirtual, "cate_name": cates[a.Cid],
 			"tenant_id": a.TenantID, "create_time": util.FormatDateTime(a.CreateTime),
@@ -538,7 +538,7 @@ func ArticleDetail(c *gin.Context) {
 	}
 	response.Data(c, map[string]any{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+		"image": filesvc.GetImageAttr(c, a.Image), "author": a.Author,
 		"content": filesvc.RewriteContentDomains(c, a.Content),
 		"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
 		"tenant_id":   a.TenantID,
@@ -557,9 +557,6 @@ func ArticleCateLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.ArticleCate{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
-	if name := lists.Param(q, "name"); name != "" {
-		db = db.Where("name LIKE ?", "%"+name+"%")
-	}
 	var count int64
 	db.Count(&count)
 	var rows []model.ArticleCate

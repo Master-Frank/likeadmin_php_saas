@@ -27,4 +27,10 @@ func TestQueryIgnoresJSONBody(t *testing.T) {
 	if QueryInt(c, "order_id") != 0 {
 		t.Fatalf("QueryInt must ignore JSON body")
 	}
+	if BodyStr(c, "from") != "json" || BodyUint(c, "order_id") != 9 {
+		t.Fatalf("Body from=%q id=%d", BodyStr(c, "from"), BodyUint(c, "order_id"))
+	}
+	if BodyStr(c, "missing") != "" {
+		t.Fatal("query must not leak into Body")
+	}
 }

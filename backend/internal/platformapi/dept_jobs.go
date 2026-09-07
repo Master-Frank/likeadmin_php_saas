@@ -152,8 +152,12 @@ func DeptDetail(c *gin.Context) {
 }
 
 func DeptAll(c *gin.Context) {
-	if _, ok := httpx.Params(c)["tenant_id"]; ok {
-		tid := httpx.Uint(c, "tenant_id")
+	if _, ok := httpx.Query(c)["tenant_id"]; ok {
+		tid := httpx.QueryUint(c, "tenant_id")
+		if tid == 0 {
+			response.Data(c, []any{})
+			return
+		}
 		db := tenantdb.ForTenant(tid)
 		if db == nil {
 			db = bootstrap.DB
@@ -308,8 +312,12 @@ func JobsDetail(c *gin.Context) {
 }
 
 func JobsAll(c *gin.Context) {
-	if _, ok := httpx.Params(c)["tenant_id"]; ok {
-		tid := httpx.Uint(c, "tenant_id")
+	if _, ok := httpx.Query(c)["tenant_id"]; ok {
+		tid := httpx.QueryUint(c, "tenant_id")
+		if tid == 0 {
+			response.Data(c, []any{})
+			return
+		}
 		db := tenantdb.ForTenant(tid)
 		if db == nil {
 			db = bootstrap.DB

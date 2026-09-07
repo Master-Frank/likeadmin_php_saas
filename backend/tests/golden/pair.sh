@@ -518,6 +518,15 @@ print((ls[0] if ls else {}).get("id") or 0)
         fail=$((fail + 1))
       fi
       mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND article_id IN (0,999999)"
+      php_cgq="$(curl -sS "$PHP/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      go_cgq="$(curl -sS "$GO/api/article/addCollect?id=${aid:-1}" -H "Host: $TENANT_HOST" -H "token: $UT")"
+      echo "collect_get_query php_msg=$(jget msg <<<"$php_cgq") go_msg=$(jget msg <<<"$go_cgq")"
+      if [[ "$(jcode <<<"$php_cgq")" != "$(jcode <<<"$go_cgq")" || "$(jget msg <<<"$php_cgq")" != "$(jget msg <<<"$go_cgq")" ]]; then
+        echo "  php_cgq=${php_cgq:0:200}"
+        echo "  go_cgq=${go_cgq:0:200}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND article_id=0"
     fi
     php_xt="$(curl -sS "$PHP/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     go_xt="$(curl -sS "$GO/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
@@ -3752,8 +3761,10 @@ print(",".join(sorted(ls[0])) if ls else "")
   fi
   php_oadm="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_oadm="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  echo "oa_reply_detail_missing php_code=$(jcode <<<"$php_oadm") go_code=$(jcode <<<"$go_oadm")"
-  if [[ "$(jcode <<<"$php_oadm")" != "$(jcode <<<"$go_oadm")" ]]; then
+  php_oadmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_oadm")"
+  go_oadmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$go_oadm")"
+  echo "oa_reply_detail_missing php_code=$(jcode <<<"$php_oadm") go_code=$(jcode <<<"$go_oadm") php=$php_oadmk go=$go_oadmk"
+  if [[ "$(jcode <<<"$php_oadm")" != "$(jcode <<<"$go_oadm")" || "$php_oadmk" != "$go_oadmk" ]]; then
     echo "  php_oadm=${php_oadm:0:200}"
     echo "  go_oadm=${go_oadm:0:200}"
     fail=$((fail + 1))

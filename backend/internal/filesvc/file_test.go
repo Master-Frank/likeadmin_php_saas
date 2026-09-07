@@ -8,6 +8,15 @@ import (
 	"likeadmin/backend/internal/config"
 )
 
+func TestGetImageAttrEmpty(t *testing.T) {
+	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" {
+		t.Fatal("empty image must stay empty")
+	}
+	if Format("http://host", "") != "http://host/" {
+		t.Fatal("Format empty still prefixes domain")
+	}
+}
+
 func TestUploadCateOKZero(t *testing.T) {
 	if UploadCateOK(nil, nil, 0, 1) != "" {
 		t.Fatal("cid 0 should skip lookup")

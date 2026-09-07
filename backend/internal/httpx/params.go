@@ -57,7 +57,20 @@ func Params(c *gin.Context) map[string]any {
 			out[k] = vs
 		}
 	}
-	if c.Request.Body != nil {
+	for k, v := range Body(c) {
+		out[k] = v
+	}
+	c.Set("likeadmin.params", out)
+	return out
+}
+
+// Body mirrors PHP request()->post(): JSON/form only, never the query string.
+func Body(c *gin.Context) map[string]any {
+	if v, ok := c.Get("likeadmin.body"); ok {
+		return v.(map[string]any)
+	}
+	out := map[string]any{}
+	if c != nil && c.Request != nil && c.Request.Body != nil {
 		raw, _ := io.ReadAll(c.Request.Body)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(raw))
 		c.Set("likeadmin.raw", raw)
@@ -84,8 +97,18 @@ func Params(c *gin.Context) map[string]any {
 			}
 		}
 	}
-	c.Set("likeadmin.params", out)
+	if c != nil {
+		c.Set("likeadmin.body", out)
+	}
 	return out
+}
+
+func BodyStr(c *gin.Context, key string) string {
+	return strings.TrimSpace(util.ToString(Body(c)[key]))
+}
+
+func BodyUint(c *gin.Context, key string) uint {
+	return uint(util.ToInt(Body(c)[key]))
 }
 
 func List(c *gin.Context) []any {

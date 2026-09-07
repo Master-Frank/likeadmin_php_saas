@@ -380,7 +380,7 @@ func ArticleLists(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc,
-			"image": filesvc.GetFileURL(c, a.Image),
+			"image": filesvc.GetImageAttr(c, a.Image),
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
 			"collect": collects[a.ID],
 		})

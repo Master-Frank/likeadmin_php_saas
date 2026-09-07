@@ -30,8 +30,8 @@ func ArticleAddCollect(c *gin.Context) {
 		response.Fail(c, "参数错误")
 		return
 	}
-	// PHP ArticleController::addCollect uses id/d (missing → 0) and never checks the article row.
-	aid := httpx.Uint(c, "id")
+	// PHP ArticleController::addCollect uses post('id/d') (query is ignored).
+	aid := httpx.BodyUint(c, "id")
 	var row model.ArticleCollect
 	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
@@ -46,7 +46,7 @@ func ArticleAddCollect(c *gin.Context) {
 
 func ArticleCancelCollect(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
-	aid := httpx.Uint(c, "id")
+	aid := httpx.BodyUint(c, "id")
 	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
 		Updates(map[string]any{"status": 0, "update_time": util.NowUnix()})
 	response.Success(c, "操作成功", nil)
@@ -88,7 +88,7 @@ func ArticleCollect(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, map[string]any{
 			"id": r.ID, "article_id": r.ArticleID, "title": r.Title,
-			"image": filesvc.GetFileURL(c, r.Image), "desc": r.Desc, "is_show": r.IsShow,
+			"image": r.Image, "desc": r.Desc, "is_show": r.IsShow,
 			"click": r.ClickActual + r.ClickVirtual, "create_time": util.FormatDateTime(r.CreateTime),
 			"collect_time": util.FormatDateTimeMinute(r.CollectTime),
 		})
@@ -587,7 +587,7 @@ func pcArticleMissing(c *gin.Context, id uint) gin.H {
 func articleDetailMap(c *gin.Context, a model.Article, click int) gin.H {
 	return gin.H{
 		"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-		"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+		"image": filesvc.GetImageAttr(c, a.Image), "author": a.Author,
 		"content": filesvc.RewriteContentDomains(c, a.Content),
 		"is_show": a.IsShow, "sort": a.Sort, "tenant_id": a.TenantID,
 		"click": click, "create_time": util.FormatDateTime(a.CreateTime),
@@ -632,7 +632,7 @@ func queryArticles(c *gin.Context, sortType string, limit, cate, exclude int, sh
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author,
+			"image": filesvc.GetImageAttr(c, a.Image), "author": a.Author,
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
 		})
 	}

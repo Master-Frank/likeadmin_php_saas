@@ -59,7 +59,8 @@ func UploadCID(c *gin.Context) uint {
 	if v := c.PostForm("cid"); v != "" {
 		return uint(util.ParseInt(v))
 	}
-	return httpx.Uint(c, "cid")
+	// PHP UploadController reads post('cid', 0) only — never the query string.
+	return httpx.BodyUint(c, "cid")
 }
 
 // UploadCateOK rejects a non-zero cid that is missing or belongs to another tenant.

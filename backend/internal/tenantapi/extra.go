@@ -100,7 +100,7 @@ func ArticleAll(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, map[string]any{
-			"id": a.ID, "cid": a.Cid, "title": a.Title, "image": filesvc.GetFileURL(c, a.Image),
+			"id": a.ID, "cid": a.Cid, "title": a.Title, "image": filesvc.GetImageAttr(c, a.Image),
 		})
 	}
 	response.Data(c, out)
@@ -118,7 +118,7 @@ func DecorateDataArticle(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
+			"image": filesvc.GetImageAttr(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
 		})
 	}
@@ -190,9 +190,13 @@ func HotSearchSet(c *gin.Context) {
 			if m == nil {
 				continue
 			}
-			tdb(c).Create(&model.HotSearch{
+			row := model.HotSearch{
 				Name: util.ToString(m["name"]), Sort: util.ToInt(m["sort"]), TenantID: tid, CreateTime: now,
-			})
+			}
+			if id := uint(util.ToInt(m["id"])); id > 0 {
+				row.ID = id
+			}
+			tdb(c).Create(&row)
 		}
 	}
 	response.SuccessNotice(c, "设置成功")
@@ -735,7 +739,11 @@ func OAReplyDetail(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	row, _ := oaReplyByID(c, httpx.QueryUint(c, "id"))
+	row, ok := oaReplyByID(c, httpx.QueryUint(c, "id"))
+	if !ok {
+		response.Data(c, []any{})
+		return
+	}
 	response.Data(c, oaReplyDetailMap(row))
 }
 
