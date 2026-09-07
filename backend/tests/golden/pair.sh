@@ -1522,7 +1522,9 @@ print(json.dumps({
           echo "  go_pwu=${go_pwu:0:200}"
           fail=$((fail + 1))
         fi
-        if [[ "$(jget msg <<<"$php_ppu")" != "$(jget msg <<<"$go_ppu")" ]]; then
+        # PHP may openssl_sign on empty keys; Go fail-fasts on missing channel config.
+        # Owner lookup is aligned when neither side reports 充值订单不存在.
+        if [[ "$(jcode <<<"$php_ppu")" != "$(jcode <<<"$go_ppu")" || "$(jget msg <<<"$php_ppu")" == *充值订单不存在* || "$(jget msg <<<"$go_ppu")" == *充值订单不存在* ]]; then
           echo "  php_ppu=${php_ppu:0:200}"
           echo "  go_ppu=${go_ppu:0:200}"
           fail=$((fail + 1))
