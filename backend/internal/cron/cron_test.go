@@ -105,3 +105,12 @@ func TestClearRuntimeWipesFile(t *testing.T) {
 		t.Fatal("generator zip should stay")
 	}
 }
+
+func TestRunCommandWithParams(t *testing.T) {
+	if got := runCommand(model.Crontab{Command: "cache", Params: "--unused extra"}); got != "" {
+		t.Fatalf("cache with params: %q", got)
+	}
+	if got := runCommand(model.Crontab{Command: "not_a_real_command", Params: "foo"}); got != "未定义的定时任务命令: not_a_real_command" {
+		t.Fatalf("unknown with params: %q", got)
+	}
+}

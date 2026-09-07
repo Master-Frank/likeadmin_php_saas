@@ -268,7 +268,7 @@ func applyRefundQuery(lg model.RefundLog) {
 			return
 		}
 		if ok {
-			updateRefundSuccess(lg, rec)
+			updateRefundSuccess(lg, rec, paycfg.RefundQueryTradeNo(result))
 			return
 		}
 		updateRefundMsg(lg, "微信:"+msg)
@@ -282,14 +282,14 @@ func applyRefundQuery(lg model.RefundLog) {
 			return
 		}
 		if ok {
-			updateRefundSuccess(lg, rec)
+			updateRefundSuccess(lg, rec, paycfg.RefundQueryTradeNo(result))
 			return
 		}
 		updateRefundMsg(lg, "支付宝:"+msg)
 	}
 }
 
-func updateRefundSuccess(lg model.RefundLog, rec model.RefundRecord) {
+func updateRefundSuccess(lg model.RefundLog, rec model.RefundRecord, refundTID string) {
 	lq := bootstrap.DB.Model(&model.RefundLog{}).Where("id = ?", lg.ID)
 	rq := bootstrap.DB.Model(&model.RefundRecord{}).Where("id = ?", rec.ID)
 	if lg.TenantID > 0 {
@@ -300,6 +300,13 @@ func updateRefundSuccess(lg model.RefundLog, rec model.RefundRecord) {
 	}
 	lq.Update("refund_status", 1)
 	rq.Update("refund_status", 1)
+	if rec.OrderType == "recharge" && rec.OrderID > 0 && refundTID != "" {
+		oq := bootstrap.DB.Model(&model.RechargeOrder{}).Where("id = ?", rec.OrderID)
+		if rec.TenantID > 0 {
+			oq = oq.Where("tenant_id = ?", rec.TenantID)
+		}
+		oq.Update("refund_transaction_id", refundTID)
+	}
 }
 
 func updateRefundMsg(lg model.RefundLog, msg string) {

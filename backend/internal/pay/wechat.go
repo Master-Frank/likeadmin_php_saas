@@ -169,6 +169,19 @@ func ParseWechatRefundQuery(result map[string]any) (ok bool, msg string, known b
 	return false, "", false
 }
 
+// RefundQueryTradeNo picks the gateway refund/trade id from a WeChat or Ali query body.
+func RefundQueryTradeNo(result map[string]any) string {
+	if result == nil {
+		return ""
+	}
+	for _, k := range []string{"refund_id", "trade_no", "tradeNo", "transaction_id"} {
+		if v := util.ToString(result[k]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func wechatV3Get(cfg WechatPayCfg, key *rsa.PrivateKey, path string) (map[string]any, error) {
 	return wechatV3Do(cfg, key, http.MethodGet, path, nil)
 }

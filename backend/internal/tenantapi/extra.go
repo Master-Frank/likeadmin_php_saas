@@ -491,7 +491,7 @@ func RechargeRefund(c *gin.Context) {
 		return tx.Create(&model.RefundLog{
 			SN: util.GenerateSN(logExists, "", 4), RecordID: rec.ID, UserID: order.UserID, HandleID: adminID,
 			OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount, RefundStatus: 0,
-			RefundMsg: "后台退款", TenantID: order.TenantID, CreateTime: util.NowUnix(),
+			TenantID: order.TenantID, CreateTime: util.NowUnix(),
 		}).Error
 	})
 	if err != nil {
@@ -623,7 +623,7 @@ func RechargeRefundAgain(c *gin.Context) {
 		}, "", 4),
 		RecordID: rec.ID, UserID: rec.UserID, HandleID: ctxutil.Get(c).AdminID,
 		OrderAmount: rec.OrderAmount, RefundAmount: rec.RefundAmount, RefundStatus: 0,
-		RefundMsg: "重新退款", TenantID: rec.TenantID, CreateTime: util.NowUnix(),
+		TenantID: rec.TenantID, CreateTime: util.NowUnix(),
 	}
 	tdb(c).Create(&againLog)
 	if againOrder.PayWay != 2 && againOrder.PayWay != 3 {

@@ -136,3 +136,18 @@ func TestParseWechatRefundQuery(t *testing.T) {
 		t.Fatalf("processing %+v %q %v", ok, msg, known)
 	}
 }
+
+func TestRefundQueryTradeNo(t *testing.T) {
+	if got := RefundQueryTradeNo(nil); got != "" {
+		t.Fatal(got)
+	}
+	if got := RefundQueryTradeNo(map[string]any{"refund_id": "503xxx", "transaction_id": "420xxx"}); got != "503xxx" {
+		t.Fatalf("wechat %s", got)
+	}
+	if got := RefundQueryTradeNo(map[string]any{"trade_no": "20240906"}); got != "20240906" {
+		t.Fatalf("ali %s", got)
+	}
+	if got := RefundQueryTradeNo(map[string]any{"tradeNo": "T2"}); got != "T2" {
+		t.Fatalf("camel %s", got)
+	}
+}
