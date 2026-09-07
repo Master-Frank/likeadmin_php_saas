@@ -341,10 +341,18 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		if err := tx.Model(order).Updates(map[string]any{
+		q := tx.Model(&model.RechargeOrder{}).Where("id = ? AND pay_status = 0 AND delete_time IS NULL", order.ID)
+		if order.TenantID > 0 {
+			q = q.Where("tenant_id = ?", order.TenantID)
+		}
+		res := q.Updates(map[string]any{
 			"pay_status": 1, "pay_time": now, "transaction_id": transactionID, "update_time": now,
-		}).Error; err != nil {
-			return err
+		})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil
 		}
 		uq := tx.Model(&model.User{}).Where("id = ?", order.UserID)
 		if order.TenantID > 0 {

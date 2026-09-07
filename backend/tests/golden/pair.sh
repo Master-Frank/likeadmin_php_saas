@@ -2118,6 +2118,28 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
       echo "  go_role=${go_role:0:200}"
       fail=$((fail + 1))
     fi
+    go_alink="$(curl -sS -X POST "$GO/tenantapi/auth.admin/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"account\":\"fkadm$now\",\"name\":\"fkadm$now\",\"password\":\"likeadmin\",\"password_confirm\":\"likeadmin\",\"role_id\":[$role_id],\"multipoint_login\":1,\"disable\":0}")"
+    echo "admin_cross_role go_msg=$(jget msg <<<"$go_alink")"
+    if [[ "$(jget msg <<<"$go_alink")" != *角色不存在* ]]; then
+      echo "  go_alink=${go_alink:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$cate_id" && "$cate_id" != "0" ]]; then
+    go_acw="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"cid\":$cate_id,\"title\":\"pairfkart\",\"abstract\":\"a\",\"image\":\"/uploads/x.png\",\"is_show\":1}")"
+    echo "article_cross_cate go_msg=$(jget msg <<<"$go_acw")"
+    if [[ "$(jget msg <<<"$go_acw")" != *所属栏目必须存在* ]]; then
+      echo "  go_acw=${go_acw:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  if [[ -n "$menu_id" && "$menu_id" != "0" ]]; then
+    go_rmenu="$(curl -sS -X POST "$GO/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"fkrole$now\",\"sort\":0,\"menu_id\":[$menu_id]}")"
+    echo "role_cross_menu go_msg=$(jget msg <<<"$go_rmenu")"
+    if [[ "$(jget msg <<<"$go_rmenu")" != *菜单不存在* ]]; then
+      echo "  go_rmenu=${go_rmenu:0:200}"
+      fail=$((fail + 1))
+    fi
   fi
   if [[ -n "$user_id" && "$user_id" != "0" ]]; then
     go_adj="$(curl -sS -X POST "$GO/tenantapi/user.user/adjustMoney" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"user_id\":$user_id,\"action\":1,\"num\":1}")"

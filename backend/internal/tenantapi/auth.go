@@ -109,11 +109,16 @@ func AdminAdd(c *gin.Context) {
 		Disable:  disable, MultipointLogin: httpx.Int(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
+	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := tenantAuthLinksCheck(c, roles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
-		return saveTenantAuthLinks(tx, admin.ID, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveTenantAuthLinks(tx, admin.ID, roles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -166,6 +171,11 @@ func AdminEdit(c *gin.Context) {
 	var oldRoles []uint
 	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
 	newRoles := httpx.Uints(c, "role_id")
+	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := tenantAuthLinksCheck(c, newRoles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
 		if tid := tenantDB(c); tid > 0 {
@@ -177,7 +187,7 @@ func AdminEdit(c *gin.Context) {
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
-		return saveTenantAuthLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveTenantAuthLinks(tx, id, newRoles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -214,6 +224,10 @@ func AdminEditSelf(c *gin.Context) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	tdb(c).Model(&admin).Updates(data)
+	if pwd := httpx.Str(c, "password"); pwd != "" {
+		expireTenantAuthTokens(c, id)
+	}
+	cache.ClearAdminAuthCache(id)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -436,9 +450,14 @@ func RoleAdd(c *gin.Context) {
 		response.Fail(c, "角色名称已存在")
 		return
 	}
+	menuIDs := httpx.Uints(c, "menu_id")
+	if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
+		response.Fail(c, "菜单不存在")
+		return
+	}
 	r := model.TenantSystemRole{Name: httpx.Str(c, "name"), Desc: httpx.Str(c, "desc"), Sort: httpx.Int(c, "sort"), TenantID: tenantDB(c), CreateTime: util.NowUnix()}
 	tdb(c).Create(&r)
-	for _, id := range httpx.Uints(c, "menu_id") {
+	for _, id := range menuIDs {
 		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
 	response.SuccessNotice(c, "添加成功")
@@ -464,6 +483,10 @@ func RoleEdit(c *gin.Context) {
 		"name": httpx.Str(c, "name"), "desc": httpx.Str(c, "desc"), "sort": httpx.Int(c, "sort"),
 	})
 	if menuIDs := httpx.Uints(c, "menu_id"); len(menuIDs) > 0 {
+		if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
+			response.Fail(c, "菜单不存在")
+			return
+		}
 		tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 		for _, mid := range menuIDs {
 			tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: id, MenuID: mid})
@@ -581,6 +604,49 @@ func tenantAdminRelations(c *gin.Context, id uint) (roles, depts, jobs []uint) {
 		jobs = []uint{}
 	}
 	return
+}
+
+func tenantAuthLinksCheck(c *gin.Context, roles, depts, jobs []uint) string {
+	if !tenantIDsOwned(c, &model.TenantSystemRole{}, roles, "delete_time IS NULL") {
+		return "角色不存在"
+	}
+	if !tenantIDsOwned(c, &model.TenantDept{}, depts, "delete_time IS NULL") {
+		return "部门不存在"
+	}
+	if !tenantIDsOwned(c, &model.TenantJobs{}, jobs, "delete_time IS NULL") {
+		return "岗位不存在"
+	}
+	return ""
+}
+
+func tenantIDsOwned(c *gin.Context, dest any, ids []uint, extra string) bool {
+	uniq := uniquePositiveUints(ids)
+	if len(uniq) == 0 {
+		return true
+	}
+	q := scopeTID(tdb(c).Model(dest).Where("id IN ?", uniq), c)
+	if extra != "" {
+		q = q.Where(extra)
+	}
+	var n int64
+	q.Count(&n)
+	return n == int64(len(uniq))
+}
+
+func uniquePositiveUints(ids []uint) []uint {
+	seen := map[uint]struct{}{}
+	out := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 func saveTenantAuthLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {

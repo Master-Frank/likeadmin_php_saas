@@ -490,6 +490,10 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if httpx.Uint(c, "cid") == 0 {
 		return "所属栏目必须存在"
 	}
+	var cate model.ArticleCate
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "cid")), c).First(&cate).Error != nil {
+		return "所属栏目必须存在"
+	}
 	if raw := httpx.Any(c, "is_show"); raw == nil || util.ToString(raw) == "" {
 		return "是否显示必须存在"
 	}

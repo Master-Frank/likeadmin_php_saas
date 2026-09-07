@@ -332,16 +332,22 @@ func TenantAdminAdd(c *gin.Context) {
 		Disable:  httpx.Int(c, "disable"), MultipointLogin: httpx.Int(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: util.NowUnix(),
 	}
+	roles, depts, jobs := httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := tenantAdminLinksCheck(adb, tid, roles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&admin).Error; err != nil {
 			return err
 		}
-		return saveTenantAdminLinks(tx, admin.ID, httpx.Uints(c, "role_id"), httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveTenantAdminLinks(tx, admin.ID, roles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
+	cache.ClearAdminAuthCache(admin.ID)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -382,6 +388,11 @@ func TenantAdminEdit(c *gin.Context) {
 	var oldRoles []uint
 	adb.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
 	newRoles := httpx.Uints(c, "role_id")
+	depts, jobs := httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id")
+	if msg := tenantAdminLinksCheck(adb, tenant.ID, newRoles, depts, jobs); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
 			return err
@@ -389,7 +400,7 @@ func TenantAdminEdit(c *gin.Context) {
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminDept{})
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminJobs{})
-		return saveTenantAdminLinks(tx, id, newRoles, httpx.Uints(c, "dept_id"), httpx.Uints(c, "jobs_id"))
+		return saveTenantAdminLinks(tx, id, newRoles, depts, jobs)
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -478,6 +489,47 @@ func phpRequiredParam(p map[string]any, key string) bool {
 	}
 	s := strings.TrimSpace(util.ToString(v))
 	return s != ""
+}
+
+func tenantAdminLinksCheck(db *gorm.DB, tid uint, roles, depts, jobs []uint) string {
+	if !tenantLinkIDsOwned(db, tid, &model.TenantSystemRole{}, roles, "delete_time IS NULL") {
+		return "角色不存在"
+	}
+	if !tenantLinkIDsOwned(db, tid, &model.TenantDept{}, depts, "delete_time IS NULL") {
+		return "部门不存在"
+	}
+	if !tenantLinkIDsOwned(db, tid, &model.TenantJobs{}, jobs, "delete_time IS NULL") {
+		return "岗位不存在"
+	}
+	return ""
+}
+
+func tenantLinkIDsOwned(db *gorm.DB, tid uint, dest any, ids []uint, extra string) bool {
+	seen := map[uint]struct{}{}
+	uniq := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 {
+		return true
+	}
+	q := db.Model(dest).Where("id IN ?", uniq)
+	if tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
+	}
+	if extra != "" {
+		q = q.Where(extra)
+	}
+	var n int64
+	q.Count(&n)
+	return n == int64(len(uniq))
 }
 
 func saveTenantAdminLinks(tx *gorm.DB, adminID uint, roles, depts, jobs []uint) error {
