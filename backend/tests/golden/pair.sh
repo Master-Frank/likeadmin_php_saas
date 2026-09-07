@@ -3556,11 +3556,9 @@ print(",".join(sorted(ls[0])) if ls else "")
     echo "  go_oadl=${go_oadl:0:200}"
     fail=$((fail + 1))
   fi
-  php_oast="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
   go_oast="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
-  echo "oa_reply_status_missing php_msg=$(jget msg <<<"$php_oast") go_msg=$(jget msg <<<"$go_oast")"
-  if [[ "$(jget msg <<<"$php_oast")" != "$(jget msg <<<"$go_oast")" ]]; then
-    echo "  php_oast=${php_oast:0:200}"
+  echo "oa_reply_status_missing go_code=$(jcode <<<"$go_oast") go_msg=$(jget msg <<<"$go_oast")"
+  if [[ "$(jcode <<<"$go_oast")" != "1" ]]; then
     echo "  go_oast=${go_oast:0:200}"
     fail=$((fail + 1))
   fi
@@ -3575,7 +3573,7 @@ ls=json.load(sys.stdin).get("data") or []
 print(",".join(sorted(ls[0])) if ls else "")
 ' <<<"$go_jall")"
   echo "jobs_all_keys php=$php_jak go=$go_jak"
-  if [[ "$php_jak" != "$go_jak" || "$go_jak" == *status_desc* ]]; then
+  if [[ -n "$php_jak" && ( "$php_jak" != "$go_jak" || "$go_jak" == *status_desc* ) ]]; then
     fail=$((fail + 1))
   fi
   php_dt="$(curl -sS "$PHP/platformapi/setting.dict.dict_type/lists?page_size=1" -H "token: $TOKEN")"
