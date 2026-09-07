@@ -1,6 +1,7 @@
 package filesvc
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,17 +21,25 @@ const (
 	SourceUser  = 1
 )
 
-func FetchWechatAvatar(c *gin.Context, openid, headimg string) string {
+func FetchWechatAvatar(c *gin.Context, openid, headimg string) (string, error) {
 	def := cfgsvc.GetString(c, "default_image", "user_avatar", config.C.Project.DefaultImage["user_avatar"])
 	if strings.TrimSpace(headimg) == "" {
-		return def
+		return def, nil
 	}
 	name := util.MD5(openid+util.ToString(time.Now().Unix())) + ".jpeg"
 	rel := filepath.ToSlash(filepath.Join("uploads/user/avatar", name))
 	if _, err := storage.Fetch(c, headimg, rel); err != nil {
-		return def
+		engine := "local"
+		if c != nil {
+			engine = cfgsvc.GetString(c, "storage", "default", "local")
+		}
+		if engine != "" && engine != "local" {
+			return "", fmt.Errorf("头像保存失败:%s", err.Error())
+		}
+		// PHP download_file returns '' when the local write is empty/failed.
+		return "", nil
 	}
-	return rel
+	return rel, nil
 }
 
 func ReceiveUpload(c *gin.Context, scene, dir string) (name, rel, errMsg string) {

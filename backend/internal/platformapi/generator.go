@@ -104,52 +104,58 @@ func GeneratorSelectTable(c *gin.Context) {
 	}
 	adminID := ctxutil.Get(c).AdminID
 	now := util.NowUnix()
-	for _, item := range arr {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			response.Fail(c, "参数缺失")
-			return
-		}
-		if _, hasName := m["name"]; !hasName {
-			if _, has := m["table_name"]; !has {
-				response.Fail(c, "参数缺失")
-				return
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		for _, item := range arr {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				return fmt.Errorf("参数缺失")
+			}
+			if _, hasName := m["name"]; !hasName {
+				if _, has := m["table_name"]; !has {
+					return fmt.Errorf("参数缺失")
+				}
+			}
+			if _, hasComment := m["comment"]; !hasComment {
+				if _, has := m["table_comment"]; !has {
+					return fmt.Errorf("参数缺失")
+				}
+			}
+			name := util.ToString(m["name"])
+			if name == "" {
+				name = util.ToString(m["table_name"])
+			}
+			comment := util.ToString(m["comment"])
+			if comment == "" {
+				comment = util.ToString(m["table_comment"])
+			}
+			var n int64
+			if err := tx.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", name).Scan(&n).Error; err != nil {
+				return err
+			}
+			if n == 0 {
+				return fmt.Errorf("当前数据库不存在%s表", name)
+			}
+			gt := model.GenerateTable{
+				Name: name, TableComment: comment, Author: "likeadmin",
+				ModuleName: "platform", ClassDir: "",
+				TemplateType: 0, GenerateType: 0,
+				Menu:      util.EncodeJSON(map[string]any{"pid": 0, "type": 0, "name": comment}),
+				Delete:    util.EncodeJSON(map[string]any{"type": 0, "name": "delete_time"}),
+				Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
+				AdminID: adminID, CreateTime: now,
+			}
+			if err := tx.Create(&gt).Error; err != nil {
+				return err
+			}
+			if err := syncColumns(tx, gt.ID, name); err != nil {
+				return err
 			}
 		}
-		if _, hasComment := m["comment"]; !hasComment {
-			if _, has := m["table_comment"]; !has {
-				response.Fail(c, "参数缺失")
-				return
-			}
-		}
-		name := util.ToString(m["name"])
-		if name == "" {
-			name = util.ToString(m["table_name"])
-		}
-		comment := util.ToString(m["comment"])
-		if comment == "" {
-			comment = util.ToString(m["table_comment"])
-		}
-		var n int64
-		bootstrap.DB.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", name).Scan(&n)
-		if n == 0 {
-			response.Fail(c, "当前数据库不存在"+name+"表")
-			return
-		}
-		gt := model.GenerateTable{
-			Name: name, TableComment: comment, Author: "likeadmin",
-			ModuleName: "platform", ClassDir: "",
-			TemplateType: 0, GenerateType: 0,
-			Menu:      util.EncodeJSON(map[string]any{"pid": 0, "type": 0, "name": comment}),
-			Delete:    util.EncodeJSON(map[string]any{"type": 0, "name": "delete_time"}),
-			Relations: util.EncodeJSON([]any{}), Tree: util.EncodeJSON(map[string]any{}),
-			AdminID: adminID, CreateTime: now,
-		}
-		if err := bootstrap.DB.Create(&gt).Error; err != nil {
-			response.Fail(c, err.Error())
-			return
-		}
-		syncColumns(gt.ID, name)
+		return nil
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
 	}
 	response.SuccessNotice(c, "操作成功")
 }
@@ -184,7 +190,10 @@ func GeneratorSyncColumn(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Where("table_id = ?", id).Delete(&model.GenerateColumn{})
-	syncColumns(id, t.Name)
+	if err := syncColumns(bootstrap.DB, id, t.Name); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -498,7 +507,10 @@ func scanGoModels(root string) []string {
 	return out
 }
 
-func syncColumns(tableID uint, tableName string) {
+func syncColumns(tx *gorm.DB, tableID uint, tableName string) error {
+	if tx == nil {
+		tx = bootstrap.DB
+	}
 	type col struct {
 		ColumnName    string `gorm:"column:COLUMN_NAME"`
 		ColumnComment string `gorm:"column:COLUMN_COMMENT"`
@@ -507,7 +519,9 @@ func syncColumns(tableID uint, tableName string) {
 		IsNullable    string `gorm:"column:IS_NULLABLE"`
 	}
 	var cols []col
-	bootstrap.DB.Raw("SELECT COLUMN_NAME, COLUMN_COMMENT, COLUMN_TYPE, COLUMN_KEY, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName).Scan(&cols)
+	if err := tx.Raw("SELECT COLUMN_NAME, COLUMN_COMMENT, COLUMN_TYPE, COLUMN_KEY, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName).Scan(&cols).Error; err != nil {
+		return err
+	}
 	now := util.NowUnix()
 	skip := map[string]bool{"id": true, "create_time": true, "update_time": true, "delete_time": true}
 	for _, col := range cols {
@@ -522,13 +536,16 @@ func syncColumns(tableID uint, tableName string) {
 		if !skip[col.ColumnName] {
 			ins, upd, lists, query = 1, 1, 1, 1
 		}
-		bootstrap.DB.Create(&model.GenerateColumn{
+		if err := tx.Create(&model.GenerateColumn{
 			TableID: tableID, ColumnName: col.ColumnName, ColumnComment: col.ColumnComment,
 			ColumnType: util.DbFieldType(col.ColumnType), IsPk: pk, IsRequired: req,
 			IsInsert: ins, IsUpdate: upd, IsLists: lists, IsQuery: query,
 			QueryType: "=", ViewType: "input", CreateTime: now,
-		})
+		}).Error; err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func generatorTemplateTypeDesc(t int) string {

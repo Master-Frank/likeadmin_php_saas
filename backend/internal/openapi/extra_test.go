@@ -105,15 +105,15 @@ func TestWechatUserInfoFields(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 	info := wechatUserInfo(c, model.User{
-		ID: 9, SN: 1001, Mobile: "13800000000", Nickname: "n",
-		Avatar: "uploads/a.png", IsDisable: 0, IsNewUser: 1,
+		ID: 9, SN: 1001, Account: "u1001", Mobile: "13800000000", Nickname: "n",
+		Avatar: "uploads/a.png", Channel: 2, IsDisable: 0, IsNewUser: 1,
 	}, "tok")
-	for _, key := range []string{"id", "sn", "mobile", "nickname", "avatar", "is_disable", "is_new_user", "token"} {
+	for _, key := range []string{"id", "sn", "account", "channel", "mobile", "nickname", "avatar", "is_disable", "is_new_user", "token"} {
 		if _, ok := info[key]; !ok {
 			t.Fatalf("missing %s in %v", key, info)
 		}
 	}
-	if info["is_disable"] != 0 || info["token"] != "tok" || info["id"] != uint(9) {
+	if info["is_disable"] != 0 || info["token"] != "tok" || info["id"] != uint(9) || info["account"] != "u1001" || info["channel"] != 2 {
 		t.Fatalf("%v", info)
 	}
 }

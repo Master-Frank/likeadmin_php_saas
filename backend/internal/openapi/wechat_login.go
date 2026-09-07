@@ -3,6 +3,7 @@ package openapi
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -247,7 +248,10 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			sn := util.CreateUserSN(func(v int) bool {
 				return userSNTaken(c, tx, v)
 			})
-			avatar := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)
+			avatar, avErr := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)
+			if avErr != nil {
+				return avErr
+			}
 			nickname := "用户" + util.ToString(sn)
 			if terminal != wechat.TerminalMNP && sess.Nickname != "" {
 				nickname = sess.Nickname
@@ -275,7 +279,11 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		}
 		if err := tdb(c).Transaction(func(tx *gorm.DB) error {
 			if user.Avatar == "" && sess.Headimgurl != "" {
-				if av := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl); av != "" {
+				av, avErr := filesvc.FetchWechatAvatar(c, sess.Openid, sess.Headimgurl)
+				if avErr != nil {
+					return avErr
+				}
+				if av != "" {
 					user.Avatar = av
 					if err := tx.Model(&user).Update("avatar", av).Error; err != nil {
 						return err
@@ -306,7 +314,8 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 // wechatUserInfo matches PHP WechatUserService::getUserInfo field() + token.
 func wechatUserInfo(c *gin.Context, user model.User, token string) gin.H {
 	return gin.H{
-		"id": user.ID, "sn": user.SN, "mobile": user.Mobile, "nickname": user.Nickname,
+		"id": user.ID, "sn": user.SN, "account": user.Account, "mobile": user.Mobile,
+		"nickname": user.Nickname, "channel": user.Channel,
 		"avatar":     filesvc.GetFileURL(c, firstNonEmpty(user.Avatar, config.C.Project.DefaultImage["user_avatar"])),
 		"is_disable": user.IsDisable, "is_new_user": user.IsNewUser, "token": token,
 	}
@@ -355,7 +364,9 @@ func handlePayNotify(c *gin.Context) {
 	}
 	if wechat.ShouldMarkRechargePaid(n) {
 		if order, err := findRechargeByNotify(n.OutTradeNo); err == nil && order != nil && order.PayStatus != 1 {
-			_ = markRechargePaid(order, n.TransactionID)
+			if err := markRechargePaid(order, n.TransactionID); err != nil {
+				log.Printf("pay notify recharge %s: %v", n.OutTradeNo, err)
+			}
 		}
 	}
 	if isV3 {

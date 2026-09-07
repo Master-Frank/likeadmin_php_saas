@@ -137,11 +137,13 @@ func TestFetchWechatAvatarEmptyHeadimg(t *testing.T) {
 	old := config.C.Project.DefaultImage
 	t.Cleanup(func() { config.C.Project.DefaultImage = old })
 	config.C.Project.DefaultImage = map[string]string{"user_avatar": "resource/image/common/default_avatar.png"}
-	if got := FetchWechatAvatar(nil, "openid", ""); got != "resource/image/common/default_avatar.png" {
-		t.Fatalf("got %q", got)
+	got, err := FetchWechatAvatar(nil, "openid", "")
+	if err != nil || got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("got %q err=%v", got, err)
 	}
-	if got := FetchWechatAvatar(nil, "openid", "   "); got != "resource/image/common/default_avatar.png" {
-		t.Fatalf("blank %q", got)
+	got, err = FetchWechatAvatar(nil, "openid", "   ")
+	if err != nil || got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("blank %q err=%v", got, err)
 	}
 }
 
