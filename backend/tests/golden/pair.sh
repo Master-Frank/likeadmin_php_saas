@@ -1843,15 +1843,19 @@ print(json.dumps({
   if [[ "$(jget msg <<<"$php_ost")" != "$(jget msg <<<"$go_ost")" ]]; then
     fail=$((fail + 1))
   fi
+  php_oem="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"reply_type":2,"name":"missing","content_type":1,"content":"hi","status":0,"keyword":"missing","matching_type":1,"sort":0,"reply_num":1}')"
   go_oem="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"reply_type":2,"name":"missing","content_type":1,"content":"hi","status":0,"keyword":"missing","matching_type":1,"sort":0,"reply_num":1}')"
-  echo "oa_reply_edit_missing go_msg=$(jget msg <<<"$go_oem")"
-  if [[ "$(jget msg <<<"$go_oem")" != *记录不存在* ]]; then
+  echo "oa_reply_edit_missing php_msg=$(jget msg <<<"$php_oem") go_msg=$(jget msg <<<"$go_oem")"
+  if [[ "$(jget msg <<<"$php_oem")" != "$(jget msg <<<"$go_oem")" ]]; then
+    echo "  php_oem=${php_oem:0:200}"
     echo "  go_oem=${go_oem:0:200}"
     fail=$((fail + 1))
   fi
+  php_osm="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"new_sort":1}')"
   go_osm="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"new_sort":1}')"
-  echo "oa_reply_sort_missing go_msg=$(jget msg <<<"$go_osm")"
-  if [[ "$(jget msg <<<"$go_osm")" != *记录不存在* ]]; then
+  echo "oa_reply_sort_missing php_msg=$(jget msg <<<"$php_osm") go_msg=$(jget msg <<<"$go_osm")"
+  if [[ "$(jget msg <<<"$php_osm")" != "$(jget msg <<<"$go_osm")" ]]; then
+    echo "  php_osm=${php_osm:0:200}"
     echo "  go_osm=${go_osm:0:200}"
     fail=$((fail + 1))
   fi
@@ -3511,6 +3515,92 @@ print(",".join(sorted(ls[0])) if ls else "")
   fi
   if command -v mysql >/dev/null; then
     mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -e "UPDATE la_article SET delete_time=UNIX_TIMESTAMP() WHERE title IN ('pairmisscate','pairmisscateg') AND delete_time IS NULL" >/dev/null 2>&1 || true
+  fi
+  php_jd0="$(curl -sS "$PHP/tenantapi/dept.jobs/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_jd0="$(curl -sS "$GO/tenantapi/dept.jobs/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "jobs_detail_noid php_msg=$(jget msg <<<"$php_jd0") go_msg=$(jget msg <<<"$go_jd0")"
+  if [[ "$(jget msg <<<"$php_jd0")" != "$(jget msg <<<"$go_jd0")" ]]; then
+    echo "  php_jd0=${php_jd0:0:200}"
+    echo "  go_jd0=${go_jd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_dd0="$(curl -sS "$PHP/tenantapi/dept.dept/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_dd0="$(curl -sS "$GO/tenantapi/dept.dept/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "dept_detail_noid php_msg=$(jget msg <<<"$php_dd0") go_msg=$(jget msg <<<"$go_dd0")"
+  if [[ "$(jget msg <<<"$php_dd0")" != "$(jget msg <<<"$go_dd0")" ]]; then
+    echo "  php_dd0=${php_dd0:0:200}"
+    echo "  go_dd0=${go_dd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_prd0="$(curl -sS "$PHP/platformapi/auth.role/detail" -H "token: $TOKEN")"
+  go_prd0="$(curl -sS "$GO/platformapi/auth.role/detail" -H "token: $TOKEN")"
+  echo "platform_role_detail_noid php_msg=$(jget msg <<<"$php_prd0") go_msg=$(jget msg <<<"$go_prd0")"
+  if [[ "$(jget msg <<<"$php_prd0")" != "$(jget msg <<<"$go_prd0")" ]]; then
+    echo "  php_prd0=${php_prd0:0:200}"
+    echo "  go_prd0=${go_prd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_oadm="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_oadm="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "oa_reply_detail_missing php_code=$(jcode <<<"$php_oadm") go_code=$(jcode <<<"$go_oadm")"
+  if [[ "$(jcode <<<"$php_oadm")" != "$(jcode <<<"$go_oadm")" ]]; then
+    echo "  php_oadm=${php_oadm:0:200}"
+    echo "  go_oadm=${go_oadm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_oadl="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_oadl="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "oa_reply_delete_missing php_msg=$(jget msg <<<"$php_oadl") go_msg=$(jget msg <<<"$go_oadl")"
+  if [[ "$(jget msg <<<"$php_oadl")" != "$(jget msg <<<"$go_oadl")" ]]; then
+    echo "  php_oadl=${php_oadl:0:200}"
+    echo "  go_oadl=${go_oadl:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_oast="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_oast="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "oa_reply_status_missing php_msg=$(jget msg <<<"$php_oast") go_msg=$(jget msg <<<"$go_oast")"
+  if [[ "$(jget msg <<<"$php_oast")" != "$(jget msg <<<"$go_oast")" ]]; then
+    echo "  php_oast=${php_oast:0:200}"
+    echo "  go_oast=${go_oast:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_jall="$(curl -sS "$PHP/tenantapi/dept.jobs/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_jall="$(curl -sS "$GO/tenantapi/dept.jobs/all" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_jak="$(python3 -c 'import json,sys
+ls=json.load(sys.stdin).get("data") or []
+print(",".join(sorted(ls[0])) if ls else "")
+' <<<"$php_jall")"
+  go_jak="$(python3 -c 'import json,sys
+ls=json.load(sys.stdin).get("data") or []
+print(",".join(sorted(ls[0])) if ls else "")
+' <<<"$go_jall")"
+  echo "jobs_all_keys php=$php_jak go=$go_jak"
+  if [[ "$php_jak" != "$go_jak" || "$go_jak" == *status_desc* ]]; then
+    fail=$((fail + 1))
+  fi
+  php_dt="$(curl -sS "$PHP/platformapi/setting.dict.dict_type/lists?page_size=1" -H "token: $TOKEN")"
+  did="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(ls.get("id") or 0)' <<<"$php_dt")"
+  if [[ "$did" != "0" && -n "$did" ]]; then
+    php_dtd="$(curl -sS "$PHP/platformapi/setting.dict.dict_type/detail?id=$did" -H "token: $TOKEN")"
+    go_dtd="$(curl -sS "$GO/platformapi/setting.dict.dict_type/detail?id=$did" -H "token: $TOKEN")"
+    php_dtk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_dtd")"
+    go_dtk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_dtd")"
+    echo "dict_type_detail_keys php=$php_dtk go=$go_dtk"
+    if [[ "$php_dtk" != "$go_dtk" || "$go_dtk" == *status_desc* ]]; then
+      echo "  php_dtd=${php_dtd:0:220}"
+      echo "  go_dtd=${go_dtd:0:220}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_pl="$(curl -sS "$PHP/platformapi/setting.pay.pay_config/lists" -H "token: $TOKEN")"
+  go_pl="$(curl -sS "$GO/platformapi/setting.pay.pay_config/lists" -H "token: $TOKEN")"
+  php_icon="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(ls.get("icon") or "")' <<<"$php_pl")"
+  go_icon="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(ls.get("icon") or "")' <<<"$go_pl")"
+  echo "pay_config_icon php_http=$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$php_icon") go_http=$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$go_icon")"
+  if [[ "$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$php_icon")" != "$(python3 -c 'import sys; print(int(sys.argv[1].startswith("http")))' "$go_icon")" ]]; then
+    echo "  php_icon=$php_icon"
+    echo "  go_icon=$go_icon"
+    fail=$((fail + 1))
   fi
 fi
 

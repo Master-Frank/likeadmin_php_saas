@@ -720,10 +720,6 @@ func OAReplyEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
-		response.Fail(c, "记录不存在")
-		return
-	}
 	replyType := httpx.Int(c, "reply_type")
 	status := httpx.Int(c, "status")
 	if replyType != 2 && status == 1 {
@@ -763,10 +759,6 @@ func OAReplyDelete(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
-		response.Fail(c, "记录不存在")
-		return
-	}
 	q := tdb(c).Unscoped().Where("id = ?", httpx.Uint(c, "id"))
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
@@ -780,11 +772,7 @@ func OAReplyDetail(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	row, ok := oaReplyByID(c, httpx.Uint(c, "id"))
-	if !ok {
-		response.Fail(c, "记录不存在")
-		return
-	}
+	row, _ := oaReplyByID(c, httpx.Uint(c, "id"))
 	response.Data(c, oaReplyDetailMap(row))
 }
 
@@ -815,7 +803,7 @@ func OAReplyStatus(c *gin.Context) {
 	}
 	row, ok := oaReplyByID(c, httpx.Uint(c, "id"))
 	if !ok {
-		response.Fail(c, "记录不存在")
+		response.SuccessNotice(c, "操作成功")
 		return
 	}
 	status := 0
@@ -844,10 +832,6 @@ func OAReplySort(c *gin.Context) {
 	}
 	if msg := util.OAReplySortCheck(httpx.Params(c)); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
-		response.Fail(c, "记录不存在")
 		return
 	}
 	sort := httpx.Int(c, "new_sort")

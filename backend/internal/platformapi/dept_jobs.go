@@ -139,6 +139,10 @@ func DeptDelete(c *gin.Context) {
 }
 
 func DeptDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var d model.Dept
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&d).Error != nil {
 		response.Fail(c, "部门不存在")
@@ -288,6 +292,10 @@ func JobsDelete(c *gin.Context) {
 }
 
 func JobsDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var j model.Jobs
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&j).Error != nil {
 		response.Fail(c, "岗位不存在")

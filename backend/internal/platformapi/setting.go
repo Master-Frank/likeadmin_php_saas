@@ -356,7 +356,7 @@ func DictTypeDetail(c *gin.Context) {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	response.Data(c, dictTypeMap(r))
+	response.Data(c, dictTypeRaw(r))
 }
 
 func DictTypeAll(c *gin.Context) {
@@ -364,7 +364,7 @@ func DictTypeAll(c *gin.Context) {
 	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, dictTypeMap(r))
+		out = append(out, dictTypeRaw(r))
 	}
 	response.Data(c, out)
 }
@@ -473,18 +473,23 @@ func DictDataDetail(c *gin.Context) {
 	response.Data(c, dictDataMap(r))
 }
 
-func dictTypeMap(r model.DictType) map[string]any {
-	desc := "正常"
-	if r.Status != 1 {
-		desc = "停用"
-	}
+func dictTypeRaw(r model.DictType) map[string]any {
 	return map[string]any{
 		"id": r.ID, "name": r.Name, "type": r.Type, "status": r.Status, "remark": r.Remark,
 		"create_time": util.FormatDateTime(r.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(r.DeleteTime),
-		"status_desc": desc,
 	}
+}
+
+func dictTypeMap(r model.DictType) map[string]any {
+	desc := "正常"
+	if r.Status != 1 {
+		desc = "停用"
+	}
+	out := dictTypeRaw(r)
+	out["status_desc"] = desc
+	return out
 }
 
 func dictDataMap(r model.DictData) map[string]any {

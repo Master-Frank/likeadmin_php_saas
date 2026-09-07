@@ -271,6 +271,10 @@ func RoleDelete(c *gin.Context) {
 }
 
 func RoleDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "请选择角色")
+		return
+	}
 	var r model.SystemRole
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&r).Error != nil {
 		response.Fail(c, "角色不存在")

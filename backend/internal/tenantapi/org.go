@@ -138,12 +138,16 @@ func DeptDelete(c *gin.Context) {
 }
 
 func DeptDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var d model.TenantDept
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&d).Error != nil {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	response.Data(c, tenantDeptMap(d))
+	response.Data(c, tenantDeptRaw(d))
 }
 
 func DeptAll(c *gin.Context) {
@@ -160,7 +164,7 @@ func DeptAll(c *gin.Context) {
 	maps := make([]map[string]any, 0, len(rows))
 	root := int(rows[0].Pid)
 	for _, d := range rows {
-		maps = append(maps, tenantDeptMap(d))
+		maps = append(maps, tenantDeptRaw(d))
 		if int(d.Pid) < root {
 			root = int(d.Pid)
 		}
@@ -264,12 +268,16 @@ func JobsDelete(c *gin.Context) {
 }
 
 func JobsDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var j model.TenantJobs
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&j).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	response.Data(c, tenantJobsMap(j))
+	response.Data(c, tenantJobsRaw(j))
 }
 
 func tenantDeptExists(c *gin.Context, id uint) bool {
@@ -317,9 +325,19 @@ func JobsAll(c *gin.Context) {
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, j := range rows {
-		out = append(out, tenantJobsMap(j))
+		out = append(out, tenantJobsRaw(j))
 	}
 	response.Data(c, out)
+}
+
+func tenantDeptRaw(d model.TenantDept) map[string]any {
+	return map[string]any{
+		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
+		"mobile": d.Mobile, "status": d.Status, "tenant_id": d.TenantID,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimePtr(d.UpdateTime),
+		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
+	}
 }
 
 func tenantDeptMap(d model.TenantDept) map[string]any {
@@ -327,13 +345,16 @@ func tenantDeptMap(d model.TenantDept) map[string]any {
 	if d.Status == 1 {
 		statusDesc = "正常"
 	}
+	out := tenantDeptRaw(d)
+	out["status_desc"] = statusDesc
+	return out
+}
+
+func tenantJobsRaw(j model.TenantJobs) map[string]any {
 	return map[string]any{
-		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
-		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
-		"tenant_id":   d.TenantID,
-		"create_time": util.FormatDateTime(d.CreateTime),
-		"update_time": util.FormatDateTimePtr(d.UpdateTime),
-		"delete_time": util.FormatDateTimePtr(d.DeleteTime),
+		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
+		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime),
 	}
 }
 
@@ -342,9 +363,7 @@ func tenantJobsMap(j model.TenantJobs) map[string]any {
 	if j.Status == 1 {
 		desc = "正常"
 	}
-	return map[string]any{
-		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
-		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
-		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
-	}
+	out := tenantJobsRaw(j)
+	out["status_desc"] = desc
+	return out
 }
