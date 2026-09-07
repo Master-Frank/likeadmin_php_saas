@@ -13,7 +13,10 @@ import (
 )
 
 func FileLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.File{}).Where("delete_time IS NULL")
 	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))
@@ -87,7 +90,10 @@ func FileDelete(c *gin.Context) {
 }
 
 func FileListCate(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.FileCate{}).Where("delete_time IS NULL")
 	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))

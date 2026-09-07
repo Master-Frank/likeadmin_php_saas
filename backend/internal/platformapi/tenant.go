@@ -25,7 +25,10 @@ import (
 )
 
 func TenantLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL")
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		like := "%" + kw + "%"
@@ -315,7 +318,10 @@ func cleanTenantScopedRows(tid uint) {
 }
 
 func TenantAdminLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if httpx.QueryStr(c, "tenant_id") == "" {
 		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
 		return
@@ -695,7 +701,10 @@ func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
 }
 
 func TenantUserLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	tid := httpx.QueryInt(c, "tenant_id")
 	if tid <= 0 {
 		response.Fail(c, "请选择租户标识")

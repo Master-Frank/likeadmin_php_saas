@@ -21,7 +21,10 @@ import (
 )
 
 func PayConfigLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	var rows []model.PayConfig
 	bootstrap.DB.Order("sort desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
@@ -200,7 +203,10 @@ func crontabWriteCheck(p map[string]any, needID bool) string {
 }
 
 func CrontabLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	var rows []model.Crontab
 	var count int64
 	db := bootstrap.DB.Model(&model.Crontab{}).Where("delete_time IS NULL")
@@ -326,7 +332,10 @@ func CrontabExpression(c *gin.Context) {
 }
 
 func NoticeSettingLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.NoticeSetting{})
 	if lists.Param(q, "recipient") != "" {
 		db = db.Where("recipient = ?", lists.ParamInt(q, "recipient"))
@@ -458,7 +467,10 @@ func asCfgMap(v any) map[string]any {
 }
 
 func UpgradeLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	payload := upgrade.GetRemoteVersion(q.PageNo, q.PageSize)
 	rawLists, _ := payload["lists"].([]any)
 	count := int64(util.ToInt(payload["count"]))

@@ -1,11 +1,13 @@
 package lists
 
 import (
+	"net/http"
 	"strings"
 	"unicode"
 
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -70,6 +72,19 @@ func Parse(c *gin.Context) Query {
 		q.Offset = 0
 	}
 	return q
+}
+
+// ParseGET matches PHP ListsValidate()->get(): POST/PUT lists are rejected.
+func ParseGET(c *gin.Context) (Query, bool) {
+	if c != nil && c.Request != nil {
+		switch c.Request.Method {
+		case http.MethodGet, http.MethodHead:
+		default:
+			response.Fail(c, "请求方式错误，请使用get请求方式")
+			return Query{}, false
+		}
+	}
+	return Parse(c), true
 }
 
 func Param(q Query, key string) string {

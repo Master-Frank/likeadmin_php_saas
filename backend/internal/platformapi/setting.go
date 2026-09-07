@@ -210,7 +210,10 @@ func SystemInfo(c *gin.Context) {
 }
 
 func LogLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.OperationLog{})
 	if ctxutil.Get(c).App == "tenantapi" {
 		db = db.Where("url LIKE ?", "%/tenantapi/%")
@@ -260,7 +263,10 @@ func LogLists(c *gin.Context) {
 }
 
 func DictTypeLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.DictType{}).Where("delete_time IS NULL")
 	if n := lists.Param(q, "name"); n != "" {
 		db = db.Where("name LIKE ?", "%"+n+"%")
@@ -370,7 +376,10 @@ func DictTypeAll(c *gin.Context) {
 }
 
 func DictDataLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.DictData{}).Where("delete_time IS NULL")
 	if n := lists.Param(q, "name"); n != "" {
 		db = db.Where("name LIKE ?", "%"+n+"%")

@@ -293,7 +293,10 @@ func firstNonEmpty(a, b string) string {
 }
 
 func UserLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -400,7 +403,10 @@ func UserEdit(c *gin.Context) {
 }
 
 func ArticleLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -543,7 +549,10 @@ func ArticleDetail(c *gin.Context) {
 }
 
 func ArticleCateLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -792,7 +801,10 @@ func RechargeSetConfig(c *gin.Context) {
 }
 
 func RechargeLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -853,7 +865,10 @@ func RechargeLists(c *gin.Context) {
 }
 
 func FinanceAccountLogLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -915,7 +930,10 @@ func FinanceAccountLogLists(c *gin.Context) {
 }
 
 func FinanceRefundRecord(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}

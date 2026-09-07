@@ -19,7 +19,10 @@ import (
 )
 
 func AdminLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.Admin{}).Where("delete_time IS NULL")
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")

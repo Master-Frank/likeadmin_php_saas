@@ -83,7 +83,7 @@ func TestParseIgnoresJSONPageNo(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/lists?page_no=2&keyword=query", bytes.NewBufferString(`{"page_no":9,"page_size":3,"keyword":"body"}`))
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?page_no=2&keyword=query", bytes.NewBufferString(`{"page_no":9,"page_size":3,"keyword":"body"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	q := Parse(c)
 	if q.PageNo != 2 || q.PageSize != 25 {
@@ -91,5 +91,16 @@ func TestParseIgnoresJSONPageNo(t *testing.T) {
 	}
 	if Param(q, "keyword") != "body" {
 		t.Fatalf("search filters still merge body, got %q", Param(q, "keyword"))
+	}
+}
+
+func TestParseGETRejectsPOST(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/lists?page_size=1", bytes.NewBufferString(`{"page_no":9}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	if _, ok := ParseGET(c); ok {
+		t.Fatal("POST lists must fail")
 	}
 }

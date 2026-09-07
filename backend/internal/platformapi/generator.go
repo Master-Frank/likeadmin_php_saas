@@ -24,7 +24,10 @@ import (
 )
 
 func GeneratorDataTable(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	type row struct {
 		Name       string `gorm:"column:Name" json:"Name"`
 		Comment    string `gorm:"column:Comment" json:"Comment"`
@@ -54,7 +57,10 @@ func GeneratorDataTable(c *gin.Context) {
 }
 
 func GeneratorGenerateTable(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.GenerateTable{})
 	if n := lists.Param(q, "table_name"); n != "" {
 		db = db.Where("table_name LIKE ? OR table_comment LIKE ?", "%"+n+"%", "%"+n+"%")

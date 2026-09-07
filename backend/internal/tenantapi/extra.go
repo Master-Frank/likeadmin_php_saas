@@ -617,7 +617,10 @@ func RechargeRefundAgain(c *gin.Context) {
 }
 
 func OAReplyLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	tid, ok := requireTenant(c)
 	if !ok {
 		response.Lists(c, []map[string]any{}, 0, q.PageNo, q.PageSize, nil)
@@ -853,7 +856,10 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 }
 
 func TenantNoticeLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := tdb(c).Model(&model.TenantNoticeSetting{})
 	tid := tenantDB(c)
 	if tid == 0 {

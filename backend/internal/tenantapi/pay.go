@@ -14,7 +14,10 @@ import (
 )
 
 func PayConfigLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}

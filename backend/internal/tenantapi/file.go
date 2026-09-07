@@ -13,7 +13,10 @@ import (
 )
 
 func FileLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -90,7 +93,10 @@ func FileDelete(c *gin.Context) {
 }
 
 func FileListCate(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}

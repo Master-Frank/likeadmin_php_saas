@@ -195,7 +195,10 @@ func DeptAll(c *gin.Context) {
 }
 
 func JobsLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.Jobs{}).Where("delete_time IS NULL")
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")

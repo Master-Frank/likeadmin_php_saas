@@ -3736,10 +3736,8 @@ print(",".join(sorted(ls[0])) if ls else "")
   fi
   php_lpj="$(curl -sS -X POST "$PHP/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"page_no":9,"page_size":50}')"
   go_lpj="$(curl -sS -X POST "$GO/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"page_no":9,"page_size":50}')"
-  php_lpjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(data.get("page_no"), data.get("page_size"), len(data.get("lists") or []))' <<<"$php_lpj")"
-  go_lpjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(data.get("page_no"), data.get("page_size"), len(data.get("lists") or []))' <<<"$go_lpj")"
-  echo "user_lists_postjson_page php=$php_lpjn go=$go_lpjn"
-  if [[ "$php_lpjn" != "$go_lpjn" ]]; then
+  echo "user_lists_postjson_page php_msg=$(jget msg <<<"$php_lpj") go_msg=$(jget msg <<<"$go_lpj")"
+  if [[ "$(jget msg <<<"$php_lpj")" != "$(jget msg <<<"$go_lpj")" ]]; then
     echo "  php_lpj=${php_lpj:0:200}"
     echo "  go_lpj=${go_lpj:0:200}"
     fail=$((fail + 1))

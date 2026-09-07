@@ -53,7 +53,10 @@ func ArticleCancelCollect(c *gin.Context) {
 }
 
 func ArticleCollect(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	at := tenantdb.Table(c, model.Article{}.TableName())
 	ct := tenantdb.Table(c, model.ArticleCollect{}.TableName())

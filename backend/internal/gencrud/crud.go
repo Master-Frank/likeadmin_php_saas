@@ -168,7 +168,10 @@ func ModuleApp(module string) string {
 }
 
 func doLists(c *gin.Context, sp *spec) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := scoped(c, sp)
 	db = applySearch(db, sp, q)
 	var count int64

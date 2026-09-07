@@ -25,7 +25,10 @@ func MenuRoute(c *gin.Context) {
 }
 
 func MenuLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	var rows []model.SystemMenu
 	bootstrap.DB.Order("sort desc, id asc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
@@ -157,7 +160,10 @@ func MenuUpdateStatus(c *gin.Context) {
 }
 
 func RoleLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := bootstrap.DB.Model(&model.SystemRole{}).Where("delete_time IS NULL")
 	var count int64
 	db.Count(&count)

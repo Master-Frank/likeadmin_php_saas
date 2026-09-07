@@ -18,7 +18,10 @@ import (
 )
 
 func AdminLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -306,7 +309,10 @@ func MenuRoute(c *gin.Context) {
 }
 
 func MenuLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	if listsNeedTenant(c, q) {
 		return
 	}
@@ -451,7 +457,10 @@ func MenuUpdateStatus(c *gin.Context) {
 }
 
 func RoleLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("delete_time IS NULL"), c)
 	var count int64
 	db.Count(&count)

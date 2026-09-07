@@ -342,7 +342,10 @@ func UserSetInfo(c *gin.Context) {
 }
 
 func ArticleLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	db := scopeTenant(tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1"), c)
 	if lists.HasParam(q, "cid") {
 		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
@@ -407,7 +410,10 @@ func SearchHot(c *gin.Context) {
 }
 
 func RechargeLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	db := scopeTenant(tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid), c)
 	var count int64
@@ -426,7 +432,10 @@ func RechargeLists(c *gin.Context) {
 }
 
 func AccountLogLists(c *gin.Context) {
-	q := lists.Parse(c)
+	q, ok := lists.ParseGET(c)
+	if !ok {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	db := scopeTenant(tdb(c).Model(&model.UserAccountLog{}).Where("user_id = ? AND delete_time IS NULL", uid), c)
 	if lists.Param(q, "type") == "um" {
