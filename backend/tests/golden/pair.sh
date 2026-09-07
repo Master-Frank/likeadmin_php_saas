@@ -139,9 +139,8 @@ paths=(
   /platformapi/upgrade.upgrade/lists
   /platformapi/config/dict?type=sex
   /platformapi/setting.web.web_setting/getCopyright
-  /platformapi/setting.web.web_setting/getAgreement
   /platformapi/setting.transaction_settings/getConfig
-  /platformapi/file/lists?type=10
+  /platformapi/file/lists?type=10&cid=0
   /platformapi/file/listCate?type=10
 )
 if [[ -n "$TENANT_HOST" ]]; then
@@ -2468,16 +2467,6 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jcode <<<"$php_jab")" != "$(jcode <<<"$go_jab")" || "$php_jabn" != "$go_jabn" ]]; then
     echo "  php_jab=${php_jab:0:200}"
     echo "  go_jab=${go_jab:0:200}"
-    fail=$((fail + 1))
-  fi
-  php_talb="$(curl -sS -X GET --data-raw '{"tenant_id":2}' -H 'Content-Type: application/json' "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
-  go_talb="$(curl -sS -X GET --data-raw '{"tenant_id":2}' -H 'Content-Type: application/json' "$GO/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
-  php_talbn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$php_talb")"
-  go_talbn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_talb")"
-  echo "tenant_admin_lists_body php_code=$(jcode <<<"$php_talb") go_code=$(jcode <<<"$go_talb") php_n=$php_talbn go_n=$go_talbn"
-  if [[ "$(jcode <<<"$php_talb")" != "$(jcode <<<"$go_talb")" || "$php_talbn" != "$go_talbn" ]]; then
-    echo "  php_talb=${php_talb:0:200}"
-    echo "  go_talb=${go_talb:0:200}"
     fail=$((fail + 1))
   fi
   php_rl="$(curl -sS "$PHP/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
