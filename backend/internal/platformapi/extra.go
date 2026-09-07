@@ -422,6 +422,10 @@ func SmsConfigSet(c *gin.Context) {
 
 func SmsConfigDetail(c *gin.Context) {
 	typ := httpx.Str(c, "type")
+	if typ == "" {
+		response.Fail(c, "请选择类型")
+		return
+	}
 	def := map[string]any{"type": typ, "status": 0}
 	switch typ {
 	case "ali":

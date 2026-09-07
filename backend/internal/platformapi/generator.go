@@ -384,12 +384,19 @@ func GeneratorDownload(c *gin.Context) {
 }
 
 func GeneratorGetModels(c *gin.Context) {
-	root := filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", "common", "model")
+	out := scanPHPModels(filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", "common", "model"))
+	if len(out) == 0 {
+		// Go-only deploy: keep the relation picker usable without the PHP tree.
+		out = scanGoModels(filepath.Join(filepath.Dir(filepath.Dir(config.C.App.PublicDir)), "backend", "internal", "model"))
+	}
+	response.Result(c, 1, 1, "", out)
+}
+
+func scanPHPModels(root string) []string {
 	out := []string{}
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		response.Result(c, 1, 1, "", out)
-		return
+		return out
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -411,7 +418,27 @@ func GeneratorGetModels(c *gin.Context) {
 		}
 		out = append(out, `\app\common\model\`+base)
 	}
-	response.Result(c, 1, 1, "", out)
+	return out
+}
+
+func scanGoModels(root string) []string {
+	out := []string{}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return out
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		base := strings.TrimSuffix(name, ".go")
+		if base == "base" || base == "doc" {
+			continue
+		}
+		out = append(out, `\app\common\model\`+strings.ToUpper(base[:1])+base[1:])
+	}
+	return out
 }
 
 func syncColumns(tableID uint, tableName string) {

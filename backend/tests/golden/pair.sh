@@ -1260,6 +1260,14 @@ print((d.get("data") or {}).get("id") or 0)
   if [[ "$(jget msg <<<"$php_sms")" != "$(jget msg <<<"$go_sms")" ]]; then
     fail=$((fail + 1))
   fi
+  php_smd="$(curl -sS "$PHP/platformapi/notice.sms_config/detail" -H "token: $TOKEN")"
+  go_smd="$(curl -sS "$GO/platformapi/notice.sms_config/detail" -H "token: $TOKEN")"
+  echo "sms_detail_notype php_msg=$(jget msg <<<"$php_smd") go_msg=$(jget msg <<<"$go_smd")"
+  if [[ "$(jget msg <<<"$php_smd")" != "$(jget msg <<<"$go_smd")" ]]; then
+    echo "  php_smd=${php_smd:0:200}"
+    echo "  go_smd=${go_smd:0:200}"
+    fail=$((fail + 1))
+  fi
   php_cust="$(curl -sS "$PHP/platformapi/setting.customer_service/getconfig" -H "token: $TOKEN")"
   go_cust="$(curl -sS "$GO/platformapi/setting.customer_service/getconfig" -H "token: $TOKEN")"
   echo "customer_get php_keys=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$php_cust") go_keys=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(sorted((d.get("data") or {}).keys())))' <<<"$go_cust")"
@@ -1705,13 +1713,13 @@ print(json.dumps({
   fi
   go_tdw="$(curl -sS -X POST "$GO/tenantapi/setting.dict.dict_type/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","type":"x"}')"
   echo "tenant_dict_write go_msg=$(jget msg <<<"$go_tdw")"
-  if [[ "$(jget msg <<<"$go_tdw")" != *"controller not exists"* ]]; then
+  if [[ "$(jget msg <<<"$go_tdw")" != *"请选择状态"* ]]; then
     echo "  go_tdw=${go_tdw:0:200}"
     fail=$((fail + 1))
   fi
   go_tsw="$(curl -sS -X POST "$GO/tenantapi/setting.storage/setup" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"engine":"local"}')"
   echo "tenant_storage_write go_msg=$(jget msg <<<"$go_tsw")"
-  if [[ "$(jget msg <<<"$go_tsw")" != *"controller not exists"* ]]; then
+  if [[ "$(jget msg <<<"$go_tsw")" != *"status不能为空"* ]]; then
     echo "  go_tsw=${go_tsw:0:200}"
     fail=$((fail + 1))
   fi
@@ -3589,6 +3597,77 @@ print(",".join(sorted(ls[0])) if ls else "")
       echo "  go_dtd=${go_dtd:0:220}"
       fail=$((fail + 1))
     fi
+  fi
+  php_ddt="$(curl -sS "$PHP/platformapi/setting.dict.dict_data/lists?page_size=1" -H "token: $TOKEN")"
+  ddid="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(ls.get("id") or 0)' <<<"$php_ddt")"
+  if [[ "$ddid" != "0" && -n "$ddid" ]]; then
+    php_ddd="$(curl -sS "$PHP/platformapi/setting.dict.dict_data/detail?id=$ddid" -H "token: $TOKEN")"
+    go_ddd="$(curl -sS "$GO/platformapi/setting.dict.dict_data/detail?id=$ddid" -H "token: $TOKEN")"
+    php_ddk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_ddd")"
+    go_ddk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_ddd")"
+    echo "dict_data_detail_keys php=$php_ddk go=$go_ddk"
+    if [[ "$php_ddk" != "$go_ddk" || "$go_ddk" == *status_desc* ]]; then
+      echo "  php_ddd=${php_ddd:0:220}"
+      echo "  go_ddd=${go_ddd:0:220}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_pdt="$(curl -sS "$PHP/platformapi/setting.dict.dict_type/all" -H "token: $TOKEN")"
+  go_pdt="$(curl -sS "$GO/platformapi/setting.dict.dict_type/all" -H "token: $TOKEN")"
+  php_pdi="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(str(x.get("id")) for x in ls[:8]))' <<<"$php_pdt")"
+  go_pdi="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(str(x.get("id")) for x in ls[:8]))' <<<"$go_pdt")"
+  php_pdk="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(sorted(ls[0])) if ls else "")' <<<"$php_pdt")"
+  go_pdk="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(sorted(ls[0])) if ls else "")' <<<"$go_pdt")"
+  echo "dict_type_all php_ids=$php_pdi go_ids=$go_pdi php_keys=$php_pdk go_keys=$go_pdk"
+  if [[ -n "$php_pdk" && ( "$php_pdi" != "$go_pdi" || "$php_pdk" != "$go_pdk" || "$go_pdk" == *status_desc* ) ]]; then
+    fail=$((fail + 1))
+  fi
+  php_pjd="$(curl -sS "$PHP/platformapi/dept.jobs/lists?page_size=1" -H "token: $TOKEN")"
+  pjid="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(ls.get("id") or 0)' <<<"$php_pjd")"
+  if [[ "$pjid" != "0" && -n "$pjid" ]]; then
+    php_pjd2="$(curl -sS "$PHP/platformapi/dept.jobs/detail?id=$pjid" -H "token: $TOKEN")"
+    go_pjd2="$(curl -sS "$GO/platformapi/dept.jobs/detail?id=$pjid" -H "token: $TOKEN")"
+    php_pjk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_pjd2")"
+    go_pjk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_pjd2")"
+    echo "platform_jobs_detail_keys php=$php_pjk go=$go_pjk"
+    if [[ "$php_pjk" != "$go_pjk" || "$go_pjk" == *status_desc* ]]; then
+      echo "  php_pjd2=${php_pjd2:0:220}"
+      echo "  go_pjd2=${go_pjd2:0:220}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_pdd="$(curl -sS "$PHP/platformapi/dept.dept/lists" -H "token: $TOKEN")"
+  pdid="$(python3 -c '
+import json,sys
+def first(rows):
+    for r in rows or []:
+        if r.get("id"):
+            return r.get("id")
+        if r.get("children"):
+            x=first(r.get("children"))
+            if x: return x
+    return 0
+print(first((json.load(sys.stdin).get("data") or {}).get("lists") or []))
+' <<<"$php_pdd")"
+  if [[ "$pdid" != "0" && -n "$pdid" ]]; then
+    php_pdd2="$(curl -sS "$PHP/platformapi/dept.dept/detail?id=$pdid" -H "token: $TOKEN")"
+    go_pdd2="$(curl -sS "$GO/platformapi/dept.dept/detail?id=$pdid" -H "token: $TOKEN")"
+    php_pdk2="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_pdd2")"
+    go_pdk2="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_pdd2")"
+    echo "platform_dept_detail_keys php=$php_pdk2 go=$go_pdk2"
+    if [[ "$php_pdk2" != "$go_pdk2" || "$go_pdk2" == *status_desc* ]]; then
+      echo "  php_pdd2=${php_pdd2:0:220}"
+      echo "  go_pdd2=${go_pdd2:0:220}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_pja="$(curl -sS "$PHP/platformapi/dept.jobs/all" -H "token: $TOKEN")"
+  go_pja="$(curl -sS "$GO/platformapi/dept.jobs/all" -H "token: $TOKEN")"
+  php_pjak="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(sorted(ls[0])) if ls else "")' <<<"$php_pja")"
+  go_pjak="$(python3 -c 'import json,sys; ls=json.load(sys.stdin).get("data") or []; print(",".join(sorted(ls[0])) if ls else "")' <<<"$go_pja")"
+  echo "platform_jobs_all_keys php=$php_pjak go=$go_pjak"
+  if [[ -n "$php_pjak" && ( "$php_pjak" != "$go_pjak" || "$go_pjak" == *status_desc* ) ]]; then
+    fail=$((fail + 1))
   fi
   php_pl="$(curl -sS "$PHP/platformapi/setting.pay.pay_config/lists" -H "token: $TOKEN")"
   go_pl="$(curl -sS "$GO/platformapi/setting.pay.pay_config/lists" -H "token: $TOKEN")"

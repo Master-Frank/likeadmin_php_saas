@@ -148,7 +148,7 @@ func DeptDetail(c *gin.Context) {
 		response.Fail(c, "部门不存在")
 		return
 	}
-	response.Data(c, deptMap(d))
+	response.Data(c, deptRaw(d))
 }
 
 func DeptAll(c *gin.Context) {
@@ -169,7 +169,7 @@ func DeptAll(c *gin.Context) {
 		maps := make([]map[string]any, 0, len(rows))
 		root := int(rows[0].Pid)
 		for _, d := range rows {
-			maps = append(maps, tenantDeptAsMap(d))
+			maps = append(maps, tenantDeptRaw(d))
 			if int(d.Pid) < root {
 				root = int(d.Pid)
 			}
@@ -186,7 +186,7 @@ func DeptAll(c *gin.Context) {
 	maps := make([]map[string]any, 0, len(rows))
 	root := int(rows[0].Pid)
 	for _, d := range rows {
-		maps = append(maps, deptMap(d))
+		maps = append(maps, deptRaw(d))
 		if int(d.Pid) < root {
 			root = int(d.Pid)
 		}
@@ -301,7 +301,7 @@ func JobsDetail(c *gin.Context) {
 		response.Fail(c, "岗位不存在")
 		return
 	}
-	response.Data(c, jobsMap(j))
+	response.Data(c, jobsRaw(j))
 }
 
 func JobsAll(c *gin.Context) {
@@ -316,7 +316,7 @@ func JobsAll(c *gin.Context) {
 		q.Order("sort desc, id desc").Find(&rows)
 		out := make([]map[string]any, 0, len(rows))
 		for _, j := range rows {
-			out = append(out, tenantJobsAsMap(j))
+			out = append(out, tenantJobsRaw(j))
 		}
 		response.Data(c, out)
 		return
@@ -325,7 +325,7 @@ func JobsAll(c *gin.Context) {
 	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, j := range rows {
-		out = append(out, jobsMap(j))
+		out = append(out, jobsRaw(j))
 	}
 	response.Data(c, out)
 }
@@ -366,15 +366,20 @@ func jobsCodeTaken(id uint, code string) bool {
 	return n > 0
 }
 
-func tenantDeptAsMap(d model.TenantDept) map[string]any {
-	statusDesc := "停用"
-	if d.Status == 1 {
-		statusDesc = "正常"
-	}
+func tenantDeptRaw(d model.TenantDept) map[string]any {
 	return map[string]any{
 		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
-		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
-		"tenant_id":   d.TenantID,
+		"mobile": d.Mobile, "status": d.Status, "tenant_id": d.TenantID,
+		"create_time": util.FormatDateTime(d.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
+		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
+	}
+}
+
+func deptRaw(d model.Dept) map[string]any {
+	return map[string]any{
+		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
+		"mobile": d.Mobile, "status": d.Status,
 		"create_time": util.FormatDateTime(d.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
@@ -386,24 +391,24 @@ func deptMap(d model.Dept) map[string]any {
 	if d.Status == 1 {
 		statusDesc = "正常"
 	}
-	return map[string]any{
-		"id": d.ID, "name": d.Name, "pid": d.Pid, "sort": d.Sort, "leader": d.Leader,
-		"mobile": d.Mobile, "status": d.Status, "status_desc": statusDesc,
-		"create_time": util.FormatDateTime(d.CreateTime),
-		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
-		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
-	}
+	out := deptRaw(d)
+	out["status_desc"] = statusDesc
+	return out
 }
 
-func tenantJobsAsMap(j model.TenantJobs) map[string]any {
-	desc := "停用"
-	if j.Status == 1 {
-		desc = "正常"
-	}
+func tenantJobsRaw(j model.TenantJobs) map[string]any {
 	return map[string]any{
 		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
 		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
-		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime),
+	}
+}
+
+func jobsRaw(j model.Jobs) map[string]any {
+	return map[string]any{
+		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
+		"remark": j.Remark, "create_time": util.FormatDateTime(j.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime),
 	}
 }
 
@@ -412,9 +417,7 @@ func jobsMap(j model.Jobs) map[string]any {
 	if j.Status != 1 {
 		desc = "停用"
 	}
-	return map[string]any{
-		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
-		"remark": j.Remark, "create_time": util.FormatDateTime(j.CreateTime),
-		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
-	}
+	out := jobsRaw(j)
+	out["status_desc"] = desc
+	return out
 }

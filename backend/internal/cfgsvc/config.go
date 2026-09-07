@@ -92,7 +92,9 @@ func Set(c *gin.Context, typ, name string, value any) any {
 	}
 	meta := ctxutil.Get(c)
 	now := util.NowUnix()
-	if meta.Source == ctxutil.SourcePlatform {
+	// PHP ConfigService::get always reads platform la_config for type=storage.
+	// Writes must land there too, or tenant storage setup would be invisible.
+	if meta.Source == ctxutil.SourcePlatform || typ == "storage" {
 		var row model.ConfigRow
 		err := bootstrap.DB.Where("type = ? AND name = ?", typ, name).First(&row).Error
 		if err != nil {
