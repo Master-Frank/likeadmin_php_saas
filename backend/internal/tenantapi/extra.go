@@ -40,12 +40,12 @@ func AdminAll(c *gin.Context) {
 }
 
 func ArticleCateDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
 	var row model.ArticleCate
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")
 		return
 	}
@@ -107,7 +107,7 @@ func ArticleAll(c *gin.Context) {
 }
 
 func DecorateDataArticle(c *gin.Context) {
-	limit := httpx.Int(c, "limit")
+	limit := httpx.QueryInt(c, "limit")
 	if limit <= 0 {
 		limit = 10
 	}
@@ -314,7 +314,7 @@ func GetUmChangeType(c *gin.Context) {
 }
 
 func FinanceRefundLog(c *gin.Context) {
-	recordID := httpx.Uint(c, "record_id")
+	recordID := httpx.QueryUint(c, "record_id")
 	// PHP RefundLogic::refundLog queries by record_id with no existence check.
 	var rows []model.RefundLog
 	q := scopeTID(tdb(c).Where("record_id = ?", recordID), c)
@@ -728,11 +728,11 @@ func OAReplyDelete(c *gin.Context) {
 }
 
 func OAReplyDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	row, _ := oaReplyByID(c, httpx.Uint(c, "id"))
+	row, _ := oaReplyByID(c, httpx.QueryUint(c, "id"))
 	response.Data(c, oaReplyDetailMap(row))
 }
 
@@ -907,7 +907,7 @@ func tenantNoticeByID(c *gin.Context, id uint) (model.TenantNoticeSetting, bool)
 }
 
 func TenantNoticeDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return

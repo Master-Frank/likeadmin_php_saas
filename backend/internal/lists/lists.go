@@ -33,12 +33,14 @@ func Parse(c *gin.Context) Query {
 	if q.PageSize <= 0 {
 		q.PageSize = 25
 	}
-	params := httpx.Params(c)
-	q.Params = params
-	if v, ok := params["page_no"]; ok && util.ToInt(v) > 0 {
+	// Search filters follow PHP request()->param() (query + body).
+	// Paging / sort / time windows follow request()->get() only.
+	q.Params = httpx.Params(c)
+	query := httpx.Query(c)
+	if v, ok := query["page_no"]; ok && util.ToInt(v) > 0 {
 		q.PageNo = util.ToInt(v)
 	}
-	if v, ok := params["page_size"]; ok && util.ToInt(v) > 0 {
+	if v, ok := query["page_size"]; ok && util.ToInt(v) > 0 {
 		q.PageSize = util.ToInt(v)
 	}
 	if q.PageSize > config.C.Project.Lists.PageSizeMax && config.C.Project.Lists.PageSizeMax > 0 {
@@ -47,16 +49,16 @@ func Parse(c *gin.Context) Query {
 	// PHP BaseDataLists::initPage: default page_type=1 paginates;
 	// any other value (including 0) uses page_size_max and page_no=1.
 	q.PageType = 1
-	if v, ok := params["page_type"]; ok {
+	if v, ok := query["page_type"]; ok {
 		q.PageType = util.ToInt(v)
 	}
-	if v, ok := params["export"]; ok {
+	if v, ok := query["export"]; ok {
 		q.Export = util.ToInt(v)
 	}
-	q.Field = util.ToString(params["field"])
-	q.OrderBy = util.ToString(params["order_by"])
-	q.StartTime = util.ToString(params["start_time"])
-	q.EndTime = util.ToString(params["end_time"])
+	q.Field = util.ToString(query["field"])
+	q.OrderBy = util.ToString(query["order_by"])
+	q.StartTime = util.ToString(query["start_time"])
+	q.EndTime = util.ToString(query["end_time"])
 	if q.PageType != 1 {
 		q.PageNo = 1
 		if config.C.Project.Lists.PageSizeMax > 0 {

@@ -112,6 +112,17 @@ func TestVersionJSON(t *testing.T) {
 	}
 }
 
+func TestParseVerifyEnvelope(t *testing.T) {
+	got := parseVerifyEnvelope(map[string]any{"msg": "ip未授权:1.2.3.4", "data": nil})
+	if got["msg"] != "ip未授权:1.2.3.4" || got["has_permission"] != false {
+		t.Fatalf("envelope msg: %+v", got)
+	}
+	got = parseVerifyEnvelope(map[string]any{"msg": "outer", "data": map[string]any{"msg": "inner", "has_permission": false}})
+	if got["msg"] != "inner" {
+		t.Fatalf("data msg wins: %+v", got)
+	}
+}
+
 func TestHasPermission(t *testing.T) {
 	if HasPermission(nil) || HasPermission(map[string]any{}) {
 		t.Fatal("empty")

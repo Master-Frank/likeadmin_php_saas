@@ -49,7 +49,7 @@ func MenuAll(c *gin.Context) {
 func MenuDetail(c *gin.Context) {
 	var m model.SystemMenu
 	// PHP MenuLogic::detail is findOrEmpty()->toArray(); missing id still succeeds.
-	_ = bootstrap.DB.First(&m, httpx.Uint(c, "id"))
+	_ = bootstrap.DB.First(&m, httpx.QueryUint(c, "id"))
 	response.Data(c, menuMap(m))
 }
 
@@ -271,12 +271,12 @@ func RoleDelete(c *gin.Context) {
 }
 
 func RoleDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "请选择角色")
 		return
 	}
 	var r model.SystemRole
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&r).Error != nil {
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")).First(&r).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
@@ -289,8 +289,12 @@ func RoleDetail(c *gin.Context) {
 }
 
 func RoleAll(c *gin.Context) {
-	if _, ok := httpx.Params(c)["tenant_id"]; ok {
-		tid := httpx.Uint(c, "tenant_id")
+	if _, ok := httpx.Query(c)["tenant_id"]; ok {
+		tid := httpx.QueryUint(c, "tenant_id")
+		if tid == 0 {
+			response.Data(c, []any{})
+			return
+		}
 		db := tenantdb.ForTenant(tid)
 		if db == nil {
 			db = bootstrap.DB

@@ -346,7 +346,7 @@ func DictTypeDelete(c *gin.Context) {
 }
 
 func DictTypeDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -460,7 +460,7 @@ func DictDataDelete(c *gin.Context) {
 }
 
 func DictDataDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -531,7 +531,7 @@ func bool01(ok bool) int {
 }
 
 func StorageDetail(c *gin.Context) {
-	engine := httpx.Str(c, "engine")
+	engine := httpx.QueryStr(c, "engine")
 	if engine == "" {
 		response.Fail(c, "engine不能为空")
 		return

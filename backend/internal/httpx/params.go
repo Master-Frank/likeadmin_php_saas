@@ -37,6 +37,10 @@ func QueryStr(c *gin.Context, key string) string {
 	return strings.TrimSpace(util.ToString(Query(c)[key]))
 }
 
+func QueryInt(c *gin.Context, key string) int {
+	return util.ToInt(Query(c)[key])
+}
+
 func QueryUint(c *gin.Context, key string) uint {
 	return uint(util.ToInt(Query(c)[key]))
 }

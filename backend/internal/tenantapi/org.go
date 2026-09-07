@@ -17,10 +17,10 @@ func DeptLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.TenantDept{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
-	if name := httpx.Str(c, "name"); name != "" {
+	if name := httpx.QueryStr(c, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
-	if status := httpx.Str(c, "status"); status != "" {
+	if status := httpx.QueryStr(c, "status"); status != "" {
 		db = db.Where("status = ?", util.ParseInt(status))
 	}
 	var rows []model.TenantDept
@@ -142,12 +142,12 @@ func DeptDelete(c *gin.Context) {
 }
 
 func DeptDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var d model.TenantDept
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&d).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&d).Error != nil {
 		response.Fail(c, "部门不存在")
 		return
 	}
@@ -274,12 +274,12 @@ func JobsDelete(c *gin.Context) {
 }
 
 func JobsDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var j model.TenantJobs
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&j).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&j).Error != nil {
 		response.Fail(c, "岗位不存在")
 		return
 	}

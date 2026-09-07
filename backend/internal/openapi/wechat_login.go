@@ -41,7 +41,7 @@ func LoginCodeURL(c *gin.Context) {
 		return
 	}
 	// PHP LoginController::codeUrl passes request url as-is (may be empty).
-	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, httpx.Str(c, "url"))})
+	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, httpx.QueryStr(c, "url"))})
 }
 
 func LoginOALogin(c *gin.Context) {
@@ -91,7 +91,7 @@ func LoginMnpLogin(c *gin.Context) {
 func LoginGetScanCode(c *gin.Context) {
 	// PHP getScanCode never checks app_id/secret; empty config still returns qrconnect URL.
 	appID, _ := wechat.OpenConfig(c)
-	redirect := httpx.Str(c, "url")
+	redirect := httpx.QueryStr(c, "url")
 	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), time.Now().UnixNano()%100000))
 	cache.Set("web_scan_"+state, state, 10*time.Minute)
 	response.Data(c, gin.H{"url": wechat.ScanCodeURL(appID, redirect, state)})

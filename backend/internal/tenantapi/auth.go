@@ -276,12 +276,12 @@ func AdminDelete(c *gin.Context) {
 }
 
 func AdminDetail(c *gin.Context) {
-	p := httpx.Params(c)
+	p := httpx.Query(c)
 	if !authAdminIDPresent(p) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	a, ok := tenantAdminByID(c, id)
 	if !ok {
 		response.Fail(c, "管理员不存在")
@@ -406,20 +406,32 @@ func MenuDelete(c *gin.Context) {
 		return
 	}
 	var bind int64
-	tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("menu_id = ?", id).Count(&bind)
+	if roleIDs := tenantOwnedRoleIDs(c); len(roleIDs) > 0 {
+		tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("menu_id = ? AND role_id IN ?", id, roleIDs).Count(&bind)
+	}
 	if bind > 0 {
 		response.Fail(c, "已分配菜单不可删除")
 		return
 	}
 	scopeTID(tdb(c).Where("id = ?", id), c).Delete(&model.TenantSystemMenu{})
-	tdb(c).Where("menu_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
+	if roleIDs := tenantOwnedRoleIDs(c); len(roleIDs) > 0 {
+		tdb(c).Where("menu_id = ? AND role_id IN ?", id, roleIDs).Delete(&model.TenantSystemRoleMenu{})
+	}
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
 
 func MenuDetail(c *gin.Context) {
+	id := httpx.QueryUint(c, "id")
+	if id == 0 {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	var m model.TenantSystemMenu
-	scopeTID(tdb(c).Where("id = ?", httpx.Uint(c, "id")), c).First(&m)
+	if scopeTID(tdb(c).Where("id = ?", id), c).First(&m).Error != nil {
+		response.Data(c, []any{})
+		return
+	}
 	response.Data(c, tenantMenuMap(m))
 }
 
@@ -450,7 +462,9 @@ func RoleLists(c *gin.Context) {
 		var menuIDs []uint
 		tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
 		var num int64
-		tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ?", r.ID).Count(&num)
+		if adminIDs := tenantOwnedAdminIDs(c); len(adminIDs) > 0 {
+			tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ? AND admin_id IN ?", r.ID, adminIDs).Count(&num)
+		}
 		if menuIDs == nil {
 			menuIDs = []uint{}
 		}
@@ -530,7 +544,9 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	var used int64
-	tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ?", id).Count(&used)
+	if adminIDs := tenantOwnedAdminIDs(c); len(adminIDs) > 0 {
+		tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ? AND admin_id IN ?", id, adminIDs).Count(&used)
+	}
 	if used > 0 {
 		response.Fail(c, "有管理员在使用该角色，不允许删除")
 		return
@@ -543,12 +559,12 @@ func RoleDelete(c *gin.Context) {
 }
 
 func RoleDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "请选择角色")
 		return
 	}
 	var r model.TenantSystemRole
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&r).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&r).Error != nil {
 		response.Fail(c, "角色不存在")
 		return
 	}
@@ -701,6 +717,18 @@ func expireTenantAuthTokens(c *gin.Context, adminID uint) {
 		tdb(c).Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
 		cache.DeleteTenantAdminInfo(s.Token)
 	}
+}
+
+func tenantOwnedRoleIDs(c *gin.Context) []uint {
+	var ids []uint
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("delete_time IS NULL"), c).Pluck("id", &ids)
+	return ids
+}
+
+func tenantOwnedAdminIDs(c *gin.Context) []uint {
+	var ids []uint
+	scopeTID(tdb(c).Model(&model.TenantAdmin{}).Where("delete_time IS NULL"), c).Pluck("id", &ids)
+	return ids
 }
 
 func tenantRoleNames(c *gin.Context, ids []uint) []string {

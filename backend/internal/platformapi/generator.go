@@ -146,12 +146,12 @@ func GeneratorSelectTable(c *gin.Context) {
 }
 
 func GeneratorDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
 		return
 	}
 	var t model.GenerateTable
-	if bootstrap.DB.First(&t, httpx.Uint(c, "id")).Error != nil {
+	if bootstrap.DB.First(&t, httpx.QueryUint(c, "id")).Error != nil {
 		response.Fail(c, "信息不存在")
 		return
 	}

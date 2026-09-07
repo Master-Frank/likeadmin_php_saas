@@ -234,11 +234,11 @@ func AdminDelete(c *gin.Context) {
 }
 
 func AdminDetail(c *gin.Context) {
-	if !authAdminIDPresent(httpx.Params(c)) {
+	if !authAdminIDPresent(httpx.Query(c)) {
 		response.Fail(c, "管理员id不能为空")
 		return
 	}
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	var admin model.Admin
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")

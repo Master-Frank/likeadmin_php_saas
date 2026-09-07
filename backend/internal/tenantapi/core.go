@@ -118,7 +118,7 @@ func ConfigGet(c *gin.Context) {
 }
 
 func ConfigDict(c *gin.Context) {
-	typ := httpx.Str(c, "type")
+	typ := httpx.QueryStr(c, "type")
 	if typ == "" {
 		response.Data(c, []any{})
 		return
@@ -332,12 +332,12 @@ func UserLists(c *gin.Context) {
 }
 
 func UserDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "请选择用户")
 		return
 	}
 	var u model.User
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&u).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&u).Error != nil {
 		response.Fail(c, "用户不存在！")
 		return
 	}
@@ -521,12 +521,12 @@ func ArticleDelete(c *gin.Context) {
 }
 
 func ArticleDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}
 	var a model.Article
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")), c).First(&a).Error != nil {
 		response.Fail(c, "资讯不存在")
 		return
 	}
@@ -681,7 +681,7 @@ func decoratePayload(c *gin.Context, key string) string {
 
 func DecoratePageDetail(c *gin.Context) {
 	var p model.DecoratePage
-	if scopeTID(tdb(c).Where("type = ?", httpx.Int(c, "type")), c).First(&p).Error != nil {
+	if scopeTID(tdb(c).Where("type = ?", httpx.QueryInt(c, "type")), c).First(&p).Error != nil {
 		// PHP findOrEmpty()->toArray() on a missing model is [].
 		response.Success(c, "获取成功", []any{})
 		return

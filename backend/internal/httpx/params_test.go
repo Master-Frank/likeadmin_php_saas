@@ -24,4 +24,7 @@ func TestQueryIgnoresJSONBody(t *testing.T) {
 	if Str(c, "from") != "json" {
 		t.Fatalf("Params should still merge body, got %q", Str(c, "from"))
 	}
+	if QueryInt(c, "order_id") != 0 {
+		t.Fatalf("QueryInt must ignore JSON body")
+	}
 }

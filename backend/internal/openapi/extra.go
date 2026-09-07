@@ -94,7 +94,7 @@ func ArticleCollect(c *gin.Context) {
 }
 
 func ArticleDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, id)
 	var a model.Article
 	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {
@@ -127,13 +127,18 @@ func RechargeCreate(c *gin.Context) {
 	}
 	money := httpx.Float(c, "money")
 	terminal := userTerminal(c)
+	tid := ctxutil.Get(c).TenantID
+	if tid == 0 {
+		response.Fail(c, "接口域名错误或租户不存在")
+		return
+	}
 	exists := func(sn string) bool {
 		var n int64
-		tdb(c).Model(&model.RechargeOrder{}).Where("sn = ?", sn).Count(&n)
+		tdb(c).Model(&model.RechargeOrder{}).Where("sn = ? AND tenant_id = ?", sn, tid).Count(&n)
 		return n > 0
 	}
 	order := model.RechargeOrder{
-		SN: util.GenerateSN(exists, "", 4), UserID: uid, TenantID: ctxutil.Get(c).TenantID,
+		SN: util.GenerateSN(exists, "", 4), UserID: uid, TenantID: tid,
 		PayStatus: 0, OrderAmount: money, OrderTerminal: terminal, CreateTime: util.NowUnix(),
 	}
 	if err := tdb(c).Create(&order).Error; err != nil {
@@ -526,8 +531,8 @@ func PcInfoCenter(c *gin.Context) {
 }
 
 func PcArticleDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
-	source := httpx.Str(c, "source")
+	id := httpx.QueryUint(c, "id")
+	source := httpx.QueryStr(c, "source")
 	if source == "" {
 		source = "default"
 	}

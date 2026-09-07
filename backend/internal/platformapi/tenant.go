@@ -79,7 +79,7 @@ func TenantLists(c *gin.Context) {
 
 func TenantDetail(c *gin.Context) {
 	var t model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&t).Error != nil {
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")).First(&t).Error != nil {
 		response.Fail(c, "租户不存在")
 		return
 	}
@@ -316,11 +316,11 @@ func cleanTenantScopedRows(tid uint) {
 
 func TenantAdminLists(c *gin.Context) {
 	q := lists.Parse(c)
-	if lists.Param(q, "tenant_id") == "" {
+	if httpx.QueryStr(c, "tenant_id") == "" {
 		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
 		return
 	}
-	tid := lists.ParamInt(q, "tenant_id")
+	tid := httpx.QueryInt(c, "tenant_id")
 	var tenant model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
 		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
@@ -357,7 +357,7 @@ func TenantAdminLists(c *gin.Context) {
 }
 
 func TenantAdminDetail(c *gin.Context) {
-	p := httpx.Params(c)
+	p := httpx.Query(c)
 	if !phpRequiredParam(p, "id") {
 		response.Fail(c, "请选择用户")
 		return
@@ -367,14 +367,14 @@ func TenantAdminDetail(c *gin.Context) {
 		return
 	}
 	var tenant model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "tenant_id")).First(&tenant).Error != nil {
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "tenant_id")).First(&tenant).Error != nil {
 		response.Fail(c, "对应租户账号不存在")
 		return
 	}
 	adb := tenantAdminDB(tenant)
 	var a model.TenantAdmin
-	tid := httpx.Uint(c, "tenant_id")
-	q := adb.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
+	tid := httpx.QueryUint(c, "tenant_id")
+	q := adb.Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id"))
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -696,7 +696,7 @@ func tenantAdminRolesChanged(oldRoles, newRoles []uint) bool {
 
 func TenantUserLists(c *gin.Context) {
 	q := lists.Parse(c)
-	tid := lists.ParamInt(q, "tenant_id")
+	tid := httpx.QueryInt(c, "tenant_id")
 	if tid <= 0 {
 		response.Fail(c, "请选择租户标识")
 		return
@@ -733,7 +733,7 @@ func TenantUserLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, u := range rows {
 		out = append(out, map[string]any{
-			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, u.Avatar),
 			"nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 			"sex": util.SexDesc(u.Sex), "channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
 			"create_time": util.FormatDateTime(u.CreateTime),
@@ -743,17 +743,17 @@ func TenantUserLists(c *gin.Context) {
 }
 
 func TenantUserDetail(c *gin.Context) {
-	if httpx.Uint(c, "id") == 0 {
+	if httpx.QueryUint(c, "id") == 0 {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	if !phpRequiredParam(httpx.Params(c), "tenant_id") {
+	if !phpRequiredParam(httpx.Query(c), "tenant_id") {
 		response.Fail(c, "请选择租户标识")
 		return
 	}
-	tid := httpx.Uint(c, "tenant_id")
+	tid := httpx.QueryUint(c, "tenant_id")
 	var u model.User
-	q := tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
+	q := tenantdb.ForTenant(tid).Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id"))
 	if tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
 	}
@@ -1177,10 +1177,10 @@ func rootDomain(c *gin.Context) string {
 func userMap(c *gin.Context, u model.User) map[string]any {
 	return map[string]any{
 		"id": u.ID, "sn": u.SN,
-		"avatar":    filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"avatar":    filesvc.GetFileURL(c, u.Avatar),
 		"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 		"sex": util.SexDesc(u.Sex), "sexCode": u.Sex, "channel": util.ChannelDesc(u.Channel),
-		"is_disable": u.IsDisable, "login_ip": u.LoginIP,
+		"is_disable": u.IsDisable,
 		"login_time": util.FormatDateTimePtr(u.LoginTime), "user_money": util.MoneyString(u.UserMoney),
 		"create_time": util.FormatDateTime(u.CreateTime),
 	}

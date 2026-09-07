@@ -36,7 +36,7 @@ func PayConfigLists(c *gin.Context) {
 }
 
 func PayConfigGet(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "id不能为空")
 		return
@@ -294,7 +294,7 @@ func CrontabOperate(c *gin.Context) {
 }
 
 func CrontabDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -351,7 +351,7 @@ func NoticeSettingLists(c *gin.Context) {
 }
 
 func NoticeDetail(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "参数缺失")
 		return
@@ -421,7 +421,7 @@ func SmsConfigSet(c *gin.Context) {
 }
 
 func SmsConfigDetail(c *gin.Context) {
-	typ := httpx.Str(c, "type")
+	typ := httpx.QueryStr(c, "type")
 	if typ == "" {
 		response.Fail(c, "请选择类型")
 		return

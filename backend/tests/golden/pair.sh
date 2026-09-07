@@ -1450,10 +1450,13 @@ except Exception:
     php_drm="$(jget msg <<<"$php_dr")"
     go_drm="$(jget msg <<<"$go_dr")"
     echo "upgrade_dl_real id=$vid php_msg=$php_drm go_msg=$go_drm"
+    upgrade_license_msg() {
+      [[ "$1" == ip未授权:* || "$1" == 请先联系客服获取授权 ]]
+    }
     if [[ "$(jcode <<<"$php_dr")" != "$(jcode <<<"$go_dr")" ]]; then
       fail=$((fail + 1))
-    elif [[ "$php_drm" != "$go_drm" && ! ( "$php_drm" == ip未授权:* && "$go_drm" == ip未授权:* ) && ! ( -z "$php_drm" && "$go_drm" == ip未授权:* ) && ! ( -z "$go_drm" && "$php_drm" == ip未授权:* ) ]]; then
-      # Remote license text embeds the caller's egress IP; PHP/Go may leave via different NICs.
+    elif [[ "$php_drm" != "$go_drm" ]] && ! { upgrade_license_msg "$php_drm" && upgrade_license_msg "$go_drm"; } && ! { [[ -z "$php_drm" ]] && upgrade_license_msg "$go_drm"; } && ! { [[ -z "$go_drm" ]] && upgrade_license_msg "$php_drm"; }; then
+      # Remote license text embeds the caller's egress IP / listen port.
       fail=$((fail + 1))
     fi
   fi
@@ -3695,6 +3698,50 @@ print(",".join(sorted(ls[0])) if ls else "")
   if [[ "$(jget msg <<<"$php_dd0")" != "$(jget msg <<<"$go_dd0")" ]]; then
     echo "  php_dd0=${php_dd0:0:200}"
     echo "  go_dd0=${go_dd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tmd0="$(curl -sS "$PHP/tenantapi/auth.menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tmd0="$(curl -sS "$GO/tenantapi/auth.menu/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_menu_detail_noid php_msg=$(jget msg <<<"$php_tmd0") go_msg=$(jget msg <<<"$go_tmd0")"
+  if [[ "$(jget msg <<<"$php_tmd0")" != "$(jget msg <<<"$go_tmd0")" ]]; then
+    echo "  php_tmd0=${php_tmd0:0:200}"
+    echo "  go_tmd0=${go_tmd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tmdm="$(curl -sS "$PHP/tenantapi/auth.menu/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tmdm="$(curl -sS "$GO/tenantapi/auth.menu/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_tmdmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_tmdm")"
+  go_tmdmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$go_tmdm")"
+  echo "tenant_menu_detail_missing php=$php_tmdmk go=$go_tmdmk"
+  if [[ "$(jcode <<<"$php_tmdm")" != "$(jcode <<<"$go_tmdm")" || "$php_tmdmk" != "$go_tmdmk" ]]; then
+    echo "  php_tmdm=${php_tmdm:0:200}"
+    echo "  go_tmdm=${go_tmdm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_udj="$(curl -sS -X POST "$PHP/tenantapi/user.user/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  go_udj="$(curl -sS -X POST "$GO/tenantapi/user.user/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":1}')"
+  echo "user_detail_postjson php_msg=$(jget msg <<<"$php_udj") go_msg=$(jget msg <<<"$go_udj")"
+  if [[ "$(jget msg <<<"$php_udj")" != "$(jget msg <<<"$go_udj")" ]]; then
+    echo "  php_udj=${php_udj:0:200}"
+    echo "  go_udj=${go_udj:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tulj="$(curl -sS -X POST "$PHP/platformapi/tenant.tenantUser/lists" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":1}')"
+  go_tulj="$(curl -sS -X POST "$GO/platformapi/tenant.tenantUser/lists" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":1}')"
+  echo "tenantuser_lists_postjson php_msg=$(jget msg <<<"$php_tulj") go_msg=$(jget msg <<<"$go_tulj")"
+  if [[ "$(jget msg <<<"$php_tulj")" != "$(jget msg <<<"$go_tulj")" ]]; then
+    echo "  php_tulj=${php_tulj:0:200}"
+    echo "  go_tulj=${go_tulj:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_lpj="$(curl -sS -X POST "$PHP/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"page_no":9,"page_size":50}')"
+  go_lpj="$(curl -sS -X POST "$GO/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"page_no":9,"page_size":50}')"
+  php_lpjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(data.get("page_no"), data.get("page_size"), len(data.get("lists") or []))' <<<"$php_lpj")"
+  go_lpjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(data.get("page_no"), data.get("page_size"), len(data.get("lists") or []))' <<<"$go_lpj")"
+  echo "user_lists_postjson_page php=$php_lpjn go=$go_lpjn"
+  if [[ "$php_lpjn" != "$go_lpjn" ]]; then
+    echo "  php_lpj=${php_lpj:0:200}"
+    echo "  go_lpj=${go_lpj:0:200}"
     fail=$((fail + 1))
   fi
   php_prd0="$(curl -sS "$PHP/platformapi/auth.role/detail" -H "token: $TOKEN")"

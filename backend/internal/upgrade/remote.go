@@ -122,7 +122,7 @@ func HasPermission(result map[string]any) bool {
 func Verify(domain string, versionID any, link string) map[string]any {
 	u := fmt.Sprintf("%s/indexapi/version/verify?domain=%s&type=2&version_id=%s&link=%s&action=verify&product_code=%s",
 		BaseURL, url.QueryEscape(domain), url.QueryEscape(util.ToString(versionID)), url.QueryEscape(link), ProductCode)
-	data := getJSON(u)
+	data := getVerifyJSON(u)
 	if data == nil {
 		return map[string]any{"has_permission": false, "link": "", "msg": ""}
 	}
@@ -152,6 +152,39 @@ func AddLog(domain string, versionID any, updateType any, ok bool, errMsg string
 }
 
 func getJSON(remote string) map[string]any {
+	wrap := fetchJSON(remote)
+	if wrap == nil {
+		return nil
+	}
+	data, _ := wrap["data"].(map[string]any)
+	return data
+}
+
+// getVerifyJSON keeps PHP verify's data-or-default shape and also surfaces
+// a top-level envelope msg when data.msg is empty (remote license replies
+// sometimes put ip未授权 on the envelope, not inside data).
+func getVerifyJSON(remote string) map[string]any {
+	wrap := fetchJSON(remote)
+	if wrap == nil {
+		return nil
+	}
+	return parseVerifyEnvelope(wrap)
+}
+
+func parseVerifyEnvelope(wrap map[string]any) map[string]any {
+	data, _ := wrap["data"].(map[string]any)
+	if data == nil {
+		data = map[string]any{"has_permission": false, "link": "", "msg": ""}
+	}
+	if util.ToString(data["msg"]) == "" {
+		if msg := util.ToString(wrap["msg"]); msg != "" {
+			data["msg"] = msg
+		}
+	}
+	return data
+}
+
+func fetchJSON(remote string) map[string]any {
 	resp, err := httpClient.Get(remote)
 	if err != nil {
 		return nil
@@ -162,8 +195,7 @@ func getJSON(remote string) map[string]any {
 	if json.Unmarshal(body, &wrap) != nil {
 		return nil
 	}
-	data, _ := wrap["data"].(map[string]any)
-	return data
+	return wrap
 }
 
 var pkgLink = map[int]string{

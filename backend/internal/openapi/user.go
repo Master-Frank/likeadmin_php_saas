@@ -103,7 +103,7 @@ func IndexConfig(c *gin.Context) {
 }
 
 func IndexPolicy(c *gin.Context) {
-	typ := httpx.Str(c, "type")
+	typ := httpx.QueryStr(c, "type")
 	response.Data(c, gin.H{
 		"title":   cfgsvc.GetString(c, "agreement", typ+"_title", ""),
 		"content": cfgsvc.GetString(c, "agreement", typ+"_content", ""),
@@ -112,7 +112,7 @@ func IndexPolicy(c *gin.Context) {
 
 func IndexDecorate(c *gin.Context) {
 	var p model.DecoratePage
-	db := scopeTenant(tdb(c).Where("type = ?", httpx.Int(c, "type")), c)
+	db := scopeTenant(tdb(c).Where("type = ?", httpx.QueryInt(c, "type")), c)
 	if db.First(&p).Error != nil {
 		response.Data(c, []any{})
 		return

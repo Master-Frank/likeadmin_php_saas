@@ -49,7 +49,7 @@ func tenantPayConfigByID(c *gin.Context, id uint) (model.TenantPayConfig, bool) 
 }
 
 func PayConfigGet(c *gin.Context) {
-	id := httpx.Uint(c, "id")
+	id := httpx.QueryUint(c, "id")
 	if id == 0 {
 		response.Fail(c, "id不能为空")
 		return
