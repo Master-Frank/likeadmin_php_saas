@@ -15,10 +15,10 @@ import (
 
 func PayConfigLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantPayConfig{})
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.TenantPayConfig{}).Where("tenant_id = ?", tenantDB(c))
 	var rows []model.TenantPayConfig
 	db.Order("sort desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
@@ -37,10 +37,11 @@ func tenantPayConfigByID(c *gin.Context, id uint) (model.TenantPayConfig, bool) 
 	if id == 0 {
 		return r, false
 	}
-	q := tdb(c).Where("id = ?", id)
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		return r, false
 	}
+	q := tdb(c).Where("id = ? AND tenant_id = ?", id, tid)
 	if q.First(&r).Error != nil || r.ID == 0 {
 		return r, false
 	}
@@ -72,6 +73,8 @@ func PayConfigSet(c *gin.Context) {
 		q := tdb(c).Model(&model.TenantPayConfig{}).Where("name = ? AND id <> ?", name, id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
+		} else {
+			q = q.Where("1 = 0")
 		}
 		q.Count(&taken)
 	}
@@ -89,6 +92,9 @@ func PayConfigSet(c *gin.Context) {
 	q := tdb(c).Model(&model.TenantPayConfig{}).Where("id = ?", id)
 	if tid := tenantDB(c); tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
+	} else {
+		response.Fail(c, "参数缺失")
+		return
 	}
 	q.Updates(map[string]any{
 		"name": in.Name, "icon": filesvc.SetFileURL(c, in.Icon), "sort": httpx.Int(c, "sort"),
@@ -98,11 +104,13 @@ func PayConfigSet(c *gin.Context) {
 }
 
 func PayWayGet(c *gin.Context) {
-	var rows []model.TenantPayWay
-	db := tdb(c)
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.SuccessSilent(c, "", []any{})
+		return
 	}
+	var rows []model.TenantPayWay
+	db := tdb(c).Where("tenant_id = ?", tid)
 	db.Find(&rows)
 	if len(rows) == 0 {
 		response.SuccessSilent(c, "", []any{})
@@ -120,10 +128,7 @@ func PayWayGet(c *gin.Context) {
 	}
 	for _, r := range rows {
 		var cfg model.TenantPayConfig
-		cq := tdb(c).Where("id = ?", r.PayConfigID)
-		if tid := tenantDB(c); tid > 0 {
-			cq = cq.Where("tenant_id = ?", tid)
-		}
+		cq := tdb(c).Where("id = ? AND tenant_id = ?", r.PayConfigID, tid)
 		cq.First(&cfg)
 		lists[r.Scene] = append(lists[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
@@ -135,6 +140,11 @@ func PayWayGet(c *gin.Context) {
 }
 
 func PayWaySet(c *gin.Context) {
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	params := httpx.Params(c)
 	if msg := util.PayWaySetCheck(params); msg != "" {
 		response.Fail(c, msg)
@@ -154,19 +164,13 @@ func PayWaySet(c *gin.Context) {
 			if id == 0 {
 				continue
 			}
-			q := tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", id)
-			if tid := tenantDB(c); tid > 0 {
-				q = q.Where("tenant_id = ?", tid)
-			}
+			q := tdb(c).Model(&model.TenantPayWay{}).Where("id = ? AND tenant_id = ?", id, tid)
 			var row model.TenantPayWay
 			if q.First(&row).Error != nil {
 				response.Fail(c, "支付方式不存在")
 				return
 			}
-			uq := tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", row.ID)
-			if tid := tenantDB(c); tid > 0 {
-				uq = uq.Where("tenant_id = ?", tid)
-			}
+			uq := tdb(c).Model(&model.TenantPayWay{}).Where("id = ? AND tenant_id = ?", row.ID, tid)
 			uq.Updates(map[string]any{
 				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
 			})

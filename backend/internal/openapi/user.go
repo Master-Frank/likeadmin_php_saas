@@ -29,10 +29,14 @@ func userSNTaken(c *gin.Context, db *gorm.DB, v int) bool {
 		return false
 	}
 	q := db.Model(&model.User{}).Where("sn = ?", v)
+	tid := uint(0)
 	if c != nil {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
+		tid = ctxutil.Get(c).TenantID
+	}
+	if tid == 0 {
+		q = q.Where("1 = 0")
+	} else {
+		q = q.Where("tenant_id = ?", tid)
 	}
 	var n int64
 	q.Count(&n)
@@ -40,10 +44,14 @@ func userSNTaken(c *gin.Context, db *gorm.DB, v int) bool {
 }
 
 func scopeTenant(db *gorm.DB, c *gin.Context) *gorm.DB {
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		return db.Where("tenant_id = ?", tid)
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
 	}
-	return db
+	if tid == 0 {
+		return db.Where("1 = 0")
+	}
+	return db.Where("tenant_id = ?", tid)
 }
 
 func userAuthQ(c *gin.Context) *gorm.DB {
@@ -104,10 +112,7 @@ func IndexPolicy(c *gin.Context) {
 
 func IndexDecorate(c *gin.Context) {
 	var p model.DecoratePage
-	db := tdb(c).Where("type = ?", httpx.Int(c, "type"))
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Where("type = ?", httpx.Int(c, "type")), c)
 	if db.First(&p).Error != nil {
 		response.Data(c, []any{})
 		return
@@ -142,12 +147,12 @@ func LoginRegister(c *gin.Context) {
 		return
 	}
 	tid := ctxutil.Get(c).TenantID
-	var exist model.User
-	existQ := tdb(c).Where("account = ? AND delete_time IS NULL", account)
-	if tid > 0 {
-		existQ = existQ.Where("tenant_id = ?", tid)
+	if tid == 0 {
+		response.Fail(c, "接口域名错误或租户不存在")
+		return
 	}
-	if existQ.First(&exist).Error == nil {
+	var exist model.User
+	if scopeTenant(tdb(c).Where("account = ? AND delete_time IS NULL", account), c).First(&exist).Error == nil {
 		response.Fail(c, "账号已存在")
 		return
 	}
@@ -211,7 +216,6 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, "请输入手机验证码")
 		return
 	}
-	tid := ctxutil.Get(c).TenantID
 	var u model.User
 	if scene == 2 {
 		// PHP checkCode verifies SMS before looking up the user and never checks is_disable.
@@ -219,20 +223,12 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, "验证码错误")
 			return
 		}
-		q := tdb(c).Where("delete_time IS NULL AND mobile = ?", account)
-		if tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		if q.First(&u).Error != nil {
+		if scopeTenant(tdb(c).Where("delete_time IS NULL AND mobile = ?", account), c).First(&u).Error != nil {
 			response.Fail(c, "用户不存在")
 			return
 		}
 	} else {
-		q := tdb(c).Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account)
-		if tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		if q.First(&u).Error != nil {
+		if scopeTenant(tdb(c).Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account), c).First(&u).Error != nil {
 			response.Fail(c, "用户不存在")
 			return
 		}
@@ -331,10 +327,7 @@ func UserSetInfo(c *gin.Context) {
 	value := httpx.Any(c, "value")
 	if field == "account" {
 		var n int64
-		q := tdb(c).Model(&model.User{}).Where("account = ? AND id <> ? AND delete_time IS NULL", util.ToString(value), u.ID)
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
+		q := scopeTenant(tdb(c).Model(&model.User{}).Where("account = ? AND id <> ? AND delete_time IS NULL", util.ToString(value), u.ID), c)
 		q.Count(&n)
 		if n > 0 {
 			response.Fail(c, "账号已被使用!")
@@ -350,10 +343,7 @@ func UserSetInfo(c *gin.Context) {
 
 func ArticleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1"), c)
 	if lists.HasParam(q, "cid") {
 		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
 	}
@@ -397,10 +387,7 @@ func ArticleLists(c *gin.Context) {
 
 func ArticleCate(c *gin.Context) {
 	var rows []model.ArticleCate
-	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Where("delete_time IS NULL AND is_show = 1"), c)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
@@ -411,7 +398,7 @@ func ArticleCate(c *gin.Context) {
 
 func SearchHot(c *gin.Context) {
 	var rows []model.HotSearch
-	tdb(c).Where("tenant_id = ?", ctxutil.Get(c).TenantID).Order("sort desc, id desc").Find(&rows)
+	scopeTenant(tdb(c).Model(&model.HotSearch{}), c).Order("sort desc, id desc").Find(&rows)
 	data := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})

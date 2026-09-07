@@ -259,6 +259,22 @@ if [[ -n "$TOKEN" ]]; then
     fail=$((fail + 1))
   fi
 fi
+php_nh="$(curl -sS "$PHP/api/index/config")"
+go_nh="$(curl -sS "$GO/api/index/config")"
+echo "api_nohost php_code=$(jcode <<<"$php_nh") go_code=$(jcode <<<"$go_nh") php_show=$(jget show <<<"$php_nh") go_show=$(jget show <<<"$go_nh") php_msg=$(jget msg <<<"$php_nh") go_msg=$(jget msg <<<"$go_nh")"
+if [[ "$(jcode <<<"$php_nh")" != "$(jcode <<<"$go_nh")" || "$(jget show <<<"$php_nh")" != "$(jget show <<<"$go_nh")" || "$(jget msg <<<"$php_nh")" != "$(jget msg <<<"$go_nh")" ]]; then
+  echo "  php_nh=${php_nh:0:200}"
+  echo "  go_nh=${go_nh:0:200}"
+  fail=$((fail + 1))
+fi
+php_th="$(curl -sS "$PHP/tenantapi/config/getConfig")"
+go_th="$(curl -sS "$GO/tenantapi/config/getConfig")"
+echo "tenant_nohost php_code=$(jcode <<<"$php_th") go_code=$(jcode <<<"$go_th") php_msg=$(jget msg <<<"$php_th") go_msg=$(jget msg <<<"$go_th")"
+if [[ "$(jcode <<<"$php_th")" != "$(jcode <<<"$go_th")" || "$(jget msg <<<"$php_th")" != "$(jget msg <<<"$go_th")" ]]; then
+  echo "  php_th=${php_th:0:200}"
+  echo "  go_th=${go_th:0:200}"
+  fail=$((fail + 1))
+fi
 echo "upgrade_lists_keys php=$php_uk go=$go_uk"
 if [[ -n "$php_uk" && "$php_uk" != "$go_uk" ]]; then
   fail=$((fail + 1))
@@ -1671,6 +1687,14 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_js")" != "$(jget msg <<<"$go_js")" ]]; then
       echo "  php_js=${php_js:0:200}"
       echo "  go_js=${go_js:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_js2="$(curl -sS -X POST "$PHP/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"url":"http://'"$TENANT_HOST"'/pc"}')"
+    go_js2="$(curl -sS -X POST "$GO/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"url":"http://'"$TENANT_HOST"'/pc"}')"
+    echo "jsconfig_noconfig php_show=$(jget show <<<"$php_js2") go_show=$(jget show <<<"$go_js2") php_msg=$(jget msg <<<"$php_js2") go_msg=$(jget msg <<<"$go_js2")"
+    if [[ "$(jget show <<<"$php_js2")" != "$(jget show <<<"$go_js2")" || "$(jget msg <<<"$php_js2")" != "$(jget msg <<<"$go_js2")" ]]; then
+      echo "  php_js2=${php_js2:0:200}"
+      echo "  go_js2=${go_js2:0:200}"
       fail=$((fail + 1))
     fi
     php_up="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT")"

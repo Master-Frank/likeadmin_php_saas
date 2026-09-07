@@ -280,23 +280,17 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		db = bootstrap.DB
 	}
 	tid := meta.TenantID
-	allKey := "tenant_auth_all"
-	if tid > 0 {
-		allKey += "_" + strconv.FormatUint(uint64(tid), 10)
+	if tid == 0 {
+		return all, mine
 	}
+	allKey := "tenant_auth_all_" + strconv.FormatUint(uint64(tid), 10)
 	all = cachedURIList(allKey, func() []string {
 		var menus []model.TenantSystemMenu
-		q := db.Where("is_disable = 0 AND perms <> ''")
-		if tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
+		q := db.Where("is_disable = 0 AND perms <> '' AND tenant_id = ?", tid)
 		q.Find(&menus)
 		return collectTenantPerms(menus)
 	})
-	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10)
-	if tid > 0 {
-		urlKey = "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10)
-	}
+	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10)
 	if cached := loadURIList(urlKey); cached != nil {
 		return all, cached
 	}
@@ -308,10 +302,7 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 	db.Model(&model.TenantSystemRoleMenu{}).Where("role_id IN ?", roleIDs).Pluck("menu_id", &menuIDs)
 	var allowed []model.TenantSystemMenu
 	if len(menuIDs) > 0 {
-		aq := db.Where("id IN ? AND is_disable = 0 AND perms <> ''", menuIDs)
-		if tid > 0 {
-			aq = aq.Where("tenant_id = ?", tid)
-		}
+		aq := db.Where("id IN ? AND is_disable = 0 AND perms <> '' AND tenant_id = ?", menuIDs, tid)
 		aq.Find(&allowed)
 	}
 	mine = collectTenantPerms(allowed)

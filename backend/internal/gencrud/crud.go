@@ -298,9 +298,14 @@ func scoped(c *gin.Context, sp *spec) *gorm.DB {
 		db = db.Where(sp.deleteCol + " IS NULL")
 	}
 	if sp.allowed["tenant_id"] {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			db = db.Where("tenant_id = ?", tid)
+		tid := uint(0)
+		if c != nil {
+			tid = ctxutil.Get(c).TenantID
 		}
+		if tid == 0 {
+			return db.Where("1 = 0")
+		}
+		db = db.Where("tenant_id = ?", tid)
 	}
 	return db
 }

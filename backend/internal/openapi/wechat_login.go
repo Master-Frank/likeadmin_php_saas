@@ -370,12 +370,12 @@ func WechatJsConfigReal(c *gin.Context) {
 	}
 	appID, secret, _ := wechat.OAConfig(c)
 	if appID == "" || secret == "" {
-		response.Fail(c, "获取jssdk失败:请先设置公众号配置")
+		response.FailSilent(c, "获取jssdk失败:请先设置公众号配置")
 		return
 	}
 	cfg, err := wechat.JsConfig(appID, secret, httpx.Str(c, "url"))
 	if err != nil {
-		response.Fail(c, "获取jssdk失败:"+err.Error())
+		response.FailSilent(c, "获取jssdk失败:"+err.Error())
 		return
 	}
 	response.Data(c, cfg)
@@ -397,10 +397,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
-	q := tdb(c).Where("mobile = ? AND delete_time IS NULL AND id <> ?", phone, u.ID)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
+	q := scopeTenant(tdb(c).Where("mobile = ? AND delete_time IS NULL AND id <> ?", phone, u.ID), c)
 	var exist model.User
 	if q.First(&exist).Error == nil {
 		response.Fail(c, "手机号已被其他账号绑定")

@@ -11,10 +11,12 @@ import (
 )
 
 func DeptLists(c *gin.Context) {
-	db := tdb(c).Model(&model.TenantDept{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.SuccessSilent(c, "", []any{})
+		return
 	}
+	db := tdb(c).Model(&model.TenantDept{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	if name := httpx.Str(c, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
@@ -35,11 +37,13 @@ func DeptLists(c *gin.Context) {
 }
 
 func DeptLeader(c *gin.Context) {
-	var rows []model.TenantDept
-	db := tdb(c).Where("delete_time IS NULL AND status = 1")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.SuccessSilent(c, "", []any{})
+		return
 	}
+	var rows []model.TenantDept
+	db := tdb(c).Where("delete_time IS NULL AND status = 1 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, d := range rows {
@@ -151,11 +155,13 @@ func DeptDetail(c *gin.Context) {
 }
 
 func DeptAll(c *gin.Context) {
-	var rows []model.TenantDept
-	db := tdb(c).Where("delete_time IS NULL AND status = 1")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, []any{})
+		return
 	}
+	var rows []model.TenantDept
+	db := tdb(c).Where("delete_time IS NULL AND status = 1 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	if len(rows) == 0 {
 		response.Data(c, []any{})
@@ -174,10 +180,10 @@ func DeptAll(c *gin.Context) {
 
 func JobsLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantJobs{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.TenantJobs{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
@@ -317,11 +323,13 @@ func tenantJobsCodeTaken(c *gin.Context, id uint, code string) bool {
 }
 
 func JobsAll(c *gin.Context) {
-	var rows []model.TenantJobs
-	db := tdb(c).Where("delete_time IS NULL AND status = 1")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, []any{})
+		return
 	}
+	var rows []model.TenantJobs
+	db := tdb(c).Where("delete_time IS NULL AND status = 1 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, j := range rows {

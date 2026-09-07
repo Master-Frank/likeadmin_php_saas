@@ -19,10 +19,11 @@ import (
 
 func AdminLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantAdmin{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	tid := tenantDB(c)
+	db := tdb(c).Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
@@ -180,6 +181,8 @@ func AdminEdit(c *gin.Context) {
 		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
+		} else {
+			q = q.Where("1 = 0")
 		}
 		if err := q.Updates(data).Error; err != nil {
 			return err
@@ -252,6 +255,8 @@ func AdminDelete(c *gin.Context) {
 		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
+		} else {
+			q = q.Where("1 = 0")
 		}
 		if err := q.Update("delete_time", now).Error; err != nil {
 			return err
@@ -302,11 +307,11 @@ func MenuRoute(c *gin.Context) {
 
 func MenuLists(c *gin.Context) {
 	q := lists.Parse(c)
-	var rows []model.TenantSystemMenu
-	db := tdb(c).Order("sort desc, id asc")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	var rows []model.TenantSystemMenu
+	db := tdb(c).Where("tenant_id = ?", tenantDB(c)).Order("sort desc, id asc")
 	db.Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
 	for _, m := range rows {
@@ -316,11 +321,13 @@ func MenuLists(c *gin.Context) {
 }
 
 func MenuAll(c *gin.Context) {
-	var rows []model.TenantSystemMenu
-	db := tdb(c).Select("id,pid,name").Where("is_disable = 0")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, []any{})
+		return
 	}
+	var rows []model.TenantSystemMenu
+	db := tdb(c).Select("id,pid,name").Where("is_disable = 0 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	maps := make([]map[string]any, 0, len(rows))
 	for _, m := range rows {
@@ -433,10 +440,7 @@ func MenuUpdateStatus(c *gin.Context) {
 
 func RoleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantSystemRole{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("delete_time IS NULL"), c)
 	var count int64
 	db.Count(&count)
 	var rows []model.TenantSystemRole
@@ -560,10 +564,7 @@ func RoleDetail(c *gin.Context) {
 
 func RoleAll(c *gin.Context) {
 	var rows []model.TenantSystemRole
-	db := tdb(c).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTID(tdb(c).Where("delete_time IS NULL"), c)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
@@ -808,10 +809,7 @@ func tenantMenuMap(m model.TenantSystemMenu) map[string]any {
 
 func tenantMenuTreeByAdmin(c *gin.Context, admin model.TenantAdmin) []map[string]any {
 	var rows []model.TenantSystemMenu
-	q := tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"})
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
+	q := scopeTID(tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"}), c)
 	if admin.Root != 1 {
 		var roleIDs []uint
 		tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)

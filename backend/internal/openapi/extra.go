@@ -61,6 +61,8 @@ func ArticleCollect(c *gin.Context) {
 		Where("c.user_id = ? AND c.status = 1 AND a.is_show = 1 AND c.delete_time IS NULL AND a.delete_time IS NULL", uid)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("c.tenant_id = ? AND a.tenant_id = ?", tid, tid)
+	} else {
+		db = db.Where("1 = 0")
 	}
 	var count int64
 	db.Count(&count)
@@ -168,21 +170,13 @@ func PayWay(c *gin.Context) {
 		return
 	}
 	terminal := userTerminal(c)
-	tid := ctxutil.Get(c).TenantID
 	var ways []model.TenantPayWay
-	q := tdb(c).Where("scene = ? AND status = 1", terminal)
-	if tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	q.Order("is_default desc").Find(&ways)
+	scopeTenant(tdb(c).Where("scene = ? AND status = 1", terminal), c).Order("is_default desc").Find(&ways)
 	u := currentUser(c)
 	out := make([]map[string]any, 0)
 	for _, w := range ways {
 		var cfg model.TenantPayConfig
-		cfgQ := tdb(c).Where("id = ?", w.PayConfigID)
-		if tid > 0 {
-			cfgQ = cfgQ.Where("tenant_id = ?", tid)
-		}
+		cfgQ := scopeTenant(tdb(c).Where("id = ?", w.PayConfigID), c)
 		if cfgQ.First(&cfg).Error != nil {
 			continue
 		}
@@ -337,10 +331,7 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		q := tx.Model(&model.RechargeOrder{}).Where("id = ? AND pay_status = 0 AND delete_time IS NULL", order.ID)
-		if order.TenantID > 0 {
-			q = q.Where("tenant_id = ?", order.TenantID)
-		}
+		q := tx.Model(&model.RechargeOrder{}).Where("id = ? AND pay_status = 0 AND delete_time IS NULL AND tenant_id = ?", order.ID, order.TenantID)
 		res := q.Updates(map[string]any{
 			"pay_status": 1, "pay_time": now, "transaction_id": transactionID, "update_time": now,
 		})
@@ -350,10 +341,7 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 		if res.RowsAffected == 0 {
 			return nil
 		}
-		uq := tx.Model(&model.User{}).Where("id = ?", order.UserID)
-		if order.TenantID > 0 {
-			uq = uq.Where("tenant_id = ?", order.TenantID)
-		}
+		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ?", order.UserID, order.TenantID)
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money + ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount + ?", order.OrderAmount),
@@ -361,10 +349,7 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 			return err
 		}
 		var user model.User
-		uq = tx.Where("id = ?", order.UserID)
-		if order.TenantID > 0 {
-			uq = uq.Where("tenant_id = ?", order.TenantID)
-		}
+		uq = tx.Where("id = ? AND tenant_id = ?", order.UserID, order.TenantID)
 		uq.First(&user)
 		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, user.UserMoney, order.SN, "用户充值")
 		return nil
@@ -423,11 +408,7 @@ func UserResetPassword(c *gin.Context) {
 		return
 	}
 	hashed := util.CreatePassword(httpx.Str(c, "password"), config.C.Project.UniqueIdentification)
-	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	q.Update("password", hashed)
+	scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c).Update("password", hashed)
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -458,10 +439,7 @@ func UserBindMobile(c *gin.Context) {
 	}
 	// PHP bindMobile: type=bind checks any user with this mobile; change only
 	// rejects when the current user already has it (duplicates across users allowed).
-	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
+	q := scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c)
 	if typ != "bind" {
 		q = q.Where("id = ?", u.ID)
 	}
@@ -484,10 +462,7 @@ func verifySms(c *gin.Context, mobile, code, scene string) bool {
 
 func PcIndex(c *gin.Context) {
 	var page model.DecoratePage
-	db := tdb(c).Where("type = 4")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Where("type = 4"), c)
 	_ = db.First(&page)
 	response.Data(c, gin.H{
 		"page": decoratePageValue(page),
@@ -537,10 +512,7 @@ func PcConfig(c *gin.Context) {
 
 func PcInfoCenter(c *gin.Context) {
 	var cates []model.ArticleCate
-	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Where("delete_time IS NULL AND is_show = 1"), c)
 	db.Order("sort desc, id desc").Find(&cates)
 	out := make([]map[string]any, 0, len(cates))
 	for _, cate := range cates {
@@ -628,9 +600,7 @@ func queryArticles(c *gin.Context, sortType string, limit, cate, exclude int, sh
 	if showOnly {
 		db = db.Where("is_show = 1")
 	}
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db = scopeTenant(db, c)
 	if cate > 0 {
 		db = db.Where("cid = ?", cate)
 	}
@@ -663,10 +633,7 @@ func queryArticles(c *gin.Context, sortType string, limit, cate, exclude int, sh
 
 func IndexIndex(c *gin.Context) {
 	var page model.DecoratePage
-	db := tdb(c).Where("type = 1")
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
+	db := scopeTenant(tdb(c).Where("type = 1"), c)
 	_ = db.First(&page)
 	articles := limitArticles(c, "new", 20, 0, 0)
 	out := make([]map[string]any, 0, len(articles))

@@ -132,6 +132,8 @@ func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]stri
 	if c != nil {
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
+		} else {
+			q = q.Where("1 = 0")
 		}
 	}
 	var u model.User

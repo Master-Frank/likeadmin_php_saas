@@ -36,13 +36,15 @@ func Style(c *gin.Context) any {
 }
 
 func Lists(c *gin.Context) []map[string]any {
-	var bars []model.DecorateTabbar
-	db := tenantdb.Use(c)
-	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	out := make([]map[string]any, 0)
+	tid := ctxutil.Get(c).TenantID
+	if tid == 0 {
+		return out
 	}
+	var bars []model.DecorateTabbar
+	db := tenantdb.Use(c).Where("tenant_id = ?", tid)
 	db.Order("id asc").Find(&bars)
-	out := make([]map[string]any, 0, len(bars))
+	out = make([]map[string]any, 0, len(bars))
 	for _, b := range bars {
 		item := map[string]any{
 			"id": b.ID, "name": b.Name, "tenant_id": b.TenantID, "is_show": b.IsShow,

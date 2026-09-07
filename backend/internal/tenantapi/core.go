@@ -56,11 +56,7 @@ func LoginAccount(c *gin.Context) {
 			return
 		}
 	}
-	meta := ctxutil.Get(c)
-	q := tdb(c).Where("account = ? AND delete_time IS NULL", account)
-	if meta.TenantID > 0 {
-		q = q.Where("tenant_id = ?", meta.TenantID)
-	}
+	q := scopeTID(tdb(c).Where("account = ? AND delete_time IS NULL", account), c)
 	var admin model.TenantAdmin
 	if q.First(&admin).Error != nil {
 		response.Fail(c, "账号不存在")
@@ -160,18 +156,11 @@ func dictDataMap(d model.DictData) map[string]any {
 
 func WorkbenchIndex(c *gin.Context) {
 	now := time.Now()
-	meta := ctxutil.Get(c)
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	var todayNew, totalNew int64
-	uq := tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
-	if meta.TenantID > 0 {
-		uq = uq.Where("tenant_id = ?", meta.TenantID)
-	}
+	uq := scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
 	uq.Where("create_time >= ?", todayStart).Count(&todayNew)
-	uq = tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
-	if meta.TenantID > 0 {
-		uq = uq.Where("tenant_id = ?", meta.TenantID)
-	}
+	uq = scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
 	uq.Count(&totalNew)
 	vDates, vNums := workbench.Series(now, 15, 0, 100)
 	sDates, sNums := workbench.Series(now, 7, 30, 200)
@@ -193,10 +182,7 @@ func AdminMySelf(c *gin.Context) {
 		return
 	}
 	var menus []model.TenantSystemMenu
-	q := tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"})
-	if meta.TenantID > 0 {
-		q = q.Where("tenant_id = ?", meta.TenantID)
-	}
+	q := scopeTID(tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"}), c)
 	roleIDs, deptIDs, jobIDs := []uint{}, []uint{}, []uint{}
 	tdb(c).Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roleIDs)
 	tdb(c).Model(&model.TenantAdminDept{}).Where("admin_id = ?", admin.ID).Pluck("dept_id", &deptIDs)
@@ -242,10 +228,7 @@ func tenantBtnAuth(c *gin.Context, admin model.TenantAdmin, roleIDs []uint) []st
 }
 
 func tenantMenuPerms(c *gin.Context, menuIDs []uint, filterIDs bool) []string {
-	q := tdb(c).Model(&model.TenantSystemMenu{}).Where("is_disable = 0 AND perms <> ''")
-	if tid := tenantDB(c); tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
+	q := scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("is_disable = 0 AND perms <> ''"), c)
 	if filterIDs {
 		if len(menuIDs) == 0 {
 			return []string{}
@@ -354,11 +337,7 @@ func UserDetail(c *gin.Context) {
 		return
 	}
 	var u model.User
-	db := tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	if db.First(&u).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&u).Error != nil {
 		response.Fail(c, "用户不存在！")
 		return
 	}
@@ -393,22 +372,14 @@ func UserEdit(c *gin.Context) {
 		return
 	}
 	var user model.User
-	db := tdb(c).Where("id = ? AND delete_time IS NULL", id)
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	if db.First(&user).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&user).Error != nil {
 		response.Fail(c, "用户不存在！")
 		return
 	}
 	switch field {
 	case "account":
 		var exist model.User
-		q := tdb(c).Where("id <> ? AND account = ? AND delete_time IS NULL", id, util.ToString(value))
-		if tid := tenantDB(c); tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		if q.First(&exist).Error == nil {
+		if scopeTID(tdb(c).Where("id <> ? AND account = ? AND delete_time IS NULL", id, util.ToString(value)), c).First(&exist).Error == nil {
 			response.Fail(c, "账号已被使用")
 			return
 		}
@@ -419,11 +390,7 @@ func UserEdit(c *gin.Context) {
 			return
 		}
 		var exist model.User
-		q := tdb(c).Where("id <> ? AND mobile = ? AND delete_time IS NULL", id, mobile)
-		if tid := tenantDB(c); tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-		if q.First(&exist).Error == nil {
+		if scopeTID(tdb(c).Where("id <> ? AND mobile = ? AND delete_time IS NULL", id, mobile), c).First(&exist).Error == nil {
 			response.Fail(c, "手机号码已存在")
 			return
 		}
@@ -662,11 +629,13 @@ func ArticleCateDelete(c *gin.Context) {
 }
 
 func ArticleCateAll(c *gin.Context) {
-	var rows []model.ArticleCate
-	db := tdb(c).Where("delete_time IS NULL AND is_show = 1")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, []any{})
+		return
 	}
+	var rows []model.ArticleCate
+	db := tdb(c).Where("delete_time IS NULL AND is_show = 1 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
@@ -712,11 +681,7 @@ func decoratePayload(c *gin.Context, key string) string {
 
 func DecoratePageDetail(c *gin.Context) {
 	var p model.DecoratePage
-	db := tdb(c).Where("type = ?", httpx.Int(c, "type"))
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
-	}
-	if db.First(&p).Error != nil {
+	if scopeTID(tdb(c).Where("type = ?", httpx.Int(c, "type")), c).First(&p).Error != nil {
 		// PHP findOrEmpty()->toArray() on a missing model is [].
 		response.Success(c, "获取成功", []any{})
 		return

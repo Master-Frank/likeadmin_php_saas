@@ -37,9 +37,7 @@ func Get(c *gin.Context, typ, name string, defaultValue any) any {
 	if usePlatform {
 		err = bootstrap.DB.Where("type = ? AND name = ?", typ, name).Model(&model.ConfigRow{}).Select("value").Scan(&value).Error
 	} else {
-		if meta.TenantID > 0 {
-			query = query.Where("tenant_id = ?", meta.TenantID)
-		}
+		query = query.Where("tenant_id = ?", meta.TenantID)
 		err = query.Model(&model.TenantConfig{}).Select("value").Scan(&value).Error
 	}
 	if err != nil || value == "" {
@@ -111,10 +109,7 @@ func Set(c *gin.Context, typ, name string, value any) any {
 		return raw
 	}
 	var row model.TenantConfig
-	q := db(c).Where("type = ? AND name = ?", typ, name)
-	if meta.TenantID > 0 {
-		q = q.Where("tenant_id = ?", meta.TenantID)
-	}
+	q := db(c).Where("type = ? AND name = ? AND tenant_id = ?", typ, name, meta.TenantID)
 	err := q.First(&row).Error
 	if err != nil {
 		db(c).Create(&model.TenantConfig{Type: typ, Name: name, Value: s, TenantID: meta.TenantID, CreateTime: now})

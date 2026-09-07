@@ -117,20 +117,15 @@ func loadNoticeSMS(c *gin.Context, scene int) map[string]any {
 	if db == nil {
 		db = bootstrap.DB
 	}
-	q := db.Model(&model.TenantNoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice")
+	tid := uint(0)
 	if c != nil {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
+		tid = ctxutil.Get(c).TenantID
 	}
-	if q.Scan(&raw).Error != nil || raw == "" {
-		tid := uint(0)
-		if c != nil {
-			tid = ctxutil.Get(c).TenantID
-		}
-		if tid == 0 {
-			bootstrap.DB.Model(&model.NoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice").Scan(&raw)
-		}
+	if tid > 0 {
+		q := db.Model(&model.TenantNoticeSetting{}).Where("scene_id = ? AND tenant_id = ?", scene, tid).Select("sms_notice")
+		_ = q.Scan(&raw).Error
+	} else {
+		bootstrap.DB.Model(&model.NoticeSetting{}).Where("scene_id = ?", scene).Select("sms_notice").Scan(&raw)
 	}
 	if raw == "" {
 		return map[string]any{}

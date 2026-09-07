@@ -195,7 +195,7 @@ func scopeSmsTenant(c *gin.Context, q *gorm.DB) *gorm.DB {
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		return q.Where("tenant_id = ?", tid)
 	}
-	return q
+	return q.Where("1 = 0")
 }
 
 func createSMSLog(c *gin.Context, scene int, mobile, code, content string, now int64) uint {

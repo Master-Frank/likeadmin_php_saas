@@ -14,10 +14,10 @@ import (
 
 func FileLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantFile{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.TenantFile{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
@@ -91,10 +91,10 @@ func FileDelete(c *gin.Context) {
 
 func FileListCate(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.TenantFileCate{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.TenantFileCate{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
@@ -112,6 +112,10 @@ func FileAddCate(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileAddCateCheck(p); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	if _, ok := requireTenant(c); !ok {
+		response.Fail(c, "参数缺失")
 		return
 	}
 	row := model.TenantFileCate{
