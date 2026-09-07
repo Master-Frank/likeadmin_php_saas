@@ -150,7 +150,7 @@ func TestNaming(t *testing.T) {
 	}
 }
 
-func TestWriteModuleSkipsPHP(t *testing.T) {
+func TestWriteModuleWritesPHP(t *testing.T) {
 	tbl, cols := sampleTable()
 	tbl.GenerateType = 1
 	files := Build(tbl, cols)
@@ -160,8 +160,13 @@ func TestWriteModuleSkipsPHP(t *testing.T) {
 		dest := moduleDest(c, "/tmp/admin", f)
 		if strings.HasSuffix(f.Name, ".php") {
 			php++
-			if dest != "" {
-				t.Fatalf("php should be skipped: %s -> %s", f.Name, dest)
+			if dest == "" {
+				t.Fatalf("php should be written: %s", f.Name)
+			}
+			inModule := strings.Contains(dest, filepath.Join("app", c.module))
+			inModel := strings.Contains(dest, filepath.Join("app", "common", "model"))
+			if !inModule && !inModel {
+				t.Fatalf("php dest unexpected: %s -> %s", f.Name, dest)
 			}
 		}
 		if strings.HasSuffix(f.Name, ".ts") || strings.HasSuffix(f.Name, ".vue") || f.Name == "menu.sql" {

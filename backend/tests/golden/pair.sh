@@ -2633,9 +2633,11 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     fi
     php_ctrl="/workspace/server/app/platform/controller/PairGencrudController.php"
     go_meta="/workspace/backend/internal/generated/platform_pair_gencrud.go"
-    if [[ -f "$php_ctrl" ]]; then
-      echo "gencrud_php_written $php_ctrl"
+    if [[ ! -f "$php_ctrl" ]]; then
+      echo "gencrud_php_missing $php_ctrl"
       fail=$((fail + 1))
+    else
+      echo "gencrud_php_written ok"
     fi
     if [[ ! -f "$go_meta" ]]; then
       echo "gencrud_go_missing $go_meta"
