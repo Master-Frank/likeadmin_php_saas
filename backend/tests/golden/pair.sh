@@ -645,6 +645,13 @@ print(json.dumps({"id": data.get("id"), "type": data.get("type") or 1, "data": d
   go_ps="$(curl -sS -X POST "$GO/tenantapi/decorate.page/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$save_page")"
   php_pd="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "decorate_page_save go_code=$(jcode <<<"$go_ps") php_detail=$(jcode <<<"$php_pd")"
+  page_id="$(python3 -c 'import json,sys; print((json.loads(sys.stdin.read()) or {}).get("id") or 0)' <<<"$save_page")"
+  go_ds="$(curl -sS -X POST "$GO/tenantapi/decorate.page/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$page_id,\"data\":[]}")"
+  echo "decorate_page_type go_msg=$(jget msg <<<"$go_ds")"
+  if [[ "$(jget msg <<<"$go_ds")" != *装修类型参数缺失* ]]; then
+    echo "  go_ds=${go_ds:0:200}"
+    fail=$((fail + 1))
+  fi
   if [[ "$(jcode <<<"$go_ps")" != "1" || "$(jcode <<<"$php_pd")" != "1" ]]; then
     echo "  go_ps=${go_ps:0:300}"
     fail=$((fail + 1))
@@ -755,6 +762,18 @@ print(walk((d.get("data") or {}).get("lists") or []))
   go_fn="$(curl -sS -X POST "$GO/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":0}')"
   echo "file_cate_name php_msg=$(jget msg <<<"$php_fn") go_msg=$(jget msg <<<"$go_fn")"
   if [[ "$(jget msg <<<"$php_fn")" != "$(jget msg <<<"$go_fn")" ]]; then
+    fail=$((fail + 1))
+  fi
+  go_fpid="$(curl -sS -X POST "$GO/tenantapi/file/addCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"type":10,"pid":99999999,"name":"pairfkcate"}')"
+  echo "file_cate_parent go_msg=$(jget msg <<<"$go_fpid")"
+  if [[ "$(jget msg <<<"$go_fpid")" != *父级分类不存在* ]]; then
+    echo "  go_fpid=${go_fpid:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_pfm="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[1],"cid":99999999}')"
+  echo "platform_file_move go_msg=$(jget msg <<<"$go_pfm")"
+  if [[ "$(jget msg <<<"$go_pfm")" != *文件分类不存在* ]]; then
+    echo "  go_pfm=${go_pfm:0:200}"
     fail=$((fail + 1))
   fi
 
@@ -1269,6 +1288,12 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     go_bm="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     echo "bind_mobile_bad php_msg=$(jget msg <<<"$php_bm") go_msg=$(jget msg <<<"$go_bm")"
     if [[ "$(jget msg <<<"$php_bm")" != "$(jget msg <<<"$go_bm")" ]]; then
+      fail=$((fail + 1))
+    fi
+    go_bm2="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"1234","mobile":"123"}')"
+    echo "bind_mobile_format go_msg=$(jget msg <<<"$go_bm2")"
+    if [[ "$(jget msg <<<"$go_bm2")" != *请输入正确手机号* ]]; then
+      echo "  go_bm2=${go_bm2:0:200}"
       fail=$((fail + 1))
     fi
     php_si="$(curl -sS -X POST "$PHP/api/user/setInfo" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"field":"nickname","value":""}')"

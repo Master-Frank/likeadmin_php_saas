@@ -39,6 +39,16 @@ func TestSendVerifyWithoutDB(t *testing.T) {
 	}
 }
 
+func TestMergeNoticeParamsEmpty(t *testing.T) {
+	got := mergeNoticeParams(nil, map[string]string{"code": "1234", "mobile": "13800000000"})
+	if got["code"] != "1234" || got["mobile"] != "13800000000" {
+		t.Fatalf("%+v", got)
+	}
+	if got["nickname"] != "" {
+		t.Fatalf("no user should not enrich %+v", got)
+	}
+}
+
 func TestNoticeBySceneMissing(t *testing.T) {
 	if err := NoticeByScene(nil, 0, nil); err == nil || err.Error() != "找不到对应场景的配置" {
 		t.Fatalf("%v", err)

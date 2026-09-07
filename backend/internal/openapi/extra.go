@@ -441,6 +441,14 @@ func UserBindMobile(c *gin.Context) {
 	}
 	u := currentUser(c)
 	mobile := httpx.Str(c, "mobile")
+	if msg := util.ValidChinaMobile(mobile); msg != "" {
+		if mobile == "" {
+			response.Fail(c, "请输入手机号")
+			return
+		}
+		response.Fail(c, "请输入正确手机号")
+		return
+	}
 	code := httpx.Str(c, "code")
 	typ := httpx.Str(c, "type")
 	scene := "BGSJHM"

@@ -47,6 +47,13 @@ func FileMove(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	if cid := httpx.Uint(c, "cid"); cid > 0 {
+		var cate model.FileCate
+		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", cid).First(&cate).Error != nil {
+			response.Fail(c, "文件分类不存在")
+			return
+		}
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "update_time": now,
@@ -106,6 +113,13 @@ func FileAddCate(c *gin.Context) {
 	if msg := util.FileAddCateCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
+	}
+	if pid := httpx.Uint(c, "pid"); pid > 0 {
+		var parent model.FileCate
+		if bootstrap.DB.Where("id = ? AND delete_time IS NULL", pid).First(&parent).Error != nil {
+			response.Fail(c, "父级分类不存在")
+			return
+		}
 	}
 	row := model.FileCate{Type: httpx.Int(c, "type"), Pid: httpx.Uint(c, "pid"), Name: httpx.Str(c, "name"), CreateTime: util.NowUnix()}
 	bootstrap.DB.Create(&row)

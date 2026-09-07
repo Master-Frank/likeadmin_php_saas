@@ -15,14 +15,15 @@ import (
 
 const sendTypeSMS = 2
 
-func addNoticeRecord(c *gin.Context, scene int, mobile, code string, tid uint) {
+func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid uint) {
 	if bootstrap.DB == nil {
 		return
 	}
+	if params == nil {
+		params = map[string]string{}
+	}
 	recipient, noticeType, smsNotice := loadNoticeMeta(c, scene)
-	content := formatContent(util.ToString(smsNotice["content"]), map[string]string{
-		"code": code, "mobile": mobile,
-	})
+	content := formatContent(util.ToString(smsNotice["content"]), params)
 	userID := uint(0)
 	if c != nil {
 		userID = ctxutil.Get(c).UserID
@@ -75,6 +76,7 @@ func findNoticeSetting(c *gin.Context, scene int) (found bool, recipient, notice
 		if q.First(&row).Error == nil {
 			return true, row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice)
 		}
+		return false, recipient, noticeType, sms
 	}
 	var row model.NoticeSetting
 	if bootstrap.DB.Where("scene_id = ?", scene).First(&row).Error == nil {
@@ -98,15 +100,57 @@ func NoticeByScene(c *gin.Context, sceneID int, params map[string]string) error 
 	if params == nil {
 		params = map[string]string{}
 	}
+	params = mergeNoticeParams(c, params)
 	tid := uint(0)
 	if c != nil {
 		tid = ctxutil.Get(c).TenantID
 	}
-	addNoticeRecord(c, sceneID, params["mobile"], params["code"], tid)
+	addNoticeRecord(c, sceneID, params, tid)
 	if err := maybeGatewaySend(c, params["mobile"], sceneID, params["code"], 0); err != nil {
 		return err
 	}
 	return nil
+}
+
+func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range params {
+		out[k] = v
+	}
+	uid := uint(util.ToInt(out["user_id"]))
+	if uid == 0 && c != nil {
+		uid = ctxutil.Get(c).UserID
+	}
+	if uid == 0 || bootstrap.DB == nil {
+		return out
+	}
+	db := tenantdb.Use(c)
+	if db == nil {
+		db = bootstrap.DB
+	}
+	q := db.Where("id = ? AND delete_time IS NULL", uid)
+	if c != nil {
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+	}
+	var u model.User
+	if q.First(&u).Error != nil {
+		return out
+	}
+	if out["nickname"] == "" {
+		out["nickname"] = u.Nickname
+	}
+	if out["user_name"] == "" {
+		out["user_name"] = u.Nickname
+	}
+	if out["user_sn"] == "" {
+		out["user_sn"] = util.ToString(u.SN)
+	}
+	if out["mobile"] == "" {
+		out["mobile"] = u.Mobile
+	}
+	return out
 }
 
 func decodeNoticeJSON(raw string) map[string]any {

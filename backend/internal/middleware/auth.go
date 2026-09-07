@@ -110,7 +110,10 @@ func handlePlatformLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string
 		return
 	}
 	if info != nil && len(info) > 0 {
-		renewIfNeed(c, "platform", token, info, config.C.Project.AdminToken)
+		if !renewIfNeed(c, "platform", token, info, config.C.Project.AdminToken) {
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			return
+		}
 		meta.AdminInfo = info
 		meta.AdminID = uint(util.ToInt(info["admin_id"]))
 	}
@@ -136,7 +139,10 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 			response.AbortFail(c, "非该站点成员禁止访问", response.CodeLoginExpire, 1)
 			return
 		}
-		renewIfNeed(c, "tenant", token, info, config.C.Project.AdminToken)
+		if !renewIfNeed(c, "tenant", token, info, config.C.Project.AdminToken) {
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			return
+		}
 		meta.AdminInfo = info
 		meta.AdminID = uint(util.ToInt(info["admin_id"]))
 	}
@@ -162,34 +168,47 @@ func handleUserLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, ne
 			response.AbortFail(c, "非该站点用户禁止访问", response.CodeLoginExpire, 1)
 			return
 		}
-		renewIfNeed(c, "user", token, info, config.C.Project.UserToken)
+		if !renewIfNeed(c, "user", token, info, config.C.Project.UserToken) {
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			return
+		}
 		meta.UserInfo = info
 		meta.UserID = uint(util.ToInt(info["user_id"]))
 	}
 	c.Next()
 }
 
-func renewIfNeed(c *gin.Context, kind, token string, info map[string]any, cfg config.TokenConfig) {
+func renewIfNeed(c *gin.Context, kind, token string, info map[string]any, cfg config.TokenConfig) bool {
 	expire := int64(util.ToInt(info["expire_time"]))
 	if expire <= 0 {
-		return
+		return true
 	}
 	if util.NowUnix() <= expire-int64(cfg.BeExpireDuration) {
-		return
+		return true
 	}
 	now := util.NowUnix()
 	newExpire := now + int64(cfg.ExpireDuration)
 	switch kind {
 	case "platform":
-		bootstrap.DB.Model(&model.AdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
-		cache.SetAdminInfo(token, ctxutil.ClientIP(c))
+		res := bootstrap.DB.Model(&model.AdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
+		if res.RowsAffected == 0 {
+			return false
+		}
+		return cache.SetAdminInfo(token, ctxutil.ClientIP(c)) != nil
 	case "tenant":
-		tenantdb.Use(c).Model(&model.TenantAdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
-		cache.SetTenantAdminInfo(token, ctxutil.ClientIP(c), tenantdb.Use(c))
+		res := tenantdb.Use(c).Model(&model.TenantAdminSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
+		if res.RowsAffected == 0 {
+			return false
+		}
+		return cache.SetTenantAdminInfo(token, ctxutil.ClientIP(c), tenantdb.Use(c)) != nil
 	case "user":
-		tenantdb.Use(c).Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
-		cache.SetUserInfo(token, tenantdb.Use(c))
+		res := tenantdb.Use(c).Model(&model.UserSession{}).Where("token = ?", token).Updates(map[string]any{"expire_time": newExpire, "update_time": now})
+		if res.RowsAffected == 0 {
+			return false
+		}
+		return cache.SetUserInfo(token, tenantdb.Use(c)) != nil
 	}
+	return true
 }
 
 // rejectWrongTenant matches PHP LoginMiddleware: only required-login

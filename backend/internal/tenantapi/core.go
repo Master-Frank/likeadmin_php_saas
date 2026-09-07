@@ -703,7 +703,7 @@ func DecoratePageSave(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if httpx.Str(c, "type") == "" && httpx.Int(c, "type") == 0 && httpx.Any(c, "type") == nil {
+	if _, ok := httpx.Params(c)["type"]; !ok || httpx.Int(c, "type") == 0 {
 		response.Fail(c, "装修类型参数缺失")
 		return
 	}

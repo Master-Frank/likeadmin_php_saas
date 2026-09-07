@@ -100,7 +100,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 		}
 		_ = bootstrap.DB.Create(&row).Error
 		logID = row.ID
-		addNoticeRecord(c, scene, mobile, code, tid)
+		addNoticeRecord(c, scene, map[string]string{"code": code, "mobile": mobile}, tid)
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
 	if err := maybeGatewaySend(c, mobile, scene, code, logID); err != nil {
