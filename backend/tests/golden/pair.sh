@@ -4492,6 +4492,7 @@ print(first_id(ls))')"
   pair_detail_msg user_detail_id0 "/tenantapi/user.user/detail?id=0"
   pair_detail_msg tenantuser_detail_id0 "/platformapi/tenant.tenantUser/detail?id=0&tenant_id=1"
   pair_detail_msg generator_detail_id0 "/platformapi/tools.generator/detail?id=0"
+  pair_detail_msg tenantadmin_detail_id0 "/platformapi/tenant.tenantAdmin/detail?id=0"
   pair_post_msg() {
     local name="$1" path="$2" body="$3"
     local extra=()
@@ -4523,6 +4524,11 @@ print(first_id(ls))')"
   pair_post_msg tenant_menu_status_id0 "/tenantapi/auth.menu/updateStatus" '{"id":0,"is_disable":1}'
   pair_post_msg platform_menu_edit_missing "/platformapi/auth.menu/edit" '{"id":99999999,"pid":0,"type":"C","name":"pairmissedit","sort":0,"is_cache":0,"is_show":1,"is_disable":0}'
   pair_post_msg tenant_menu_edit_missing "/tenantapi/auth.menu/edit" '{"id":99999999,"pid":0,"type":"C","name":"pairmissedit","sort":0,"is_cache":0,"is_show":1,"is_disable":0}'
+  pair_post_msg api_login_terminal0 "/api/login/account" '{"account":"x","password":"x","terminal":0,"scene":1}'
+  pair_post_msg api_login_scene0 "/api/login/account" '{"account":"x","password":"x","terminal":1,"scene":0}'
+  pair_post_msg api_register_channel0 "/api/login/register" '{"channel":0}'
+  pair_post_msg article_add_cid0 "/tenantapi/article.article/add" '{"title":"x","cid":0}'
+  pair_post_msg tenantadmin_edit_id0 "/platformapi/tenant.tenantAdmin/edit" '{"id":0,"name":"x"}'
   pair_post_msg dict_type_delete_id0 "/platformapi/setting.dict.dict_type/delete" '{"id":0}'
   pair_post_msg dict_data_delete_id0 "/platformapi/setting.dict.dict_data/delete" '{"id":0}'
   pair_post_msg crontab_delete_id0 "/platformapi/crontab.crontab/delete" '{"id":0}'

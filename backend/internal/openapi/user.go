@@ -127,7 +127,7 @@ func LoginRegister(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyAny(c, "channel") == nil || httpx.BodyInt(c, "channel") == 0 {
+	if !httpx.BodyPresent(c, "channel") {
 		response.Fail(c, "注册来源参数缺失")
 		return
 	}
@@ -181,20 +181,20 @@ func LoginAccount(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	terminal := httpx.BodyInt(c, "terminal")
-	if terminal == 0 {
+	if !httpx.BodyPresent(c, "terminal") {
 		response.Fail(c, "终端参数缺失")
 		return
 	}
+	terminal := httpx.BodyInt(c, "terminal")
 	if terminal < 1 || terminal > 6 {
 		response.Fail(c, "终端参数状态值不正确")
 		return
 	}
-	scene := httpx.BodyInt(c, "scene")
-	if scene == 0 {
+	if !httpx.BodyPresent(c, "scene") {
 		response.Fail(c, "场景不能为空")
 		return
 	}
+	scene := httpx.BodyInt(c, "scene")
 	if scene != 1 && scene != 2 {
 		response.Fail(c, "场景值错误")
 		return

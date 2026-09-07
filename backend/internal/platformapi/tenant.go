@@ -372,10 +372,21 @@ func TenantAdminLists(c *gin.Context) {
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
+func tenantAdminIDExists(id uint) bool {
+	var a model.TenantAdmin
+	return bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error == nil
+}
+
 func TenantAdminDetail(c *gin.Context) {
 	p := httpx.Query(c)
 	if !phpRequiredParam(p, "id") {
 		response.Fail(c, "请选择用户")
+		return
+	}
+	// PHP sceneDetail is id.require|checkUser then tenant_id.require;
+	// ThinkPHP require treats 0 as present, so id=0 hits checkUser first.
+	if !tenantAdminIDExists(httpx.QueryUint(c, "id")) {
+		response.Fail(c, "租户管理员不存在")
 		return
 	}
 	if !phpRequiredParam(p, "tenant_id") {
@@ -458,6 +469,14 @@ func TenantAdminEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
+	if !phpRequiredParam(p, "id") {
+		response.Fail(c, "请选择用户")
+		return
+	}
+	if !tenantAdminIDExists(httpx.BodyUint(c, "id")) {
+		response.Fail(c, "租户管理员不存在")
+		return
+	}
 	if msg := util.TenantAdminEditCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return

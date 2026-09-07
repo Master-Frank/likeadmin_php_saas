@@ -493,7 +493,7 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if len([]rune(httpx.BodyStr(c, "title"))) > 255 {
 		return "标题长度须在1-255位字符"
 	}
-	if httpx.BodyUint(c, "cid") == 0 {
+	if !httpx.BodyPresent(c, "cid") {
 		return "所属栏目必须存在"
 	}
 	// PHP ArticleValidate: is_show require|in:0,1 with no custom messages.
