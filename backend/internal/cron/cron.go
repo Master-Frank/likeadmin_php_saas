@@ -47,24 +47,29 @@ func RunOnce() {
 		}
 		start := time.Now()
 		errMsg := runCommand(item)
-		elapsed := time.Since(start).Seconds()
-		maxTime := elapsed
-		if prev := util.ToFloat(item.MaxTime); prev > maxTime {
-			maxTime = prev
-		}
-		updates := map[string]any{
-			"last_time": now,
-			"time":      fmt.Sprintf("%.2f", elapsed),
-			"max_time":  fmt.Sprintf("%.2f", maxTime),
-			"error":     errMsg,
-		}
-		if errMsg != "" {
-			updates["status"] = 3
-		} else {
-			updates["error"] = ""
-		}
-		bootstrap.DB.Model(&item).Updates(updates)
+		// PHP Crontab::start finally writes last_time = time() after the job.
+		bootstrap.DB.Model(&item).Updates(crontabFinishUpdates(item, start, errMsg))
 	}
+}
+
+// crontabFinishUpdates mirrors PHP Crontab::start finally block.
+func crontabFinishUpdates(item model.Crontab, start time.Time, errMsg string) map[string]any {
+	elapsed := time.Since(start).Seconds()
+	maxTime := elapsed
+	if prev := util.ToFloat(item.MaxTime); prev > maxTime {
+		maxTime = prev
+	}
+	updates := map[string]any{
+		"last_time": util.NowUnix(),
+		"time":      fmt.Sprintf("%.2f", elapsed),
+		"max_time":  fmt.Sprintf("%.2f", maxTime),
+		"error":     "",
+	}
+	if errMsg != "" {
+		updates["error"] = errMsg
+		updates["status"] = 3
+	}
+	return updates
 }
 
 func due(item model.Crontab, now int64) bool {

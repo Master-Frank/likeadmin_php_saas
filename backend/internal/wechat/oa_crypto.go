@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type encryptedEnvelope struct {
@@ -119,7 +121,7 @@ func EncryptedReplyXML(token, aesKey, appID, timestamp, nonce, xmlBody string) (
 		return "", err
 	}
 	if timestamp == "" {
-		timestamp = fmt.Sprintf("%d", 0)
+		timestamp = strconv.FormatInt(time.Now().Unix(), 10)
 	}
 	sig := OAMsgSignature(token, timestamp, nonce, enc)
 	return fmt.Sprintf(`<xml><Encrypt><![CDATA[%s]]></Encrypt><MsgSignature><![CDATA[%s]]></MsgSignature><TimeStamp>%s</TimeStamp><Nonce><![CDATA[%s]]></Nonce></xml>`,

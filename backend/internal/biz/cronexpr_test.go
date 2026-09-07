@@ -31,6 +31,26 @@ func TestParseCronHourly(t *testing.T) {
 	}
 }
 
+func TestParseCronQuestionMark(t *testing.T) {
+	dow, err := ParseCron("0 0 * * ?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dow.dowStar || !dow.Match(time.Date(2026, 9, 8, 0, 0, 0, 0, time.Local)) {
+		t.Fatal("0 0 * * ? should match midnight any weekday")
+	}
+	dom, err := ParseCron("0 0 ? * 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dom.domStar || !dom.Match(time.Date(2026, 9, 7, 0, 0, 0, 0, time.Local)) { // Monday
+		t.Fatal("0 0 ? * 1 should match Monday midnight")
+	}
+	if ValidCron("0 0 ? * ?") || ValidCron("? * * * *") || ValidCron("0 ? * * *") {
+		t.Fatal("invalid ? placements accepted")
+	}
+}
+
 func TestParseCronInvalid(t *testing.T) {
 	if ValidCron("foo") || ValidCron("* * *") || ValidCron("") {
 		t.Fatal("expected invalid")

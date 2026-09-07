@@ -166,6 +166,25 @@ func TestParsePayNotify(t *testing.T) {
 	}
 }
 
+func TestEncryptedReplyXMLUsesNowTimestamp(t *testing.T) {
+	rawKey := make([]byte, 32)
+	for i := range rawKey {
+		rawKey[i] = byte(i + 3)
+	}
+	aesKey := strings.TrimRight(base64.StdEncoding.EncodeToString(rawKey), "=")
+	xmlBody := TextReplyXML("user", "oa", "hi")
+	out, err := EncryptedReplyXML("token", aesKey, "wxappid", "", "nonce", xmlBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "<TimeStamp>0</TimeStamp>") {
+		t.Fatal("empty timestamp must not stay 0")
+	}
+	if !strings.Contains(out, "<TimeStamp>") || !strings.Contains(out, "<Nonce><![CDATA[nonce]]></Nonce>") {
+		t.Fatalf("envelope %s", out)
+	}
+}
+
 func TestTextReplyXML(t *testing.T) {
 	s := TextReplyXML("user", "oa", "hi")
 	if !containsAll(s, "user", "oa", "hi", "text") {

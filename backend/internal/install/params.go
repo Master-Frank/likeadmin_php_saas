@@ -93,17 +93,8 @@ func importDemo(db *gorm.DB, publicDir, prefix, dbName string) error {
 	if err != nil {
 		return fmt.Errorf("导入测试数据错误")
 	}
-	content := strings.ReplaceAll(string(raw), ";\r\n", ";\n")
-	for _, stmt := range strings.Split(content, ";\n") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		stmt = strings.ReplaceAll(stmt, "`la_", dbName+".`la_")
-		stmt = strings.ReplaceAll(stmt, "`la_", "`"+prefix)
-		if err := db.Exec(stmt).Error; err != nil {
-			return fmt.Errorf("导入测试数据错误")
-		}
+	if _, err := ImportSQL(db, string(raw), prefix, dbName); err != nil {
+		return fmt.Errorf("导入测试数据错误")
 	}
 	from := filepath.Join(filepath.Dir(path), "..", "uploads")
 	to := filepath.Join(publicDir, "uploads")

@@ -13,6 +13,14 @@ func TestSplitSQL(t *testing.T) {
 	}
 }
 
+func TestSplitSQLSkipsComments(t *testing.T) {
+	raw := "-- demo dump;\nCREATE TABLE `la_foo` (`id` int);\nINSERT INTO `la_foo` VALUES (1);\n"
+	got := SplitSQL(raw)
+	if len(got) != 2 {
+		t.Fatalf("got %d %#v", len(got), got)
+	}
+}
+
 func TestQualifyInstallSQL(t *testing.T) {
 	stmt := "CREATE TABLE `la_foo` (`id` int)"
 	got := qualifyInstallSQL(stmt, "likeadmin", "xx_")

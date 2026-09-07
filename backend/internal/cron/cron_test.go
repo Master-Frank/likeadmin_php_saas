@@ -33,6 +33,22 @@ func TestRunCommandUnknown(t *testing.T) {
 	}
 }
 
+func TestCrontabFinishUpdatesLastTimeAfterRun(t *testing.T) {
+	start := time.Now().Add(-1500 * time.Millisecond)
+	got := crontabFinishUpdates(model.Crontab{MaxTime: "0.10"}, start, "")
+	last, _ := got["last_time"].(int64)
+	if last < time.Now().Unix()-1 {
+		t.Fatalf("last_time=%v should be now, not loop-start", got["last_time"])
+	}
+	if got["error"] != "" || got["status"] != nil {
+		t.Fatalf("ok run %+v", got)
+	}
+	fail := crontabFinishUpdates(model.Crontab{}, time.Now(), "boom")
+	if fail["error"] != "boom" || fail["status"] != 3 {
+		t.Fatalf("err run %+v", fail)
+	}
+}
+
 func TestEnsureNativeJobsNilDB(t *testing.T) {
 	EnsureNativeJobs()
 }

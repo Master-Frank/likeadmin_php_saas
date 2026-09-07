@@ -18,6 +18,21 @@ func ParseCron(expr string) (*CronExpr, error) {
 	if len(parts) != 5 {
 		return nil, fmt.Errorf("定时任务运行规则错误")
 	}
+	// dragonmantank CronExpression: ? is only valid on DOM or DOW, and not both.
+	if parts[0] == "?" || parts[1] == "?" || parts[3] == "?" {
+		return nil, fmt.Errorf("定时任务运行规则错误")
+	}
+	if parts[2] == "?" && parts[4] == "?" {
+		return nil, fmt.Errorf("定时任务运行规则错误")
+	}
+	domStar := parts[2] == "*" || parts[2] == "?"
+	dowStar := parts[4] == "*" || parts[4] == "?"
+	if parts[2] == "?" {
+		parts[2] = "*"
+	}
+	if parts[4] == "?" {
+		parts[4] = "*"
+	}
 	min, err := parseCronField(parts[0], 0, 59)
 	if err != nil {
 		return nil, err
@@ -51,7 +66,7 @@ func ParseCron(expr string) (*CronExpr, error) {
 	}
 	return &CronExpr{
 		min: min, hour: hour, dom: dom, month: month, dow: norm,
-		domStar: parts[2] == "*", dowStar: parts[4] == "*",
+		domStar: domStar, dowStar: dowStar,
 	}, nil
 }
 
