@@ -91,7 +91,8 @@ func AliVerifyNotifyByTenant(tenantID uint, form map[string][]string) bool {
 	cfg := AliCfgByTenant(tenantID)
 	pub := resolveAliPublicKey(cfg)
 	if pub == nil {
-		return true
+		// PHP AliPayService::notify always verifyNotify(); missing public key fails.
+		return false
 	}
 	sign := firstForm(form, "sign")
 	if sign == "" {

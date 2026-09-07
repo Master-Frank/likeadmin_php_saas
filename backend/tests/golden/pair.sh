@@ -307,6 +307,15 @@ if [[ -n "$TENANT_HOST" ]]; then
     echo "  go_login=$go_ul"
     fail=$((fail + 1))
   fi
+  sms_unknown='{"account":"13900009999","code":"0000","terminal":3,"scene":2}'
+  php_smu="$(curl -sS -X POST "$PHP/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$sms_unknown")"
+  go_smu="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$sms_unknown")"
+  echo "sms_login_unknown php_msg=$(jget msg <<<"$php_smu") go_msg=$(jget msg <<<"$go_smu")"
+  if [[ "$(jget msg <<<"$php_smu")" != "$(jget msg <<<"$go_smu")" ]]; then
+    echo "  php_smu=${php_smu:0:200}"
+    echo "  go_smu=${go_smu:0:200}"
+    fail=$((fail + 1))
+  fi
   UT="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_ul")"
   if [[ -n "$UT" ]] && command -v mysql >/dev/null; then
     sess_tid="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT tenant_id FROM la_user_session WHERE token='$UT'" 2>/dev/null)"
@@ -437,6 +446,23 @@ print((ls[0] if ls else {}).get("id") or 0)
         fail=$((fail + 1))
       fi
       mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND tenant_id=999 AND create_time=$now"
+      php_c0="$(curl -sS -X POST "$PHP/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+      go_c0="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+      echo "collect_empty_id php_code=$(jcode <<<"$php_c0") go_code=$(jcode <<<"$go_c0") php_msg=$(jget msg <<<"$php_c0") go_msg=$(jget msg <<<"$go_c0")"
+      if [[ "$(jcode <<<"$php_c0")" != "$(jcode <<<"$go_c0")" || "$(jget msg <<<"$php_c0")" != "$(jget msg <<<"$go_c0")" ]]; then
+        echo "  php_c0=${php_c0:0:200}"
+        echo "  go_c0=${go_c0:0:200}"
+        fail=$((fail + 1))
+      fi
+      php_cmiss="$(curl -sS -X POST "$PHP/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":999999}')"
+      go_cmiss="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"id":999999}')"
+      echo "collect_missing_id php_code=$(jcode <<<"$php_cmiss") go_code=$(jcode <<<"$go_cmiss") php_msg=$(jget msg <<<"$php_cmiss") go_msg=$(jget msg <<<"$go_cmiss")"
+      if [[ "$(jcode <<<"$php_cmiss")" != "$(jcode <<<"$go_cmiss")" || "$(jget msg <<<"$php_cmiss")" != "$(jget msg <<<"$go_cmiss")" ]]; then
+        echo "  php_cmiss=${php_cmiss:0:200}"
+        echo "  go_cmiss=${go_cmiss:0:200}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "DELETE FROM la_article_collect WHERE user_id=$uid AND article_id IN (0,999999)"
     fi
     php_xt="$(curl -sS "$PHP/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
     go_xt="$(curl -sS "$GO/api/article/detail?id=1" -H "Host: ${SHARD_HOST:-pair2.likeadmin.test}" -H "token: $UT")"
@@ -1571,10 +1597,23 @@ print(json.dumps({
       echo "  go_pucid=${go_pucid:0:200}"
       fail=$((fail + 1))
     fi
+    php_aucid="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
     go_aucid="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
-    echo "api_file_upload_cid_missing go_msg=$(jget msg <<<"$go_aucid")"
-    if [[ "$(jget msg <<<"$go_aucid")" != *文件分类不存在* ]]; then
+    echo "api_file_upload_cid_ignored php_msg=$(jget msg <<<"$php_aucid") go_msg=$(jget msg <<<"$go_aucid")"
+    if [[ "$(jget msg <<<"$php_aucid")" != "$(jget msg <<<"$go_aucid")" ]]; then
+      echo "  php_aucid=${php_aucid:0:200}"
       echo "  go_aucid=${go_aucid:0:200}"
+      fail=$((fail + 1))
+    fi
+    python3 -c 'import pathlib; pathlib.Path("/tmp/likeadmin-pair.png").write_bytes(bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c49444154789c63f80f00000101000518d84e0000000049454e44ae426082"))'
+    php_upcid="$(curl -sS -X POST "$PHP/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT" -F "file=@/tmp/likeadmin-pair.png" -F "cid=1")"
+    go_upcid="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT" -F "file=@/tmp/likeadmin-pair.png" -F "cid=1")"
+    php_upcid_v="$(jget data.cid <<<"$php_upcid")"
+    go_upcid_v="$(jget data.cid <<<"$go_upcid")"
+    echo "api_upload_cid0 php_cid=$php_upcid_v go_cid=$go_upcid_v php_code=$(jcode <<<"$php_upcid") go_code=$(jcode <<<"$go_upcid")"
+    if [[ "$(jcode <<<"$php_upcid")" != "1" || "$(jcode <<<"$go_upcid")" != "1" || "$php_upcid_v" != "0" || "$go_upcid_v" != "0" ]]; then
+      echo "  php_upcid=${php_upcid:0:240}"
+      echo "  go_upcid=${go_upcid:0:240}"
       fail=$((fail + 1))
     fi
   fi
@@ -2122,6 +2161,28 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   go_pt="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(type(d.get("create_time")).__name__)' <<<"$go_pd")"
   echo "decorate_page_time php=$php_pt go=$go_pt"
   if [[ "$php_pt" != "$go_pt" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_d99="$(curl -sS "$PHP/tenantapi/decorate.page/detail?type=99" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_d99="$(curl -sS "$GO/tenantapi/decorate.page/detail?type=99" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_d99t="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__)' <<<"$php_d99")"
+  go_d99t="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__)' <<<"$go_d99")"
+  echo "decorate_page_empty php_type=$php_d99t go_type=$go_d99t php_code=$(jcode <<<"$php_d99") go_code=$(jcode <<<"$go_d99")"
+  if [[ "$php_d99t" != "$go_d99t" || "$(jcode <<<"$php_d99")" != "$(jcode <<<"$go_d99")" ]]; then
+    echo "  php_d99=${php_d99:0:200}"
+    echo "  go_d99=${go_d99:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_oa_hdr="$(curl -sS -D - -o /tmp/likeadmin-golden/php_oa_echo.txt "$PHP/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  go_oa_hdr="$(curl -sS -D - -o /tmp/likeadmin-golden/go_oa_echo.txt "$GO/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  oa_ct() { awk -F': ' 'tolower($1)=="content-type"{gsub(/ /,"",$2); print tolower($2); exit}' <<<"$1"; }
+  php_oact="$(oa_ct "$php_oa_hdr")"
+  go_oact="$(oa_ct "$go_oa_hdr")"
+  echo "oa_echo_ct php=$php_oact go=$go_oact php_body=$(head -c 40 /tmp/likeadmin-golden/php_oa_echo.txt) go_body=$(head -c 40 /tmp/likeadmin-golden/go_oa_echo.txt)"
+  if [[ "$go_oact" != "text/plain;charset=utf-8" ]]; then
+    fail=$((fail + 1))
+  fi
+  if [[ "$(head -c 20 /tmp/likeadmin-golden/php_oa_echo.txt)" == "pairabc" && "$php_oact" != "$go_oact" ]]; then
     fail=$((fail + 1))
   fi
 fi
@@ -3022,6 +3083,96 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
       fail=$((fail + 1))
     fi
   fi
+fi
+
+if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  ts="${ts:-$(date +%s)}"
+  now="$(date +%s)"
+  insert_sms() {
+    mysqlq "INSERT INTO la_tenant_sms_log (scene_id,mobile,content,code,is_verify,check_num,send_status,send_time,tenant_id,create_time) VALUES ($1,'$2','验证码$3','$3',0,0,1,$now,1,$now)"
+  }
+  if [[ -n "${UT:-}" && -n "${acc:-}" ]]; then
+    self_uid="$(mysqlq "SELECT id FROM la_user WHERE account='$acc' AND delete_time IS NULL LIMIT 1")"
+    other_uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL AND id<>IFNULL('$self_uid',0) ORDER BY id LIMIT 1")"
+    other_mobile="13800${ts: -6}"
+    if [[ -n "$self_uid" && -n "$other_uid" && "$other_uid" != "0" ]]; then
+      old_other="$(mysqlq "SELECT mobile FROM la_user WHERE id=$other_uid")"
+      old_self="$(mysqlq "SELECT mobile FROM la_user WHERE id=$self_uid")"
+      mysqlq "UPDATE la_user SET mobile='$other_mobile' WHERE id=$other_uid"
+      insert_sms 103 "$other_mobile" "2468"
+      php_bmc="$(curl -sS -X POST "$PHP/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"type\":\"change\",\"mobile\":\"$other_mobile\",\"code\":\"2468\"}")"
+      mysqlq "UPDATE la_user SET mobile='$old_self' WHERE id=$self_uid"
+      insert_sms 103 "$other_mobile" "2468"
+      go_bmc="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"type\":\"change\",\"mobile\":\"$other_mobile\",\"code\":\"2468\"}")"
+      echo "bind_change_dup php_code=$(jcode <<<"$php_bmc") go_code=$(jcode <<<"$go_bmc") php_msg=$(jget msg <<<"$php_bmc") go_msg=$(jget msg <<<"$go_bmc")"
+      if [[ "$(jcode <<<"$php_bmc")" != "1" || "$(jcode <<<"$go_bmc")" != "1" ]]; then
+        echo "  php_bmc=${php_bmc:0:200}"
+        echo "  go_bmc=${go_bmc:0:200}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "UPDATE la_user SET mobile='$old_self' WHERE id=$self_uid"
+      insert_sms 102 "$other_mobile" "1357"
+      php_bmb="$(curl -sS -X POST "$PHP/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"type\":\"bind\",\"mobile\":\"$other_mobile\",\"code\":\"1357\"}")"
+      insert_sms 102 "$other_mobile" "1357"
+      go_bmb="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"type\":\"bind\",\"mobile\":\"$other_mobile\",\"code\":\"1357\"}")"
+      echo "bind_type_used php_msg=$(jget msg <<<"$php_bmb") go_msg=$(jget msg <<<"$go_bmb")"
+      if [[ "$(jget msg <<<"$php_bmb")" != "$(jget msg <<<"$go_bmb")" ]]; then
+        echo "  php_bmb=${php_bmb:0:200}"
+        echo "  go_bmb=${go_bmb:0:200}"
+        fail=$((fail + 1))
+      fi
+      mysqlq "UPDATE la_user SET mobile='$old_other' WHERE id=$other_uid"
+      mysqlq "UPDATE la_user SET mobile='$old_self' WHERE id=$self_uid"
+    fi
+  fi
+  acc_dis="d${ts}"
+  dis_body="{\"account\":\"$acc_dis\",\"password\":\"Likeadmin1\",\"password_confirm\":\"Likeadmin1\",\"channel\":1}"
+  php_regd="$(curl -sS -X POST "$PHP/api/login/register" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$dis_body")"
+  if [[ "$(jcode <<<"$php_regd")" == "1" ]]; then
+    dis_uid="$(mysqlq "SELECT id FROM la_user WHERE account='$acc_dis' AND delete_time IS NULL LIMIT 1")"
+    dis_mobile="13700${ts: -6}"
+    mysqlq "UPDATE la_user SET mobile='$dis_mobile',is_disable=1 WHERE id=$dis_uid"
+    insert_sms 101 "$dis_mobile" "8642"
+    php_smd="$(curl -sS -X POST "$PHP/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"account\":\"$dis_mobile\",\"code\":\"8642\",\"terminal\":3,\"scene\":2}")"
+    insert_sms 101 "$dis_mobile" "8642"
+    go_smd="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"account\":\"$dis_mobile\",\"code\":\"8642\",\"terminal\":3,\"scene\":2}")"
+    echo "sms_login_disabled php_code=$(jcode <<<"$php_smd") go_code=$(jcode <<<"$go_smd") php_msg=$(jget msg <<<"$php_smd") go_msg=$(jget msg <<<"$go_smd")"
+    if [[ "$(jcode <<<"$php_smd")" != "$(jcode <<<"$go_smd")" ]]; then
+      echo "  php_smd=${php_smd:0:200}"
+      echo "  go_smd=${go_smd:0:200}"
+      fail=$((fail + 1))
+    fi
+    mysqlq "UPDATE la_user SET is_disable=0 WHERE id=$dis_uid"
+  else
+    echo "sms_login_disabled skip php_reg=$(jget msg <<<"$php_regd")"
+  fi
+  hide_title="pairhide$ts"
+  hide_cid="$(mysqlq "SELECT id FROM la_article_cate WHERE tenant_id=1 AND is_show=1 AND delete_time IS NULL ORDER BY sort DESC, id DESC LIMIT 1")"
+  if [[ -n "$hide_cid" && "$hide_cid" != "0" ]]; then
+    mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (1,$hide_cid,'$hide_title','pair','','','',0,0,$now)"
+    php_ic="$(curl -sS "$PHP/api/pc/infoCenter" -H "Host: $TENANT_HOST")"
+    go_ic="$(curl -sS "$GO/api/pc/infoCenter" -H "Host: $TENANT_HOST")"
+    php_hid="$(python3 -c 'import json,sys; t=sys.argv[1]; d=json.load(sys.stdin); print(int(t in json.dumps(d,ensure_ascii=False)))' "$hide_title" <<<"$php_ic")"
+    go_hid="$(python3 -c 'import json,sys; t=sys.argv[1]; d=json.load(sys.stdin); print(int(t in json.dumps(d,ensure_ascii=False)))' "$hide_title" <<<"$go_ic")"
+    echo "pc_infocenter_hidden php=$php_hid go=$go_hid"
+    if [[ "$php_hid" != "$go_hid" ]]; then
+      echo "  php_ic=${php_ic:0:240}"
+      echo "  go_ic=${go_ic:0:240}"
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_article WHERE title='$hide_title' AND tenant_id=1"
+  fi
+  mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('ali$now',1,3,0,9,1,0,1,$now),('alg$now',1,3,0,9,1,0,1,$now)"
+  php_ali="$(curl -sS -X POST "$PHP/api/pay/aliNotify" -H "Host: $TENANT_HOST" -H 'Content-Type: application/x-www-form-urlencoded' --data "out_trade_no=ali$now&trade_status=TRADE_SUCCESS&passback_params=recharge&trade_no=ali$now")"
+  go_ali="$(curl -sS -X POST "$GO/api/pay/aliNotify" -H "Host: $TENANT_HOST" -H 'Content-Type: application/x-www-form-urlencoded' --data "out_trade_no=alg$now&trade_status=TRADE_SUCCESS&passback_params=recharge&trade_no=alg$now")"
+  php_alip="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='ali$now'")"
+  go_alip="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='alg$now'")"
+  echo "pay_notify_ali_nokey php_pay=$php_alip go_pay=$go_alip php_body=${php_ali:0:40} go_body=${go_ali:0:40}"
+  if [[ "$php_alip" != "0" || "$go_alip" != "0" || "$go_ali" != "fail" ]]; then
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('ali$now','alg$now')"
 fi
 
 if [[ -n "$GO" ]]; then

@@ -36,6 +36,17 @@ func TestResolveAliPublicKeyFromCert(t *testing.T) {
 	}
 }
 
+func TestAliVerifyNotifyRejectsMissingKey(t *testing.T) {
+	form := map[string][]string{
+		"out_trade_no":    {"SN1"},
+		"trade_status":    {"TRADE_SUCCESS"},
+		"passback_params": {"recharge"},
+	}
+	if AliVerifyNotifyByTenant(0, form) {
+		t.Fatal("missing public key should fail verify")
+	}
+}
+
 func TestAliVerifyNotifyRejectsBadSign(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

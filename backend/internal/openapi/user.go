@@ -213,29 +213,33 @@ func LoginAccount(c *gin.Context) {
 	}
 	tid := ctxutil.Get(c).TenantID
 	var u model.User
-	q := tdb(c).Where("delete_time IS NULL")
 	if scene == 2 {
-		q = q.Where("mobile = ?", account)
-	} else {
-		q = q.Where("(account = ? OR mobile = ?)", account, account)
-	}
-	if tid > 0 {
-		q = q.Where("tenant_id = ?", tid)
-	}
-	if q.First(&u).Error != nil {
-		response.Fail(c, "用户不存在")
-		return
-	}
-	if u.IsDisable == 1 {
-		response.Fail(c, "用户已禁用")
-		return
-	}
-	if scene == 2 {
+		// PHP checkCode verifies SMS before looking up the user and never checks is_disable.
 		if !verifySms(c, account, httpx.Str(c, "code"), "YZMDL") {
 			response.Fail(c, "验证码错误")
 			return
 		}
+		q := tdb(c).Where("delete_time IS NULL AND mobile = ?", account)
+		if tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if q.First(&u).Error != nil {
+			response.Fail(c, "用户不存在")
+			return
+		}
 	} else {
+		q := tdb(c).Where("delete_time IS NULL AND (account = ? OR mobile = ?)", account, account)
+		if tid > 0 {
+			q = q.Where("tenant_id = ?", tid)
+		}
+		if q.First(&u).Error != nil {
+			response.Fail(c, "用户不存在")
+			return
+		}
+		if u.IsDisable == 1 {
+			response.Fail(c, "用户已禁用")
+			return
+		}
 		if u.Password == "" {
 			cache.RecordUserLoginFail(ip)
 			response.Fail(c, "用户不存在")

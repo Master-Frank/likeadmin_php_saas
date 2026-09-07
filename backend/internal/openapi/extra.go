@@ -26,16 +26,12 @@ import (
 
 func ArticleAddCollect(c *gin.Context) {
 	uid := ctxutil.Get(c).UserID
-	aid := httpx.Uint(c, "id")
-	if uid == 0 || aid == 0 {
+	if uid == 0 {
 		response.Fail(c, "参数错误")
 		return
 	}
-	var article model.Article
-	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", aid), c).First(&article).Error != nil {
-		response.Fail(c, "资讯不存在")
-		return
-	}
+	// PHP ArticleController::addCollect uses id/d (missing → 0) and never checks the article row.
+	aid := httpx.Uint(c, "id")
 	var row model.ArticleCollect
 	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
@@ -459,9 +455,14 @@ func UserBindMobile(c *gin.Context) {
 		response.Fail(c, "验证码错误")
 		return
 	}
+	// PHP bindMobile: type=bind checks any user with this mobile; change only
+	// rejects when the current user already has it (duplicates across users allowed).
 	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		q = q.Where("tenant_id = ?", tid)
+	}
+	if typ != "bind" {
+		q = q.Where("id = ?", u.ID)
 	}
 	var exist model.User
 	if q.First(&exist).Error == nil {
@@ -537,7 +538,8 @@ func PcInfoCenter(c *gin.Context) {
 	for _, cate := range cates {
 		out = append(out, map[string]any{
 			"id": cate.ID, "name": cate.Name,
-			"article": limitArticles(c, "all", 10, int(cate.ID), 0),
+			// PHP ArticleCate::article() hasMany has no is_show filter.
+			"article": queryArticles(c, "all", 10, int(cate.ID), 0, false),
 		})
 	}
 	response.Data(c, out)
@@ -607,10 +609,17 @@ func articleDetailMap(c *gin.Context, a model.Article, click int) gin.H {
 }
 
 func limitArticles(c *gin.Context, sortType string, limit, cate, exclude int) []map[string]any {
+	return queryArticles(c, sortType, limit, cate, exclude, true)
+}
+
+func queryArticles(c *gin.Context, sortType string, limit, cate, exclude int, showOnly bool) []map[string]any {
 	if tdb(c) == nil {
 		return []map[string]any{}
 	}
-	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND is_show = 1")
+	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL")
+	if showOnly {
+		db = db.Where("is_show = 1")
+	}
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
@@ -675,17 +684,14 @@ func decoratePageMap(page model.DecoratePage) gin.H {
 }
 
 func UploadImage(c *gin.Context) {
-	if msg := filesvc.UploadCateOK(tdb(c), &model.TenantFileCate{}, filesvc.UploadCID(c), ctxutil.Get(c).TenantID); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
+	// PHP UploadController::image always stores cid=0 and ignores the form field.
 	name, rel, errMsg := filesvc.ReceiveUpload(c, "image", "uploads/images")
 	if errMsg != "" {
 		response.Fail(c, errMsg)
 		return
 	}
 	row := model.TenantFile{
-		Cid: filesvc.UploadCID(c), Type: 10, Name: name, URI: rel,
+		Cid: 0, Type: 10, Name: name, URI: rel,
 		Source: filesvc.SourceUser, SourceID: ctxutil.Get(c).UserID,
 		TenantID: ctxutil.Get(c).TenantID, CreateTime: util.NowUnix(),
 	}

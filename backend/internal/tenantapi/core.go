@@ -686,7 +686,8 @@ func DecoratePageDetail(c *gin.Context) {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if db.First(&p).Error != nil {
-		response.Success(c, "获取成功", gin.H{})
+		// PHP findOrEmpty()->toArray() on a missing model is [].
+		response.Success(c, "获取成功", []any{})
 		return
 	}
 	response.Success(c, "获取成功", gin.H{
@@ -1015,14 +1016,17 @@ func OAReplyIndex(c *gin.Context) {
 		c.String(401, "invalid signature")
 		return
 	}
+	writeOA := func(body string) {
+		c.Data(200, "text/plain;charset=utf-8", []byte(body))
+	}
 	if echostr := c.Query("echostr"); echostr != "" {
-		c.String(200, echostr)
+		writeOA(echostr)
 		return
 	}
 	raw := middleware.ReadBody(c)
 	msg, err := wechat.DecodeOABody(raw, token, aesKey, appID, encType, c.Query("msg_signature"), ts, nonce)
 	if err != nil || msg.MsgType == "" {
-		c.String(200, "success")
+		writeOA("success")
 		return
 	}
 	q := tdb(c).Where("delete_time IS NULL AND status = 1")
@@ -1045,6 +1049,5 @@ func OAReplyIndex(c *gin.Context) {
 			xmlBody = enc
 		}
 	}
-	c.Header("Content-Type", "application/xml; charset=utf-8")
-	c.String(200, xmlBody)
+	writeOA(xmlBody)
 }
