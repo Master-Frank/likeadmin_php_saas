@@ -22,6 +22,20 @@ import (
 
 var aliGatewayURL = "https://openapi.alipay.com/gateway.do"
 
+// aliPayWay mirrors PHP AliPayService::pay terminal match.
+func aliPayWay(terminal int) (method, productCode string, err error) {
+	switch terminal {
+	case wechat.TerminalPC:
+		return "alipay.trade.page.pay", "FAST_INSTANT_TRADE_PAY", nil
+	case wechat.TerminalIOS, wechat.TerminalAndroid:
+		return "alipay.trade.app.pay", "QUICK_MSECURITY_PAY", nil
+	case wechat.TerminalOA, wechat.TerminalH5:
+		return "alipay.trade.wap.pay", "QUICK_WAP_WAY", nil
+	default:
+		return "", "", fmt.Errorf("支付方式错误")
+	}
+}
+
 func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string, terminal int) (any, error) {
 	// PHP AliPayService::pay match has no MNP case; default is 支付方式错误
 	// even when app_id is empty.
@@ -36,22 +50,18 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 	if err != nil {
 		return nil, fmt.Errorf("支付宝私钥无效")
 	}
+	method, productCode, err := aliPayWay(terminal)
+	if err != nil {
+		return nil, err
+	}
 	notifyURL := ctxutil.Domain(c) + "/api/pay/aliNotify"
 	domain := ctxutil.Domain(c)
 	returnURL := domain + redirect
-	method := "alipay.trade.page.pay"
-	productCode := "FAST_INSTANT_TRADE_PAY"
-	switch terminal {
-	case wechat.TerminalOA, wechat.TerminalH5:
-		method = "alipay.trade.wap.pay"
-		productCode = "QUICK_WAP_WAY"
+	if terminal == wechat.TerminalOA || terminal == wechat.TerminalH5 {
 		returnURL = domain + "/mobile" + redirect + "?id=" + util.ToString(order.ID) + "&from=" + from + "&checkPay=true"
-	case 5, 6:
-		method = "alipay.trade.app.pay"
-		productCode = "QUICK_MSECURITY_PAY"
 	}
 	subject := "订单:" + order.SN
-	if terminal == 5 || terminal == 6 {
+	if terminal == wechat.TerminalIOS || terminal == wechat.TerminalAndroid {
 		subject = order.SN
 	}
 	bizJSON, _ := json.Marshal(map[string]any{

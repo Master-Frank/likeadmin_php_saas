@@ -116,6 +116,27 @@ func TestWechatRefundMissingConfig(t *testing.T) {
 	}
 }
 
+func TestAliPayWay(t *testing.T) {
+	method, product, err := aliPayWay(wechat.TerminalPC)
+	if err != nil || method != "alipay.trade.page.pay" || product != "FAST_INSTANT_TRADE_PAY" {
+		t.Fatalf("pc %s %s %v", method, product, err)
+	}
+	method, product, err = aliPayWay(wechat.TerminalH5)
+	if err != nil || method != "alipay.trade.wap.pay" || product != "QUICK_WAP_WAY" {
+		t.Fatalf("h5 %s %s %v", method, product, err)
+	}
+	method, product, err = aliPayWay(wechat.TerminalIOS)
+	if err != nil || method != "alipay.trade.app.pay" || product != "QUICK_MSECURITY_PAY" {
+		t.Fatalf("ios %s %s %v", method, product, err)
+	}
+	if _, _, err := aliPayWay(0); err == nil || err.Error() != "支付方式错误" {
+		t.Fatalf("unknown 0: %v", err)
+	}
+	if _, _, err := aliPayWay(wechat.TerminalMNP); err == nil || err.Error() != "支付方式错误" {
+		t.Fatalf("mnp: %v", err)
+	}
+}
+
 func TestAliPrepayMissingConfig(t *testing.T) {
 	_, err := AliPrepay(nil, model.RechargeOrder{OrderAmount: 1}, "recharge", "/", wechat.TerminalOA)
 	if err == nil || err.Error() != "请配置好支付设置" {
