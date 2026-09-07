@@ -83,6 +83,7 @@ func Run(c *gin.Context) {
 		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
 		return
 	}
+	setPHPSQLMode(db)
 
 	var exists int
 	_ = db.Raw("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?", dbName).Scan(&exists)
@@ -112,6 +113,7 @@ func Run(c *gin.Context) {
 		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
 		return
 	}
+	setPHPSQLMode(db)
 
 	imported := 0
 	salt := ""
@@ -200,4 +202,13 @@ func CheckPort(host string, port int) error {
 		return err
 	}
 	return conn.Close()
+}
+
+// setPHPSQLMode mirrors PHP installModel::connectDB / TenantCreatService::connectDB.
+// Permission errors are ignored the same way PHP wraps this in an empty catch.
+func setPHPSQLMode(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	_ = db.Exec("SET GLOBAL sql_mode='STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'").Error
 }

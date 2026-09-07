@@ -46,7 +46,11 @@ func CollectEnv() []envItem {
 	out = append(out, probeRedis())
 	out = append(out, probeDir("runtime", runtimeDir()))
 	out = append(out, probeDir("public", config.C.App.PublicDir))
+	out = append(out, probeDir("public/uploads", publicSub("uploads")))
+	out = append(out, probeDir("public/platform", publicSub("platform")))
+	out = append(out, probeDir("public/admin", publicSub("admin")))
 	out = append(out, probeDir("config", configDir()))
+	out = append(out, probeWritableFile(".env", envFilePath()))
 	return out
 }
 
@@ -103,6 +107,48 @@ func probeDir(name, dir string) envItem {
 	_ = os.Remove(probe)
 	item.Status = "ok"
 	return item
+}
+
+func probeWritableFile(name, path string) envItem {
+	item := envItem{Name: name, Status: "fail", Value: path}
+	if path == "" {
+		item.Value = "未配置"
+		return item
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		item.Value = "文件不存在"
+		return item
+	}
+	if info.IsDir() {
+		item.Value = "不是文件"
+		return item
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		item.Value = err.Error()
+		return item
+	}
+	_ = f.Close()
+	item.Status = "ok"
+	return item
+}
+
+func publicSub(name string) string {
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(config.C.App.PublicDir, name)
+	}
+	return filepath.Join("public", name)
+}
+
+func envFilePath() string {
+	if config.C.App.InstallLock != "" {
+		return filepath.Join(filepath.Dir(config.C.App.InstallLock), "..", ".env")
+	}
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(config.C.App.PublicDir, "..", ".env")
+	}
+	return ".env"
 }
 
 func runtimeDir() string {

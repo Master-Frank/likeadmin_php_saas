@@ -131,9 +131,6 @@ func DecorateDataPC(c *gin.Context) {
 	update := ""
 	if p.ID > 0 {
 		update = util.FormatDateTimePtr(p.UpdateTime)
-		if update == "" {
-			update = util.FormatDateTime(p.CreateTime)
-		}
 	}
 	if update == "" {
 		update = util.FormatDateTime(util.NowUnix())
@@ -898,7 +895,7 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 		return
 	}
 	cfgsvc.Set(c, "oa_setting", "menu", menu)
-	response.Success(c, "保存并发布成功", nil)
+	response.SuccessNotice(c, "保存并发布成功")
 }
 
 func TenantNoticeLists(c *gin.Context) {
@@ -982,7 +979,7 @@ func TenantNoticeSet(c *gin.Context) {
 		q = q.Where("tenant_id = ?", tid)
 	}
 	q.Updates(updates)
-	response.SuccessNotice(c, "设置成功")
+	response.Success(c, "设置成功", nil)
 }
 
 func SettingUserGetConfig(c *gin.Context)   { platformapi.UserGetConfig(c) }

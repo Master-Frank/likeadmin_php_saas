@@ -1735,13 +1735,13 @@ print(json.dumps({
   fi
   go_tcw="$(curl -sS -X POST "$GO/tenantapi/crontab.crontab/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","command":"x","type":1}')"
   echo "tenant_crontab_write go_msg=$(jget msg <<<"$go_tcw")"
-  if [[ "$(jget msg <<<"$go_tcw")" != *"controller not exists"* ]]; then
+  if [[ "$(jget msg <<<"$go_tcw")" != *"请选择状态"* ]]; then
     echo "  go_tcw=${go_tcw:0:200}"
     fail=$((fail + 1))
   fi
-  go_tgw="$(curl -sS -X POST "$GO/tenantapi/tools.generator/selectTable" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"table":[{"name":"la_config","comment":"x"}]}')"
+  go_tgw="$(curl -sS -X POST "$GO/tenantapi/tools.generator/selectTable" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "tenant_generator_write go_msg=$(jget msg <<<"$go_tgw")"
-  if [[ "$(jget msg <<<"$go_tgw")" != *"controller not exists"* ]]; then
+  if [[ "$(jget msg <<<"$go_tgw")" != *"参数缺失"* ]]; then
     echo "  go_tgw=${go_tgw:0:200}"
     fail=$((fail + 1))
   fi
@@ -2991,8 +2991,10 @@ else
 fi
 
 go_ie="$(curl -sS "$GO/install/env")"
-echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie")"
-if [[ "$(jcode <<<"$go_ie")" != "1" ]]; then
+ie_names="$(python3 -c 'import json,sys; print(",".join(i.get("name","") for i in ((json.load(sys.stdin).get("data") or {}).get("items") or [])))' <<<"$go_ie")"
+echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie") names=$ie_names"
+if [[ "$(jcode <<<"$go_ie")" != "1" || "$ie_names" != *"public/uploads"* || "$ie_names" != *".env"* ]]; then
+  echo "  go_ie=${go_ie:0:400}"
   fail=$((fail + 1))
 fi
 go_iw="$(curl -sS -o /dev/null -w '%{http_code}' "$GO/install")"

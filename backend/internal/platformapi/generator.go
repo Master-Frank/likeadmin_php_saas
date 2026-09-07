@@ -340,7 +340,7 @@ func GeneratorGenerate(c *gin.Context) {
 	if needZip {
 		root := generator.RuntimeDir()
 		_ = os.MkdirAll(root, 0755)
-		fileName := fmt.Sprintf("curd-%d.zip", time.Now().UnixNano())
+		fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
 		zipPath := filepath.Join(root, fileName)
 		zf, err := os.Create(zipPath)
 		if err != nil {

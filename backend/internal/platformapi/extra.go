@@ -377,7 +377,7 @@ func NoticeSet(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Model(&model.NoticeSetting{}).Where("id = ?", id).Updates(updates)
-	response.SuccessNotice(c, "设置成功")
+	response.Success(c, "设置成功", nil)
 }
 
 func SmsConfigGet(c *gin.Context) {

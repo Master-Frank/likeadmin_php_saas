@@ -169,7 +169,7 @@ func CustomerSet(c *gin.Context) {
 func CacheClear(c *gin.Context) {
 	cache.Flush()
 	clearRuntimeFileCache()
-	response.Success(c, "清除成功", nil)
+	response.SuccessNotice(c, "清除成功")
 }
 
 func clearRuntimeFileCache() {

@@ -68,6 +68,8 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"setting.dict.dict_data/add", "setting.dict.dict_data/edit", "setting.dict.dict_data/delete",
 		"setting.pay.pay_way/getpayway",
 		"setting.pay.pay_config/lists", "crontab.crontab/lists",
+		"crontab.crontab/add", "crontab.crontab/edit", "crontab.crontab/delete", "crontab.crontab/operate",
+		"tools.generator/selecttable", "tools.generator/preview", "tools.generator/generate", "tools.generator/download",
 		"notice.notice/settinglists", "finance.account_log/getumchangetype",
 		"recharge.recharge/refund", "finance.refund/log",
 		"channel.official_account_menu/save", "channel.official_account_reply/add",
