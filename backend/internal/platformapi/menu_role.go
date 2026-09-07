@@ -129,7 +129,7 @@ func MenuDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -156,7 +156,7 @@ func MenuUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -169,10 +169,14 @@ func MenuUpdateStatus(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	var exist model.SystemMenu
-	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
-		response.Fail(c, "菜单不存在")
-		return
+	// PHP MenuLogic::updateStatus updates by id with no existence check;
+	// id=0 is a no-op success. Unknown positive ids still fail closed.
+	if id != 0 {
+		var exist model.SystemMenu
+		if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
+			response.Fail(c, "菜单不存在")
+			return
+		}
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("id = ?", id).Updates(map[string]any{
@@ -286,11 +290,11 @@ func RoleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择角色")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var exist model.SystemRole
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")

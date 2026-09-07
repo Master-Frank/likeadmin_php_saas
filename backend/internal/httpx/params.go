@@ -144,6 +144,21 @@ func BodyHas(c *gin.Context, key string) bool {
 	return ok
 }
 
+// BodyPresent reports whether the JSON/form body includes a key whose
+// value ThinkPHP Validate "require" would accept. Missing/empty string
+// fail; the literal 0/"0" is present.
+func BodyPresent(c *gin.Context, key string) bool {
+	v, ok := Body(c)[key]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
+func BodyIDPresent(c *gin.Context) bool {
+	return BodyPresent(c, "id")
+}
+
 func BodyInts(c *gin.Context, key string) []int {
 	v := Body(c)[key]
 	switch t := v.(type) {

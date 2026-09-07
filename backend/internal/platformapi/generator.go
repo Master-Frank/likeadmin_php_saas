@@ -173,7 +173,7 @@ func GeneratorSyncColumn(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !httpx.BodyHas(c, "id") || httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -301,11 +301,11 @@ func GeneratorPreview(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
 		response.Fail(c, "信息不存在")

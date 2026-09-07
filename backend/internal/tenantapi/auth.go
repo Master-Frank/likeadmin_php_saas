@@ -409,11 +409,11 @@ func MenuDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var child int64
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("pid = ?", id), c).Count(&child)
 	if child > 0 {
@@ -455,7 +455,7 @@ func MenuUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -467,12 +467,17 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "菜单状态参数值错误")
 		return
 	}
-	var exist model.TenantSystemMenu
-	if scopeTID(tdb(c).Where("id = ?", httpx.BodyUint(c, "id")), c).First(&exist).Error != nil {
-		response.Fail(c, "菜单不存在")
-		return
+	id := httpx.BodyUint(c, "id")
+	// PHP MenuLogic::updateStatus updates by id with no existence check;
+	// id=0 is a no-op success. Unknown positive ids still fail closed.
+	if id != 0 {
+		var exist model.TenantSystemMenu
+		if scopeTID(tdb(c).Where("id = ?", id), c).First(&exist).Error != nil {
+			response.Fail(c, "菜单不存在")
+			return
+		}
 	}
-	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("is_disable", httpx.BodyInt(c, "is_disable"))
+	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Update("is_disable", httpx.BodyInt(c, "is_disable"))
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")
 }
@@ -572,11 +577,11 @@ func RoleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择角色")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var exist model.TenantSystemRole
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")

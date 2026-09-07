@@ -165,18 +165,18 @@ func TenantEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择用户")
+		return
+	}
+	id := httpx.BodyUint(c, "id")
+	var cur model.Tenant
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
+		response.Fail(c, "租户不存在")
 		return
 	}
 	if httpx.BodyStr(c, "name") == "" {
 		response.Fail(c, "请输入用户名")
-		return
-	}
-	var cur model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
-		response.Fail(c, "租户不存在")
 		return
 	}
 	alias := stripHost(httpx.BodyStr(c, "domain_alias"))
@@ -203,11 +203,11 @@ func TenantDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择用户")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var cur model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
 		response.Fail(c, "租户不存在")

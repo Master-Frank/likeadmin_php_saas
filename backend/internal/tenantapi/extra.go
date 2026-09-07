@@ -56,7 +56,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
@@ -77,7 +77,7 @@ func ArticleUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}

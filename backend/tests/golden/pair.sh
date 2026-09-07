@@ -4473,6 +4473,51 @@ print(first_id(ls))')"
   pair_detail_msg user_detail_id0 "/tenantapi/user.user/detail?id=0"
   pair_detail_msg tenantuser_detail_id0 "/platformapi/tenant.tenantUser/detail?id=0&tenant_id=1"
   pair_detail_msg generator_detail_id0 "/platformapi/tools.generator/detail?id=0"
+  pair_post_msg() {
+    local name="$1" path="$2" body="$3"
+    local extra=()
+    if [[ "$path" == /tenantapi/* || "$path" == /api/* ]]; then
+      extra=(-H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")
+    else
+      extra=(-H "token: $TOKEN")
+    fi
+    extra+=(-H 'Content-Type: application/json' -d "$body")
+    local php_body go_body
+    php_body="$(curl -sS -X POST "$PHP$path" "${extra[@]}")"
+    go_body="$(curl -sS -X POST "$GO$path" "${extra[@]}")"
+    echo "$name php_msg=$(jget msg <<<"$php_body") go_msg=$(jget msg <<<"$go_body")"
+    if [[ "$(jget msg <<<"$php_body")" != "$(jget msg <<<"$go_body")" ]]; then
+      echo "  php=${php_body:0:200}"
+      echo "  go=${go_body:0:200}"
+      fail=$((fail + 1))
+    fi
+  }
+  pair_post_msg platform_role_delete_id0 "/platformapi/auth.role/delete" '{"id":0}'
+  pair_post_msg tenant_role_delete_id0 "/tenantapi/auth.role/delete" '{"id":0}'
+  pair_post_msg platform_dept_delete_id0 "/platformapi/dept.dept/delete" '{"id":0}'
+  pair_post_msg tenant_dept_delete_id0 "/tenantapi/dept.dept/delete" '{"id":0}'
+  pair_post_msg platform_jobs_delete_id0 "/platformapi/dept.jobs/delete" '{"id":0}'
+  pair_post_msg tenant_jobs_delete_id0 "/tenantapi/dept.jobs/delete" '{"id":0}'
+  pair_post_msg platform_menu_delete_id0 "/platformapi/auth.menu/delete" '{"id":0}'
+  pair_post_msg tenant_menu_delete_id0 "/tenantapi/auth.menu/delete" '{"id":0}'
+  pair_post_msg platform_menu_status_id0 "/platformapi/auth.menu/updateStatus" '{"id":0,"is_disable":1}'
+  pair_post_msg tenant_menu_status_id0 "/tenantapi/auth.menu/updateStatus" '{"id":0,"is_disable":1}'
+  pair_post_msg dict_type_delete_id0 "/platformapi/setting.dict.dict_type/delete" '{"id":0}'
+  pair_post_msg dict_data_delete_id0 "/platformapi/setting.dict.dict_data/delete" '{"id":0}'
+  pair_post_msg crontab_delete_id0 "/platformapi/crontab.crontab/delete" '{"id":0}'
+  pair_post_msg crontab_operate_id0 "/platformapi/crontab.crontab/operate" '{"id":0,"operate":"stop"}'
+  pair_post_msg article_edit_id0 "/tenantapi/article.article/edit" '{"id":0}'
+  pair_post_msg article_delete_id0 "/tenantapi/article.article/delete" '{"id":0}'
+  pair_post_msg article_status_id0 "/tenantapi/article.article/updateStatus" '{"id":0}'
+  pair_post_msg article_cate_edit_id0 "/tenantapi/article.article_cate/edit" '{"id":0}'
+  pair_post_msg article_cate_delete_id0 "/tenantapi/article.article_cate/delete" '{"id":0}'
+  pair_post_msg article_cate_status_id0 "/tenantapi/article.article_cate/updateStatus" '{"id":0}'
+  pair_post_msg user_edit_id0 "/tenantapi/user.user/edit" '{"id":0}'
+  pair_post_msg tenant_edit_id0 "/platformapi/tenant.tenant/edit" '{"id":0}'
+  pair_post_msg tenant_delete_id0 "/platformapi/tenant.tenant/delete" '{"id":0}'
+  pair_post_msg generator_preview_id0 "/platformapi/tools.generator/preview" '{"id":0}'
+  pair_post_msg generator_sync_id0 "/platformapi/tools.generator/syncColumn" '{"id":0}'
+  pair_post_msg decorate_save_id0 "/tenantapi/decorate.page/save" '{"id":0,"type":1,"data":[{}]}'
   php_oadm="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_oadm="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   php_oadmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_oadm")"

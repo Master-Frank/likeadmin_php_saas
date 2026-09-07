@@ -202,7 +202,7 @@ func crontabWriteCheck(p map[string]any, needID bool) string {
 		return "定时任务运行规则错误"
 	}
 	if needID {
-		if _, ok := p["id"]; !ok || util.ToInt(p["id"]) == 0 {
+		if v, ok := p["id"]; !ok || v == nil || strings.TrimSpace(util.ToString(v)) == "" {
 			return "参数缺失"
 		}
 	}
@@ -276,11 +276,11 @@ func CrontabDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	now := util.NowUnix()
 	// PHP CrontabLogic::delete is destroy() and always returns true.
 	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Update("delete_time", now)
@@ -291,11 +291,11 @@ func CrontabOperate(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	operate := httpx.BodyStr(c, "operate")
 	if operate == "" {
 		response.Fail(c, "请选择操作")

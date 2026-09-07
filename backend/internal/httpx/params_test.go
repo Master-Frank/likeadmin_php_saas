@@ -55,6 +55,32 @@ func TestBodyIgnoresQuery(t *testing.T) {
 	}
 }
 
+func TestBodyIDPresent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	req := func(body string) bool {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/auth.role/delete", bytes.NewBufferString(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		return BodyIDPresent(c)
+	}
+	if req(`{}`) {
+		t.Fatal("missing id must be absent")
+	}
+	if req(`{"id":""}`) {
+		t.Fatal("empty id must be absent")
+	}
+	if !req(`{"id":0}`) {
+		t.Fatal("id=0 is present under ThinkPHP require")
+	}
+	if !req(`{"id":"0"}`) {
+		t.Fatal(`id:"0" is present`)
+	}
+	if !req(`{"id":12}`) {
+		t.Fatal("id=12 must be present")
+	}
+}
+
 func TestQueryIDPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	req := func(raw string) bool {

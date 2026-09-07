@@ -360,13 +360,13 @@ func UserEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	field := httpx.BodyStr(c, "field")
-	value := httpx.BodyAny(c, "value")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "请选择用户")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
+	field := httpx.BodyStr(c, "field")
+	value := httpx.BodyAny(c, "value")
 	// PHP UserValidate: id require|checkUser before field/value.
 	var user model.User
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&user).Error != nil {
@@ -478,7 +478,7 @@ func ArticleAdd(c *gin.Context) {
 }
 
 func articleWriteCheck(c *gin.Context, needID bool) string {
-	if needID && httpx.BodyUint(c, "id") == 0 {
+	if needID && !httpx.BodyIDPresent(c) {
 		return "资讯id不能为空"
 	}
 	if needID {
@@ -526,7 +526,7 @@ func ArticleDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}
@@ -585,7 +585,7 @@ func ArticleCateLists(c *gin.Context) {
 
 func articleCateWriteCheck(c *gin.Context, needID bool) string {
 	if needID {
-		if httpx.BodyUint(c, "id") == 0 {
+		if !httpx.BodyIDPresent(c) {
 			return "资讯分类id不能为空"
 		}
 		var row model.ArticleCate
@@ -637,7 +637,7 @@ func ArticleCateDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if httpx.BodyUint(c, "id") == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "资讯分类id不能为空")
 		return
 	}
@@ -727,11 +727,11 @@ func DecoratePageSave(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	if !httpx.BodyHas(c, "type") || httpx.BodyInt(c, "type") == 0 {
 		response.Fail(c, "装修类型参数缺失")
 		return

@@ -124,11 +124,11 @@ func DeptDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var cur model.TenantDept
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&cur).Error != nil {
 		response.Fail(c, "部门不存在")
@@ -274,11 +274,11 @@ func JobsDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	id := httpx.BodyUint(c, "id")
-	if id == 0 {
+	if !httpx.BodyIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.BodyUint(c, "id")
 	var exist model.TenantJobs
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
