@@ -7,12 +7,16 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 )
 
 const maxUpload = 50 << 20
 
-// Strangler front door: API prefixes go to the Go backend, everything else to PHP.
+// Strangler front door: API prefixes go to the Go backend; static files and
+// SPA shells are served from public_dir so PHP is no longer on the page path.
+// LIKEADMIN_PHP_FALLBACK=1 (default) still proxies unknown paths to PHP.
 func main() {
 	listen := getenv("LIKEADMIN_STRANGLER", "127.0.0.1:8090")
 	goURL, err := url.Parse(getenv("LIKEADMIN_GO", "http://127.0.0.1:8080"))
@@ -23,6 +27,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	public := resolvePublicDir()
+	phpFallback := getenv("LIKEADMIN_PHP_FALLBACK", "1") != "0"
 	goProxy := newForwardProxy(goURL)
 	phpProxy := newForwardProxy(phpURL)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -31,9 +37,16 @@ func main() {
 			goProxy.ServeHTTP(w, r)
 			return
 		}
-		phpProxy.ServeHTTP(w, r)
+		if servePublic(w, r, public) {
+			return
+		}
+		if phpFallback {
+			phpProxy.ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
 	})
-	log.Printf("strangler listening on %s (api->%s other->%s)", listen, goURL, phpURL)
+	log.Printf("strangler listening on %s (api->%s public=%s php_fallback=%v)", listen, goURL, public, phpFallback)
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
 
@@ -72,6 +85,70 @@ func setForwarded(req *http.Request, host string) {
 func goAPI(path string) bool {
 	for _, p := range []string{"/platformapi/", "/tenantapi/", "/api/", "/crontab", "/install"} {
 		if strings.HasPrefix(path, p) || path == strings.TrimSuffix(p, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+func resolvePublicDir() string {
+	if v := getenv("LIKEADMIN_PUBLIC", ""); v != "" {
+		return v
+	}
+	for _, cand := range []string{
+		"/workspace/server/public",
+		filepath.Join("..", "..", "server", "public"),
+		filepath.Join("server", "public"),
+	} {
+		if st, err := os.Stat(cand); err == nil && st.IsDir() {
+			abs, err := filepath.Abs(cand)
+			if err == nil {
+				return abs
+			}
+			return cand
+		}
+	}
+	return ""
+}
+
+func servePublic(w http.ResponseWriter, r *http.Request, public string) bool {
+	if public == "" || w == nil || r == nil {
+		return false
+	}
+	reqPath := path.Clean("/" + r.URL.Path)
+	if !strings.HasPrefix(reqPath, "/") {
+		reqPath = "/" + reqPath
+	}
+	rel := strings.TrimPrefix(reqPath, "/")
+	full := filepath.Join(public, filepath.FromSlash(rel))
+	root, err := filepath.Abs(public)
+	if err != nil {
+		return false
+	}
+	abs, err := filepath.Abs(full)
+	if err != nil {
+		return false
+	}
+	if abs != root && !strings.HasPrefix(abs, root+string(os.PathSeparator)) {
+		return false
+	}
+	if st, err := os.Stat(abs); err == nil && !st.IsDir() {
+		http.ServeFile(w, r, abs)
+		return true
+	}
+	for _, prefix := range []string{"/platform", "/admin", "/mobile", "/pc"} {
+		if reqPath == prefix || strings.HasPrefix(reqPath, prefix+"/") {
+			index := filepath.Join(public, strings.TrimPrefix(prefix, "/"), "index.html")
+			if _, err := os.Stat(index); err == nil {
+				http.ServeFile(w, r, index)
+				return true
+			}
+		}
+	}
+	if reqPath == "/" {
+		index := filepath.Join(public, "index.html")
+		if _, err := os.Stat(index); err == nil {
+			http.ServeFile(w, r, index)
 			return true
 		}
 	}

@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +63,41 @@ func TestNewForwardProxyKeepsHost(t *testing.T) {
 	}
 	if req.Header.Get("X-Forwarded-Host") != "pair1.likeadmin.test" {
 		t.Fatalf("x-forwarded-host=%s", req.Header.Get("X-Forwarded-Host"))
+	}
+}
+
+func TestServePublicSPA(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "admin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "admin", "index.html"), []byte("<html>admin-spa</html>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "resource"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "resource", "x.txt"), []byte("static"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/login", nil)
+	if !servePublic(rec, req, dir) || !strings.Contains(rec.Body.String(), "admin-spa") {
+		t.Fatalf("spa: %s %s", rec.Result().Status, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/resource/x.txt", nil)
+	if !servePublic(rec, req, dir) || rec.Body.String() != "static" {
+		t.Fatalf("static: %s", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/missing", nil)
+	if servePublic(rec, req, dir) {
+		t.Fatal("missing should fall through")
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/../etc/passwd", nil)
+	if servePublic(rec, req, dir) {
+		t.Fatal("path escape")
 	}
 }

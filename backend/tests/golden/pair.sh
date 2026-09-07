@@ -5231,6 +5231,12 @@ print(first_m(json.load(sys.stdin).get("data") or []))
 fi
 
 if [[ -n "$GO" ]]; then
+  go_admin="$(curl -sS "$GO/admin" -H "Host: $TENANT_HOST")"
+  echo "spa_admin html=$(python3 -c 'import sys; s=sys.stdin.read(); print(int("<html" in s.lower() or "<!doctype" in s.lower()))' <<<"$go_admin")"
+  if [[ "$go_admin" == *'"code":4'* && "$go_admin" == *'"msg"'* ]]; then
+    echo "  go_admin=${go_admin:0:160}"
+    fail=$((fail + 1))
+  fi
   go_html="$(curl -sS "$GO/admin" -H "Host: missing.likeadmin.test")"
   echo "tenant_page_404 html=$(python3 -c 'import sys; s=sys.stdin.read(); print(int("<html" in s.lower() or "租户" in s or "404" in s))' <<<"$go_html")"
   if [[ "$go_html" == *'"code":4'* && "$go_html" == *'"msg"'* ]]; then
