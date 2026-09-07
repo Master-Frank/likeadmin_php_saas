@@ -48,12 +48,17 @@ func DeptAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DeptWriteCheck(p, false); msg != "" {
+	// PHP sceneAdd: pid require|integer|checkDept before name.
+	if msg := util.DeptPidCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	if !deptExists(httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "部门不存在")
+		return
+	}
+	if msg := util.DeptWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if deptNameTaken(0, httpx.BodyStr(c, "name")) {
@@ -77,14 +82,18 @@ func DeptEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DeptWriteCheck(p, true); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "参数缺失")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var cur model.Dept
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cur).Error != nil {
-		response.Fail(c, "当前部门信息缺失")
+		response.Fail(c, "部门不存在")
+		return
+	}
+	if msg := util.DeptWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	pid := httpx.BodyUint(c, "pid")
@@ -266,14 +275,18 @@ func JobsEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.JobsWriteCheck(p, true); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "参数缺失")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var exist model.Jobs
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
+		return
+	}
+	if msg := util.JobsWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if jobsNameTaken(id, httpx.BodyStr(c, "name")) {

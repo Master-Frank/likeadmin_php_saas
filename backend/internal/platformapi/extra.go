@@ -174,11 +174,7 @@ func crontabStatusDesc(s int) string {
 }
 
 func crontabWriteCheck(p map[string]any, needID bool) string {
-	if needID {
-		if _, ok := p["id"]; !ok || util.ToInt(p["id"]) == 0 {
-			return "参数缺失"
-		}
-	}
+	// PHP CrontabValidate $rule lists name/type/command/status/expression before id.
 	if strings.TrimSpace(util.ToString(p["name"])) == "" {
 		return "请输入定时任务名称"
 	}
@@ -204,6 +200,11 @@ func crontabWriteCheck(p map[string]any, needID bool) string {
 	}
 	if !biz.ValidCron(expr) {
 		return "定时任务运行规则错误"
+	}
+	if needID {
+		if _, ok := p["id"]; !ok || util.ToInt(p["id"]) == 0 {
+			return "参数缺失"
+		}
 	}
 	return ""
 }

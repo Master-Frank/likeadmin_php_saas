@@ -97,8 +97,8 @@ func TestFileNameCheck(t *testing.T) {
 }
 
 func TestFileMoveCheck(t *testing.T) {
-	if FileMoveCheck(map[string]any{}, nil) != "缺少ids参数" {
-		t.Fatal("ids")
+	if FileMoveCheck(map[string]any{}, nil) != "缺少cid参数" {
+		t.Fatal("cid first")
 	}
 	if FileMoveCheck(map[string]any{"ids": []any{1}}, []uint{1}) != "缺少cid参数" {
 		t.Fatal("cid")

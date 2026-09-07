@@ -57,12 +57,16 @@ func DeptAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DeptWriteCheck(p, false); msg != "" {
+	if msg := util.DeptPidCheck(p); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
 	if !tenantDeptExists(c, httpx.BodyUint(c, "pid")) {
 		response.Fail(c, "部门不存在")
+		return
+	}
+	if msg := util.DeptWriteCheck(p, false); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if tenantDeptNameTaken(c, 0, httpx.BodyStr(c, "name")) {
@@ -82,14 +86,18 @@ func DeptEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.DeptWriteCheck(p, true); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "参数缺失")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var cur model.TenantDept
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&cur).Error != nil {
-		response.Fail(c, "当前部门信息缺失")
+		response.Fail(c, "部门不存在")
+		return
+	}
+	if msg := util.DeptWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	pid := httpx.BodyUint(c, "pid")
@@ -245,14 +253,18 @@ func JobsEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.JobsWriteCheck(p, true); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "参数缺失")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var exist model.TenantJobs
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&exist).Error != nil {
 		response.Fail(c, "岗位不存在")
+		return
+	}
+	if msg := util.JobsWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if tenantJobsNameTaken(c, id, httpx.BodyStr(c, "name")) {

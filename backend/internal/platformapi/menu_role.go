@@ -156,6 +156,10 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	if !httpx.BodyHas(c, "is_disable") {
+		response.Fail(c, "请选择菜单状态")
+		return
+	}
 	id := httpx.BodyUint(c, "id")
 	var exist model.SystemMenu
 	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
@@ -238,14 +242,18 @@ func RoleEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.RoleWriteCheck(p, true); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "请选择角色")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var exist model.SystemRole
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&exist).Error != nil {
 		response.Fail(c, "角色不存在")
+		return
+	}
+	if msg := util.RoleWriteCheck(p, true); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	if roleNameTaken(id, httpx.BodyStr(c, "name")) {

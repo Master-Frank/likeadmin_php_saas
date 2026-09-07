@@ -113,11 +113,12 @@ func FileNameCheck(name string) string {
 }
 
 func FileMoveCheck(p map[string]any, ids []uint) string {
-	if _, ok := p["ids"]; !ok || len(ids) == 0 {
-		return "缺少ids参数"
-	}
+	// PHP FileValidate $rule lists cid before ids.
 	if _, ok := p["cid"]; !ok {
 		return "缺少cid参数"
+	}
+	if _, ok := p["ids"]; !ok || len(ids) == 0 {
+		return "缺少ids参数"
 	}
 	return ""
 }
@@ -626,6 +627,12 @@ func GeneratorEditCheck(p map[string]any) string {
 	if !phpRequired(p, "id") {
 		return "表id缺失"
 	}
+	// Remaining field rules run only after the caller confirms the row exists
+	// (PHP EditTableValidate checkTableData is on id, before table_name).
+	return GeneratorEditFields(p)
+}
+
+func GeneratorEditFields(p map[string]any) string {
 	if !phpRequired(p, "table_name") {
 		return "请填写表名称"
 	}
@@ -1030,6 +1037,16 @@ func RoleWriteCheck(p map[string]any, needID bool) string {
 	}
 	if v, ok := p["menu_id"]; ok && v != nil && !isArrayValue(v) {
 		return "权限格式错误"
+	}
+	return ""
+}
+
+func DeptPidCheck(p map[string]any) string {
+	if !phpRequired(p, "pid") {
+		return "请选择上级部门"
+	}
+	if !isWholeNumber(p["pid"]) {
+		return "上级部门参数错误"
 	}
 	return ""
 }

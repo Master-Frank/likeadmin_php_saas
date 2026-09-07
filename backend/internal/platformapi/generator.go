@@ -220,14 +220,18 @@ func GeneratorEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if msg := util.GeneratorEditCheck(p); msg != "" {
-		response.Fail(c, msg)
+	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+		response.Fail(c, "表id缺失")
 		return
 	}
 	id := httpx.BodyUint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
 		response.Fail(c, "信息不存在")
+		return
+	}
+	if msg := util.GeneratorEditFields(p); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()
