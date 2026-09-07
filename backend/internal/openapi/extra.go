@@ -522,7 +522,7 @@ func PcConfig(c *gin.Context) {
 			"pc_desc":     cfgsvc.GetString(c, "website", "pc_desc", ""),
 			"pc_keywords": cfgsvc.GetString(c, "website", "pc_keywords", ""),
 		},
-		"siteStatistics": gin.H{"clarity_code": cfgsvc.Get(c, "siteStatistics", "clarity_code", nil)},
+		"siteStatistics": gin.H{"clarity_code": cfgsvc.GetString(c, "siteStatistics", "clarity_code", "")},
 		"version":        config.C.Project.Version,
 		"copyright":      cfgsvc.Get(c, "copyright", "config", []any{}),
 		"admin_url":      ctxutil.Domain(c) + "/admin",

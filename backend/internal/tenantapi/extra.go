@@ -240,7 +240,7 @@ func SettingSetAgreement(c *gin.Context) {
 }
 
 func SettingGetSiteStatistics(c *gin.Context) {
-	response.Data(c, gin.H{"clarity_code": cfgsvc.Get(c, "siteStatistics", "clarity_code", nil)})
+	response.Data(c, gin.H{"clarity_code": cfgsvc.GetString(c, "siteStatistics", "clarity_code", "")})
 }
 
 func SettingSetSiteStatistics(c *gin.Context) {
