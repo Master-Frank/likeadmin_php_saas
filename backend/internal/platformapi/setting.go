@@ -375,11 +375,11 @@ func DictTypeDelete(c *gin.Context) {
 }
 
 func DictTypeDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var r model.DictType
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Fail(c, "字典类型不存在")
@@ -501,11 +501,11 @@ func DictDataDelete(c *gin.Context) {
 }
 
 func DictDataDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var r model.DictData
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Fail(c, "字典数据不存在")

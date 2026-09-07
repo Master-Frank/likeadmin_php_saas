@@ -55,6 +55,31 @@ func TestBodyIgnoresQuery(t *testing.T) {
 	}
 }
 
+func TestQueryIDPresent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	req := func(raw string) bool {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/auth.role/detail"+raw, nil)
+		return QueryIDPresent(c)
+	}
+	if req("") {
+		t.Fatal("missing id must be absent")
+	}
+	if req("?foo=1") {
+		t.Fatal("other keys must not count")
+	}
+	if req("?id=") {
+		t.Fatal("empty id must be absent")
+	}
+	if !req("?id=0") {
+		t.Fatal("id=0 is present under ThinkPHP require")
+	}
+	if !req("?id=12") {
+		t.Fatal("id=12 must be present")
+	}
+}
+
 func TestParamTenantID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	req := func(raw, body string) (uint, bool) {

@@ -769,7 +769,7 @@ func TenantUserLists(c *gin.Context) {
 }
 
 func TenantUserDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "请选择用户")
 		return
 	}

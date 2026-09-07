@@ -45,6 +45,22 @@ func QueryUint(c *gin.Context, key string) uint {
 	return uint(util.ToInt(Query(c)[key]))
 }
 
+// QueryPresent reports whether the query string includes a key whose
+// value ThinkPHP Validate "require" would accept. require treats a
+// missing/empty string as absent but treats the literal "0" as present
+// (!empty($value) || '0' == $value).
+func QueryPresent(c *gin.Context, key string) bool {
+	v, ok := Query(c)[key]
+	if !ok || v == nil {
+		return false
+	}
+	return strings.TrimSpace(util.ToString(v)) != ""
+}
+
+func QueryIDPresent(c *gin.Context) bool {
+	return QueryPresent(c, "id")
+}
+
 func Params(c *gin.Context) map[string]any {
 	if v, ok := c.Get("likeadmin.params"); ok {
 		return v.(map[string]any)

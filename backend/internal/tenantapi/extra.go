@@ -954,11 +954,11 @@ func tenantNoticeByID(c *gin.Context, id uint) (model.TenantNoticeSetting, bool)
 }
 
 func TenantNoticeDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	r, ok := tenantNoticeByID(c, id)
 	if !ok {
 		response.Data(c, []any{})

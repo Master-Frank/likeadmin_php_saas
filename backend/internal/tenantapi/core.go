@@ -338,7 +338,7 @@ func UserLists(c *gin.Context) {
 }
 
 func UserDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "请选择用户")
 		return
 	}
@@ -541,7 +541,7 @@ func ArticleDelete(c *gin.Context) {
 }
 
 func ArticleDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "资讯id不能为空")
 		return
 	}

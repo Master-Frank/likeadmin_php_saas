@@ -438,7 +438,7 @@ func MenuDelete(c *gin.Context) {
 
 func MenuDetail(c *gin.Context) {
 	// PHP MenuValidate sceneDetail is id.require; ThinkPHP require treats 0/"0" as present.
-	if !authAdminIDPresent(httpx.Query(c)) {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -598,7 +598,7 @@ func RoleDelete(c *gin.Context) {
 }
 
 func RoleDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "请选择角色")
 		return
 	}

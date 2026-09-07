@@ -52,11 +52,11 @@ func tenantPayConfigByID(c *gin.Context, id uint) (model.TenantPayConfig, bool) 
 }
 
 func PayConfigGet(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "id不能为空")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	r, ok := tenantPayConfigByID(c, id)
 	if !ok {
 		response.Fail(c, "支付方式不存在")

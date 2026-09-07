@@ -155,7 +155,7 @@ func GeneratorSelectTable(c *gin.Context) {
 }
 
 func GeneratorDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}

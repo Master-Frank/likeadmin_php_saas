@@ -155,7 +155,7 @@ func DeptDelete(c *gin.Context) {
 }
 
 func DeptDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -295,7 +295,7 @@ func JobsDelete(c *gin.Context) {
 }
 
 func JobsDetail(c *gin.Context) {
-	if httpx.QueryUint(c, "id") == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}

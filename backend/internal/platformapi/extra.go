@@ -39,11 +39,11 @@ func PayConfigLists(c *gin.Context) {
 }
 
 func PayConfigGet(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "id不能为空")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var r model.PayConfig
 	if bootstrap.DB.First(&r, id).Error != nil {
 		response.Fail(c, "支付方式不存在")
@@ -319,11 +319,11 @@ func CrontabOperate(c *gin.Context) {
 }
 
 func CrontabDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var r model.Crontab
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Data(c, []any{})
@@ -379,11 +379,11 @@ func NoticeSettingLists(c *gin.Context) {
 }
 
 func NoticeDetail(c *gin.Context) {
-	id := httpx.QueryUint(c, "id")
-	if id == 0 {
+	if !httpx.QueryIDPresent(c) {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	id := httpx.QueryUint(c, "id")
 	var r model.NoticeSetting
 	if bootstrap.DB.First(&r, id).Error != nil || r.ID == 0 {
 		response.Data(c, []any{})

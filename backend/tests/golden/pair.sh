@@ -4419,6 +4419,62 @@ print(first_id(ls))')"
     echo "  go_prd0=${go_prd0:0:200}"
     fail=$((fail + 1))
   fi
+  pair_detail_msg() {
+    local name="$1" path="$2"
+    local extra=()
+    if [[ "$path" == /tenantapi/* || "$path" == /api/* ]]; then
+      extra=(-H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")
+    else
+      extra=(-H "token: $TOKEN")
+    fi
+    local php_body go_body
+    php_body="$(curl -sS "$PHP$path" "${extra[@]}")"
+    go_body="$(curl -sS "$GO$path" "${extra[@]}")"
+    echo "$name php_msg=$(jget msg <<<"$php_body") go_msg=$(jget msg <<<"$go_body")"
+    if [[ "$(jget msg <<<"$php_body")" != "$(jget msg <<<"$go_body")" ]]; then
+      echo "  php=${php_body:0:200}"
+      echo "  go=${go_body:0:200}"
+      fail=$((fail + 1))
+    fi
+  }
+  pair_detail_empty() {
+    local name="$1" path="$2"
+    local extra=()
+    if [[ "$path" == /tenantapi/* || "$path" == /api/* ]]; then
+      extra=(-H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")
+    else
+      extra=(-H "token: $TOKEN")
+    fi
+    local php_body go_body php_shape go_shape
+    php_body="$(curl -sS "$PHP$path" "${extra[@]}")"
+    go_body="$(curl -sS "$GO$path" "${extra[@]}")"
+    php_shape="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$php_body")"
+    go_shape="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$go_body")"
+    echo "$name php=$php_shape go=$go_shape"
+    if [[ "$php_shape" != "$go_shape" ]]; then
+      echo "  php=${php_body:0:200}"
+      echo "  go=${go_body:0:200}"
+      fail=$((fail + 1))
+    fi
+  }
+  # ThinkPHP require treats id=0 as present; missing id stays the require message.
+  pair_detail_msg platform_role_detail_id0 "/platformapi/auth.role/detail?id=0"
+  pair_detail_msg tenant_role_detail_id0 "/tenantapi/auth.role/detail?id=0"
+  pair_detail_msg platform_dept_detail_id0 "/platformapi/dept.dept/detail?id=0"
+  pair_detail_msg tenant_dept_detail_id0 "/tenantapi/dept.dept/detail?id=0"
+  pair_detail_msg platform_jobs_detail_id0 "/platformapi/dept.jobs/detail?id=0"
+  pair_detail_msg tenant_jobs_detail_id0 "/tenantapi/dept.jobs/detail?id=0"
+  pair_detail_msg dict_type_detail_id0 "/platformapi/setting.dict.dict_type/detail?id=0"
+  pair_detail_msg dict_data_detail_id0 "/platformapi/setting.dict.dict_data/detail?id=0"
+  pair_detail_empty crontab_detail_id0 "/platformapi/crontab.crontab/detail?id=0"
+  pair_detail_empty notice_detail_id0 "/platformapi/notice.notice/detail?id=0"
+  pair_detail_empty tenant_notice_detail_id0 "/tenantapi/notice.notice/detail?id=0"
+  pair_detail_msg article_detail_id0 "/tenantapi/article.article/detail?id=0"
+  pair_detail_msg user_detail_id0 "/tenantapi/user.user/detail?id=0"
+  pair_detail_msg tenantuser_detail_id0 "/platformapi/tenant.tenantUser/detail?id=0&tenant_id=1"
+  pair_detail_msg generator_detail_id0 "/platformapi/tools.generator/detail?id=0"
+  pair_detail_msg platform_pay_get_id0 "/platformapi/setting.pay.pay_config/getConfig?id=0"
+  pair_detail_msg tenant_pay_get_id0 "/tenantapi/setting.pay.pay_config/getConfig?id=0"
   php_oadm="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_oadm="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   php_oadmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_oadm")"
@@ -4872,6 +4928,55 @@ print(first_m(json.load(sys.stdin).get("data") or []))
       echo "  go_pp99=${go_pp99:0:200}"
       fail=$((fail + 1))
     fi
+  fi
+  php_app0="$(curl -sS "$PHP/tenantapi/channel.app_setting/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_app0="$(curl -sS "$GO/tenantapi/channel.app_setting/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_appk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_app0")"
+  go_appk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_app0")"
+  echo "app_setting_get php_keys=$php_appk go_keys=$go_appk"
+  if [[ "$php_appk" != "$go_appk" ]]; then
+    echo "  php_app0=${php_app0:0:200}"
+    echo "  go_app0=${go_app0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_appset="$(curl -sS -X POST "$PHP/tenantapi/channel.app_setting/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_appset="$(curl -sS -X POST "$GO/tenantapi/channel.app_setting/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "app_setting_set_empty php_msg=$(jget msg <<<"$php_appset") go_msg=$(jget msg <<<"$go_appset")"
+  if [[ "$(jget msg <<<"$php_appset")" != "$(jget msg <<<"$go_appset")" ]]; then
+    echo "  php_appset=${php_appset:0:200}"
+    echo "  go_appset=${go_appset:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_app1="$(curl -sS "$PHP/tenantapi/channel.app_setting/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_app1="$(curl -sS "$GO/tenantapi/channel.app_setting/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_app1s="$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data") or {}, sort_keys=True))' <<<"$php_app1")"
+  go_app1s="$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("data") or {}, sort_keys=True))' <<<"$go_app1")"
+  echo "app_setting_set_empty_read php=$php_app1s go=$go_app1s"
+  if [[ "$php_app1s" != "$go_app1s" ]]; then
+    echo "  php_app1=${php_app1:0:200}"
+    echo "  go_app1=${go_app1:0:200}"
+    fail=$((fail + 1))
+  fi
+  restore_app="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(json.dumps({"ios_download_url":d.get("ios_download_url") or "","android_download_url":d.get("android_download_url") or "","download_title":d.get("download_title") or ""}))' <<<"$php_app0")"
+  curl -sS -X POST "$PHP/tenantapi/channel.app_setting/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$restore_app" >/dev/null || true
+  php_exm="$(curl -sS "$PHP/platformapi/download/export?file=missing" -H "token: $TOKEN")"
+  go_exm="$(curl -sS "$GO/platformapi/download/export?file=missing" -H "token: $TOKEN")"
+  echo "export_missing php_msg=$(jget msg <<<"$php_exm") go_msg=$(jget msg <<<"$go_exm")"
+  if [[ "$(jget msg <<<"$php_exm")" != "$(jget msg <<<"$go_exm")" ]]; then
+    echo "  php_exm=${php_exm:0:200}"
+    echo "  go_exm=${go_exm:0:200}"
+    fail=$((fail + 1))
+  fi
+  echo 'pair-file' >/tmp/likeadmin-pair-file.txt
+  php_ufok="$(curl -sS -X POST "$PHP/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair-file.txt")"
+  go_ufok="$(curl -sS -X POST "$GO/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair-file.txt")"
+  php_ufokk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)), d.get("type"))' <<<"$php_ufok")"
+  go_ufokk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)), d.get("type"))' <<<"$go_ufok")"
+  echo "upload_file_ok php_code=$(jcode <<<"$php_ufok") go_code=$(jcode <<<"$go_ufok") php=$php_ufokk go=$go_ufokk"
+  if [[ "$(jcode <<<"$php_ufok")" != "1" || "$(jcode <<<"$go_ufok")" != "1" || "$php_ufokk" != "$go_ufokk" ]]; then
+    echo "  php_ufok=${php_ufok:0:240}"
+    echo "  go_ufok=${go_ufok:0:240}"
+    fail=$((fail + 1))
   fi
   php_cclear="$(curl -sS -X POST "$PHP/platformapi/setting.system.cache/clear" -H "token: $TOKEN")"
   go_cclear="$(curl -sS -X POST "$GO/platformapi/setting.system.cache/clear" -H "token: $TOKEN")"
