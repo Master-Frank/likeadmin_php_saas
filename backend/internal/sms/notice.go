@@ -121,6 +121,12 @@ func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]stri
 	if uid == 0 && c != nil {
 		uid = ctxutil.Get(c).UserID
 	}
+	if out["url"] == "" {
+		out["url"] = "/mobile/pages/index/index"
+	}
+	if out["page"] == "" {
+		out["page"] = "/pages/index/index"
+	}
 	if uid == 0 || bootstrap.DB == nil {
 		return out
 	}

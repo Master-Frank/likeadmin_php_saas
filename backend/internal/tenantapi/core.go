@@ -1014,7 +1014,9 @@ func OAReplyIndex(c *gin.Context) {
 	ts := c.Query("timestamp")
 	nonce := c.Query("nonce")
 	if token != "" && sig != "" && !wechat.CheckOASignature(token, sig, ts, nonce) {
-		c.String(401, "invalid signature")
+		// EasyWeChat serve() does not echo echostr on a bad signature.
+		// Do not copy PHP 500 from an unconfigured OA client.
+		c.Data(200, "text/plain;charset=utf-8", []byte("success"))
 		return
 	}
 	writeOA := func(body string) {

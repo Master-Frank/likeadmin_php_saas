@@ -67,6 +67,11 @@ func due(item model.Crontab, now int64) bool {
 	return biz.CronDue(item.Expression, item.LastTime, now)
 }
 
+// RunNamed runs a php-think compatible command (cache/clear/session/query_refund/...).
+func RunNamed(command string, params ...string) string {
+	return runCommand(model.Crontab{Command: command, Params: strings.Join(params, " ")})
+}
+
 func runCommand(item model.Crontab) string {
 	cmd := normalizeCommand(item.Command)
 	_ = strings.Fields(strings.TrimSpace(item.Params))

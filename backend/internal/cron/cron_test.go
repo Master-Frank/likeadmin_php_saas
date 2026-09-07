@@ -27,3 +27,12 @@ func TestRunCommandUnknown(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestRunNamed(t *testing.T) {
+	if RunNamed("not_a_real_command") != "未定义的定时任务命令: not_a_real_command" {
+		t.Fatal(RunNamed("not_a_real_command"))
+	}
+	if got := RunNamed(`app\common\command\QueryRefund`); len(got) >= 3 && got[:3] == "未定" {
+		t.Fatalf("native query_refund should not fall through, got %q", got)
+	}
+}

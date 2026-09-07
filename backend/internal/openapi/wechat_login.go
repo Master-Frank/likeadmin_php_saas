@@ -364,7 +364,7 @@ func findRechargeByNotify(outTradeNo string) (*model.RechargeOrder, error) {
 }
 
 func WechatJsConfigReal(c *gin.Context) {
-	if msg := util.WechatJsConfigCheck(httpx.Params(c)); msg != "" {
+	if msg := util.WechatJsConfigCheck(httpx.Query(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
@@ -373,7 +373,7 @@ func WechatJsConfigReal(c *gin.Context) {
 		response.FailSilent(c, "获取jssdk失败:请先设置公众号配置")
 		return
 	}
-	cfg, err := wechat.JsConfig(appID, secret, httpx.Str(c, "url"))
+	cfg, err := wechat.JsConfig(appID, secret, httpx.QueryStr(c, "url"))
 	if err != nil {
 		response.FailSilent(c, "获取jssdk失败:"+err.Error())
 		return

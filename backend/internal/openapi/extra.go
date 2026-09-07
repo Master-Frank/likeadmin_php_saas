@@ -153,12 +153,12 @@ func RechargeConfig(c *gin.Context) {
 }
 
 func PayWay(c *gin.Context) {
-	if msg := util.PayQueryCheck(httpx.Params(c)); msg != "" {
+	if msg := util.PayQueryCheck(httpx.Query(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	from := httpx.Str(c, "from")
-	orderID := httpx.Uint(c, "order_id")
+	from := httpx.QueryStr(c, "from")
+	orderID := httpx.QueryUint(c, "order_id")
 	if from != "recharge" {
 		response.Fail(c, "待支付订单不存在")
 		return
@@ -296,12 +296,12 @@ func PayPrepay(c *gin.Context) {
 }
 
 func PayStatus(c *gin.Context) {
-	if msg := util.PayQueryCheck(httpx.Params(c)); msg != "" {
+	if msg := util.PayQueryCheck(httpx.Query(c)); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	from := httpx.Str(c, "from")
-	orderID := httpx.Uint(c, "order_id")
+	from := httpx.QueryStr(c, "from")
+	orderID := httpx.QueryUint(c, "order_id")
 	uid := ctxutil.Get(c).UserID
 	if from != "recharge" {
 		response.Fail(c, "订单不存在")

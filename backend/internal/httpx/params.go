@@ -11,6 +11,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Query mirrors PHP BaseValidate::$method=GET / request()->get():
+// only the query string, never the JSON/form body.
+func Query(c *gin.Context) map[string]any {
+	if v, ok := c.Get("likeadmin.query"); ok {
+		return v.(map[string]any)
+	}
+	out := map[string]any{}
+	if c != nil && c.Request != nil {
+		for k, vs := range c.Request.URL.Query() {
+			if len(vs) == 1 {
+				out[k] = vs[0]
+			} else if len(vs) > 1 {
+				out[k] = vs
+			}
+		}
+	}
+	if c != nil {
+		c.Set("likeadmin.query", out)
+	}
+	return out
+}
+
+func QueryStr(c *gin.Context, key string) string {
+	return strings.TrimSpace(util.ToString(Query(c)[key]))
+}
+
+func QueryUint(c *gin.Context, key string) uint {
+	return uint(util.ToInt(Query(c)[key]))
+}
+
 func Params(c *gin.Context) map[string]any {
 	if v, ok := c.Get("likeadmin.params"); ok {
 		return v.(map[string]any)

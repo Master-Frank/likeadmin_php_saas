@@ -82,6 +82,9 @@ func TestMergeNoticeParamsEmpty(t *testing.T) {
 	if got["nickname"] != "" {
 		t.Fatalf("no user should not enrich %+v", got)
 	}
+	if got["url"] != "/mobile/pages/index/index" || got["page"] != "/pages/index/index" {
+		t.Fatalf("php path defaults %+v", got)
+	}
 }
 
 func TestNoticeBySceneMissing(t *testing.T) {

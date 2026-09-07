@@ -1190,9 +1190,20 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
   php_ce="$(curl -sS "$PHP/platformapi/crontab.crontab/expression?expression=*+*+*+*+*" -H "token: $TOKEN")"
   go_ce="$(curl -sS "$GO/platformapi/crontab.crontab/expression?expression=*+*+*+*+*" -H "token: $TOKEN")"
   echo "crontab_expr php_code=$(jcode <<<"$php_ce") go_code=$(jcode <<<"$go_ce") php_tail=$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or []; print((data[-1] or {}).get("date") if data else "")' <<<"$php_ce") go_tail=$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or []; print((data[-1] or {}).get("date") if data else "")' <<<"$go_ce")"
-  if [[ "$(jcode <<<"$php_ce")" != "$(jcode <<<"$go_ce")" ]]; then
+  php_ced="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print("|".join((x.get("date") or "") for x in (d.get("data") or [])))' <<<"$php_ce")"
+  go_ced="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print("|".join((x.get("date") or "") for x in (d.get("data") or [])))' <<<"$go_ce")"
+  echo "crontab_expr_dates php=$php_ced go=$go_ced"
+  if [[ "$(jcode <<<"$php_ce")" != "$(jcode <<<"$go_ce")" || "$php_ced" != "$go_ced" ]]; then
     echo "  php_ce=${php_ce:0:300}"
     echo "  go_ce=${go_ce:0:300}"
+    fail=$((fail + 1))
+  fi
+  php_cepost="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/expression" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"expression":"* * * * *"}')"
+  go_cepost="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/expression" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"expression":"* * * * *"}')"
+  echo "crontab_expr_post php_msg=$(jget msg <<<"$php_cepost") go_msg=$(jget msg <<<"$go_cepost")"
+  if [[ "$(jget msg <<<"$php_cepost")" != "$(jget msg <<<"$go_cepost")" ]]; then
+    echo "  php_cepost=${php_cepost:0:200}"
+    echo "  go_cepost=${go_cepost:0:200}"
     fail=$((fail + 1))
   fi
   php_cebad="$(curl -sS "$PHP/platformapi/crontab.crontab/expression?expression=not-a-cron" -H "token: $TOKEN")"
@@ -1603,6 +1614,14 @@ print(json.dumps({
     go_pw="$(curl -sS "$GO/api/pay/payWay" -H "Host: $TENANT_HOST" -H "token: $UT")"
     echo "pay_way_bad php_msg=$(jget msg <<<"$php_pw") go_msg=$(jget msg <<<"$go_pw")"
     if [[ "$(jget msg <<<"$php_pw")" != "$(jget msg <<<"$go_pw")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_pwj="$(curl -sS -X POST "$PHP/api/pay/payWay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1}')"
+    go_pwj="$(curl -sS -X POST "$GO/api/pay/payWay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1}')"
+    echo "pay_way_postjson php_msg=$(jget msg <<<"$php_pwj") go_msg=$(jget msg <<<"$go_pwj")"
+    if [[ "$(jget msg <<<"$php_pwj")" != "$(jget msg <<<"$go_pwj")" ]]; then
+      echo "  php_pwj=${php_pwj:0:200}"
+      echo "  go_pwj=${go_pwj:0:200}"
       fail=$((fail + 1))
     fi
     php_ps="$(curl -sS "$PHP/api/pay/payStatus?from=recharge" -H "Host: $TENANT_HOST" -H "token: $UT")"
@@ -2366,6 +2385,16 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
   if [[ "$(head -c 20 /tmp/likeadmin-golden/php_oa_echo.txt)" == "pairabc" && "$php_oact" != "$go_oact" ]]; then
     fail=$((fail + 1))
+  fi
+  go_oa_bad="$(curl -sS -D - -o /tmp/likeadmin-golden/go_oa_bad.txt "$GO/tenantapi/channel.official_account_reply/index?signature=bad&timestamp=1&nonce=2&echostr=hello" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  go_oabad_ct="$(oa_ct "$go_oa_bad")"
+  go_oabad_body="$(head -c 40 /tmp/likeadmin-golden/go_oa_bad.txt)"
+  echo "oa_bad_sig go_ct=$go_oabad_ct go_body=$go_oabad_body"
+  if [[ "$go_oabad_ct" != "text/plain;charset=utf-8" || "$go_oabad_body" != "hello" ]]; then
+    # Empty OA token skips the signature check and still echoes echostr (pair default).
+    if [[ "$go_oabad_body" != "hello" && "$go_oabad_body" != "success" ]]; then
+      fail=$((fail + 1))
+    fi
   fi
 fi
 

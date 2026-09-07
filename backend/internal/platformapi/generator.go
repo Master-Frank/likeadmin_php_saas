@@ -353,7 +353,7 @@ func GeneratorGenerate(c *gin.Context) {
 }
 
 func GeneratorDownload(c *gin.Context) {
-	fileName := httpx.Str(c, "file")
+	fileName := httpx.QueryStr(c, "file")
 	if fileName == "" {
 		response.Fail(c, "下载失败")
 		return

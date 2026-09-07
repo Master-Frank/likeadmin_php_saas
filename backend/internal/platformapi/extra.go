@@ -312,7 +312,7 @@ func CrontabDetail(c *gin.Context) {
 }
 
 func CrontabExpression(c *gin.Context) {
-	expr := httpx.Str(c, "expression")
+	expr := httpx.QueryStr(c, "expression")
 	if expr == "" {
 		response.Fail(c, "请输入运行规则")
 		return
