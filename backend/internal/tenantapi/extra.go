@@ -109,7 +109,7 @@ func DecorateDataArticle(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
+			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
 			"click": a.ClickActual + a.ClickVirtual, "create_time": util.FormatDateTime(a.CreateTime),
 		})
 	}

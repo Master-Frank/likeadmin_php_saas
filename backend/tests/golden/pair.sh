@@ -538,6 +538,32 @@ except Exception:
   if command -v mysql >/dev/null; then
     mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
     now="$(date +%s)"
+    if [[ -n "${cid:-}" && "$cid" != "0" ]]; then
+      art_title="pairart$now"
+      art_html="<p><img src=\"http://${TENANT_HOST}/uploads/pair-art.png\"></p>"
+      art_body="$(python3 -c 'import json,sys; print(json.dumps({"cid":int(sys.argv[1]),"title":sys.argv[2],"is_show":1,"content":sys.argv[3],"abstract":"pair","image":""}))' "$cid" "$art_title" "$art_html")"
+      go_art="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$art_body")"
+      art_id="$(mysqlq "SELECT id FROM la_article WHERE title='$art_title' AND delete_time IS NULL ORDER BY id DESC LIMIT 1")"
+      art_stored="$(mysqlq "SELECT content FROM la_article WHERE id=${art_id:-0}")"
+      go_ad="$(curl -sS "$GO/tenantapi/article.article/detail?id=${art_id:-0}" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+      go_acont="$(jget data.content <<<"$go_ad")"
+      stored_rel=0
+      detail_abs=0
+      if [[ "$art_stored" == *pair-art.png* && "$art_stored" != *http://* && "$art_stored" != *https://* ]]; then
+        stored_rel=1
+      fi
+      if [[ "$go_acont" == *pair-art.png* && ( "$go_acont" == *http://* || "$go_acont" == *https://* ) ]]; then
+        detail_abs=1
+      fi
+      echo "article_content_domain go_code=$(jcode <<<"$go_art") stored_rel=$stored_rel detail_abs=$detail_abs"
+      if [[ "$(jcode <<<"$go_art")" != "1" || "$stored_rel" != "1" || "$detail_abs" != "1" ]]; then
+        echo "  stored=${art_stored:0:160} detail=${go_acont:0:160}"
+        fail=$((fail + 1))
+      fi
+      if [[ -n "$art_id" && "$art_id" != "0" ]]; then
+        mysqlq "UPDATE la_article SET delete_time=$now WHERE id=$art_id"
+      fi
+    fi
     mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (999,1,'pairleak','a','resource/image/x.png','','',1,0,$now)"
     leak_id="$(mysqlq "SELECT id FROM la_article WHERE tenant_id=999 AND title='pairleak' ORDER BY id DESC LIMIT 1")"
     if [[ -n "$leak_id" && "$leak_id" != "0" ]]; then

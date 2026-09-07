@@ -443,7 +443,7 @@ func ArticleLists(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "cid": a.Cid, "title": a.Title, "desc": a.Desc, "abstract": a.Abstract,
-			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": a.Content,
+			"image": filesvc.GetFileURL(c, a.Image), "author": a.Author, "content": filesvc.RewriteContentDomains(c, a.Content),
 			"is_show": a.IsShow, "sort": a.Sort, "click_virtual": a.ClickVirtual, "click_actual": a.ClickActual,
 			"click": a.ClickActual + a.ClickVirtual, "cate_name": cates[a.Cid],
 			"tenant_id": a.TenantID, "create_time": util.FormatDateTime(a.CreateTime),
@@ -462,7 +462,7 @@ func ArticleAdd(c *gin.Context) {
 	a := model.Article{
 		Cid: httpx.Uint(c, "cid"), Title: httpx.Str(c, "title"), Desc: httpx.Str(c, "desc"),
 		Abstract: httpx.Str(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.Str(c, "image")),
-		Author: httpx.Str(c, "author"), Content: httpx.Str(c, "content"),
+		Author: httpx.Str(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.Str(c, "content")),
 		IsShow: httpx.Int(c, "is_show"), Sort: httpx.Int(c, "sort"),
 		ClickVirtual: httpx.Int(c, "click_virtual"),
 		TenantID:     tenantDB(c), CreateTime: util.NowUnix(),
@@ -512,7 +512,7 @@ func ArticleEdit(c *gin.Context) {
 	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "title": httpx.Str(c, "title"), "desc": httpx.Str(c, "desc"),
 		"abstract": httpx.Str(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.Str(c, "image")),
-		"author": httpx.Str(c, "author"), "content": httpx.Str(c, "content"),
+		"author": httpx.Str(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.Str(c, "content")),
 		"is_show": httpx.Int(c, "is_show"), "sort": httpx.Int(c, "sort"),
 		"click_virtual": httpx.Int(c, "click_virtual"), "update_time": now,
 	})
