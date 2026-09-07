@@ -37,6 +37,36 @@ print("" if cur is None else cur)
 
 jcode() { jget code ""; }
 
+# Rewrite an absolute URL onto $base. Nginx $host omits the listen port, so
+# API data.url / data.file can become http://127.0.0.1/... (:80) and curl dies.
+origin_url() {
+  local base="$1" url="${2:-}"
+  if [[ -z "$url" ]]; then
+    echo ""
+    return 0
+  fi
+  python3 -c '
+from urllib.parse import urlparse
+import sys
+base=sys.argv[1].rstrip("/")
+url=sys.argv[2].strip()
+if not url:
+    print("")
+    raise SystemExit(0)
+if url.startswith("/"):
+    print(base + url)
+    raise SystemExit(0)
+p=urlparse(url)
+if not p.scheme:
+    print(base + "/" + url.lstrip("/"))
+    raise SystemExit(0)
+path=p.path or "/"
+if p.query:
+    path += "?" + p.query
+print(base + path)
+' "$base" "$url"
+}
+
 login() {
   local base="$1"
   curl -sS -X POST "$base/platformapi/login/account" \
@@ -2148,6 +2178,8 @@ except Exception:
     if [[ -n "$php_file" && -n "$go_file" ]]; then
       php_zip="$OUT/php-curd.zip"
       go_zip="$OUT/go-curd.zip"
+      php_file="$(origin_url "$PHP" "$php_file")"
+      go_file="$(origin_url "$GO" "$go_file")"
       curl -sS -o "$php_zip" "$php_file" -H "token: $TOKEN" || true
       if [[ "$php_file" == "$go_file" ]]; then
         cp -f "$php_zip" "$go_zip" || true
@@ -2569,8 +2601,8 @@ if [[ "$php_lfn" != "$go_lfn" || "$go_lfn" != "系统日志" ]]; then
 fi
 php_lex2="$(curl -sS "$PHP/platformapi/setting.system.log/lists?export=2&page_start=1&page_end=1" -H "token: $TOKEN")"
 go_lex2="$(curl -sS "$GO/platformapi/setting.system.log/lists?export=2&page_start=1&page_end=1" -H "token: $TOKEN")"
-php_exu="$(jget data.url <<<"$php_lex2")"
-go_exu="$(jget data.url <<<"$go_lex2")"
+php_exu="$(origin_url "$PHP" "$(jget data.url <<<"$php_lex2")")"
+go_exu="$(origin_url "$GO" "$(jget data.url <<<"$go_lex2")")"
 echo "log_export_file php_code=$(jcode <<<"$php_lex2") go_code=$(jcode <<<"$go_lex2")"
 if [[ "$(jcode <<<"$php_lex2")" != "$(jcode <<<"$go_lex2")" ]]; then
   fail=$((fail + 1))
@@ -2607,14 +2639,18 @@ print(n)' <<<"$go_tlog")"
   mysqlq "DELETE FROM la_operation_log WHERE action='pair-plat-leak'"
 fi
 if [[ -n "$go_exu" ]]; then
-  go_exf="$(curl -sS -D - -o /tmp/likeadmin-golden/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"
-  go_disp="$(printf '%s\n' "$go_exf" | awk -F': ' 'tolower($1)=="content-disposition"{print $2}')"
-  echo "log_export_xlsx php_url=${php_exu:0:80} disposition=$go_disp magic=$(head -c 2 /tmp/likeadmin-golden/go_export.bin | od -An -tx1)"
-  if [[ "$go_disp" != *.xlsx* ]]; then
+  if ! go_exf="$(curl -sS -D - -o /tmp/likeadmin-golden/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"; then
+    echo "log_export_xlsx download_failed url=$go_exu"
     fail=$((fail + 1))
-  fi
-  if ! cmp -s <(printf 'PK') <(head -c 2 /tmp/likeadmin-golden/go_export.bin); then
-    fail=$((fail + 1))
+  else
+    go_disp="$(printf '%s\n' "$go_exf" | awk -F': ' 'tolower($1)=="content-disposition"{print $2}')"
+    echo "log_export_xlsx php_url=${php_exu:0:80} go_url=${go_exu:0:80} disposition=$go_disp magic=$(head -c 2 /tmp/likeadmin-golden/go_export.bin | od -An -tx1)"
+    if [[ "$go_disp" != *.xlsx* ]]; then
+      fail=$((fail + 1))
+    fi
+    if ! cmp -s <(printf 'PK') <(head -c 2 /tmp/likeadmin-golden/go_export.bin); then
+      fail=$((fail + 1))
+    fi
   fi
 fi
 
