@@ -268,12 +268,8 @@ func GeneratorEdit(c *gin.Context) {
 			if colID == 0 {
 				continue
 			}
-			var n int64
-			tx.Model(&model.GenerateColumn{}).Where("id = ? AND table_id = ?", colID, id).Count(&n)
-			if n == 0 {
-				return fmt.Errorf("字段不存在")
-			}
-			if err := tx.Model(&model.GenerateColumn{}).Where("id = ? AND table_id = ?", colID, id).Updates(map[string]any{
+			// PHP GenerateColumn::update is by column id only; a missing row is a no-op.
+			if err := tx.Model(&model.GenerateColumn{}).Where("id = ?", colID).Updates(map[string]any{
 				"column_comment": util.ToString(m["column_comment"]),
 				"is_required":    util.ToInt(m["is_required"]),
 				"is_insert":      util.ToInt(m["is_insert"]),

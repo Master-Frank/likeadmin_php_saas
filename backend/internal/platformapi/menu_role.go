@@ -109,11 +109,7 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
-	var exist model.SystemMenu
-	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
-		response.Fail(c, "菜单不存在")
-		return
-	}
+	// PHP MenuLogic::edit updates by id with no existence check.
 	m := menuFromReq(c)
 	now := util.NowUnix()
 	m.UpdateTime = &now
@@ -169,15 +165,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	// PHP MenuLogic::updateStatus updates by id with no existence check;
-	// id=0 is a no-op success. Unknown positive ids still fail closed.
-	if id != 0 {
-		var exist model.SystemMenu
-		if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
-			response.Fail(c, "菜单不存在")
-			return
-		}
-	}
+	// PHP MenuLogic::updateStatus updates by id with no existence check.
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("id = ?", id).Updates(map[string]any{
 		"is_disable":  httpx.BodyInt(c, "is_disable"),

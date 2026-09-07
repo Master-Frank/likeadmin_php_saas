@@ -389,11 +389,7 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, "上级菜单不存在")
 		return
 	}
-	var exist model.TenantSystemMenu
-	if scopeTID(tdb(c).Where("id = ?", id), c).First(&exist).Error != nil {
-		response.Fail(c, "菜单不存在")
-		return
-	}
+	// PHP MenuLogic::edit updates by id with no existence check.
 	m := tenantMenuFromReq(c)
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Updates(map[string]any{
@@ -468,15 +464,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	// PHP MenuLogic::updateStatus updates by id with no existence check;
-	// id=0 is a no-op success. Unknown positive ids still fail closed.
-	if id != 0 {
-		var exist model.TenantSystemMenu
-		if scopeTID(tdb(c).Where("id = ?", id), c).First(&exist).Error != nil {
-			response.Fail(c, "菜单不存在")
-			return
-		}
-	}
+	// PHP MenuLogic::updateStatus updates by id with no existence check.
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Update("is_disable", httpx.BodyInt(c, "is_disable"))
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "操作成功")

@@ -2036,15 +2036,19 @@ print(json.dumps({
     echo "  go_pmpid=${go_pmpid:0:200}"
     fail=$((fail + 1))
   fi
+  php_ms="$(curl -sS -X POST "$PHP/tenantapi/auth.menu/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
   go_ms="$(curl -sS -X POST "$GO/tenantapi/auth.menu/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
-  echo "menu_status_missing go_msg=$(jget msg <<<"$go_ms")"
-  if [[ "$(jget msg <<<"$go_ms")" != *菜单不存在* ]]; then
+  echo "menu_status_missing php_msg=$(jget msg <<<"$php_ms") go_msg=$(jget msg <<<"$go_ms")"
+  if [[ "$(jget msg <<<"$php_ms")" != "$(jget msg <<<"$go_ms")" || "$(jget msg <<<"$go_ms")" != *操作成功* ]]; then
+    echo "  php_ms=${php_ms:0:200}"
     echo "  go_ms=${go_ms:0:200}"
     fail=$((fail + 1))
   fi
+  php_pms="$(curl -sS -X POST "$PHP/platformapi/auth.menu/updateStatus" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
   go_pms="$(curl -sS -X POST "$GO/platformapi/auth.menu/updateStatus" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
-  echo "platform_menu_status_missing go_msg=$(jget msg <<<"$go_pms")"
-  if [[ "$(jget msg <<<"$go_pms")" != *菜单不存在* ]]; then
+  echo "platform_menu_status_missing php_msg=$(jget msg <<<"$php_pms") go_msg=$(jget msg <<<"$go_pms")"
+  if [[ "$(jget msg <<<"$php_pms")" != "$(jget msg <<<"$go_pms")" || "$(jget msg <<<"$go_pms")" != *操作成功* ]]; then
+    echo "  php_pms=${php_pms:0:200}"
     echo "  go_pms=${go_pms:0:200}"
     fail=$((fail + 1))
   fi
@@ -2837,9 +2841,11 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
       echo "  go_gd=${go_gd:0:240}"
       fail=$((fail + 1))
     fi
+    php_gec="$(curl -sS -X POST "$PHP/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid,\"table_name\":\"la_config\",\"table_comment\":\"$gcomment\",\"template_type\":0,\"generate_type\":0,\"module_name\":\"platform\",\"table_column\":[{\"id\":99999999,\"query_type\":\"=\",\"view_type\":\"input\"}]}")"
     go_gec="$(curl -sS -X POST "$GO/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid,\"table_name\":\"la_config\",\"table_comment\":\"$gcomment\",\"template_type\":0,\"generate_type\":0,\"module_name\":\"platform\",\"table_column\":[{\"id\":99999999,\"query_type\":\"=\",\"view_type\":\"input\"}]}")"
-    echo "generator_edit_column go_msg=$(jget msg <<<"$go_gec")"
-    if [[ "$(jget msg <<<"$go_gec")" != *字段不存在* ]]; then
+    echo "generator_edit_column php_msg=$(jget msg <<<"$php_gec") go_msg=$(jget msg <<<"$go_gec")"
+    if [[ "$(jget msg <<<"$php_gec")" != "$(jget msg <<<"$go_gec")" || "$(jget msg <<<"$go_gec")" != *操作成功* ]]; then
+      echo "  php_gec=${php_gec:0:200}"
       echo "  go_gec=${go_gec:0:200}"
       fail=$((fail + 1))
     fi
@@ -4515,6 +4521,8 @@ print(first_id(ls))')"
   pair_post_msg tenant_menu_delete_id0 "/tenantapi/auth.menu/delete" '{"id":0}'
   pair_post_msg platform_menu_status_id0 "/platformapi/auth.menu/updateStatus" '{"id":0,"is_disable":1}'
   pair_post_msg tenant_menu_status_id0 "/tenantapi/auth.menu/updateStatus" '{"id":0,"is_disable":1}'
+  pair_post_msg platform_menu_edit_missing "/platformapi/auth.menu/edit" '{"id":99999999,"pid":0,"type":"C","name":"pairmissedit","sort":0,"is_cache":0,"is_show":1,"is_disable":0}'
+  pair_post_msg tenant_menu_edit_missing "/tenantapi/auth.menu/edit" '{"id":99999999,"pid":0,"type":"C","name":"pairmissedit","sort":0,"is_cache":0,"is_show":1,"is_disable":0}'
   pair_post_msg dict_type_delete_id0 "/platformapi/setting.dict.dict_type/delete" '{"id":0}'
   pair_post_msg dict_data_delete_id0 "/platformapi/setting.dict.dict_data/delete" '{"id":0}'
   pair_post_msg crontab_delete_id0 "/platformapi/crontab.crontab/delete" '{"id":0}'
