@@ -15,7 +15,7 @@ func TestDecodePayConfigEmptyIsNull(t *testing.T) {
 
 func TestCheckPayConfigBalance(t *testing.T) {
 	in := PayConfigInput{
-		ID: 1, Name: "余额支付", Icon: "/icon.png", Sort: 1, SortPresent: true,
+		ID: 1, IDPresent: true, Name: "余额支付", Icon: "/icon.png", Sort: 1, SortPresent: true,
 		PayWay: PayBalance, Exists: true,
 	}
 	if msg := CheckPayConfig(in); msg != "" {
@@ -25,7 +25,7 @@ func TestCheckPayConfigBalance(t *testing.T) {
 
 func TestCheckPayConfigWechat(t *testing.T) {
 	in := PayConfigInput{
-		ID: 2, Name: "微信支付", Icon: "/i.png", Sort: 2, SortPresent: true,
+		ID: 2, IDPresent: true, Name: "微信支付", Icon: "/i.png", Sort: 2, SortPresent: true,
 		PayWay: PayWechat, Exists: true, ConfigPresent: true,
 		Config: map[string]any{},
 	}
@@ -45,7 +45,10 @@ func TestCheckPayConfigMessages(t *testing.T) {
 	if CheckPayConfig(PayConfigInput{}) != "id不能为空" {
 		t.Fatal(CheckPayConfig(PayConfigInput{}))
 	}
-	in := PayConfigInput{ID: 1, Exists: true}
+	if CheckPayConfig(PayConfigInput{IDPresent: true, Name: "n", Icon: "i", SortPresent: true, Sort: 1}) != "支付方式不存在" {
+		t.Fatal(CheckPayConfig(PayConfigInput{IDPresent: true, Name: "n", Icon: "i", SortPresent: true, Sort: 1}))
+	}
+	in := PayConfigInput{ID: 1, IDPresent: true, Exists: true}
 	if CheckPayConfig(in) != "支付名称不能为空" {
 		t.Fatal(CheckPayConfig(in))
 	}
@@ -71,7 +74,7 @@ func TestCheckPayConfigMessages(t *testing.T) {
 
 func TestCheckPayConfigAlipayCertificate(t *testing.T) {
 	in := PayConfigInput{
-		ID: 3, Name: "支付宝", Icon: "/i.png", Sort: 3, SortPresent: true,
+		ID: 3, IDPresent: true, Name: "支付宝", Icon: "/i.png", Sort: 3, SortPresent: true,
 		PayWay: PayAlipay, Exists: true, ConfigPresent: true,
 		Config: map[string]any{
 			"mode": "certificate", "merchant_type": "ordinary_merchant",

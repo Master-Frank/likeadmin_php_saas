@@ -69,7 +69,7 @@ func PayConfigSet(c *gin.Context) {
 	_, sortOK := p["sort"]
 	_, cfgOK := p["config"]
 	in := biz.PayConfigInput{
-		ID: id, Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
+		ID: id, IDPresent: httpx.BodyIDPresent(c), Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
 		Sort: httpx.BodyAny(c, "sort"), SortPresent: sortOK, Config: httpx.BodyAny(c, "config"), ConfigPresent: cfgOK,
 		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
 	}

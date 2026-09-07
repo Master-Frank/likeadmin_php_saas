@@ -325,7 +325,7 @@ func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
 		return "请填写字典数据值"
 	}
 	if needTypeID {
-		if _, ok := p["type_id"]; !ok || ToInt(p["type_id"]) == 0 {
+		if !phpRequired(p, "type_id") {
 			return "字典类型缺失"
 		}
 	}

@@ -196,8 +196,8 @@ func GeneratorDelete(c *gin.Context) {
 	if len(ids) == 0 {
 		ids = httpx.BodyUints(c, "ids")
 	}
-	if id := httpx.BodyUint(c, "id"); id > 0 && len(ids) == 0 {
-		ids = []uint{id}
+	if httpx.BodyIDPresent(c) && len(ids) == 0 {
+		ids = []uint{httpx.BodyUint(c, "id")}
 	}
 	if len(ids) == 0 {
 		response.Fail(c, "参数缺失")
@@ -324,8 +324,8 @@ func GeneratorGenerate(c *gin.Context) {
 	if len(ids) == 0 {
 		ids = httpx.BodyUints(c, "ids")
 	}
-	if id := httpx.BodyUint(c, "id"); id > 0 && len(ids) == 0 {
-		ids = []uint{id}
+	if httpx.BodyIDPresent(c) && len(ids) == 0 {
+		ids = []uint{httpx.BodyUint(c, "id")}
 	}
 	if len(ids) == 0 {
 		response.Fail(c, "参数缺失")

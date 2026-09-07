@@ -16,6 +16,7 @@ const (
 
 type PayConfigInput struct {
 	ID            uint
+	IDPresent     bool
 	Name          string
 	Icon          string
 	Remark        string
@@ -29,7 +30,7 @@ type PayConfigInput struct {
 }
 
 func CheckPayConfig(in PayConfigInput) string {
-	if in.ID == 0 {
+	if !in.IDPresent {
 		return "id不能为空"
 	}
 	if strings.TrimSpace(in.Name) == "" {

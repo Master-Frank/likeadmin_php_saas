@@ -255,15 +255,15 @@ func UserAdjustMoney(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	uid := httpx.BodyUint(c, "user_id")
-	action := httpx.BodyInt(c, "action")
-	num := httpx.BodyFloat(c, "num")
-	remark := httpx.BodyStr(c, "remark")
-	if uid == 0 {
+	if !httpx.BodyPresent(c, "user_id") {
 		// PHP AdjustUserMoney rule key is user_id; ThinkPHP prints "user_id不能为空".
 		response.Fail(c, "user_id不能为空")
 		return
 	}
+	uid := httpx.BodyUint(c, "user_id")
+	action := httpx.BodyInt(c, "action")
+	num := httpx.BodyFloat(c, "num")
+	remark := httpx.BodyStr(c, "remark")
 	if action != biz.INC && action != biz.DEC {
 		if httpx.BodyStr(c, "action") == "" {
 			response.Fail(c, "请选择调整类型")

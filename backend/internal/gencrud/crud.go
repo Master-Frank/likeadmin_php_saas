@@ -230,11 +230,11 @@ func doEdit(c *gin.Context, sp *spec) {
 		return
 	}
 	p := httpx.Body(c)
-	id := httpx.BodyUint(c, sp.pk)
-	if id == 0 {
+	if !httpx.BodyPresent(c, sp.pk) {
 		response.Fail(c, sp.pk+"不能为空")
 		return
 	}
+	id := httpx.BodyUint(c, sp.pk)
 	if msg := requiredMsg(sp, p, true); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -286,11 +286,11 @@ func doDelete(c *gin.Context, sp *spec) {
 }
 
 func doDetail(c *gin.Context, sp *spec) {
-	id := httpx.QueryUint(c, sp.pk)
-	if id == 0 {
+	if !httpx.QueryPresent(c, sp.pk) {
 		response.Fail(c, sp.pk+"不能为空")
 		return
 	}
+	id := httpx.QueryUint(c, sp.pk)
 	row := map[string]any{}
 	if scoped(c, sp).Where(sp.pk+" = ?", id).Take(&row).Error != nil || len(row) == 0 {
 		response.Data(c, []any{})

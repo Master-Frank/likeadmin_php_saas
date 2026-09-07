@@ -3677,6 +3677,19 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     else
       echo "gencrud_go_meta ok"
     fi
+    go_gdt0="$(curl -sS "$GO/platformapi/pair_gencrud/detail?id=0" -H "token: $TOKEN")"
+    go_gdt0k="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("code"), d.get("data"))' <<<"$go_gdt0")"
+    echo "gencrud_detail_id0 go=$go_gdt0k"
+    if [[ "$go_gdt0k" != "list 1 []" ]]; then
+      echo "  go_gdt0=${go_gdt0:0:200}"
+      fail=$((fail + 1))
+    fi
+    go_ged0="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":0,"name":"x","status":1}')"
+    echo "gencrud_edit_id0 go_code=$(jcode <<<"$go_ged0") go_msg=$(jget msg <<<"$go_ged0")"
+    if [[ "$(jcode <<<"$go_ged0")" != "1" ]]; then
+      echo "  go_ged0=${go_ged0:0:200}"
+      fail=$((fail + 1))
+    fi
     go_add="$(curl -sS -X POST "$GO/platformapi/pair_gencrud/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"n$ts\",\"status\":1}")"
     echo "gencrud_add go_code=$(jcode <<<"$go_add") go_msg=$(jget msg <<<"$go_add")"
     if [[ "$(jcode <<<"$go_add")" != "1" ]]; then
@@ -4518,6 +4531,15 @@ print(first_id(ls))')"
   pair_post_msg generator_preview_id0 "/platformapi/tools.generator/preview" '{"id":0}'
   pair_post_msg generator_sync_id0 "/platformapi/tools.generator/syncColumn" '{"id":0}'
   pair_post_msg decorate_save_id0 "/tenantapi/decorate.page/save" '{"id":0,"type":1,"data":[{}]}'
+  pair_post_msg decorate_save_type0 "/tenantapi/decorate.page/save" '{"id":0,"type":0,"data":[{}]}'
+  pair_post_msg decorate_save_type_missing "/tenantapi/decorate.page/save" '{"id":0,"data":[{}]}'
+  pair_post_msg decorate_save_data_empty "/tenantapi/decorate.page/save" '{"id":0,"type":1,"data":[]}'
+  pair_post_msg pay_config_set_id0 "/platformapi/setting.pay.pay_config/setConfig" '{"id":0,"name":"x","icon":"x","sort":1}'
+  pair_post_msg tenant_pay_config_set_id0 "/tenantapi/setting.pay.pay_config/setConfig" '{"id":0,"name":"x","icon":"x","sort":1}'
+  pair_post_msg adjust_money_user0 "/tenantapi/user.user/adjustMoney" '{"user_id":0,"action":1,"num":1}'
+  pair_post_msg dict_data_add_type0 "/platformapi/setting.dict.dict_data/add" '{"name":"x","value":"x","type_id":0,"status":1}'
+  pair_post_msg generator_delete_id0 "/platformapi/tools.generator/delete" '{"id":0}'
+  pair_post_msg generator_generate_id0 "/platformapi/tools.generator/generate" '{"id":0}'
   php_oadm="$(curl -sS "$PHP/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_oadm="$(curl -sS "$GO/tenantapi/channel.official_account_reply/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   php_oadmk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(type(d.get("data")).__name__, d.get("data"))' <<<"$php_oadm")"

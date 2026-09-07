@@ -708,6 +708,30 @@ func decoratePayload(c *gin.Context, key string) string {
 	return util.EncodeJSON(v)
 }
 
+// decorateDataPresent mirrors ThinkPHP data.require: missing/empty
+// string and empty arrays fail; a non-empty array or object passes.
+func decorateDataPresent(c *gin.Context) bool {
+	if !httpx.BodyHas(c, "data") {
+		return false
+	}
+	v := httpx.BodyAny(c, "data")
+	if v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) != ""
+	case []any:
+		return len(t) > 0
+	case []map[string]any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	default:
+		return strings.TrimSpace(util.ToString(t)) != ""
+	}
+}
+
 func DecoratePageDetail(c *gin.Context) {
 	var p model.DecoratePage
 	if scopeTID(tdb(c).Where("type = ?", httpx.QueryInt(c, "type")), c).First(&p).Error != nil {
@@ -732,15 +756,15 @@ func DecoratePageSave(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	if !httpx.BodyHas(c, "type") || httpx.BodyInt(c, "type") == 0 {
+	if !httpx.BodyPresent(c, "type") {
 		response.Fail(c, "装修类型参数缺失")
 		return
 	}
-	data := decoratePayload(c, "data")
-	if data == "" {
+	if !decorateDataPresent(c) {
 		response.Fail(c, "装修信息参数缺失")
 		return
 	}
+	data := decoratePayload(c, "data")
 	var page model.DecoratePage
 	if scopeTID(tdb(c).Where("id = ?", id), c).First(&page).Error != nil {
 		response.Fail(c, "信息不存在")
