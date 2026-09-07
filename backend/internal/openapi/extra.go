@@ -88,7 +88,7 @@ func ArticleCollect(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, map[string]any{
 			"id": r.ID, "article_id": r.ArticleID, "title": r.Title,
-			"image": r.Image, "desc": r.Desc, "is_show": r.IsShow,
+			"image": filesvc.GetImageAttr(c, r.Image), "desc": r.Desc, "is_show": r.IsShow,
 			"click": r.ClickActual + r.ClickVirtual, "create_time": util.FormatDateTime(r.CreateTime),
 			"collect_time": util.FormatDateTimeMinute(r.CollectTime),
 		})
