@@ -128,6 +128,13 @@ func TestParsePayNotify(t *testing.T) {
 	if !ShouldMarkRechargePaid(n) {
 		t.Fatal("recharge attach should mark paid")
 	}
+	rf := ParsePayNotify([]byte(`{"event_type":"REFUND.SUCCESS","out_refund_no":"RF1","refund_status":"SUCCESS"}`), nil)
+	if !ShouldApplyRefund(rf) || rf.OutRefundNo != "RF1" {
+		t.Fatalf("refund %+v", rf)
+	}
+	if ShouldApplyRefund(n) {
+		t.Fatal("pay notify should not apply refund")
+	}
 }
 
 func TestTextReplyXML(t *testing.T) {

@@ -42,8 +42,12 @@ func DecryptWechatV3OK(raw []byte, apiV3Key string) (wechat.PayNotify, bool) {
 		return n, false
 	}
 	dec := wechat.ParsePayNotify(plain, nil)
+	dec.EventType = env.EventType
 	if env.EventType == "TRANSACTION.SUCCESS" {
 		dec.Paid = true
+	}
+	if env.EventType == "REFUND.SUCCESS" {
+		dec.RefundOK = true
 	}
 	if dec.Attach == "" {
 		dec.Attach = n.Attach

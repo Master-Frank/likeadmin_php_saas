@@ -2666,6 +2666,26 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     if [[ "$go_pssig" != "0" ]]; then
       fail=$((fail + 1))
     fi
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('v3bad$now',$uid,2,0,9,1,0,1,$now)"
+    go_v3bad="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
+      -H 'Wechatpay-Signature: dGVzdA==' -H 'Wechatpay-Timestamp: 1' -H 'Wechatpay-Nonce: n' -H 'Wechatpay-Serial: S' \
+      -d "{\"event_type\":\"TRANSACTION.SUCCESS\",\"out_trade_no\":\"v3bad$now\",\"attach\":\"recharge\",\"trade_state\":\"SUCCESS\"}")"
+    go_v3ps="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='v3bad$now'")"
+    echo "pay_notify_v3_bad_sign go_pay=$go_v3ps go_body=${go_v3bad:0:80}"
+    if [[ "$go_v3ps" != "0" || "$go_v3bad" != *"验签失败"* ]]; then
+      fail=$((fail + 1))
+    fi
+    mysqlq "INSERT INTO la_refund_record (sn,user_id,order_id,order_sn,order_type,order_amount,refund_amount,refund_type,refund_way,refund_status,tenant_id,create_time) VALUES ('rr$now',$uid,0,'v3bad$now','recharge',9,9,1,1,0,1,$now)"
+    rid="$(mysqlq "SELECT id FROM la_refund_record WHERE sn='rr$now'")"
+    mysqlq "INSERT INTO la_refund_log (sn,record_id,user_id,handle_id,order_amount,refund_amount,refund_status,tenant_id,create_time) VALUES ('rl$now',$rid,$uid,1,9,9,0,1,$now)"
+    go_v3rf="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' \
+      -d "{\"event_type\":\"REFUND.SUCCESS\",\"out_refund_no\":\"rl$now\",\"refund_status\":\"SUCCESS\"}")"
+    go_rfs="$(mysqlq "SELECT refund_status FROM la_refund_log WHERE sn='rl$now'")"
+    go_rrs="$(mysqlq "SELECT refund_status FROM la_refund_record WHERE sn='rr$now'")"
+    echo "pay_notify_v3_refund go_log=$go_rfs go_rec=$go_rrs go_body=${go_v3rf:0:80}"
+    if [[ "$go_rfs" != "1" || "$go_rrs" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
     old_cfg="$(mysqlq "SELECT config FROM la_tenant_pay_config WHERE tenant_id=1 AND pay_way=2 LIMIT 1")"
     if [[ -n "$old_cfg" ]]; then
       new_cfg="$(python3 -c 'import json,sys; m=json.loads(sys.argv[1] or "{}"); m["pay_sign_key"]="pairkey1234567890"; print(json.dumps(m,separators=(",",":")))' "$old_cfg")"

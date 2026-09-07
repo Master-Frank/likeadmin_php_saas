@@ -24,6 +24,7 @@ type WechatPayCfg struct {
 	APIClientKey  string
 	SignKey       string
 	SerialNo      string
+	PublicKey     string
 }
 
 type AliPayCfg struct {
@@ -94,6 +95,10 @@ func WechatCfgByTenant(tenantID uint) WechatPayCfg {
 		APIClientKey:  util.ToString(m["apiclient_key"]),
 		SignKey:       firstNonEmpty(util.ToString(m["pay_sign_key"]), util.ToString(m["secret_key"])),
 		SerialNo:      certSerial(util.ToString(m["apiclient_cert"])),
+		PublicKey: firstNonEmpty(
+			util.ToString(m["wechat_public_key"]),
+			firstNonEmpty(util.ToString(m["wechatpay_public_key"]),
+				firstNonEmpty(util.ToString(m["public_key"]), util.ToString(m["platform_cert"])))),
 	}
 }
 

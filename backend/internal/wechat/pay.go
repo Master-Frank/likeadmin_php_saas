@@ -16,6 +16,9 @@ type PayNotify struct {
 	OutTradeNo    string
 	TransactionID string
 	Paid          bool
+	EventType     string
+	OutRefundNo   string
+	RefundOK      bool
 }
 
 func ParsePayNotify(raw []byte, form map[string][]string) PayNotify {
@@ -62,15 +65,25 @@ func ParsePayNotify(raw []byte, form map[string][]string) PayNotify {
 		n.OutTradeNo = utilString(m["out_trade_no"])
 		n.TransactionID = firstNonEmpty(utilString(m["transaction_id"]), utilString(m["trade_no"]))
 		n.Attach = firstNonEmpty(utilString(m["attach"]), utilString(m["passback_params"]))
+		n.EventType = utilString(m["event_type"])
+		n.OutRefundNo = firstNonEmpty(utilString(m["out_refund_no"]), utilString(m["out_refund_id"]))
 		st := utilString(m["trade_state"])
 		if st == "" {
-			st = utilString(m["event_type"])
+			st = n.EventType
 		}
 		n.Paid = st == "SUCCESS" || st == "TRANSACTION.SUCCESS" || utilString(m["trade_status"]) == "TRADE_SUCCESS"
-		if res, ok := m["resource"].(map[string]any); ok && n.OutTradeNo == "" {
-			n.OutTradeNo = utilString(res["out_trade_no"])
+		refundSt := utilString(m["refund_status"])
+		n.RefundOK = refundSt == "SUCCESS" || n.EventType == "REFUND.SUCCESS"
+		if res, ok := m["resource"].(map[string]any); ok {
+			if n.OutTradeNo == "" {
+				n.OutTradeNo = utilString(res["out_trade_no"])
+			}
 			n.TransactionID = firstNonEmpty(n.TransactionID, utilString(res["transaction_id"]))
 			n.Attach = firstNonEmpty(n.Attach, utilString(res["attach"]))
+			n.OutRefundNo = firstNonEmpty(n.OutRefundNo, utilString(res["out_refund_no"]))
+			if !n.RefundOK {
+				n.RefundOK = utilString(res["refund_status"]) == "SUCCESS"
+			}
 		}
 	}
 	return n
@@ -159,6 +172,12 @@ func RechargeSN(outTradeNo string) string {
 // only the recharge scene is handled; empty attach is ignored.
 func ShouldMarkRechargePaid(n PayNotify) bool {
 	return n.Paid && n.Attach == "recharge"
+}
+
+// ShouldApplyRefund matches a V3 REFUND.SUCCESS notify (PHP handleRefunded is a no-op;
+// Go applies it so a Go-only stack does not wait solely on query_refund cron).
+func ShouldApplyRefund(n PayNotify) bool {
+	return n.RefundOK && n.OutRefundNo != ""
 }
 
 func utilString(v any) string {

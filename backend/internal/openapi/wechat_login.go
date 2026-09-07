@@ -285,6 +285,10 @@ func handlePayNotify(c *gin.Context) {
 			return
 		}
 	} else if isV3 {
+		if !pay.VerifyWechatV3Notify(c, raw) {
+			c.JSON(200, gin.H{"code": "FAIL", "message": "验签失败"})
+			return
+		}
 		dec, ok := pay.DecryptWechatV3WithKeys(raw, pay.CollectWechatSignKeys(ctxutil.Get(c).TenantID))
 		if !ok {
 			c.JSON(200, gin.H{"code": "FAIL", "message": "验签失败"})
@@ -303,6 +307,9 @@ func handlePayNotify(c *gin.Context) {
 				return
 			}
 		}
+	}
+	if wechat.ShouldApplyRefund(n) {
+		pay.ApplyRefundNotify(n)
 	}
 	if wechat.ShouldMarkRechargePaid(n) {
 		if order, err := findRechargeBySN(wechat.RechargeSN(n.OutTradeNo)); err == nil && order != nil && order.PayStatus != 1 {
