@@ -28,14 +28,19 @@ func TestPHPFallbackDefaultOff(t *testing.T) {
 
 func TestGoAPI(t *testing.T) {
 	cases := map[string]bool{
-		"/platformapi/login/account":  true,
-		"/tenantapi/config/getConfig": true,
-		"/api/index/config":           true,
-		"/crontab":                    true,
-		"/install":                    true,
-		"/admin":                      false,
-		"/mobile":                     false,
-		"/resource/x.png":             false,
+		"/platformapi/login/account":            true,
+		"/tenantapi/config/getConfig":           true,
+		"/api/index/config":                     true,
+		"/crontab":                              true,
+		"/install":                              true,
+		"/index.php/platformapi/login/account":  true,
+		"/index.php/tenantapi/config/getConfig": true,
+		"/index.php/api/index/config":           true,
+		"/index.php/crontab":                    true,
+		"/index.php":                            false,
+		"/admin":                                false,
+		"/mobile":                               false,
+		"/resource/x.png":                       false,
 	}
 	for path, want := range cases {
 		if got := goAPI(path); got != want {

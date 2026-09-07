@@ -38,7 +38,7 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 	}
 	appID := wechatAppID(c, terminal)
 	if appID == "" {
-		return nil, fmt.Errorf("请先完成微信渠道配置")
+		return nil, fmt.Errorf("%s", wechatChannelMissing(terminal))
 	}
 	notifyURL := ctxutil.Domain(c) + notifyPath(terminal)
 	amount := int(order.OrderAmount*100 + 0.5)
@@ -253,6 +253,17 @@ func jsapiBridge(key *rsa.PrivateKey, appID, prepayID string) (map[string]any, e
 		"appId": appID, "timeStamp": ts, "nonceStr": nonce,
 		"package": pkg, "signType": "RSA", "paySign": sig,
 	}, nil
+}
+
+func wechatChannelMissing(terminal int) string {
+	switch terminal {
+	case wechat.TerminalMNP:
+		return "请先设置小程序配置"
+	case wechat.TerminalOA, wechat.TerminalH5, wechat.TerminalPC:
+		return "请先设置公众号配置"
+	default:
+		return "请先设置小程序配置"
+	}
 }
 
 func wechatAppID(c *gin.Context, terminal int) string {

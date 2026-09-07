@@ -3,6 +3,7 @@ package filesvc
 import (
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"likeadmin/backend/internal/cache"
@@ -101,25 +102,49 @@ func SetFileURL(c *gin.Context, uri string) string {
 	return strings.ReplaceAll(uri, strings.TrimRight(domain, "/")+"/", "")
 }
 
+func storageScope(c *gin.Context) uint {
+	if c == nil {
+		return 0
+	}
+	return ctxutil.Get(c).TenantID
+}
+
+func storageCacheKey(c *gin.Context, name string) string {
+	if tid := storageScope(c); tid > 0 {
+		return name + "_" + strconv.FormatUint(uint64(tid), 10)
+	}
+	return name
+}
+
+// ClearStorageCache drops tenant-scoped and legacy global storage URL keys.
+func ClearStorageCache(c *gin.Context) {
+	cache.Del(storageCacheKey(c, "STORAGE_DEFAULT"))
+	cache.Del(storageCacheKey(c, "STORAGE_ENGINE"))
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+}
+
 func storageDefault(c *gin.Context) string {
-	if raw, ok := cache.Get("STORAGE_DEFAULT"); ok && raw != "" {
+	key := storageCacheKey(c, "STORAGE_DEFAULT")
+	if raw, ok := cache.Get(key); ok && raw != "" {
 		return raw
 	}
 	def := cfgsvc.GetString(c, "storage", "default", "local")
 	if def != "" {
-		cache.Set("STORAGE_DEFAULT", def, 0)
+		cache.Set(key, def, 0)
 	}
 	return def
 }
 
 func storageEngine(c *gin.Context, def string) map[string]any {
+	key := storageCacheKey(c, "STORAGE_ENGINE")
 	var cached map[string]any
-	if cache.GetJSON("STORAGE_ENGINE", &cached) && cached != nil {
+	if cache.GetJSON(key, &cached) && cached != nil {
 		return cached
 	}
 	engine := cfgsvc.Get(c, "storage", def, nil)
 	if m, ok := engine.(map[string]any); ok && m != nil {
-		cache.Set("STORAGE_ENGINE", m, 0)
+		cache.Set(key, m, 0)
 		return m
 	}
 	return nil

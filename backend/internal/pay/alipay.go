@@ -30,7 +30,7 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 	}
 	cfg := AliCfg(c)
 	if cfg.AppID == "" || cfg.PrivateKey == "" {
-		return nil, fmt.Errorf("请先完成支付渠道配置")
+		return nil, fmt.Errorf("请配置好支付设置")
 	}
 	key, err := parseRSAPrivateKey(cfg.PrivateKey)
 	if err != nil {

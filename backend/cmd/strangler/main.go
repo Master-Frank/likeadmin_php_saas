@@ -35,6 +35,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 		if goAPI(r.URL.Path) {
+			r.URL.Path = canonicalAPIPath(r.URL.Path)
 			goProxy.ServeHTTP(w, r)
 			return
 		}
@@ -84,12 +85,26 @@ func setForwarded(req *http.Request, host string) {
 }
 
 func goAPI(path string) bool {
+	path = canonicalAPIPath(path)
 	for _, p := range []string{"/platformapi/", "/tenantapi/", "/api/", "/crontab", "/install"} {
 		if strings.HasPrefix(path, p) || path == strings.TrimSuffix(p, "/") {
 			return true
 		}
 	}
 	return false
+}
+
+// canonicalAPIPath strips ThinkPHP PATHINFO /index.php so the same API
+// prefixes reach Go (PHP public/index.php/platformapi/...).
+func canonicalAPIPath(path string) string {
+	path = strings.TrimPrefix(path, "/index.php")
+	if path == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
 }
 
 func resolvePublicDir() string {

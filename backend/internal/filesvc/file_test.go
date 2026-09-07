@@ -1,11 +1,15 @@
 package filesvc
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestGetImageAttrEmpty(t *testing.T) {
@@ -88,6 +92,44 @@ func TestStorageCache(t *testing.T) {
 	}
 	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
 		t.Fatalf("set url=%s", got)
+	}
+}
+
+func TestStorageCacheTenantIsolation(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	cache.Del("STORAGE_DEFAULT_1")
+	cache.Del("STORAGE_ENGINE_1")
+	cache.Del("STORAGE_DEFAULT_2")
+	cache.Del("STORAGE_ENGINE_2")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+		cache.Del("STORAGE_DEFAULT_1")
+		cache.Del("STORAGE_ENGINE_1")
+		cache.Del("STORAGE_DEFAULT_2")
+		cache.Del("STORAGE_ENGINE_2")
+	})
+	w1 := httptest.NewRecorder()
+	c1, _ := gin.CreateTestContext(w1)
+	ctxutil.Get(c1).TenantID = 1
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	ctxutil.Get(c2).TenantID = 2
+	cache.Set(storageCacheKey(c1, "STORAGE_DEFAULT"), "qiniu", 0)
+	cache.Set(storageCacheKey(c1, "STORAGE_ENGINE"), map[string]any{"domain": "https://cdn-a.example/"}, 0)
+	if storageDefault(c2) == "qiniu" {
+		t.Fatal("tenant 2 must not inherit tenant 1 storage default")
+	}
+	if storageEngine(c2, "qiniu") != nil {
+		t.Fatal("tenant 2 must not inherit tenant 1 engine cache")
+	}
+	if got := GetFileURL(c1, "uploads/a.png"); got != "https://cdn-a.example/uploads/a.png" {
+		t.Fatalf("tenant1 url=%s", got)
+	}
+	ClearStorageCache(c1)
+	if _, ok := cache.Get("STORAGE_DEFAULT_1"); ok {
+		t.Fatal("tenant cache should clear")
 	}
 }
 

@@ -10,6 +10,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"testing"
+
+	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/wechat"
 )
 
 func TestRSASignVerify(t *testing.T) {
@@ -108,6 +111,22 @@ func TestWechatRefundMissingConfig(t *testing.T) {
 	err := WechatRefund(nil, "", "rf1", 1, 1)
 	if err == nil || err.Error() != "请先完成支付渠道配置" {
 		t.Fatalf("cfg %v", err)
+	}
+}
+
+func TestAliPrepayMissingConfig(t *testing.T) {
+	_, err := AliPrepay(nil, model.RechargeOrder{OrderAmount: 1}, "recharge", "/", wechat.TerminalOA)
+	if err == nil || err.Error() != "请配置好支付设置" {
+		t.Fatalf("ali prepay cfg %v", err)
+	}
+}
+
+func TestWechatChannelMissing(t *testing.T) {
+	if wechatChannelMissing(wechat.TerminalMNP) != "请先设置小程序配置" {
+		t.Fatal(wechatChannelMissing(wechat.TerminalMNP))
+	}
+	if wechatChannelMissing(wechat.TerminalOA) != "请先设置公众号配置" {
+		t.Fatal(wechatChannelMissing(wechat.TerminalOA))
 	}
 }
 

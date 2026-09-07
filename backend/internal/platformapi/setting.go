@@ -636,8 +636,7 @@ func StorageSetup(c *gin.Context) {
 			"domain": httpx.BodyStr(c, "domain"),
 		})
 	}
-	cache.Del("STORAGE_DEFAULT")
-	cache.Del("STORAGE_ENGINE")
+	filesvc.ClearStorageCache(c)
 	if engine == "local" && status == 0 {
 		response.SuccessNotice(c, "默认开启本地存储")
 		return
@@ -660,8 +659,7 @@ func StorageChange(c *gin.Context) {
 	} else {
 		cfgsvc.Set(c, "storage", "default", engine)
 	}
-	cache.Del("STORAGE_DEFAULT")
-	cache.Del("STORAGE_ENGINE")
+	filesvc.ClearStorageCache(c)
 	response.SuccessNotice(c, "切换成功")
 }
 
