@@ -200,6 +200,10 @@ func UploadVideo(c *gin.Context) { tenantUpload(c, 20, "uploads/video", "video")
 func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", "file") }
 
 func tenantUpload(c *gin.Context, typ int, dir, scene string) {
+	if msg := filesvc.UploadCateOK(tdb(c), &model.TenantFileCate{}, filesvc.UploadCID(c), tenantDB(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
 	if errMsg != "" {
 		response.Fail(c, errMsg)

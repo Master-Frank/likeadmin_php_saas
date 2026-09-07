@@ -62,6 +62,26 @@ func UploadCID(c *gin.Context) uint {
 	return httpx.Uint(c, "cid")
 }
 
+// UploadCateOK rejects a non-zero cid that is missing or belongs to another tenant.
+func UploadCateOK(db *gorm.DB, cateModel any, cid, tenantID uint) string {
+	if cid == 0 {
+		return ""
+	}
+	if db == nil {
+		return "文件分类不存在"
+	}
+	q := cateDB(db).Model(cateModel).Where("id = ? AND delete_time IS NULL", cid)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	var n int64
+	q.Count(&n)
+	if n == 0 {
+		return "文件分类不存在"
+	}
+	return ""
+}
+
 func truncateUploadName(name string) string {
 	if len(name) <= 128 {
 		return name

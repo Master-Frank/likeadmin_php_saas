@@ -8,6 +8,15 @@ import (
 	"likeadmin/backend/internal/config"
 )
 
+func TestUploadCateOKZero(t *testing.T) {
+	if UploadCateOK(nil, nil, 0, 1) != "" {
+		t.Fatal("cid 0 should skip lookup")
+	}
+	if UploadCateOK(nil, nil, 9, 1) != "文件分类不存在" {
+		t.Fatal("missing db should reject cid")
+	}
+}
+
 func TestApplyFileCIDMissingCid(t *testing.T) {
 	if ApplyFileCID(nil, nil, map[string]any{}, 7) != nil {
 		t.Fatal("missing cid should leave db unchanged")

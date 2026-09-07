@@ -460,12 +460,8 @@ func UserBindMobile(c *gin.Context) {
 		return
 	}
 	q := tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile)
-	if typ == "bind" {
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			q = q.Where("tenant_id = ?", tid)
-		}
-	} else {
-		q = q.Where("id = ? AND mobile = ?", u.ID, mobile)
+	if tid := ctxutil.Get(c).TenantID; tid > 0 {
+		q = q.Where("tenant_id = ?", tid)
 	}
 	var exist model.User
 	if q.First(&exist).Error == nil {
@@ -679,6 +675,10 @@ func decoratePageMap(page model.DecoratePage) gin.H {
 }
 
 func UploadImage(c *gin.Context) {
+	if msg := filesvc.UploadCateOK(tdb(c), &model.TenantFileCate{}, filesvc.UploadCID(c), ctxutil.Get(c).TenantID); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	name, rel, errMsg := filesvc.ReceiveUpload(c, "image", "uploads/images")
 	if errMsg != "" {
 		response.Fail(c, errMsg)

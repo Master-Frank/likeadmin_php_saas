@@ -1492,6 +1492,24 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_mp4")" != "$(jget msg <<<"$go_mp4")" ]]; then
       fail=$((fail + 1))
     fi
+    go_ucid="$(curl -sS -X POST "$GO/tenantapi/upload/image" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
+    echo "file_upload_cid_missing go_msg=$(jget msg <<<"$go_ucid")"
+    if [[ "$(jget msg <<<"$go_ucid")" != *文件分类不存在* ]]; then
+      echo "  go_ucid=${go_ucid:0:200}"
+      fail=$((fail + 1))
+    fi
+    go_pucid="$(curl -sS -X POST "$GO/platformapi/upload/image" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
+    echo "platform_file_upload_cid_missing go_msg=$(jget msg <<<"$go_pucid")"
+    if [[ "$(jget msg <<<"$go_pucid")" != *文件分类不存在* ]]; then
+      echo "  go_pucid=${go_pucid:0:200}"
+      fail=$((fail + 1))
+    fi
+    go_aucid="$(curl -sS -X POST "$GO/api/upload/image" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
+    echo "api_file_upload_cid_missing go_msg=$(jget msg <<<"$go_aucid")"
+    if [[ "$(jget msg <<<"$go_aucid")" != *文件分类不存在* ]]; then
+      echo "  go_aucid=${go_aucid:0:200}"
+      fail=$((fail + 1))
+    fi
   fi
   php_es="$(curl -sS -X POST "$PHP/tenantapi/auth.admin/editSelf" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_es="$(curl -sS -X POST "$GO/tenantapi/auth.admin/editSelf" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -1515,6 +1533,18 @@ print(json.dumps({
   echo "platform_menu_parent go_msg=$(jget msg <<<"$go_pmpid")"
   if [[ "$(jget msg <<<"$go_pmpid")" != *上级菜单不存在* ]]; then
     echo "  go_pmpid=${go_pmpid:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_ms="$(curl -sS -X POST "$GO/tenantapi/auth.menu/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
+  echo "menu_status_missing go_msg=$(jget msg <<<"$go_ms")"
+  if [[ "$(jget msg <<<"$go_ms")" != *菜单不存在* ]]; then
+    echo "  go_ms=${go_ms:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_pms="$(curl -sS -X POST "$GO/platformapi/auth.menu/updateStatus" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_disable":1}')"
+  echo "platform_menu_status_missing go_msg=$(jget msg <<<"$go_pms")"
+  if [[ "$(jget msg <<<"$go_pms")" != *菜单不存在* ]]; then
+    echo "  go_pms=${go_pms:0:200}"
     fail=$((fail + 1))
   fi
   go_rlog="$(curl -sS "$GO/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -1656,6 +1686,12 @@ print(json.dumps(data,ensure_ascii=False))
   go_pws="$(curl -sS -X POST "$GO/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "$pwbad")"
   echo "payway_set_bad php_msg=$(jget msg <<<"$php_pws") go_msg=$(jget msg <<<"$go_pws")"
   if [[ "$(jget msg <<<"$php_pws")" != "$(jget msg <<<"$go_pws")" ]]; then
+    fail=$((fail + 1))
+  fi
+  go_pwm="$(curl -sS -X POST "$GO/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"1":[{"id":99999999,"is_default":1,"status":1}]}')"
+  echo "payway_set_missing go_msg=$(jget msg <<<"$go_pwm")"
+  if [[ "$(jget msg <<<"$go_pwm")" != *支付方式不存在* ]]; then
+    echo "  go_pwm=${go_pwm:0:200}"
     fail=$((fail + 1))
   fi
   rname="pr${ts: -6}"
@@ -2012,6 +2048,12 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
     if [[ "$php_gk" != "1" || "$go_gk" != "1" ]]; then
       echo "  php_gd=${php_gd:0:240}"
       echo "  go_gd=${go_gd:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_gec="$(curl -sS -X POST "$GO/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid,\"table_name\":\"la_config\",\"table_comment\":\"$gcomment\",\"template_type\":0,\"generate_type\":0,\"module_name\":\"platform\",\"table_column\":[{\"id\":99999999,\"query_type\":\"=\",\"view_type\":\"input\"}]}")"
+    echo "generator_edit_column go_msg=$(jget msg <<<"$go_gec")"
+    if [[ "$(jget msg <<<"$go_gec")" != *字段不存在* ]]; then
+      echo "  go_gec=${go_gec:0:200}"
       fail=$((fail + 1))
     fi
     php_pv="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}")"

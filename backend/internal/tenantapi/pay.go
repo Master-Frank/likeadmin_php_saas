@@ -158,7 +158,16 @@ func PayWaySet(c *gin.Context) {
 			if tid := tenantDB(c); tid > 0 {
 				q = q.Where("tenant_id = ?", tid)
 			}
-			q.Updates(map[string]any{
+			var row model.TenantPayWay
+			if q.First(&row).Error != nil {
+				response.Fail(c, "支付方式不存在")
+				return
+			}
+			uq := tdb(c).Model(&model.TenantPayWay{}).Where("id = ?", row.ID)
+			if tid := tenantDB(c); tid > 0 {
+				uq = uq.Where("tenant_id = ?", tid)
+			}
+			uq.Updates(map[string]any{
 				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
 			})
 		}

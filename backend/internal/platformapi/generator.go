@@ -20,6 +20,7 @@ import (
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func GeneratorDataTable(c *gin.Context) {
@@ -231,32 +232,45 @@ func GeneratorEdit(c *gin.Context) {
 	if v := httpx.Any(c, "relations"); v != nil {
 		data["relations"] = util.EncodeJSON(v)
 	}
-	if err := bootstrap.DB.Model(&model.GenerateTable{}).Where("id = ?", id).Updates(data).Error; err != nil {
+	cols, _ := httpx.Any(c, "table_column").([]any)
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.GenerateTable{}).Where("id = ?", id).Updates(data).Error; err != nil {
+			return err
+		}
+		for _, item := range cols {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
+			}
+			colID := uint(util.ToInt(m["id"]))
+			if colID == 0 {
+				continue
+			}
+			var n int64
+			tx.Model(&model.GenerateColumn{}).Where("id = ? AND table_id = ?", colID, id).Count(&n)
+			if n == 0 {
+				return fmt.Errorf("字段不存在")
+			}
+			if err := tx.Model(&model.GenerateColumn{}).Where("id = ? AND table_id = ?", colID, id).Updates(map[string]any{
+				"column_comment": util.ToString(m["column_comment"]),
+				"is_required":    util.ToInt(m["is_required"]),
+				"is_insert":      util.ToInt(m["is_insert"]),
+				"is_update":      util.ToInt(m["is_update"]),
+				"is_lists":       util.ToInt(m["is_lists"]),
+				"is_query":       util.ToInt(m["is_query"]),
+				"query_type":     util.ToString(m["query_type"]),
+				"view_type":      util.ToString(m["view_type"]),
+				"dict_type":      util.ToString(m["dict_type"]),
+				"update_time":    now,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		response.Fail(c, err.Error())
 		return
-	}
-	cols, _ := httpx.Any(c, "table_column").([]any)
-	for _, item := range cols {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			continue
-		}
-		colID := uint(util.ToInt(m["id"]))
-		if colID == 0 {
-			continue
-		}
-		bootstrap.DB.Model(&model.GenerateColumn{}).Where("id = ?", colID).Updates(map[string]any{
-			"column_comment": util.ToString(m["column_comment"]),
-			"is_required":    util.ToInt(m["is_required"]),
-			"is_insert":      util.ToInt(m["is_insert"]),
-			"is_update":      util.ToInt(m["is_update"]),
-			"is_lists":       util.ToInt(m["is_lists"]),
-			"is_query":       util.ToInt(m["is_query"]),
-			"query_type":     util.ToString(m["query_type"]),
-			"view_type":      util.ToString(m["view_type"]),
-			"dict_type":      util.ToString(m["dict_type"]),
-			"update_time":    now,
-		})
 	}
 	response.SuccessNotice(c, "操作成功")
 }

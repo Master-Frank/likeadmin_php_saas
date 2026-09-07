@@ -370,6 +370,11 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	var exist model.TenantSystemMenu
+	if scopeTID(tdb(c).Where("id = ?", id), c).First(&exist).Error != nil {
+		response.Fail(c, "菜单不存在")
+		return
+	}
 	m := tenantMenuFromReq(c)
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", id), c).Updates(map[string]any{
@@ -414,6 +419,11 @@ func MenuDetail(c *gin.Context) {
 func MenuUpdateStatus(c *gin.Context) {
 	if httpx.Uint(c, "id") == 0 {
 		response.Fail(c, "参数缺失")
+		return
+	}
+	var exist model.TenantSystemMenu
+	if scopeTID(tdb(c).Where("id = ?", httpx.Uint(c, "id")), c).First(&exist).Error != nil {
+		response.Fail(c, "菜单不存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemMenu{}).Where("id = ?", httpx.Uint(c, "id")), c).Update("is_disable", httpx.Int(c, "is_disable"))

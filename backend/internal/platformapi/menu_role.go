@@ -98,6 +98,11 @@ func MenuEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	var exist model.SystemMenu
+	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
+		response.Fail(c, "菜单不存在")
+		return
+	}
 	m := menuFromReq(c)
 	now := util.NowUnix()
 	m.UpdateTime = &now
@@ -139,6 +144,11 @@ func MenuUpdateStatus(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
+	var exist model.SystemMenu
+	if bootstrap.DB.Where("id = ?", id).First(&exist).Error != nil {
+		response.Fail(c, "菜单不存在")
+		return
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemMenu{}).Where("id = ?", id).Updates(map[string]any{
 		"is_disable":  httpx.Int(c, "is_disable"),
