@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
 
@@ -49,7 +50,7 @@ func InstallAndTenant() gin.HandlerFunc {
 		if strings.Contains(first, "api") {
 			if first == "platformapi" {
 				meta.Source = ctxutil.SourcePlatform
-				if tid := firstNonEmpty(c.Query("tenant_id"), c.Query("tenantId")); tid != "" {
+				if tid := platformRequestTenantID(c); tid != "" {
 					id := uint(atoi(tid))
 					meta.TenantID = id
 					bindPlatformTenant(meta, id)
@@ -70,6 +71,11 @@ func InstallAndTenant() gin.HandlerFunc {
 				return
 			}
 			meta.Source = ctxutil.SourcePlatform
+			if tid := platformRequestTenantID(c); tid != "" {
+				id := uint(atoi(tid))
+				meta.TenantID = id
+				bindPlatformTenant(meta, id)
+			}
 			c.Next()
 			return
 		}
@@ -160,6 +166,16 @@ func bindPlatformTenant(meta *ctxutil.RequestMeta, id uint) {
 	}
 	meta.TenantSN = tenant.SN
 	meta.Tactics = tenant.Tactics
+}
+
+// platformRequestTenantID matches PHP LikeAdminAllowMiddleware: request()->param()
+// so tenant_id/tenantId may arrive on the query string or in the JSON/form body
+// (platform axios isParamsToData moves GET params onto POST body).
+func platformRequestTenantID(c *gin.Context) string {
+	if v := firstNonEmpty(c.Query("tenant_id"), c.Query("tenantId")); v != "" {
+		return v
+	}
+	return firstNonEmpty(httpx.BodyStr(c, "tenant_id"), httpx.BodyStr(c, "tenantId"))
 }
 
 func firstNonEmpty(a, b string) string {

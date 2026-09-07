@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,31 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func TestPlatformRequestTenantID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	q := func(raw string, body string) string {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/x"+raw, bytes.NewBufferString(body))
+		if body != "" {
+			c.Request.Header.Set("Content-Type", "application/json")
+		}
+		return platformRequestTenantID(c)
+	}
+	if q("?tenant_id=2", `{"tenant_id":9}`) != "2" {
+		t.Fatal("query wins")
+	}
+	if q("", `{"tenant_id":9}`) != "9" {
+		t.Fatal("body tenant_id")
+	}
+	if q("", `{"tenantId":7}`) != "7" {
+		t.Fatal("body tenantId")
+	}
+	if q("", `{}`) != "" {
+		t.Fatal("empty")
+	}
+}
 
 func TestServeTenantErrorPage(t *testing.T) {
 	dir := t.TempDir()

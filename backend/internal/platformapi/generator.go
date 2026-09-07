@@ -66,8 +66,9 @@ func GeneratorGenerateTable(c *gin.Context) {
 		return
 	}
 	db := bootstrap.DB.Model(&model.GenerateTable{})
+	// PHP ListsSearchTrait %like% on table_name / table_comment independently (AND).
 	if n := lists.Param(q, "table_name"); n != "" {
-		db = db.Where("table_name LIKE ? OR table_comment LIKE ?", "%"+n+"%", "%"+n+"%")
+		db = db.Where("table_name LIKE ?", "%"+n+"%")
 	}
 	if cmt := lists.Param(q, "table_comment"); cmt != "" {
 		db = db.Where("table_comment LIKE ?", "%"+cmt+"%")
@@ -78,12 +79,7 @@ func GeneratorGenerateTable(c *gin.Context) {
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, map[string]any{
-			"id": r.ID, "table_name": r.Name, "table_comment": r.TableComment,
-			"template_type": r.TemplateType, "template_type_desc": generatorTemplateTypeDesc(r.TemplateType),
-			"generate_type": r.GenerateType, "module_name": r.ModuleName,
-			"author": r.Author, "remark": r.Remark, "create_time": util.FormatDateTime(r.CreateTime),
-		})
+		out = append(out, formatGenerateTableList(r))
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
@@ -537,6 +533,38 @@ func generatorTemplateTypeDesc(t int) string {
 		return "树表(增删改查)"
 	}
 	return "单表(增删改查)"
+}
+
+// formatGenerateTableList matches PHP GenerateTable::toArray() + template_type_desc.
+func formatGenerateTableList(r model.GenerateTable) map[string]any {
+	return map[string]any{
+		"id": r.ID, "table_name": r.Name, "table_comment": r.TableComment,
+		"template_type": r.TemplateType, "template_type_desc": generatorTemplateTypeDesc(r.TemplateType),
+		"generate_type": r.GenerateType, "module_name": r.ModuleName,
+		"class_dir": r.ClassDir, "class_comment": r.ClassComment, "admin_id": r.AdminID,
+		"author": r.Author, "remark": r.Remark,
+		"menu": phpJSONAssoc(r.Menu), "delete": phpJSONAssoc(r.Delete),
+		"tree": phpJSONAssoc(r.Tree), "relations": phpJSONAssoc(r.Relations),
+		"create_time": util.FormatDateTime(r.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(r.UpdateTime),
+	}
+}
+
+// phpJSONAssoc matches ThinkPHP $jsonAssoc: json_decode($raw, true).
+// Empty objects become [] (PHP json_decode('{}', true) === []).
+func phpJSONAssoc(raw string) any {
+	s := strings.TrimSpace(raw)
+	if s == "" || s == "null" {
+		return []any{}
+	}
+	v := util.DecodeJSON(raw)
+	if m, ok := v.(map[string]any); ok && len(m) == 0 {
+		return []any{}
+	}
+	if v == nil {
+		return []any{}
+	}
+	return v
 }
 
 func formatGeneratorDetail(t model.GenerateTable, cols []model.GenerateColumn) map[string]any {

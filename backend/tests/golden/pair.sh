@@ -2490,6 +2490,27 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
 fi
 
+php_gt="$(curl -sS "$PHP/platformapi/tools.generator/generateTable?page_size=1" -H "token: $TOKEN")"
+go_gt="$(curl -sS "$GO/platformapi/tools.generator/generateTable?page_size=1" -H "token: $TOKEN")"
+php_gtk="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(",".join(sorted(ls[0].keys())) if ls and isinstance(ls[0], dict) else "")
+' <<<"$php_gt")"
+go_gtk="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(",".join(sorted(ls[0].keys())) if ls and isinstance(ls[0], dict) else "")
+' <<<"$go_gt")"
+echo "generator_generatetable_keys php=$php_gtk go=$go_gtk"
+if [[ -n "$php_gtk" && "$php_gtk" != "$go_gtk" ]]; then
+  echo "  php_gt=${php_gt:0:240}"
+  echo "  go_gt=${go_gt:0:240}"
+  fail=$((fail + 1))
+fi
+if [[ "$go_gtk" != *class_dir* || "$go_gtk" != *menu* || "$go_gtk" != *relations* ]]; then
+  echo "  go_gt=${go_gt:0:240}"
+  fail=$((fail + 1))
+fi
+
 php_dt="$(curl -sS "$PHP/platformapi/tools.generator/dataTable?page_size=5" -H "token: $TOKEN")"
 go_dt="$(curl -sS "$GO/platformapi/tools.generator/dataTable?page_size=5" -H "token: $TOKEN")"
 php_dtk="$(python3 -c 'import json,sys

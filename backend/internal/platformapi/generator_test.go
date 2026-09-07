@@ -36,6 +36,33 @@ func TestGenerateBundleHasPHPShapes(t *testing.T) {
 	}
 }
 
+func TestPHPJSONAssoc(t *testing.T) {
+	if _, ok := phpJSONAssoc("{}").([]any); !ok {
+		t.Fatalf("empty object must become list, got %T", phpJSONAssoc("{}"))
+	}
+	if _, ok := phpJSONAssoc("[]").([]any); !ok {
+		t.Fatalf("array %T", phpJSONAssoc("[]"))
+	}
+	m, ok := phpJSONAssoc(`{"pid":0,"type":0,"name":"x"}`).(map[string]any)
+	if !ok || m["name"] != "x" {
+		t.Fatalf("object %v", phpJSONAssoc(`{"pid":0,"type":0,"name":"x"}`))
+	}
+}
+
+func TestFormatGenerateTableListKeys(t *testing.T) {
+	row := formatGenerateTableList(model.GenerateTable{
+		ID: 1, Name: "la_config", TableComment: "cfg", Menu: `{"pid":0,"type":0,"name":"n"}`,
+		Delete: `{"type":0,"name":"delete_time"}`, Tree: `{}`, Relations: `[]`,
+	})
+	for _, k := range []string{"id", "table_name", "table_comment", "template_type", "template_type_desc",
+		"generate_type", "module_name", "class_dir", "class_comment", "admin_id", "author", "remark",
+		"menu", "delete", "tree", "relations", "create_time", "update_time"} {
+		if _, ok := row[k]; !ok {
+			t.Fatalf("missing %s", k)
+		}
+	}
+}
+
 func TestTableStatusValue(t *testing.T) {
 	if tableStatusValue(nil) != nil {
 		t.Fatal("nil")
