@@ -524,7 +524,11 @@ func TenantAdminDelete(c *gin.Context) {
 	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Update("delete_time", now).Error; err != nil {
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		if a.TenantID > 0 {
+			q = q.Where("tenant_id = ?", a.TenantID)
+		}
+		if err := q.Update("delete_time", now).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -568,15 +572,9 @@ func resolveTenantAdmin(tid, adminID uint) (*gorm.DB, model.TenantAdmin, bool) {
 		}
 		return bootstrap.DB, a, true
 	}
-	var tenants []model.Tenant
-	bootstrap.DB.Where("tactics = 1 AND delete_time IS NULL AND sn <> ''").Find(&tenants)
-	for _, t := range tenants {
-		adb := tenantAdminDB(t)
-		var row model.TenantAdmin
-		if adb.Where("id = ? AND delete_time IS NULL", adminID).First(&row).Error == nil {
-			return adb, row, true
-		}
-	}
+	// PHP TenantAdmin::findOrEmpty($id) only hits the shared table. Scanning
+	// every la_tenant_admin_{sn} by id alone can soft-delete another tenant's
+	// admin when AUTO_INCREMENT ids collide (each shard typically has id=1).
 	return bootstrap.DB, a, false
 }
 

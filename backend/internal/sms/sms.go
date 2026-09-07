@@ -224,7 +224,7 @@ func updateSMSLog(c *gin.Context, logID uint, fields map[string]any, extraWhere 
 	if logID == 0 || bootstrap.DB == nil {
 		return
 	}
-	q := smsLogModel(c).Where("id = ?", logID)
+	q := scopeSmsTenant(c, smsLogModel(c)).Where("id = ?", logID)
 	if extraWhere != "" {
 		q = q.Where(extraWhere)
 	}

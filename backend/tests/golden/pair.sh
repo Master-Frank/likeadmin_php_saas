@@ -2585,6 +2585,21 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     if [[ "$aid1" != "1" ]]; then
       fail=$((fail + 1))
     fi
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq "INSERT INTO la_tenant_admin_$ssn (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES ($sid,0,'nroot','nroot$ssn','x','',0,UNIX_TIMESTAMP())"
+    nrid="$(mysqlq "SELECT id FROM la_tenant_admin_$ssn WHERE account='nroot$ssn' LIMIT 1")"
+    if [[ -n "$nrid" && "$nrid" != "0" ]]; then
+      go_sdel="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$nrid}")"
+      left_nr="$(mysqlq "SELECT COUNT(*) FROM la_tenant_admin_$ssn WHERE id=$nrid AND delete_time IS NULL")"
+      echo "shard_admin_delete_noscope go_msg=$(jget msg <<<"$go_sdel") left=$left_nr"
+      if [[ "$(jget msg <<<"$go_sdel")" != *租户管理员不存在* || "$left_nr" != "1" ]]; then
+        echo "  go_sdel=${go_sdel:0:200}"
+        fail=$((fail + 1))
+      fi
+    else
+      echo "shard_admin_delete_noscope insert failed"
+      fail=$((fail + 1))
+    fi
     nset="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT COUNT(*) FROM la_tenant_notice_setting_$ssn" 2>/dev/null)"
     echo "shard_notice_setting n=$nset"
     if [[ -z "$nset" || "$nset" == "0" ]]; then
