@@ -1631,15 +1631,19 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_mp4")" != "$(jget msg <<<"$go_mp4")" ]]; then
       fail=$((fail + 1))
     fi
+    php_ucid="$(curl -sS -X POST "$PHP/tenantapi/upload/image" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
     go_ucid="$(curl -sS -X POST "$GO/tenantapi/upload/image" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
-    echo "file_upload_cid_missing go_msg=$(jget msg <<<"$go_ucid")"
-    if [[ "$(jget msg <<<"$go_ucid")" != *文件分类不存在* ]]; then
+    echo "file_upload_cid_missing php_msg=$(jget msg <<<"$php_ucid") go_msg=$(jget msg <<<"$go_ucid")"
+    if [[ "$(jget msg <<<"$php_ucid")" != "$(jget msg <<<"$go_ucid")" ]]; then
+      echo "  php_ucid=${php_ucid:0:200}"
       echo "  go_ucid=${go_ucid:0:200}"
       fail=$((fail + 1))
     fi
+    php_pucid="$(curl -sS -X POST "$PHP/platformapi/upload/image" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
     go_pucid="$(curl -sS -X POST "$GO/platformapi/upload/image" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999}')"
-    echo "platform_file_upload_cid_missing go_msg=$(jget msg <<<"$go_pucid")"
-    if [[ "$(jget msg <<<"$go_pucid")" != *文件分类不存在* ]]; then
+    echo "platform_file_upload_cid_missing php_msg=$(jget msg <<<"$php_pucid") go_msg=$(jget msg <<<"$go_pucid")"
+    if [[ "$(jget msg <<<"$php_pucid")" != "$(jget msg <<<"$go_pucid")" ]]; then
+      echo "  php_pucid=${php_pucid:0:200}"
       echo "  go_pucid=${go_pucid:0:200}"
       fail=$((fail + 1))
     fi
@@ -1723,9 +1727,11 @@ print(json.dumps({
     echo "  go_tgw=${go_tgw:0:200}"
     fail=$((fail + 1))
   fi
+  php_rlog="$(curl -sS "$PHP/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_rlog="$(curl -sS "$GO/tenantapi/finance.refund/log?record_id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  echo "refund_log_missing go_msg=$(jget msg <<<"$go_rlog")"
-  if [[ "$(jget msg <<<"$go_rlog")" != *退款记录不存在* ]]; then
+  echo "refund_log_missing php_code=$(jcode <<<"$php_rlog") go_code=$(jcode <<<"$go_rlog") php_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$php_rlog") go_n=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data") or []))' <<<"$go_rlog")"
+  if [[ "$(jcode <<<"$php_rlog")" != "$(jcode <<<"$go_rlog")" ]]; then
+    echo "  php_rlog=${php_rlog:0:200}"
     echo "  go_rlog=${go_rlog:0:200}"
     fail=$((fail + 1))
   fi
@@ -2662,12 +2668,15 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
     fi
   fi
   if [[ -n "$cate_id" && "$cate_id" != "0" ]]; then
-    go_acw="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"cid\":$cate_id,\"title\":\"pairfkart\",\"abstract\":\"a\",\"image\":\"/uploads/x.png\",\"is_show\":1}")"
-    echo "article_cross_cate go_msg=$(jget msg <<<"$go_acw")"
-    if [[ "$(jget msg <<<"$go_acw")" != *所属栏目必须存在* ]]; then
+    php_acw="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"cid\":$cate_id,\"title\":\"pairfkart\",\"abstract\":\"a\",\"image\":\"/uploads/x.png\",\"is_show\":1}")"
+    go_acw="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"cid\":$cate_id,\"title\":\"pairfkartg\",\"abstract\":\"a\",\"image\":\"/uploads/x.png\",\"is_show\":1}")"
+    echo "article_cross_cate php_code=$(jcode <<<"$php_acw") go_code=$(jcode <<<"$go_acw") php_msg=$(jget msg <<<"$php_acw") go_msg=$(jget msg <<<"$go_acw")"
+    if [[ "$(jcode <<<"$php_acw")" != "$(jcode <<<"$go_acw")" || "$(jget msg <<<"$php_acw")" != "$(jget msg <<<"$go_acw")" ]]; then
+      echo "  php_acw=${php_acw:0:200}"
       echo "  go_acw=${go_acw:0:200}"
       fail=$((fail + 1))
     fi
+    mysqlq "UPDATE la_article SET delete_time=UNIX_TIMESTAMP() WHERE title IN ('pairfkart','pairfkartg') AND delete_time IS NULL" || true
   fi
   if [[ -n "$menu_id" && "$menu_id" != "0" ]]; then
     go_rmenu="$(curl -sS -X POST "$GO/tenantapi/auth.role/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"fkrole$now\",\"sort\":0,\"menu_id\":[$menu_id]}")"
@@ -3436,6 +3445,73 @@ print(",".join(sorted(ls[0])) if ls else "")
   fi
   restore_hs="${hs_old:-0}"
   curl -sS -X POST "$PHP/tenantapi/setting.hot_search/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"status\":$restore_hs,\"data\":[]}" >/dev/null || true
+  php_ad0="$(curl -sS "$PHP/tenantapi/article.article/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ad0="$(curl -sS "$GO/tenantapi/article.article/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "article_detail_noid php_msg=$(jget msg <<<"$php_ad0") go_msg=$(jget msg <<<"$go_ad0")"
+  if [[ "$(jget msg <<<"$php_ad0")" != "$(jget msg <<<"$go_ad0")" ]]; then
+    echo "  php_ad0=${php_ad0:0:200}"
+    echo "  go_ad0=${go_ad0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ud0="$(curl -sS "$PHP/tenantapi/user.user/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ud0="$(curl -sS "$GO/tenantapi/user.user/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "user_detail_noid php_msg=$(jget msg <<<"$php_ud0") go_msg=$(jget msg <<<"$go_ud0")"
+  if [[ "$(jget msg <<<"$php_ud0")" != "$(jget msg <<<"$go_ud0")" ]]; then
+    echo "  php_ud0=${php_ud0:0:200}"
+    echo "  go_ud0=${go_ud0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_udm="$(curl -sS "$PHP/tenantapi/user.user/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_udm="$(curl -sS "$GO/tenantapi/user.user/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "user_detail_missing php_msg=$(jget msg <<<"$php_udm") go_msg=$(jget msg <<<"$go_udm")"
+  if [[ "$(jget msg <<<"$php_udm")" != "$(jget msg <<<"$go_udm")" ]]; then
+    echo "  php_udm=${php_udm:0:200}"
+    echo "  go_udm=${go_udm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ul="$(curl -sS "$PHP/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_ul="$(curl -sS "$GO/tenantapi/user.user/lists?page_size=1" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_ulk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(int("login_time" in ls))' <<<"$php_ul")"
+  go_ulk="$(python3 -c 'import json,sys; ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [{}])[0]; print(int("login_time" in ls))' <<<"$go_ul")"
+  echo "user_lists_login_time php=$php_ulk go=$go_ulk"
+  if [[ "$php_ulk" != "$go_ulk" ]]; then
+    fail=$((fail + 1))
+  fi
+  php_pmd="$(curl -sS "$PHP/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
+  go_pmd="$(curl -sS "$GO/platformapi/auth.menu/detail?id=99999999" -H "token: $TOKEN")"
+  echo "platform_menu_detail_missing php_code=$(jcode <<<"$php_pmd") go_code=$(jcode <<<"$go_pmd")"
+  if [[ "$(jcode <<<"$php_pmd")" != "$(jcode <<<"$go_pmd")" ]]; then
+    echo "  php_pmd=${php_pmd:0:200}"
+    echo "  go_pmd=${go_pmd:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rdm="$(curl -sS "$PHP/tenantapi/auth.role/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rdm="$(curl -sS "$GO/tenantapi/auth.role/detail?id=99999999" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "role_detail_missing php_msg=$(jget msg <<<"$php_rdm") go_msg=$(jget msg <<<"$go_rdm")"
+  if [[ "$(jget msg <<<"$php_rdm")" != "$(jget msg <<<"$go_rdm")" ]]; then
+    echo "  php_rdm=${php_rdm:0:200}"
+    echo "  go_rdm=${go_rdm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rd0="$(curl -sS "$PHP/tenantapi/auth.role/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_rd0="$(curl -sS "$GO/tenantapi/auth.role/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "role_detail_noid php_msg=$(jget msg <<<"$php_rd0") go_msg=$(jget msg <<<"$go_rd0")"
+  if [[ "$(jget msg <<<"$php_rd0")" != "$(jget msg <<<"$go_rd0")" ]]; then
+    echo "  php_rd0=${php_rd0:0:200}"
+    echo "  go_rd0=${go_rd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_aca="$(curl -sS -X POST "$PHP/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscate","abstract":"a","is_show":1}')"
+  go_aca="$(curl -sS -X POST "$GO/tenantapi/article.article/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"cid":99999999,"title":"pairmisscateg","abstract":"a","is_show":1}')"
+  echo "article_add_missing_cate php_code=$(jcode <<<"$php_aca") go_code=$(jcode <<<"$go_aca") php_msg=$(jget msg <<<"$php_aca") go_msg=$(jget msg <<<"$go_aca")"
+  if [[ "$(jcode <<<"$php_aca")" != "$(jcode <<<"$go_aca")" || "$(jget msg <<<"$php_aca")" != "$(jget msg <<<"$go_aca")" ]]; then
+    echo "  php_aca=${php_aca:0:200}"
+    echo "  go_aca=${go_aca:0:200}"
+    fail=$((fail + 1))
+  fi
+  if command -v mysql >/dev/null; then
+    mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -e "UPDATE la_article SET delete_time=UNIX_TIMESTAMP() WHERE title IN ('pairmisscate','pairmisscateg') AND delete_time IS NULL" >/dev/null 2>&1 || true
+  fi
 fi
 
 if [[ -n "$GO" ]]; then

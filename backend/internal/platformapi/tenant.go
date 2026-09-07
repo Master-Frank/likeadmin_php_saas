@@ -758,7 +758,7 @@ func TenantUserDetail(c *gin.Context) {
 		q = q.Where("tenant_id = ?", tid)
 	}
 	if q.First(&u).Error != nil {
-		response.Fail(c, "用户不存在")
+		response.Fail(c, "用户不存在！")
 		return
 	}
 	response.Success(c, "获取租户用户详情成功", userMap(c, u))

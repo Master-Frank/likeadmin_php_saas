@@ -48,10 +48,8 @@ func MenuAll(c *gin.Context) {
 
 func MenuDetail(c *gin.Context) {
 	var m model.SystemMenu
-	if bootstrap.DB.First(&m, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "菜单不存在")
-		return
-	}
+	// PHP MenuLogic::detail is findOrEmpty()->toArray(); missing id still succeeds.
+	_ = bootstrap.DB.First(&m, httpx.Uint(c, "id"))
 	response.Data(c, menuMap(m))
 }
 

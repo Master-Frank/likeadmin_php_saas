@@ -539,8 +539,15 @@ func RoleDelete(c *gin.Context) {
 }
 
 func RoleDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "请选择角色")
+		return
+	}
 	var r model.TenantSystemRole
-	scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&r)
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&r).Error != nil {
+		response.Fail(c, "角色不存在")
+		return
+	}
 	var menuIDs []uint
 	tdb(c).Model(&model.TenantSystemRoleMenu{}).Where("role_id = ?", r.ID).Pluck("menu_id", &menuIDs)
 	if menuIDs == nil {
@@ -548,7 +555,6 @@ func RoleDetail(c *gin.Context) {
 	}
 	response.Data(c, gin.H{
 		"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort, "menu_id": menuIDs,
-		"create_time": util.FormatDateTime(r.CreateTime),
 	})
 }
 

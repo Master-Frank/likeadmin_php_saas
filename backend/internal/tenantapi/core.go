@@ -326,7 +326,6 @@ func UserLists(c *gin.Context) {
 			"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 			"avatar": filesvc.GetFileURL(c, u.Avatar), "sex": util.SexDesc(u.Sex),
 			"channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
-			"login_time":  util.FormatDateTimePtr(u.LoginTime),
 			"create_time": util.FormatDateTime(u.CreateTime),
 		})
 	}
@@ -334,13 +333,17 @@ func UserLists(c *gin.Context) {
 }
 
 func UserDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "请选择用户")
+		return
+	}
 	var u model.User
 	db := tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id"))
 	if tid := tenantDB(c); tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
 	if db.First(&u).Error != nil {
-		response.Fail(c, "用户不存在")
+		response.Fail(c, "用户不存在！")
 		return
 	}
 	response.Data(c, gin.H{
@@ -490,10 +493,6 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 	if httpx.Uint(c, "cid") == 0 {
 		return "所属栏目必须存在"
 	}
-	var cate model.ArticleCate
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "cid")), c).First(&cate).Error != nil {
-		return "所属栏目必须存在"
-	}
 	if raw := httpx.Any(c, "is_show"); raw == nil || util.ToString(raw) == "" {
 		return "是否显示必须存在"
 	}
@@ -535,6 +534,10 @@ func ArticleDelete(c *gin.Context) {
 }
 
 func ArticleDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯id不能为空")
+		return
+	}
 	var a model.Article
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&a).Error != nil {
 		response.Fail(c, "资讯不存在")
