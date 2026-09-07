@@ -137,6 +137,23 @@ func TestParseWechatRefundQuery(t *testing.T) {
 	}
 }
 
+func TestWechatResultFail(t *testing.T) {
+	if err := wechatResultFail(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := wechatResultFail(map[string]any{"status": "SUCCESS"}); err != nil {
+		t.Fatal(err)
+	}
+	err := wechatResultFail(map[string]any{"code": "PARAM_ERROR", "message": "bad"})
+	if err == nil || err.Error() != "微信:PARAM_ERROR-bad" {
+		t.Fatalf("%v", err)
+	}
+	err = wechatResultFail(map[string]any{"message": "only"})
+	if err == nil || err.Error() != "微信:-only" {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestRefundQueryTradeNo(t *testing.T) {
 	if got := RefundQueryTradeNo(nil); got != "" {
 		t.Fatal(got)

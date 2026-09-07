@@ -137,8 +137,18 @@ func WechatRefundByTenant(tenantID uint, transactionID, refundSN string, refundA
 	if err != nil {
 		return err
 	}
-	if msg := util.ToString(result["message"]); msg != "" && util.ToString(result["status"]) == "" {
-		return fmt.Errorf("微信退款:%s", msg)
+	return wechatResultFail(result)
+}
+
+// wechatResultFail mirrors PHP WeChatPayService::checkResultFail.
+func wechatResultFail(result map[string]any) error {
+	if result == nil {
+		return nil
+	}
+	code := util.ToString(result["code"])
+	message := util.ToString(result["message"])
+	if code != "" || message != "" {
+		return fmt.Errorf("微信:%s-%s", code, message)
 	}
 	return nil
 }
