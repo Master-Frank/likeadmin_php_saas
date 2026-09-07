@@ -310,8 +310,9 @@ func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
 		row := m
 		row.ID = 0
 		row.TenantID = tenantID
-		row.CreateTime = util.NowUnix()
-		row.UpdateTime = nil
+		now := util.NowUnix()
+		row.CreateTime = now
+		row.UpdateTime = &now
 		if err := dest.Create(&row).Error; err != nil {
 			return err
 		}
