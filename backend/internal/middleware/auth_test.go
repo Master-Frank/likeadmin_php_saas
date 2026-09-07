@@ -22,6 +22,21 @@ func TestFormatURIPerms(t *testing.T) {
 	}
 }
 
+func TestLoginIPChanged(t *testing.T) {
+	if !loginIPChanged("1.1.1.1", "2.2.2.2") {
+		t.Fatal("different IP should force re-login")
+	}
+	if loginIPChanged("1.1.1.1", "1.1.1.1") {
+		t.Fatal("same IP should pass")
+	}
+	if !loginIPChanged("", "127.0.0.1") {
+		t.Fatal("empty login_ip should mismatch a real client IP, matching PHP")
+	}
+	if loginIPChanged("", "") {
+		t.Fatal("both empty should pass")
+	}
+}
+
 func TestRejectWrongTenant(t *testing.T) {
 	if rejectWrongTenant(false, 1, 2) {
 		t.Fatal("optional login should allow a stale cross-tenant token")

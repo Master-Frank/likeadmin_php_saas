@@ -70,6 +70,11 @@ func FileRename(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	var row model.TenantFile
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
+		response.Fail(c, "文件不存在")
+		return
+	}
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "update_time": now,
@@ -139,6 +144,11 @@ func FileEditCate(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileEditCateCheck(p); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	var cate model.TenantFileCate
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&cate).Error != nil {
+		response.Fail(c, "文件分类不存在")
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.Uint(c, "id")), c).Updates(map[string]any{

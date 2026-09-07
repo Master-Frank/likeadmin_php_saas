@@ -802,6 +802,24 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_pfm=${go_pfm:0:200}"
     fail=$((fail + 1))
   fi
+  go_pfe="$(curl -sS -X POST "$GO/platformapi/file/editCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
+  echo "platform_file_edit_cate go_msg=$(jget msg <<<"$go_pfe")"
+  if [[ "$(jget msg <<<"$go_pfe")" != *文件分类不存在* ]]; then
+    echo "  go_pfe=${go_pfe:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_frn="$(curl -sS -X POST "$GO/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
+  echo "file_rename_missing go_msg=$(jget msg <<<"$go_frn")"
+  if [[ "$(jget msg <<<"$go_frn")" != *文件不存在* ]]; then
+    echo "  go_frn=${go_frn:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_fec="$(curl -sS -X POST "$GO/tenantapi/file/editCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
+  echo "file_edit_cate_missing go_msg=$(jget msg <<<"$go_fec")"
+  if [[ "$(jget msg <<<"$go_fec")" != *文件分类不存在* ]]; then
+    echo "  go_fec=${go_fec:0:200}"
+    fail=$((fail + 1))
+  fi
 
   nlist="$(curl -sS "$GO/tenantapi/notice.notice/settingLists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   nid="$(python3 -c '
@@ -1557,6 +1575,18 @@ print(json.dumps({
   go_ost="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/status" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "oa_status_bad php_msg=$(jget msg <<<"$php_ost") go_msg=$(jget msg <<<"$go_ost")"
   if [[ "$(jget msg <<<"$php_ost")" != "$(jget msg <<<"$go_ost")" ]]; then
+    fail=$((fail + 1))
+  fi
+  go_oem="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"reply_type":2,"name":"missing","content_type":1,"content":"hi","status":0,"keyword":"missing","matching_type":1,"sort":0,"reply_num":1}')"
+  echo "oa_reply_edit_missing go_msg=$(jget msg <<<"$go_oem")"
+  if [[ "$(jget msg <<<"$go_oem")" != *记录不存在* ]]; then
+    echo "  go_oem=${go_oem:0:200}"
+    fail=$((fail + 1))
+  fi
+  go_osm="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/sort" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"new_sort":1}')"
+  echo "oa_reply_sort_missing go_msg=$(jget msg <<<"$go_osm")"
+  if [[ "$(jget msg <<<"$go_osm")" != *记录不存在* ]]; then
+    echo "  go_osm=${go_osm:0:200}"
     fail=$((fail + 1))
   fi
   pwjson="$(curl -sS "$PHP/tenantapi/setting.pay.pay_way/getPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"

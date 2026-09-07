@@ -687,6 +687,10 @@ func OAReplyEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
+		response.Fail(c, "记录不存在")
+		return
+	}
 	replyType := httpx.Int(c, "reply_type")
 	status := httpx.Int(c, "status")
 	if replyType != 2 && status == 1 {
@@ -807,6 +811,10 @@ func OAReplySort(c *gin.Context) {
 	}
 	if msg := util.OAReplySortCheck(httpx.Params(c)); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	if _, ok := oaReplyByID(c, httpx.Uint(c, "id")); !ok {
+		response.Fail(c, "记录不存在")
 		return
 	}
 	sort := httpx.Int(c, "new_sort")

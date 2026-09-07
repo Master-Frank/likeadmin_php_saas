@@ -57,13 +57,13 @@ func Auth() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if util.ToInt(meta.AdminInfo["root"]) == 1 {
-			c.Next()
+		// PHP AuthMiddleware checks login_ip before the root=1 bypass.
+		if loginIPChanged(util.ToString(meta.AdminInfo["login_ip"]), ctxutil.ClientIP(c)) {
+			response.AbortFail(c, "ip地址发生变化，请重新登录", response.CodeLoginExpire, 1)
 			return
 		}
-		loginIP := util.ToString(meta.AdminInfo["login_ip"])
-		if loginIP != "" && loginIP != ctxutil.ClientIP(c) {
-			response.AbortFail(c, "ip地址发生变化，请重新登录", response.CodeLoginExpire, 1)
+		if util.ToInt(meta.AdminInfo["root"]) == 1 {
+			c.Next()
 			return
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
@@ -78,6 +78,12 @@ func Auth() gin.HandlerFunc {
 		}
 		response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
 	}
+}
+
+// loginIPChanged matches PHP `$adminInfo['login_ip'] != request()->ip()`:
+// empty stored IP still mismatches a real client IP.
+func loginIPChanged(loginIP, clientIP string) bool {
+	return loginIP != clientIP
 }
 
 func DemoGuard() gin.HandlerFunc {

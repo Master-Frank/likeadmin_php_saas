@@ -67,6 +67,11 @@ func FileRename(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
+	var row model.File
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&row).Error != nil {
+		response.Fail(c, "文件不存在")
+		return
+	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.File{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "update_time": now,
@@ -130,6 +135,11 @@ func FileEditCate(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileEditCateCheck(p); msg != "" {
 		response.Fail(c, msg)
+		return
+	}
+	var cate model.FileCate
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")).First(&cate).Error != nil {
+		response.Fail(c, "文件分类不存在")
 		return
 	}
 	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
