@@ -175,6 +175,9 @@ func DecorateTabbarSave(c *gin.Context) {
 }
 
 func HotSearchSet(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	// PHP: empty($params['status']) ? 0 : $params['status'] — keep values like 2.
 	status := 0
 	if httpx.BodyHas(c, "status") && strings.TrimSpace(httpx.BodyStr(c, "status")) != "" && httpx.BodyInt(c, "status") != 0 {

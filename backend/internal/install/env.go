@@ -2,9 +2,11 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
@@ -52,6 +54,7 @@ func CollectEnv() []envItem {
 	out = append(out, probeDir("public/mobile", publicSub("mobile")))
 	out = append(out, probeDir("config", configDir()))
 	out = append(out, probeWritableFile(".env", envFilePath()))
+	out = append(out, probeDiskSpace())
 	return out
 }
 
@@ -133,6 +136,34 @@ func probeWritableFile(name, path string) envItem {
 	_ = f.Close()
 	item.Status = "ok"
 	return item
+}
+
+// probeDiskSpace mirrors PHP installModel::freeDiskSpace on the project root.
+func probeDiskSpace() envItem {
+	item := envItem{Name: "磁盘空间", Status: "ok"}
+	dir := config.C.App.PublicDir
+	if dir == "" {
+		dir = "."
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(dir, &st); err != nil {
+		item.Status = "fail"
+		item.Value = err.Error()
+		return item
+	}
+	item.Value = formatDiskSpace(float64(st.Bavail) * float64(st.Bsize))
+	return item
+}
+
+func formatDiskSpace(bytes float64) string {
+	mb := bytes / 1024 / 1024
+	if mb > 1024 {
+		return fmt.Sprintf("%.2fG", mb/1024)
+	}
+	return fmt.Sprintf("%.2fM", mb)
 }
 
 func publicSub(name string) string {

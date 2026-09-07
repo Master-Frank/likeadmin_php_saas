@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -82,8 +83,27 @@ func ApplyPackage(link, zipName string) error {
 }
 
 // ApplyLocal applies an already-downloaded upgrade zip (offline / fixture).
-func ApplyLocal(zipPath string) error {
-	return ApplyPackage(zipPath, "")
+// versionNo, when set, is written to upgrade/version.json after a successful apply
+// (same as the online UpgradeDo path). If omitted, a version is taken from the zip name.
+func ApplyLocal(zipPath string, versionNo ...string) error {
+	if err := ApplyPackage(zipPath, ""); err != nil {
+		return err
+	}
+	ver := ""
+	if len(versionNo) > 0 {
+		ver = strings.TrimSpace(versionNo[0])
+	}
+	if ver == "" {
+		ver = versionFromFilename(zipPath)
+	}
+	return WriteLocalVersion(ver)
+}
+
+var versionInName = regexp.MustCompile(`\d+\.\d+(?:\.\d+)*`)
+
+func versionFromFilename(path string) string {
+	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	return versionInName.FindString(base)
 }
 
 func resolvePackage(link, saveDir string) (string, error) {

@@ -288,6 +288,18 @@ func requireTenant(c *gin.Context) (uint, bool) {
 	return tid, tid > 0
 }
 
+// requirePlatformTenant rejects platform writes that would land on tenant_id=0.
+func requirePlatformTenant(c *gin.Context) bool {
+	if ctxutil.Get(c).Source != ctxutil.SourcePlatform {
+		return true
+	}
+	if tenantDB(c) > 0 {
+		return true
+	}
+	response.Fail(c, "请选择租户标识")
+	return false
+}
+
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -840,6 +852,9 @@ func RechargeGetConfig(c *gin.Context) {
 }
 
 func RechargeSetConfig(c *gin.Context) {
+	if !requirePlatformTenant(c) {
+		return
+	}
 	p := httpx.Body(c)
 	if _, ok := p["status"]; ok {
 		cfgsvc.Set(c, "recharge", "status", httpx.BodyInt(c, "status"))

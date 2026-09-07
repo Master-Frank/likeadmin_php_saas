@@ -144,6 +144,15 @@ func TestUnzipSkipsParentPaths(t *testing.T) {
 	}
 }
 
+func TestVersionFromFilename(t *testing.T) {
+	if got := versionFromFilename("/tmp/likeadmin-1.8.0.zip"); got != "1.8.0" {
+		t.Fatalf("%s", got)
+	}
+	if got := versionFromFilename("pkg.zip"); got != "" {
+		t.Fatalf("empty %q", got)
+	}
+}
+
 func TestResolvePackageEmpty(t *testing.T) {
 	if _, err := resolvePackage("", t.TempDir()); err == nil || !strings.Contains(err.Error(), "获取文件错误") {
 		t.Fatalf("empty: %v", err)

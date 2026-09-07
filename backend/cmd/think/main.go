@@ -37,7 +37,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: think upgrade-local <zip>")
 			os.Exit(1)
 		}
-		if err := upgrade.ApplyLocal(os.Args[2]); err != nil {
+		ver := ""
+		if len(os.Args) >= 4 {
+			ver = os.Args[3]
+		}
+		if err := upgrade.ApplyLocal(os.Args[2], ver); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

@@ -59,6 +59,25 @@ func TestProbeWritableFile(t *testing.T) {
 	}
 }
 
+func TestFormatDiskSpace(t *testing.T) {
+	if got := formatDiskSpace(512 * 1024 * 1024); got != "512.00M" {
+		t.Fatalf("512M %s", got)
+	}
+	if got := formatDiskSpace(1536 * 1024 * 1024); got != "1.50G" {
+		t.Fatalf("1.5G %s", got)
+	}
+}
+
+func TestProbeDiskSpace(t *testing.T) {
+	item := probeDiskSpace()
+	if item.Name != "磁盘空间" || item.Status != "ok" || item.Value == "" {
+		t.Fatalf("%+v", item)
+	}
+	if !strings.HasSuffix(item.Value, "G") && !strings.HasSuffix(item.Value, "M") {
+		t.Fatalf("unit %s", item.Value)
+	}
+}
+
 func TestPublicSub(t *testing.T) {
 	if got := publicSub("uploads"); !strings.HasSuffix(got, "uploads") {
 		t.Fatalf("got %s", got)

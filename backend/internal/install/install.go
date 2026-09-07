@@ -76,6 +76,10 @@ func Run(c *gin.Context) {
 	adminUser := pick(p, "admin_user")
 	adminPass := pick(p, "admin_password")
 
+	if err := CheckPort(host, port); err != nil {
+		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
+		return
+	}
 	rootDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=false&loc=Local",
 		user, pass, host, port)
 	db, err := gorm.Open(mysql.Open(rootDSN), &gorm.Config{})

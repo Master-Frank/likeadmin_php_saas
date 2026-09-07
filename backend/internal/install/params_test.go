@@ -12,6 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestCheckPortClosed(t *testing.T) {
+	if err := CheckPort("127.0.0.1", 1); err == nil {
+		t.Fatal("closed port should fail")
+	}
+}
+
 func TestCheckParams(t *testing.T) {
 	if CheckParams(map[string]any{}) != "数据表前缀不能为空" {
 		t.Fatal(CheckParams(map[string]any{}))
