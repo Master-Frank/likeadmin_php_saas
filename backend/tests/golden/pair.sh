@@ -137,6 +137,12 @@ paths=(
   /platformapi/setting.pay.pay_way/getPayWay
   /platformapi/setting.system.system/info
   /platformapi/upgrade.upgrade/lists
+  /platformapi/config/dict?type=sex
+  /platformapi/setting.web.web_setting/getCopyright
+  /platformapi/setting.web.web_setting/getAgreement
+  /platformapi/setting.transaction_settings/getConfig
+  /platformapi/file/lists?type=10
+  /platformapi/file/listCate?type=10
 )
 if [[ -n "$TENANT_HOST" ]]; then
   paths+=(
@@ -176,6 +182,18 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/recharge.recharge/getConfig
     /tenantapi/channel.official_account_setting/getConfig
     /api/pc/config
+    /tenantapi/auth.role/all
+    /tenantapi/finance.refund/stat
+    /tenantapi/dept.dept/leaderDept
+    /tenantapi/setting.customer_service/getConfig
+    /tenantapi/setting.transaction_settings/getConfig
+    /tenantapi/channel.mnp_settings/getConfig
+    /tenantapi/channel.open_setting/getConfig
+    /tenantapi/channel.app_setting/getConfig
+    /tenantapi/channel.web_page_setting/getConfig
+    /tenantapi/setting.user.user/getConfig
+    /tenantapi/setting.web.web_setting/getCopyright
+    /tenantapi/notice.sms_config/getConfig
   )
 fi
 
@@ -2430,6 +2448,36 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jcode <<<"$php_pja")" != "$(jcode <<<"$go_pja")" || "$php_pjn" != "$go_pjn" ]]; then
     echo "  php_pja=${php_pja:0:200}"
     echo "  go_pja=${go_pja:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_dab="$(curl -sS -X POST "$PHP/platformapi/dept.dept/all" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":2}')"
+  go_dab="$(curl -sS -X POST "$GO/platformapi/dept.dept/all" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":2}')"
+  php_dabn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$php_dab")"
+  go_dabn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$go_dab")"
+  echo "dept_all_body_tenant php_code=$(jcode <<<"$php_dab") go_code=$(jcode <<<"$go_dab") php_n=$php_dabn go_n=$go_dabn"
+  if [[ "$(jcode <<<"$php_dab")" != "$(jcode <<<"$go_dab")" || "$php_dabn" != "$go_dabn" ]]; then
+    echo "  php_dab=${php_dab:0:200}"
+    echo "  go_dab=${go_dab:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_jab="$(curl -sS -X POST "$PHP/platformapi/dept.jobs/all" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":2}')"
+  go_jab="$(curl -sS -X POST "$GO/platformapi/dept.jobs/all" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"tenant_id":2}')"
+  php_jabn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$php_jab")"
+  go_jabn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$go_jab")"
+  echo "jobs_all_body_tenant php_code=$(jcode <<<"$php_jab") go_code=$(jcode <<<"$go_jab") php_n=$php_jabn go_n=$go_jabn"
+  if [[ "$(jcode <<<"$php_jab")" != "$(jcode <<<"$go_jab")" || "$php_jabn" != "$go_jabn" ]]; then
+    echo "  php_jab=${php_jab:0:200}"
+    echo "  go_jab=${go_jab:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_talb="$(curl -sS -X GET --data-raw '{"tenant_id":2}' -H 'Content-Type: application/json' "$PHP/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
+  go_talb="$(curl -sS -X GET --data-raw '{"tenant_id":2}' -H 'Content-Type: application/json' "$GO/platformapi/tenant.tenant_admin/lists" -H "token: $TOKEN")"
+  php_talbn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$php_talb")"
+  go_talbn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_talb")"
+  echo "tenant_admin_lists_body php_code=$(jcode <<<"$php_talb") go_code=$(jcode <<<"$go_talb") php_n=$php_talbn go_n=$go_talbn"
+  if [[ "$(jcode <<<"$php_talb")" != "$(jcode <<<"$go_talb")" || "$php_talbn" != "$go_talbn" ]]; then
+    echo "  php_talb=${php_talb:0:200}"
+    echo "  go_talb=${go_talb:0:200}"
     fail=$((fail + 1))
   fi
   php_rl="$(curl -sS "$PHP/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"

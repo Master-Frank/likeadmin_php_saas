@@ -331,11 +331,12 @@ func TenantAdminLists(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if httpx.QueryStr(c, "tenant_id") == "" {
+	// PHP TenantAdminLists uses $this->params['tenant_id'] from request()->param().
+	if lists.Param(q, "tenant_id") == "" {
 		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
 		return
 	}
-	tid := httpx.QueryInt(c, "tenant_id")
+	tid := lists.ParamInt(q, "tenant_id")
 	var tenant model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", tid).First(&tenant).Error != nil {
 		response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)

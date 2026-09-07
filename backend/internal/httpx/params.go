@@ -211,3 +211,16 @@ func Uints(c *gin.Context, key string) []uint {
 	}
 	return out
 }
+
+// ParamTenantID matches PHP request()->param('tenant_id') / tenantId:
+// query then body (body wins). Missing key => present=false.
+func ParamTenantID(c *gin.Context) (id uint, present bool) {
+	p := Params(c)
+	if v, ok := p["tenant_id"]; ok && v != nil {
+		return Uint(c, "tenant_id"), true
+	}
+	if v, ok := p["tenantId"]; ok && v != nil {
+		return uint(util.ToInt(v)), true
+	}
+	return 0, false
+}

@@ -161,8 +161,8 @@ func DeptDetail(c *gin.Context) {
 }
 
 func DeptAll(c *gin.Context) {
-	if _, ok := httpx.Query(c)["tenant_id"]; ok {
-		tid := httpx.QueryUint(c, "tenant_id")
+	// PHP DeptLogic::getAllData uses request()->param('tenant_id').
+	if tid, ok := httpx.ParamTenantID(c); ok {
 		if tid == 0 {
 			response.Data(c, []any{})
 			return
@@ -330,8 +330,8 @@ func JobsDetail(c *gin.Context) {
 }
 
 func JobsAll(c *gin.Context) {
-	if _, ok := httpx.Query(c)["tenant_id"]; ok {
-		tid := httpx.QueryUint(c, "tenant_id")
+	// PHP JobsLogic::getAllData uses request()->param('tenant_id').
+	if tid, ok := httpx.ParamTenantID(c); ok {
 		if tid == 0 {
 			response.Data(c, []any{})
 			return

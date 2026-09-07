@@ -54,3 +54,31 @@ func TestBodyIgnoresQuery(t *testing.T) {
 		t.Fatalf("Params still merges query, got %q", Str(c, "from"))
 	}
 }
+
+func TestParamTenantID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	req := func(raw, body string) (uint, bool) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/x"+raw, bytes.NewBufferString(body))
+		if body != "" {
+			c.Request.Header.Set("Content-Type", "application/json")
+		}
+		return ParamTenantID(c)
+	}
+	if id, ok := req("", `{}`); ok || id != 0 {
+		t.Fatal("missing")
+	}
+	if id, ok := req("", `{"tenant_id":2}`); !ok || id != 2 {
+		t.Fatalf("body %d %v", id, ok)
+	}
+	if id, ok := req("", `{"tenantId":7}`); !ok || id != 7 {
+		t.Fatalf("tenantId %d %v", id, ok)
+	}
+	if id, ok := req("?tenant_id=2", `{"tenant_id":9}`); !ok || id != 9 {
+		t.Fatalf("body wins %d %v", id, ok)
+	}
+	if id, ok := req("?tenant_id=3", `{}`); !ok || id != 3 {
+		t.Fatalf("query %d %v", id, ok)
+	}
+}
