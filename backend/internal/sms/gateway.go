@@ -46,37 +46,29 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, log
 	if c == nil || bootstrap.DB == nil {
 		return nil
 	}
-	engine := strings.ToUpper(strings.TrimSpace(cfgsvc.GetString(c, "sms", "engine", "")))
-	if engine == "" {
-		return nil
-	}
-	cfg := loadEngine(c, engine)
-	if cfg.Status != 1 {
-		return nil
-	}
+	rawEngine := strings.TrimSpace(cfgsvc.GetString(c, "sms", "engine", ""))
+	cfg := loadEngine(c, rawEngine)
 	notice := loadNoticeSMS(c, scene)
 	tplID := util.ToString(notice["template_id"])
-	if tplID == "" {
-		return nil
-	}
 	content := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile})
+	if err := gatewayConfigError(rawEngine, cfg, tplID); err != nil {
+		return gatewayFail(c, logID, content, err.Error())
+	}
+	engine := strings.ToUpper(rawEngine)
+	if engine == "ALIYUN" {
+		engine = "ALI"
+	}
 	var (
 		result any
 		err    error
 	)
 	switch engine {
 	case "ALI":
-		if cfg.AppKey == "" || cfg.SecretKey == "" || cfg.Sign == "" {
-			return nil
-		}
 		result, err = sendAliyun(cfg, mobile, tplID, code)
 	case "TENCENT":
-		if cfg.SecretID == "" || cfg.SecretKey == "" || cfg.Sign == "" || cfg.AppID == "" {
-			return nil
-		}
 		result, err = sendTencent(cfg, mobile, tplID, tencentParams(notice, code, mobile))
 	default:
-		return nil
+		return gatewayFail(c, logID, content, "没有相应的短信驱动类")
 	}
 	if logID > 0 {
 		raw, _ := json.Marshal(result)
@@ -92,6 +84,53 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, code string, log
 		}
 	}
 	return err
+}
+
+// gatewayConfigError mirrors PHP SmsDriver::initialize fail-closed messages.
+func gatewayConfigError(rawEngine string, cfg engineCfg, tplID string) error {
+	rawEngine = strings.TrimSpace(rawEngine)
+	if rawEngine == "" || strings.EqualFold(rawEngine, "false") {
+		return fmt.Errorf("请开启短信配置")
+	}
+	engine := strings.ToUpper(rawEngine)
+	if engine == "ALIYUN" {
+		engine = "ALI"
+	}
+	switch engine {
+	case "ALI", "TENCENT":
+	default:
+		return fmt.Errorf("没有相应的短信驱动类")
+	}
+	if engineConfigEmpty(engine, cfg) {
+		return fmt.Errorf("%s未配置", rawEngine)
+	}
+	if cfg.Status != 1 {
+		return fmt.Errorf("短信服务未开启")
+	}
+	if strings.TrimSpace(tplID) == "" {
+		return fmt.Errorf("短信服务未开启")
+	}
+	return nil
+}
+
+func engineConfigEmpty(engine string, cfg engineCfg) bool {
+	switch engine {
+	case "ALI":
+		return cfg.AppKey == "" || cfg.SecretKey == "" || cfg.Sign == ""
+	case "TENCENT":
+		return cfg.SecretID == "" || cfg.SecretKey == "" || cfg.Sign == "" || cfg.AppID == ""
+	default:
+		return true
+	}
+}
+
+func gatewayFail(c *gin.Context, logID uint, content, msg string) error {
+	if logID > 0 {
+		updateSMSLog(c, logID, map[string]any{
+			"send_status": 2, "results": msg, "content": content,
+		}, "")
+	}
+	return fmt.Errorf("%s", msg)
 }
 
 func loadEngine(c *gin.Context, engine string) engineCfg {

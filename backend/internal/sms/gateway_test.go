@@ -70,6 +70,27 @@ func TestTencentParams(t *testing.T) {
 	}
 }
 
+func TestGatewayConfigError(t *testing.T) {
+	if err := gatewayConfigError("", engineCfg{}, ""); err == nil || err.Error() != "请开启短信配置" {
+		t.Fatalf("empty engine: %v", err)
+	}
+	if err := gatewayConfigError("foo", engineCfg{}, "T"); err == nil || err.Error() != "没有相应的短信驱动类" {
+		t.Fatalf("unknown: %v", err)
+	}
+	if err := gatewayConfigError("ali", engineCfg{Status: 1}, "T"); err == nil || err.Error() != "ali未配置" {
+		t.Fatalf("incomplete: %v", err)
+	}
+	if err := gatewayConfigError("ali", engineCfg{Status: 0, AppKey: "a", SecretKey: "s", Sign: "n"}, "T"); err == nil || err.Error() != "短信服务未开启" {
+		t.Fatalf("disabled: %v", err)
+	}
+	if err := gatewayConfigError("ali", engineCfg{Status: 1, AppKey: "a", SecretKey: "s", Sign: "n"}, ""); err == nil || err.Error() != "短信服务未开启" {
+		t.Fatalf("no tpl: %v", err)
+	}
+	if err := gatewayConfigError("ali", engineCfg{Status: 1, AppKey: "a", SecretKey: "s", Sign: "n"}, "SMS_1"); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+}
+
 func TestSendAliyunFixture(t *testing.T) {
 	var phone, sign, tpl, signature string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

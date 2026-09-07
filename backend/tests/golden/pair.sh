@@ -3964,6 +3964,10 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
       curl -sS -X POST "$GO/platformapi/tools.generator/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$tgid]}" >/dev/null || true
       rm -f /workspace/backend/internal/generated/tenant_pair_tenant_crud.go \
         /workspace/server/app/tenant/controller/PairTenantCrudController.php \
+        /workspace/server/app/tenant/lists/PairTenantCrudLists.php \
+        /workspace/server/app/tenant/logic/PairTenantCrudLogic.php \
+        /workspace/server/app/tenant/validate/PairTenantCrudValidate.php \
+        /workspace/server/app/common/model/PairTenantCrud.php \
         /workspace/admin/src/api/pair_tenant_crud.ts
       rm -rf /workspace/admin/src/views/pair_tenant_crud
     else
@@ -4013,8 +4017,14 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   ts="${ts:-$(date +%s)}"
   mobile="13900${ts: -6}"
   now="$(date +%s)"
+  php_sms="$(curl -sS -X POST "$PHP/api/sms/sendCode" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"mobile\":\"$mobile\",\"scene\":\"YZMDL\"}")"
   go_sms="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "{\"mobile\":\"$mobile\",\"scene\":\"YZMDL\"}")"
-  echo "sms_send go_code=$(jcode <<<"$go_sms") go_msg=$(jget msg <<<"$go_sms")"
+  echo "sms_send php_code=$(jcode <<<"$php_sms") go_code=$(jcode <<<"$go_sms") php_msg=$(jget msg <<<"$php_sms") go_msg=$(jget msg <<<"$go_sms")"
+  if [[ "$(jcode <<<"$php_sms")" != "$(jcode <<<"$go_sms")" || "$(jget msg <<<"$php_sms")" != "$(jget msg <<<"$go_sms")" ]]; then
+    echo "  php_sms=${php_sms:0:240}"
+    echo "  go_sms=${go_sms:0:240}"
+    fail=$((fail + 1))
+  fi
   nrec="$(mysqlq "SELECT COUNT(*) FROM la_tenant_notice_record WHERE scene_id=101 AND create_time>=$now")"
   echo "sms_notice_record n=$nrec"
   if [[ "$(jcode <<<"$go_sms")" == "1" && "$nrec" == "0" ]]; then

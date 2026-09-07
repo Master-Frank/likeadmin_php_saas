@@ -10,7 +10,7 @@ func TestNormalizeCommand(t *testing.T) {
 	if normalizeCommand(`app\common\command\QueryRefund`) != "query_refund" {
 		t.Fatal(normalizeCommand(`app\common\command\QueryRefund`))
 	}
-	if normalizeCommand("crontab") != "cache" {
+	if normalizeCommand("crontab") != "crontab" {
 		t.Fatal(normalizeCommand("crontab"))
 	}
 	if normalizeCommand("clear_session") != "session" {
@@ -34,5 +34,11 @@ func TestRunNamed(t *testing.T) {
 	}
 	if got := RunNamed(`app\common\command\QueryRefund`); len(got) >= 3 && got[:3] == "未定" {
 		t.Fatalf("native query_refund should not fall through, got %q", got)
+	}
+	if got := RunNamed("crontab"); got != "" {
+		t.Fatalf("think crontab is RunOnce, got %q", got)
+	}
+	if got := runCommand(model.Crontab{Command: "crontab"}); got != "未定义的定时任务命令: crontab" {
+		t.Fatalf("db row crontab must not recurse: %q", got)
 	}
 }

@@ -86,6 +86,21 @@ func TestStorageCache(t *testing.T) {
 	if got := GetFileURL(nil, "uploads/a.png"); got != "https://cdn.example/uploads/a.png" {
 		t.Fatalf("url=%s", got)
 	}
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("set url=%s", got)
+	}
+}
+
+func TestFetchWechatAvatarEmptyHeadimg(t *testing.T) {
+	old := config.C.Project.DefaultImage
+	t.Cleanup(func() { config.C.Project.DefaultImage = old })
+	config.C.Project.DefaultImage = map[string]string{"user_avatar": "resource/image/common/default_avatar.png"}
+	if got := FetchWechatAvatar(nil, "openid", ""); got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("got %q", got)
+	}
+	if got := FetchWechatAvatar(nil, "openid", "   "); got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("blank %q", got)
+	}
 }
 
 func TestPublicPath(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"likeadmin/backend/internal/biz"
@@ -68,7 +67,12 @@ func due(item model.Crontab, now int64) bool {
 }
 
 // RunNamed runs a php-think compatible command (cache/clear/session/query_refund/...).
+// `think crontab` is the scheduler once-shot (PHP Crontab::execute), not cache flush.
 func RunNamed(command string, params ...string) string {
+	if normalizeCommand(command) == "crontab" {
+		RunOnce()
+		return ""
+	}
 	return runCommand(model.Crontab{Command: command, Params: strings.Join(params, " ")})
 }
 
@@ -90,52 +94,13 @@ func runCommand(item model.Crontab) string {
 		return queryRefund()
 	case cmd == "cancel_unpaid_orders":
 		return cancelUnpaidOrders()
+	case cmd == "crontab":
+		// A la_dev_crontab row must not recurse into RunOnce.
+		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
 	default:
-		if ok, msg := runThinkCommand(item); ok {
-			return msg
-		}
 		log.Printf("crontab skip unsupported command %s", cmd)
 		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
 	}
-}
-
-func runThinkCommand(item model.Crontab) (bool, string) {
-	root := ""
-	if pub := config.C.App.PublicDir; pub != "" {
-		root = filepath.Dir(pub)
-	}
-	if root == "" {
-		return false, ""
-	}
-	if _, err := os.Stat(filepath.Join(root, "think")); err != nil {
-		return false, ""
-	}
-	php, err := exec.LookPath("php")
-	if err != nil {
-		return false, ""
-	}
-	args := []string{"think", strings.TrimSpace(item.Command)}
-	if p := strings.TrimSpace(item.Params); p != "" {
-		args = append(args, strings.Fields(p)...)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, php, args...)
-	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if err == nil {
-		return true, ""
-	}
-	low := strings.ToLower(text + " " + err.Error())
-	if strings.Contains(low, "not defined") || strings.Contains(low, "does not exist") ||
-		strings.Contains(low, "not found") || strings.Contains(low, "未定义") {
-		return false, ""
-	}
-	if text == "" {
-		text = err.Error()
-	}
-	return true, text
 }
 
 func normalizeCommand(raw string) string {
@@ -150,7 +115,9 @@ func normalizeCommand(raw string) string {
 		return "session"
 	case cmd == "clear" || strings.HasSuffix(cmd, "/clear"):
 		return "clear"
-	case cmd == "" || strings.Contains(cmd, "cache") || cmd == "crontab":
+	case cmd == "crontab":
+		return "crontab"
+	case cmd == "" || strings.Contains(cmd, "cache"):
 		return "cache"
 	default:
 		return cmd

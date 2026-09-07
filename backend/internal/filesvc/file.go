@@ -91,15 +91,12 @@ func SetFileURL(c *gin.Context, uri string) string {
 	if uri == "" {
 		return ""
 	}
-	def := cfgsvc.GetString(c, "storage", "default", "local")
+	def := storageDefault(c)
 	var domain string
 	if def == "local" {
 		domain = ctxutil.Domain(c)
-	} else {
-		engine := cfgsvc.Get(c, "storage", def, nil)
-		if m, ok := engine.(map[string]any); ok {
-			domain, _ = m["domain"].(string)
-		}
+	} else if engine := storageEngine(c, def); engine != nil {
+		domain, _ = engine["domain"].(string)
 	}
 	return strings.ReplaceAll(uri, strings.TrimRight(domain, "/")+"/", "")
 }

@@ -31,10 +31,12 @@ go run ./cmd/strangler
 定时任务：
 
 ```bash
-go run ./cmd/crontab
-# 或
+go run ./cmd/crontab          # 循环执行 la_dev_crontab
+go run ./cmd/think crontab    # 等价 php think crontab，只跑一轮
 go run ./cmd/think query_refund
 ```
+
+未知 `la_dev_crontab.command` 记「未定义的定时任务命令」，不再回落 `php think`。
 
 离线升级包（已下载的 zip，无需 mddai.cn）：
 

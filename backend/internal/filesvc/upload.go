@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/storage"
@@ -20,7 +21,7 @@ const (
 )
 
 func FetchWechatAvatar(c *gin.Context, openid, headimg string) string {
-	def := config.C.Project.DefaultImage["user_avatar"]
+	def := cfgsvc.GetString(c, "default_image", "user_avatar", config.C.Project.DefaultImage["user_avatar"])
 	if strings.TrimSpace(headimg) == "" {
 		return def
 	}
