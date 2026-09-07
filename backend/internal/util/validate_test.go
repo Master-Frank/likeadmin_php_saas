@@ -227,6 +227,15 @@ func TestOAMenuCheck(t *testing.T) {
 	if OAMenuCheck([]any{map[string]any{"name": "菜单", "has_menu": false}}) != "一级菜单未选择菜单类型" {
 		t.Fatal("type")
 	}
+	if OAMenuCheck([]any{map[string]any{"name": 0, "has_menu": false, "type": "click", "key": "k"}}) != "请输入一级菜单名称" {
+		t.Fatal("name0")
+	}
+	if OAMenuCheck([]any{map[string]any{"name": "菜单", "has_menu": false, "type": "click", "key": 0}}) != "请输入关键字" {
+		t.Fatal("key0")
+	}
+	if OAMenuCheck([]any{map[string]any{"name": "菜单", "has_menu": false, "type": "view", "url": "0"}}) != "请输入网页链接" {
+		t.Fatal("url0")
+	}
 }
 
 func TestCoerceOAMenuHasMenu(t *testing.T) {

@@ -21,6 +21,11 @@ import (
 )
 
 func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string, terminal int) (any, error) {
+	// PHP AliPayService::pay match has no MNP case; default is 支付方式错误
+	// even when app_id is empty.
+	if terminal == wechat.TerminalMNP {
+		return nil, fmt.Errorf("支付方式错误")
+	}
 	cfg := AliCfg(c)
 	if cfg.AppID == "" || cfg.PrivateKey == "" {
 		return nil, fmt.Errorf("请先完成支付渠道配置")

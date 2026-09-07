@@ -224,9 +224,9 @@ func SettingSetCopyright(c *gin.Context) {
 
 func SettingGetAgreement(c *gin.Context) {
 	response.Data(c, gin.H{
-		"service_title":   cfgsvc.Get(c, "agreement", "service_title", nil),
+		"service_title":   cfgsvc.GetString(c, "agreement", "service_title", ""),
 		"service_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "service_content", "")),
-		"privacy_title":   cfgsvc.Get(c, "agreement", "privacy_title", nil),
+		"privacy_title":   cfgsvc.GetString(c, "agreement", "privacy_title", ""),
 		"privacy_content": filesvc.RewriteContentDomains(c, cfgsvc.GetString(c, "agreement", "privacy_content", "")),
 	})
 }

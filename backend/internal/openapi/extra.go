@@ -282,7 +282,8 @@ func PayPrepay(c *gin.Context) {
 		return
 	}
 	if payWay == 1 {
-		response.FailWithData(c, "充值不支持余额支付", p)
+		// PHP PaymentLogic::pay switch is wechat/ali/default → 订单异常.
+		response.FailWithData(c, "订单异常", p)
 		return
 	}
 	redirect := httpx.BodyStr(c, "redirect")
@@ -441,15 +442,8 @@ func UserBindMobile(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
+	// PHP UserValidate::sceneBindMobile is only code.require; mobile format is not checked.
 	mobile := httpx.BodyStr(c, "mobile")
-	if msg := util.ValidChinaMobile(mobile); msg != "" {
-		if mobile == "" {
-			response.Fail(c, "请输入手机号")
-			return
-		}
-		response.Fail(c, "请输入正确手机号")
-		return
-	}
 	code := httpx.BodyStr(c, "code")
 	typ := httpx.BodyStr(c, "type")
 	scene := "BGSJHM"

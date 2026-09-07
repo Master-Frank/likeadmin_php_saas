@@ -1612,6 +1612,22 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jget msg <<<"$php_menu2")" != "$(jget msg <<<"$go_menu2")" ]]; then
     fail=$((fail + 1))
   fi
+  php_menu0="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":0,"has_menu":false,"type":"click","key":"k"}]')"
+  go_menu0="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":0,"has_menu":false,"type":"click","key":"k"}]')"
+  echo "oa_menu_name0 php_msg=$(jget msg <<<"$php_menu0") go_msg=$(jget msg <<<"$go_menu0")"
+  if [[ "$(jget msg <<<"$php_menu0")" != "$(jget msg <<<"$go_menu0")" || "$(jget msg <<<"$go_menu0")" != *请输入一级菜单名称* ]]; then
+    echo "  php_menu0=${php_menu0:0:200}"
+    echo "  go_menu0=${go_menu0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_menuk0="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":false,"type":"click","key":0}]')"
+  go_menuk0="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":false,"type":"click","key":0}]')"
+  echo "oa_menu_key0 php_msg=$(jget msg <<<"$php_menuk0") go_msg=$(jget msg <<<"$go_menuk0")"
+  if [[ "$(jget msg <<<"$php_menuk0")" != "$(jget msg <<<"$go_menuk0")" || "$(jget msg <<<"$go_menuk0")" != *请输入关键字* ]]; then
+    echo "  php_menuk0=${php_menuk0:0:200}"
+    echo "  go_menuk0=${go_menuk0:0:200}"
+    fail=$((fail + 1))
+  fi
   php_menu3="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":0,"type":"click","key":"pair"}]')"
   go_menu3="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_menu/save" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '[{"name":"菜单","has_menu":0,"type":"click","key":"pair"}]')"
   echo "oa_menu_save php_code=$(jcode <<<"$php_menu3") go_code=$(jcode <<<"$go_menu3")"
@@ -1745,6 +1761,18 @@ print(json.dumps({
   }
   restore_ag "$PHP" "$php_ag0"
   restore_ag "$GO" "$go_ag0"
+  curl -sS -X POST "$PHP/tenantapi/setting.web.web_setting/setagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"service_title":"","service_content":"","privacy_title":"","privacy_content":""}' >/dev/null
+  php_age="$(curl -sS "$PHP/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_age="$(curl -sS "$GO/tenantapi/setting.web.web_setting/getagreement" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_agt="$(python3 -c 'import json,sys; d=(json.load(sys.stdin).get("data") or {}); print(d.get("service_title"), type(d.get("service_title")).__name__)' <<<"$php_age")"
+  go_agt="$(python3 -c 'import json,sys; d=(json.load(sys.stdin).get("data") or {}); print(d.get("service_title"), type(d.get("service_title")).__name__)' <<<"$go_age")"
+  echo "agreement_empty_title php=$php_agt go=$go_agt"
+  if [[ "$php_agt" != "$go_agt" ]]; then
+    echo "  php_age=${php_age:0:200}"
+    echo "  go_age=${go_age:0:200}"
+    fail=$((fail + 1))
+  fi
+  restore_ag "$PHP" "$php_ag0"
   if [[ -n "${UT:-}" ]]; then
     php_rc="$(curl -sS -X POST "$PHP/api/recharge/recharge" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     go_rc="$(curl -sS -X POST "$GO/api/recharge/recharge" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
@@ -1856,9 +1884,11 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_bm")" != "$(jget msg <<<"$go_bm")" ]]; then
       fail=$((fail + 1))
     fi
-    go_bm2="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"code":"1234","mobile":"123"}')"
-    echo "bind_mobile_format go_msg=$(jget msg <<<"$go_bm2")"
-    if [[ "$(jget msg <<<"$go_bm2")" != *请输入正确手机号* ]]; then
+    php_bm2="$(curl -sS -X POST "$PHP/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"type":"bind","code":"1234","mobile":"123"}')"
+    go_bm2="$(curl -sS -X POST "$GO/api/user/bindMobile" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"type":"bind","code":"1234","mobile":"123"}')"
+    echo "bind_mobile_format php_msg=$(jget msg <<<"$php_bm2") go_msg=$(jget msg <<<"$go_bm2")"
+    if [[ "$(jget msg <<<"$php_bm2")" != "$(jget msg <<<"$go_bm2")" || "$(jget msg <<<"$go_bm2")" != *验证码错误* ]]; then
+      echo "  php_bm2=${php_bm2:0:200}"
       echo "  go_bm2=${go_bm2:0:200}"
       fail=$((fail + 1))
     fi
@@ -5023,6 +5053,22 @@ print(first_m(json.load(sys.stdin).get("data") or []))
     if [[ "$(jget msg <<<"$php_pp99")" != "$(jget msg <<<"$go_pp99")" ]]; then
       echo "  php_pp99=${php_pp99:0:200}"
       echo "  go_pp99=${go_pp99:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pp1="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":1}')"
+    go_pp1="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":1}')"
+    echo "pay_prepay_balance php_msg=$(jget msg <<<"$php_pp1") go_msg=$(jget msg <<<"$go_pp1")"
+    if [[ "$(jget msg <<<"$php_pp1")" != "$(jget msg <<<"$go_pp1")" ]]; then
+      echo "  php_pp1=${php_pp1:0:200}"
+      echo "  go_pp1=${go_pp1:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_ppali="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":3}')"
+    go_ppali="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":3}')"
+    echo "pay_prepay_ali_mnp php_msg=$(jget msg <<<"$php_ppali") go_msg=$(jget msg <<<"$go_ppali")"
+    if [[ "$(jget msg <<<"$php_ppali")" != "$(jget msg <<<"$go_ppali")" ]]; then
+      echo "  php_ppali=${php_ppali:0:200}"
+      echo "  go_ppali=${go_ppali:0:200}"
       fail=$((fail + 1))
     fi
   fi

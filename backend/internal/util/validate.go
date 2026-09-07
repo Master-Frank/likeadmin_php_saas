@@ -339,6 +339,15 @@ func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
 	return ""
 }
 
+// phpLooseEmpty matches PHP empty() for OA menu scalars: missing, "", 0, "0".
+func phpLooseEmpty(v any) bool {
+	if v == nil {
+		return true
+	}
+	s := strings.TrimSpace(ToString(v))
+	return s == "" || s == "0"
+}
+
 func phpRequired(p map[string]any, key string) bool {
 	v, ok := p[key]
 	if !ok || v == nil {
@@ -791,7 +800,8 @@ func OAMenuCheck(menu []any) string {
 			return "一级菜单项须为数组格式"
 		}
 		name := strings.TrimSpace(ToString(m["name"]))
-		if name == "" {
+		// PHP OfficialAccountMenuLogic uses empty(), so 0/"0" is absent.
+		if phpLooseEmpty(m["name"]) {
 			return "请输入一级菜单名称"
 		}
 		if MBStrWidth(name) > 8 {
@@ -834,7 +844,7 @@ func oaMenuSubCheck(sub []any) string {
 			return "二级菜单项须为数组"
 		}
 		name := strings.TrimSpace(ToString(m["name"]))
-		if name == "" {
+		if phpLooseEmpty(m["name"]) {
 			return "请输入二级菜单名称"
 		}
 		if n := len([]rune(name)); n > 8 {
@@ -853,21 +863,21 @@ func oaMenuSubCheck(sub []any) string {
 func oaMenuTypeCheck(item map[string]any) string {
 	switch ToString(item["type"]) {
 	case "click":
-		if !phpRequired(item, "key") {
+		if phpLooseEmpty(item["key"]) {
 			return "请输入关键字"
 		}
 	case "view":
-		if !phpRequired(item, "url") {
+		if phpLooseEmpty(item["url"]) {
 			return "请输入网页链接"
 		}
 	case "miniprogram":
-		if !phpRequired(item, "url") {
+		if phpLooseEmpty(item["url"]) {
 			return "请输入网页链接"
 		}
-		if !phpRequired(item, "appid") {
+		if phpLooseEmpty(item["appid"]) {
 			return "请输入appid"
 		}
-		if !phpRequired(item, "pagepath") {
+		if phpLooseEmpty(item["pagepath"]) {
 			return "请输入小程序路径"
 		}
 	}
