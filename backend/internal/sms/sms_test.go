@@ -22,6 +22,7 @@ func TestSceneByTag(t *testing.T) {
 		"101":                 LoginCaptcha,
 		"":                    0,
 		"unknown":             0,
+		"999":                 0,
 	}
 	for in, want := range cases {
 		if got := SceneByTag(in); got != want {

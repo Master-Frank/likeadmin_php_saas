@@ -250,6 +250,15 @@ echo "pay_config_eq=$pay_cfg_eq"
 if [[ "$pay_cfg_eq" == "0" ]]; then
   fail=$((fail + 1))
 fi
+if [[ -n "$TOKEN" ]]; then
+  go_pal="$(curl -sS "$GO/platformapi/article.article/lists" -H "token: $TOKEN")"
+  go_pal_n="$(python3 -c 'import json,sys; print(((json.load(sys.stdin).get("data") or {}).get("count")) )' <<<"$go_pal")"
+  echo "platform_article_notenant go_count=$go_pal_n"
+  if [[ "$go_pal_n" != "0" ]]; then
+    echo "  go_pal=${go_pal:0:200}"
+    fail=$((fail + 1))
+  fi
+fi
 echo "upgrade_lists_keys php=$php_uk go=$go_uk"
 if [[ -n "$php_uk" && "$php_uk" != "$go_uk" ]]; then
   fail=$((fail + 1))
@@ -1566,6 +1575,12 @@ print(json.dumps({
     go_sms2="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
     echo "sms_send_bad php_msg=$(jget msg <<<"$php_sms2") go_msg=$(jget msg <<<"$go_sms2")"
     if [[ "$(jget msg <<<"$php_sms2")" != "$(jget msg <<<"$go_sms2")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_sms3="$(curl -sS -X POST "$PHP/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"mobile":"13800000000","scene":"NOSUCH"}')"
+    go_sms3="$(curl -sS -X POST "$GO/api/sms/sendCode" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"mobile":"13800000000","scene":"NOSUCH"}')"
+    echo "sms_send_unknown php_msg=$(jget msg <<<"$php_sms3") go_msg=$(jget msg <<<"$go_sms3")"
+    if [[ "$(jget msg <<<"$php_sms3")" != "$(jget msg <<<"$go_sms3")" ]]; then
       fail=$((fail + 1))
     fi
     php_pw="$(curl -sS "$PHP/api/pay/payWay" -H "Host: $TENANT_HOST" -H "token: $UT")"

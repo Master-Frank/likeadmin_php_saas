@@ -280,10 +280,19 @@ func tenantDB(c *gin.Context) uint {
 }
 
 func scopeTID(db *gorm.DB, c *gin.Context) *gorm.DB {
-	if tid := tenantDB(c); tid > 0 {
-		return db.Where("tenant_id = ?", tid)
+	tid := tenantDB(c)
+	if tid == 0 {
+		return db.Where("1 = 0")
 	}
-	return db
+	return db.Where("tenant_id = ?", tid)
+}
+
+func listsNeedTenant(c *gin.Context, q lists.Query) bool {
+	if tenantDB(c) > 0 {
+		return false
+	}
+	response.Lists(c, []any{}, 0, q.PageNo, q.PageSize, nil)
+	return true
 }
 
 // requireTenant fails closed for tenantapi writes/lookups that PHP BaseModel
@@ -302,10 +311,10 @@ func firstNonEmpty(a, b string) string {
 
 func UserLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.User{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.User{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if kw := lists.Param(q, "keyword"); kw != "" {
 		like := "%" + kw + "%"
 		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
@@ -425,10 +434,10 @@ func UserEdit(c *gin.Context) {
 
 func ArticleLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if title := lists.Param(q, "title"); title != "" {
 		db = db.Where("title LIKE ?", "%"+title+"%")
 	}
@@ -465,6 +474,10 @@ func ArticleLists(c *gin.Context) {
 }
 
 func ArticleAdd(c *gin.Context) {
+	if _, ok := requireTenant(c); !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	if msg := articleWriteCheck(c, false); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -564,10 +577,10 @@ func ArticleDetail(c *gin.Context) {
 
 func ArticleCateLists(c *gin.Context) {
 	q := lists.Parse(c)
-	db := tdb(c).Model(&model.ArticleCate{}).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	if listsNeedTenant(c, q) {
+		return
 	}
+	db := tdb(c).Model(&model.ArticleCate{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
 	if name := lists.Param(q, "name"); name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
@@ -815,12 +828,14 @@ func RechargeSetConfig(c *gin.Context) {
 
 func RechargeLists(c *gin.Context) {
 	q := lists.Parse(c)
+	if listsNeedTenant(c, q) {
+		return
+	}
+	tid := tenantDB(c)
 	ro := tenantdb.Table(c, model.RechargeOrder{}.TableName())
 	u := tenantdb.Table(c, model.User{}.TableName())
-	db := tdb(c).Table(ro + " AS ro").Joins("JOIN " + u + " AS u ON u.id = ro.user_id").Where("ro.delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("ro.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	}
+	db := tdb(c).Table(ro+" AS ro").Joins("JOIN "+u+" AS u ON u.id = ro.user_id").
+		Where("ro.delete_time IS NULL AND ro.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	if sn := lists.Param(q, "sn"); sn != "" {
 		db = db.Where("ro.sn = ?", sn)
 	}
@@ -874,12 +889,14 @@ func RechargeLists(c *gin.Context) {
 
 func FinanceAccountLogLists(c *gin.Context) {
 	q := lists.Parse(c)
+	if listsNeedTenant(c, q) {
+		return
+	}
+	tid := tenantDB(c)
 	al := tenantdb.Table(c, model.UserAccountLog{}.TableName())
 	u := tenantdb.Table(c, model.User{}.TableName())
-	db := tdb(c).Table(al + " AS al").Joins("JOIN " + u + " AS u ON u.id = al.user_id")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("al.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	}
+	db := tdb(c).Table(al+" AS al").Joins("JOIN "+u+" AS u ON u.id = al.user_id").
+		Where("al.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	if lists.Param(q, "change_type") != "" {
 		db = db.Where("al.change_type = ?", lists.ParamInt(q, "change_type"))
 	}
@@ -934,12 +951,14 @@ func FinanceAccountLogLists(c *gin.Context) {
 
 func FinanceRefundRecord(c *gin.Context) {
 	q := lists.Parse(c)
+	if listsNeedTenant(c, q) {
+		return
+	}
+	tid := tenantDB(c)
 	rt := tenantdb.Table(c, model.RefundRecord{}.TableName())
 	u := tenantdb.Table(c, model.User{}.TableName())
-	base := tdb(c).Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
-	if tid := tenantDB(c); tid > 0 {
-		base = base.Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	}
+	base := tdb(c).Table(rt+" AS r").Joins("JOIN "+u+" AS u ON u.id = r.user_id").
+		Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 	if sn := lists.Param(q, "sn"); sn != "" {
 		base = base.Where("r.sn = ?", sn)
 	}
@@ -960,10 +979,8 @@ func FinanceRefundRecord(c *gin.Context) {
 		base = base.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
 	extendWhere := func(db *gorm.DB) *gorm.DB {
-		db = db.Table(rt + " AS r").Joins("JOIN " + u + " AS u ON u.id = r.user_id")
-		if tid := tenantDB(c); tid > 0 {
-			db = db.Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-		}
+		db = db.Table(rt+" AS r").Joins("JOIN "+u+" AS u ON u.id = r.user_id").
+			Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
 		if sn := lists.Param(q, "sn"); sn != "" {
 			db = db.Where("r.sn = ?", sn)
 		}

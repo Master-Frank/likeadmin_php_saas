@@ -57,9 +57,6 @@ func SceneByTag(tag string) int {
 	if n, ok := aliasToScene[strings.ToLower(tag)]; ok {
 		return n
 	}
-	if n, err := strconv.Atoi(tag); err == nil && n > 0 {
-		return n
-	}
 	return 0
 }
 
@@ -86,14 +83,16 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 		tid = ctxutil.Get(c).TenantID
 	}
 	content := "验证码" + code
-	if c != nil {
-		if notice := loadNoticeSMS(c, scene); len(notice) > 0 {
-			if _, ok := notice["status"]; ok && util.ToInt(notice["status"]) != 1 {
-				return 0, "", fmt.Errorf("发送通知失败")
-			}
-			if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {
-				content = formatted
-			}
+	if c != nil && bootstrap.DB != nil {
+		found, _, _, notice := findNoticeSetting(c, scene)
+		if !found {
+			return 0, "", fmt.Errorf("找不到对应场景的配置")
+		}
+		if _, ok := notice["status"]; ok && util.ToInt(notice["status"]) != 1 {
+			return 0, "", fmt.Errorf("发送通知失败")
+		}
+		if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {
+			content = formatted
 		}
 	}
 	var logID uint

@@ -87,11 +87,13 @@ func ArticleUpdateStatus(c *gin.Context) {
 }
 
 func ArticleAll(c *gin.Context) {
-	var rows []model.Article
-	db := tdb(c).Where("delete_time IS NULL")
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, []any{})
+		return
 	}
+	var rows []model.Article
+	db := tdb(c).Where("delete_time IS NULL AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
@@ -139,7 +141,11 @@ func DecorateDataPC(c *gin.Context) {
 }
 
 func DecorateTabbarSave(c *gin.Context) {
-	tid := tenantDB(c)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	if style := httpx.Any(c, "style"); style != nil {
 		cfgsvc.Set(c, "tabbar", "style", style)
 	}
@@ -174,7 +180,11 @@ func HotSearchSet(c *gin.Context) {
 	data := httpx.Any(c, "data")
 	arr, _ := data.([]any)
 	if len(arr) > 0 {
-		tid := tenantDB(c)
+		tid, ok := requireTenant(c)
+		if !ok {
+			response.Fail(c, "参数缺失")
+			return
+		}
 		tdb(c).Where("tenant_id = ? AND id > 0", tid).Delete(&model.HotSearch{})
 		now := util.NowUnix()
 		for _, item := range arr {
@@ -351,10 +361,12 @@ func refundHandlerName(c *gin.Context, handleID uint) string {
 }
 
 func FinanceRefundStat(c *gin.Context) {
-	db := tdb(c).Model(&model.RefundRecord{})
-	if tid := tenantDB(c); tid > 0 {
-		db = db.Where("tenant_id = ?", tid)
+	tid, ok := requireTenant(c)
+	if !ok {
+		response.Data(c, gin.H{"total": 0, "ing": 0, "success": 0, "error": 0})
+		return
 	}
+	db := tdb(c).Model(&model.RefundRecord{}).Where("tenant_id = ?", tid)
 	var rows []model.RefundRecord
 	db.Find(&rows)
 	var total, ing, success, errAmt float64
