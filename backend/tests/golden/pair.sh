@@ -2902,6 +2902,26 @@ print("|".join("%s:%s" % (x.get("name"), x.get("type")) for x in ls))
     if [[ "$php_pv_shape" != "$go_pv_shape" ]]; then
       fail=$((fail + 1))
     fi
+    printf '%s' "$php_pv" > /tmp/likeadmin-php-preview.json
+    printf '%s' "$go_pv" > /tmp/likeadmin-go-preview.json
+    php_pv_eq="$(python3 -c '
+import json,re
+date_re=re.compile(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}")
+def norm(s):
+    return date_re.sub("DATE", s or "")
+php=json.load(open("/tmp/likeadmin-php-preview.json"))
+go=json.load(open("/tmp/likeadmin-go-preview.json"))
+pls=php.get("data") or []
+gls=go.get("data") or []
+pm={x.get("name"):norm(x.get("content") or "") for x in pls}
+gm={x.get("name"):norm(x.get("content") or "") for x in gls}
+diff=[n for n in sorted(set(pm)|set(gm)) if pm.get(n)!=gm.get(n)]
+print("ok" if pls and gls and not diff else (",".join(diff) if diff else "empty"))
+')"
+    echo "generator_preview_content $php_pv_eq"
+    if [[ "$php_pv_eq" != "ok" ]]; then
+      fail=$((fail + 1))
+    fi
     php_gn="$(curl -sS -X POST "$PHP/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}" || true)"
     go_gn="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}" || true)"
     echo "generator_generate php_code=$(jcode <<<"$php_gn") go_code=$(jcode <<<"$go_gn") php_msg=$(jget msg <<<"$php_gn") go_msg=$(jget msg <<<"$go_gn")"
