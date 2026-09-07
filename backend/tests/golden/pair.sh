@@ -853,9 +853,11 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_fpid=${go_fpid:0:200}"
     fail=$((fail + 1))
   fi
+  php_pfm="$(curl -sS -X POST "$PHP/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[1],"cid":99999999}')"
   go_pfm="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[1],"cid":99999999}')"
-  echo "platform_file_move go_msg=$(jget msg <<<"$go_pfm")"
-  if [[ "$(jget msg <<<"$go_pfm")" != *文件分类不存在* ]]; then
+  echo "platform_file_move php_msg=$(jget msg <<<"$php_pfm") go_msg=$(jget msg <<<"$go_pfm")"
+  if [[ "$(jget msg <<<"$php_pfm")" != "$(jget msg <<<"$go_pfm")" ]]; then
+    echo "  php_pfm=${php_pfm:0:200}"
     echo "  go_pfm=${go_pfm:0:200}"
     fail=$((fail + 1))
   fi
@@ -865,27 +867,35 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_pfe=${go_pfe:0:200}"
     fail=$((fail + 1))
   fi
+  php_fmv="$(curl -sS -X POST "$PHP/tenantapi/file/move" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
   go_fmv="$(curl -sS -X POST "$GO/tenantapi/file/move" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
-  echo "file_move_missing go_msg=$(jget msg <<<"$go_fmv")"
-  if [[ "$(jget msg <<<"$go_fmv")" != *文件不存在* ]]; then
+  echo "file_move_missing php_msg=$(jget msg <<<"$php_fmv") go_msg=$(jget msg <<<"$go_fmv")"
+  if [[ "$(jget msg <<<"$php_fmv")" != "$(jget msg <<<"$go_fmv")" ]]; then
+    echo "  php_fmv=${php_fmv:0:200}"
     echo "  go_fmv=${go_fmv:0:200}"
     fail=$((fail + 1))
   fi
+  php_pfmv="$(curl -sS -X POST "$PHP/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
   go_pfmv="$(curl -sS -X POST "$GO/platformapi/file/move" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999],"cid":0}')"
-  echo "platform_file_move_missing go_msg=$(jget msg <<<"$go_pfmv")"
-  if [[ "$(jget msg <<<"$go_pfmv")" != *文件不存在* ]]; then
+  echo "platform_file_move_missing php_msg=$(jget msg <<<"$php_pfmv") go_msg=$(jget msg <<<"$go_pfmv")"
+  if [[ "$(jget msg <<<"$php_pfmv")" != "$(jget msg <<<"$go_pfmv")" ]]; then
+    echo "  php_pfmv=${php_pfmv:0:200}"
     echo "  go_pfmv=${go_pfmv:0:200}"
     fail=$((fail + 1))
   fi
+  php_fdel="$(curl -sS -X POST "$PHP/tenantapi/file/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999]}')"
   go_fdel="$(curl -sS -X POST "$GO/tenantapi/file/delete" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999]}')"
-  echo "file_delete_missing go_msg=$(jget msg <<<"$go_fdel")"
-  if [[ "$(jget msg <<<"$go_fdel")" != *文件不存在* ]]; then
+  echo "file_delete_missing php_msg=$(jget msg <<<"$php_fdel") go_msg=$(jget msg <<<"$go_fdel")"
+  if [[ "$(jget msg <<<"$php_fdel")" != "$(jget msg <<<"$go_fdel")" ]]; then
+    echo "  php_fdel=${php_fdel:0:200}"
     echo "  go_fdel=${go_fdel:0:200}"
     fail=$((fail + 1))
   fi
+  php_frn="$(curl -sS -X POST "$PHP/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
   go_frn="$(curl -sS -X POST "$GO/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
-  echo "file_rename_missing go_msg=$(jget msg <<<"$go_frn")"
-  if [[ "$(jget msg <<<"$go_frn")" != *文件不存在* ]]; then
+  echo "file_rename_missing php_msg=$(jget msg <<<"$php_frn") go_msg=$(jget msg <<<"$go_frn")"
+  if [[ "$(jget msg <<<"$php_frn")" != "$(jget msg <<<"$go_frn")" ]]; then
+    echo "  php_frn=${php_frn:0:200}"
     echo "  go_frn=${go_frn:0:200}"
     fail=$((fail + 1))
   fi
@@ -1502,14 +1512,18 @@ print(json.dumps({
       if [[ -n "$other_uid" && "$other_uid" != "0" ]]; then
         mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('pwu$now',$other_uid,2,0,9,1,0,1,$now)"
         oid="$(mysqlq "SELECT id FROM la_recharge_order WHERE sn='pwu$now'")"
+        php_pwu="$(curl -sS "$PHP/api/pay/payWay?from=recharge&order_id=$oid" -H "Host: $TENANT_HOST" -H "token: $UT")"
         go_pwu="$(curl -sS "$GO/api/pay/payWay?from=recharge&order_id=$oid" -H "Host: $TENANT_HOST" -H "token: $UT")"
+        php_ppu="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"from\":\"recharge\",\"pay_way\":2,\"order_id\":$oid}")"
         go_ppu="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"from\":\"recharge\",\"pay_way\":2,\"order_id\":$oid}")"
-        echo "pay_order_owner go_way=$(jget msg <<<"$go_pwu") go_prepay=$(jget msg <<<"$go_ppu")"
-        if [[ "$(jget msg <<<"$go_pwu")" != *待支付订单不存在* ]]; then
+        echo "pay_order_owner php_way=$(jcode <<<"$php_pwu") go_way=$(jcode <<<"$go_pwu") php_prepay=$(jget msg <<<"$php_ppu") go_prepay=$(jget msg <<<"$go_ppu")"
+        if [[ "$(jcode <<<"$php_pwu")" != "$(jcode <<<"$go_pwu")" ]]; then
+          echo "  php_pwu=${php_pwu:0:200}"
           echo "  go_pwu=${go_pwu:0:200}"
           fail=$((fail + 1))
         fi
-        if [[ "$(jget msg <<<"$go_ppu")" != *充值订单不存在* ]]; then
+        if [[ "$(jget msg <<<"$php_ppu")" != "$(jget msg <<<"$go_ppu")" ]]; then
+          echo "  php_ppu=${php_ppu:0:200}"
           echo "  go_ppu=${go_ppu:0:200}"
           fail=$((fail + 1))
         fi
@@ -3253,6 +3267,48 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('rf0p$now','rf0g$now')"
+  if [[ -n "${UT:-}" ]]; then
+    php_gmm="$(curl -sS -X POST "$PHP/api/user/getMobileByMnp" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_gmm="$(curl -sS -X POST "$GO/api/user/getMobileByMnp" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "mnp_mobile_nocode php_msg=$(jget msg <<<"$php_gmm") go_msg=$(jget msg <<<"$go_gmm")"
+    if [[ "$(jget msg <<<"$php_gmm")" != "$(jget msg <<<"$go_gmm")" ]]; then
+      echo "  php_gmm=${php_gmm:0:200}"
+      echo "  go_gmm=${go_gmm:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_cpw="$(curl -sS -X POST "$PHP/api/user/changePassword" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_cpw="$(curl -sS -X POST "$GO/api/user/changePassword" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "change_password_empty php_msg=$(jget msg <<<"$php_cpw") go_msg=$(jget msg <<<"$go_cpw")"
+    if [[ "$(jget msg <<<"$php_cpw")" != "$(jget msg <<<"$go_cpw")" ]]; then
+      echo "  php_cpw=${php_cpw:0:200}"
+      echo "  go_cpw=${go_cpw:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_cpw2="$(curl -sS -X POST "$PHP/api/user/changePassword" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"password":"abc123","password_confirm":"abc123"}')"
+    go_cpw2="$(curl -sS -X POST "$GO/api/user/changePassword" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"password":"abc123","password_confirm":"abc123"}')"
+    echo "change_password_noold php_msg=$(jget msg <<<"$php_cpw2") go_msg=$(jget msg <<<"$go_cpw2")"
+    if [[ "$(jget msg <<<"$php_cpw2")" != "$(jget msg <<<"$go_cpw2")" ]]; then
+      echo "  php_cpw2=${php_cpw2:0:200}"
+      echo "  go_cpw2=${go_cpw2:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_acd="$(curl -sS "$PHP/tenantapi/article.article_cate/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_acd="$(curl -sS "$GO/tenantapi/article.article_cate/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "article_cate_noid php_msg=$(jget msg <<<"$php_acd") go_msg=$(jget msg <<<"$go_acd")"
+  if [[ "$(jget msg <<<"$php_acd")" != "$(jget msg <<<"$go_acd")" ]]; then
+    echo "  php_acd=${php_acd:0:200}"
+    echo "  go_acd=${go_acd:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_cdelm="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_cdelm="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "crontab_delete_missing php_msg=$(jget msg <<<"$php_cdelm") go_msg=$(jget msg <<<"$go_cdelm")"
+  if [[ "$(jget msg <<<"$php_cdelm")" != "$(jget msg <<<"$go_cdelm")" ]]; then
+    echo "  php_cdelm=${php_cdelm:0:200}"
+    echo "  go_cdelm=${go_cdelm:0:200}"
+    fail=$((fail + 1))
+  fi
 fi
 
 if [[ -n "$GO" ]]; then

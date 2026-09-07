@@ -37,6 +37,10 @@ func AdminAll(c *gin.Context) {
 }
 
 func ArticleCateDetail(c *gin.Context) {
+	if httpx.Uint(c, "id") == 0 {
+		response.Fail(c, "资讯分类id不能为空")
+		return
+	}
 	var row model.ArticleCate
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
 		response.Fail(c, "资讯分类不存在")

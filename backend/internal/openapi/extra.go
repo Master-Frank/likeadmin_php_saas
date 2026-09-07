@@ -161,9 +161,9 @@ func PayWay(c *gin.Context) {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
-	uid := ctxutil.Get(c).UserID
 	var order model.RechargeOrder
-	if scopeTenant(tdb(c).Where("id = ? AND user_id = ? AND delete_time IS NULL", orderID, uid), c).First(&order).Error != nil {
+	// PHP PaymentLogic::getPayWay uses findOrEmpty(order_id) with no user_id filter.
+	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
 		response.Fail(c, "待支付订单不存在")
 		return
 	}
@@ -243,13 +243,13 @@ func PayPrepay(c *gin.Context) {
 	}
 	from := httpx.Str(c, "from")
 	orderID := httpx.Uint(c, "order_id")
-	uid := ctxutil.Get(c).UserID
 	if from != "recharge" {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
 	var order model.RechargeOrder
-	if scopeTenant(tdb(c).Where("id = ? AND user_id = ? AND delete_time IS NULL", orderID, uid), c).First(&order).Error != nil {
+	// PHP PaymentLogic::getPayOrderInfo looks up by order_id only.
+	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", orderID), c).First(&order).Error != nil {
 		response.FailWithData(c, "充值订单不存在", p)
 		return
 	}
@@ -378,6 +378,11 @@ func UserChangePassword(c *gin.Context) {
 		return
 	}
 	salt := config.C.Project.UniqueIdentification
+	// PHP PasswordValidate runs before UserLogic::changePassword.
+	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	if u.Password != "" {
 		old := httpx.Str(c, "old_password")
 		if old == "" {
@@ -388,10 +393,6 @@ func UserChangePassword(c *gin.Context) {
 			response.Fail(c, "原密码不正确")
 			return
 		}
-	}
-	if msg := util.UserPasswordCheck(httpx.Params(c)); msg != "" {
-		response.Fail(c, msg)
-		return
 	}
 	pwd := httpx.Str(c, "password")
 	tdb(c).Model(&u).Update("password", util.CreatePassword(pwd, salt))

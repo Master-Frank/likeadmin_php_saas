@@ -264,11 +264,8 @@ func CrontabDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	res := bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Update("delete_time", now)
-	if res.RowsAffected == 0 {
-		response.Fail(c, "删除失败")
-		return
-	}
+	// PHP CrontabLogic::delete is destroy() and always returns true.
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Update("delete_time", now)
 	response.SuccessNotice(c, "删除成功")
 }
 

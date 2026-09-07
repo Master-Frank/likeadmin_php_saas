@@ -50,17 +50,7 @@ func FileMove(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if cid := httpx.Uint(c, "cid"); cid > 0 {
-		var cate model.TenantFileCate
-		if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", cid), c).First(&cate).Error != nil {
-			response.Fail(c, "文件分类不存在")
-			return
-		}
-	}
-	if !filesvc.FileIDsExist(scopeTID(tdb(c).Model(&model.TenantFile{}), c), ids) {
-		response.Fail(c, "文件不存在")
-		return
-	}
+	// PHP FileLogic::move updates by id list and does not check file/cate existence.
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(map[string]any{
 		"cid": httpx.Uint(c, "cid"), "update_time": now,
@@ -72,11 +62,6 @@ func FileRename(c *gin.Context) {
 	p := httpx.Params(c)
 	if msg := util.FileRenameCheck(p); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	var row model.TenantFile
-	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", httpx.Uint(c, "id")), c).First(&row).Error != nil {
-		response.Fail(c, "文件不存在")
 		return
 	}
 	now := util.NowUnix()
@@ -91,10 +76,6 @@ func FileDelete(c *gin.Context) {
 	ids := httpx.Uints(c, "ids")
 	if msg := util.FileDeleteCheck(p, ids); msg != "" {
 		response.Fail(c, msg)
-		return
-	}
-	if !filesvc.FileIDsExist(scopeTID(tdb(c).Model(&model.TenantFile{}), c), ids) {
-		response.Fail(c, "文件不存在")
 		return
 	}
 	var rows []model.TenantFile

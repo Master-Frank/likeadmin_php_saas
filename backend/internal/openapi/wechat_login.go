@@ -382,6 +382,10 @@ func WechatJsConfigReal(c *gin.Context) {
 }
 
 func UserGetMobileByMnpReal(c *gin.Context) {
+	if !phpRequiredParam(httpx.Params(c), "code") {
+		response.Fail(c, "参数缺失")
+		return
+	}
 	appID, secret := wechat.MnpConfig(c)
 	if appID == "" || secret == "" {
 		response.Fail(c, "请先设置小程序配置")
