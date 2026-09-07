@@ -13,6 +13,7 @@ type CronExpr struct {
 }
 
 func ParseCron(expr string) (*CronExpr, error) {
+	expr = expandCronMacros(expr)
 	parts := strings.Fields(strings.TrimSpace(expr))
 	if len(parts) != 5 {
 		return nil, fmt.Errorf("定时任务运行规则错误")
@@ -165,18 +166,18 @@ func parseCronField(field string, min, max int) ([]int, error) {
 			if len(ab) != 2 {
 				return nil, fmt.Errorf("定时任务运行规则错误")
 			}
-			var err error
-			start, err = strconv.Atoi(ab[0])
-			if err != nil {
+			var ok bool
+			start, ok = cronFieldValue(ab[0], min, max)
+			if !ok {
 				return nil, fmt.Errorf("定时任务运行规则错误")
 			}
-			end, err = strconv.Atoi(ab[1])
-			if err != nil {
+			end, ok = cronFieldValue(ab[1], min, max)
+			if !ok {
 				return nil, fmt.Errorf("定时任务运行规则错误")
 			}
 		default:
-			n, err := strconv.Atoi(rangePart)
-			if err != nil {
+			n, ok := cronFieldValue(rangePart, min, max)
+			if !ok {
 				return nil, fmt.Errorf("定时任务运行规则错误")
 			}
 			start, end = n, n
@@ -192,6 +193,55 @@ func parseCronField(field string, min, max int) ([]int, error) {
 		return nil, fmt.Errorf("定时任务运行规则错误")
 	}
 	return out, nil
+}
+
+func expandCronMacros(expr string) string {
+	switch strings.ToLower(strings.TrimSpace(expr)) {
+	case "@yearly", "@annually":
+		return "0 0 1 1 *"
+	case "@monthly":
+		return "0 0 1 * *"
+	case "@weekly":
+		return "0 0 * * 0"
+	case "@daily", "@midnight":
+		return "0 0 * * *"
+	case "@hourly":
+		return "0 * * * *"
+	default:
+		return expr
+	}
+}
+
+var cronMonthNames = map[string]int{
+	"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+	"JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+var cronDowNames = map[string]int{
+	"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6,
+}
+
+func cronFieldValue(s string, min, max int) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	key := strings.ToUpper(s)
+	if min == 1 && max == 12 {
+		if n, ok := cronMonthNames[key]; ok {
+			return n, true
+		}
+	}
+	if min == 0 && max == 7 {
+		if n, ok := cronDowNames[key]; ok {
+			return n, true
+		}
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 func containsInt(list []int, v int) bool {

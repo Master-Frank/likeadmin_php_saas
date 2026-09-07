@@ -2,6 +2,9 @@ package filesvc
 
 import (
 	"fmt"
+	"io"
+	"math/rand"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -52,17 +55,41 @@ func ReceiveUpload(c *gin.Context, scene, dir string) (name, rel, errMsg string)
 		return "", "", msg
 	}
 	name = truncateUploadName(fh.Filename)
-	saved := time.Now().Format("20060102150405") + util.MD5(fh.Filename)[:8] + "." + ext
-	rel = filepath.ToSlash(filepath.Join(dir, time.Now().Format("20060102"), saved))
 	src, err := fh.Open()
 	if err != nil {
 		return "", "", err.Error()
 	}
 	defer src.Close()
-	if _, err = storage.Save(c, rel, src, fh.Size, fh.Header.Get("Content-Type")); err != nil {
+	tmp, err := os.CreateTemp("", "likeadmin-upload-*")
+	if err != nil {
+		return "", "", err.Error()
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err = io.Copy(tmp, src); err != nil {
+		_ = tmp.Close()
+		return "", "", err.Error()
+	}
+	if err = tmp.Close(); err != nil {
+		return "", "", err.Error()
+	}
+	saved := buildSaveName(tmpPath, ext)
+	rel = filepath.ToSlash(filepath.Join(dir, time.Now().Format("20060102"), saved))
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		return "", "", err.Error()
+	}
+	defer f.Close()
+	if _, err = storage.Save(c, rel, f, fh.Size, fh.Header.Get("Content-Type")); err != nil {
 		return "", "", err.Error()
 	}
 	return name, rel, ""
+}
+
+// buildSaveName mirrors PHP Server::buildSaveName:
+// date('YmdHis') + substr(md5(realPath), 0, 5) + str_pad(rand(0, 9999), 4, '0') + .ext
+func buildSaveName(realPath, ext string) string {
+	return time.Now().Format("20060102150405") + util.MD5(realPath)[:5] + fmt.Sprintf("%04d", rand.Intn(10000)) + "." + ext
 }
 
 func UploadCID(c *gin.Context) uint {

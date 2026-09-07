@@ -71,7 +71,7 @@ func PayConfigSet(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -152,14 +152,10 @@ func PayWaySet(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
-	tid, ok := requireTenant(c)
-	if !ok {
-		response.Fail(c, "参数缺失")
-		return
-	}
+	tid := tenantDB(c)
 	params := httpx.Body(c)
 	if msg := util.PayWaySetCheck(params); msg != "" {
 		response.Fail(c, msg)

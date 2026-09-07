@@ -27,6 +27,11 @@ type SaveResult struct {
 	Engine string
 }
 
+// unknownEngineErr mirrors PHP Driver::getEngineClass.
+func unknownEngineErr(engine string) error {
+	return fmt.Errorf("未找到存储引擎类: %s", engine)
+}
+
 var (
 	qiniuUploadURL = "https://upload.qiniup.com/"
 	qiniuRSURL     = "https://rs.qiniu.com"
@@ -60,7 +65,7 @@ func Delete(c *gin.Context, uri string) error {
 	case "qcloud":
 		return deleteQcloud(cfg, key)
 	default:
-		return fmt.Errorf("未知存储引擎")
+		return unknownEngineErr(engine)
 	}
 }
 
@@ -133,7 +138,7 @@ func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType strin
 			return SaveResult{}, err
 		}
 	default:
-		return SaveResult{}, fmt.Errorf("未知存储引擎")
+		return SaveResult{}, unknownEngineErr(engine)
 	}
 	return SaveResult{URI: rel, Engine: engine}, nil
 }

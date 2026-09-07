@@ -152,6 +152,26 @@ func TestTableHasColumnNilDB(t *testing.T) {
 	}
 }
 
+func TestRequiredMsgUsesColumnComment(t *testing.T) {
+	sp := &spec{cols: []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1, IsRequired: 1, IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "name", ColumnComment: "名称", IsRequired: 1, IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "status", ColumnComment: "", IsRequired: 1, IsInsert: 1, IsUpdate: 1},
+	}}
+	if got := requiredMsg(sp, map[string]any{}, false); got != "名称" {
+		t.Fatalf("empty add %q", got)
+	}
+	if got := requiredMsg(sp, map[string]any{"name": "x"}, false); got != "status" {
+		t.Fatalf("missing status %q", got)
+	}
+	if got := requiredMsg(sp, map[string]any{"name": "x", "status": 1}, false); got != "" {
+		t.Fatalf("ok add %q", got)
+	}
+	if got := requiredMsg(sp, map[string]any{"name": ""}, true); got != "名称" {
+		t.Fatalf("empty edit %q", got)
+	}
+}
+
 func TestNewSpecSoftDeleteAndPk(t *testing.T) {
 	sp := newSpec(model.GenerateTable{
 		Name:   "la_pair_gencrud",

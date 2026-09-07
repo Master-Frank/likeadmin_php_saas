@@ -15,7 +15,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const sendTypeSMS = 2
+const (
+	sendTypeSMS = 2
+	sendTypeOA  = 3
+	sendTypeMNP = 4
+)
+
+// titleByScene mirrors PHP NoticeLogic::getTitleByScene.
+func titleByScene(sendType int, oa, mnp map[string]any) string {
+	switch sendType {
+	case sendTypeOA:
+		return util.ToString(oa["name"])
+	case sendTypeMNP:
+		return util.ToString(mnp["name"])
+	default:
+		return ""
+	}
+}
 
 func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid uint) {
 	if bootstrap.DB == nil {
@@ -24,8 +40,9 @@ func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid ui
 	if params == nil {
 		params = map[string]string{}
 	}
-	recipient, noticeType, smsNotice := loadNoticeMeta(c, scene)
-	content := formatContent(util.ToString(smsNotice["content"]), params)
+	meta := loadNoticeMeta(c, scene)
+	content := formatContent(util.ToString(meta.sms["content"]), params)
+	title := titleByScene(sendTypeSMS, meta.oa, meta.mnp)
 	userID := uint(0)
 	if c != nil {
 		userID = ctxutil.Get(c).UserID
@@ -37,32 +54,37 @@ func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid ui
 			db = bootstrap.DB
 		}
 		_ = db.Create(&model.TenantNoticeRecord{
-			TenantID: tid, UserID: userID, Title: "", Content: content,
-			SceneID: scene, Read: 0, Recipient: recipient, SendType: sendTypeSMS,
-			NoticeType: noticeType, Extra: "", CreateTime: now,
+			TenantID: tid, UserID: userID, Title: title, Content: content,
+			SceneID: scene, Read: 0, Recipient: meta.recipient, SendType: sendTypeSMS,
+			NoticeType: meta.noticeType, Extra: "", CreateTime: now,
 		}).Error
 		return
 	}
 	_ = bootstrap.DB.Create(&model.NoticeRecord{
-		UserID: userID, Title: "", Content: content,
-		SceneID: scene, Read: 0, Recipient: recipient, SendType: sendTypeSMS,
-		NoticeType: noticeType, Extra: "", CreateTime: now,
+		UserID: userID, Title: title, Content: content,
+		SceneID: scene, Read: 0, Recipient: meta.recipient, SendType: sendTypeSMS,
+		NoticeType: meta.noticeType, Extra: "", CreateTime: now,
 	}).Error
 }
 
-func loadNoticeMeta(c *gin.Context, scene int) (recipient, noticeType int, sms map[string]any) {
-	found, rec, typ, sms := findNoticeSetting(c, scene)
-	if !found {
-		return 1, 2, map[string]any{}
-	}
-	return rec, typ, sms
+type noticeMeta struct {
+	recipient, noticeType int
+	sms, oa, mnp          map[string]any
 }
 
-func findNoticeSetting(c *gin.Context, scene int) (found bool, recipient, noticeType int, sms map[string]any) {
+func loadNoticeMeta(c *gin.Context, scene int) noticeMeta {
+	found, rec, typ, sms, oa, mnp := findNoticeSetting(c, scene)
+	if !found {
+		return noticeMeta{recipient: 1, noticeType: 2, sms: map[string]any{}, oa: map[string]any{}, mnp: map[string]any{}}
+	}
+	return noticeMeta{recipient: rec, noticeType: typ, sms: sms, oa: oa, mnp: mnp}
+}
+
+func findNoticeSetting(c *gin.Context, scene int) (found bool, recipient, noticeType int, sms, oa, mnp map[string]any) {
 	recipient, noticeType = 1, 2
-	sms = map[string]any{}
+	sms, oa, mnp = map[string]any{}, map[string]any{}, map[string]any{}
 	if bootstrap.DB == nil {
-		return false, recipient, noticeType, sms
+		return false, recipient, noticeType, sms, oa, mnp
 	}
 	tid := uint(0)
 	if c != nil {
@@ -76,15 +98,15 @@ func findNoticeSetting(c *gin.Context, scene int) (found bool, recipient, notice
 		}
 		q := db.Where("scene_id = ?", scene).Where("tenant_id = ?", tid)
 		if q.First(&row).Error == nil {
-			return true, row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice)
+			return true, row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice), decodeNoticeJSON(row.OaNotice), decodeNoticeJSON(row.MnpNotice)
 		}
-		return false, recipient, noticeType, sms
+		return false, recipient, noticeType, sms, oa, mnp
 	}
 	var row model.NoticeSetting
 	if bootstrap.DB.Where("scene_id = ?", scene).First(&row).Error == nil {
-		return true, row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice)
+		return true, row.Recipient, row.Type, decodeNoticeJSON(row.SmsNotice), decodeNoticeJSON(row.OaNotice), decodeNoticeJSON(row.MnpNotice)
 	}
-	return false, recipient, noticeType, sms
+	return false, recipient, noticeType, sms, oa, mnp
 }
 
 // NoticeByScene mirrors PHP NoticeLogic::noticeByScene for SMS-enabled scenes.
@@ -92,7 +114,7 @@ func NoticeByScene(c *gin.Context, sceneID int, params map[string]string) error 
 	if sceneID <= 0 {
 		return fmt.Errorf("找不到对应场景的配置")
 	}
-	found, _, _, smsNotice := findNoticeSetting(c, sceneID)
+	found, _, _, smsNotice, _, _ := findNoticeSetting(c, sceneID)
 	if !found {
 		return fmt.Errorf("找不到对应场景的配置")
 	}

@@ -58,6 +58,7 @@ func CollectEnv() []envItem {
 	out = append(out, probeDir("public/mobile", publicSub("mobile")))
 	out = append(out, probeDir("config", configDir()))
 	out = append(out, probeWritableFile(".env", envFilePath()))
+	out = append(out, probeDir("临时目录", os.TempDir()))
 	out = append(out, probeDiskSpace())
 	out = append(out, probeUploadLimit())
 	return out
@@ -100,6 +101,10 @@ func probeMySQL() envItem {
 	}
 	item.Status = "ok"
 	item.Value = config.C.Database.Hostname
+	var ver string
+	if err := bootstrap.DB.Raw("SELECT VERSION()").Scan(&ver).Error; err == nil && strings.TrimSpace(ver) != "" {
+		item.Value = item.Value + " " + strings.TrimSpace(ver)
+	}
 	return item
 }
 

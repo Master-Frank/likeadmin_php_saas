@@ -658,7 +658,7 @@ func ArticleCateEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := articleCateWriteCheck(c, true); msg != "" {
@@ -675,7 +675,7 @@ func ArticleCateDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -792,7 +792,7 @@ func DecoratePageSave(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {

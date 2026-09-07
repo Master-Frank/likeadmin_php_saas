@@ -167,9 +167,11 @@ func downFile(remote, saveDir string) (string, error) {
 		name = "package.zip"
 	}
 	path := filepath.Join(saveDir, name)
-	if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
+	base := filepath.Dir(path)
+	if err := os.MkdirAll(base, 0777); err != nil {
 		return "", err
 	}
+	_ = os.Chmod(base, 0777)
 	f, err := os.Create(path)
 	if err != nil {
 		return "", err

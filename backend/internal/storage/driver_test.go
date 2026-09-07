@@ -117,6 +117,13 @@ func TestAliyunHostUsesRegion(t *testing.T) {
 	}
 }
 
+func TestUnknownEngineMessage(t *testing.T) {
+	err := unknownEngineErr("ftp")
+	if err == nil || err.Error() != "未找到存储引擎类: ftp" {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestDeleteCloudMissingConfig(t *testing.T) {
 	if err := deleteQiniu(map[string]any{}, "k"); err == nil {
 		t.Fatal("qiniu")

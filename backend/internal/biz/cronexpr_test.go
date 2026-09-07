@@ -53,6 +53,40 @@ func TestCronExpressionLists(t *testing.T) {
 	}
 }
 
+func TestParseCronMacrosAndNames(t *testing.T) {
+	daily, err := ParseCron("@daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hourly, err := ParseCron("@hourly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 7, 10, 15, 0, 0, time.Local)
+	if next := daily.Next(now); !next.Equal(time.Date(2026, 9, 8, 0, 0, 0, 0, time.Local)) {
+		t.Fatalf("daily next=%s", next)
+	}
+	if next := hourly.Next(now); !next.Equal(time.Date(2026, 9, 7, 11, 0, 0, 0, time.Local)) {
+		t.Fatalf("hourly next=%s", next)
+	}
+	named, err := ParseCron("0 9 * JAN-MAR MON-FRI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !named.Match(time.Date(2026, 1, 5, 9, 0, 0, 0, time.Local)) { // Monday
+		t.Fatal("jan monday 09:00 should match")
+	}
+	if named.Match(time.Date(2026, 4, 6, 9, 0, 0, 0, time.Local)) { // April Monday
+		t.Fatal("april should not match JAN-MAR")
+	}
+	if named.Match(time.Date(2026, 1, 4, 9, 0, 0, 0, time.Local)) { // Sunday
+		t.Fatal("sunday should not match MON-FRI")
+	}
+	if ValidCron("@reboot") || ValidCron("@yearly extra") {
+		t.Fatal("invalid macros")
+	}
+}
+
 func TestCronDue(t *testing.T) {
 	last := time.Date(2026, 9, 6, 10, 0, 0, 0, time.Local).Unix()
 	now := time.Date(2026, 9, 6, 10, 1, 0, 0, time.Local).Unix()

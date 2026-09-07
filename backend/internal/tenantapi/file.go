@@ -155,7 +155,7 @@ func FileEditCate(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)

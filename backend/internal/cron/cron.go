@@ -3,6 +3,7 @@ package cron
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,26 +185,54 @@ func dropSessionTokens(admins []model.AdminSession, tenants []model.TenantAdminS
 	}
 }
 
-func runClear(args []string) string {
-	cacheOnly, logOnly := false, false
-	for _, a := range args {
-		switch a {
-		case "--cache", "-c":
-			cacheOnly = true
-		case "--log", "-l":
-			logOnly = true
+type clearOpts struct {
+	cache, log, rmdir, expire bool
+	path                      string
+}
+
+func parseClearArgs(args []string) clearOpts {
+	var o clearOpts
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--cache" || a == "-c":
+			o.cache = true
+		case a == "--log" || a == "-l":
+			o.log = true
+		case a == "--dir" || a == "-r":
+			o.rmdir = true
+		case a == "--expire" || a == "-e":
+			o.expire = true
+		case a == "--path" || a == "-d":
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				o.path = args[i]
+			}
+		case strings.HasPrefix(a, "--path="):
+			o.path = strings.TrimPrefix(a, "--path=")
+		case strings.HasPrefix(a, "-d="):
+			o.path = strings.TrimPrefix(a, "-d=")
 		}
 	}
-	if logOnly && !cacheOnly {
-		return clearRuntimeNamed("log")
+	return o
+}
+
+func runClear(args []string) string {
+	o := parseClearArgs(args)
+	expireOnly := o.expire && o.cache
+	if o.log && !o.cache {
+		return clearRuntimeNamed("log", o.rmdir, false)
 	}
-	if cacheOnly {
-		return clearRuntimeNamed("cache")
+	if o.cache {
+		return clearRuntimeNamed("cache", o.rmdir, expireOnly)
+	}
+	if o.path != "" {
+		return clearCustomPath(o.path, o.rmdir)
 	}
 	if msg := flushCache(); msg != "" {
 		return msg
 	}
-	return clearRuntime()
+	return clearRuntimeDir(filepath.Join(runtimeRoot(), "runtime"), o.rmdir, false)
 }
 
 func runtimeRoot() string {
@@ -218,22 +247,47 @@ func clearRuntime() string {
 	if root == "" {
 		return ""
 	}
-	return clearRuntimeDir(filepath.Join(root, "runtime"))
+	return clearRuntimeDir(filepath.Join(root, "runtime"), false, false)
 }
 
-func clearRuntimeNamed(name string) string {
+func clearRuntimeNamed(name string, rmdir, expireOnly bool) string {
 	root := runtimeRoot()
 	if root == "" {
 		return ""
 	}
-	return clearRuntimeDir(filepath.Join(root, "runtime", name))
+	return clearRuntimeDir(filepath.Join(root, "runtime", name), rmdir, expireOnly)
 }
 
-func clearRuntimeDir(dir string) string {
+func clearCustomPath(p string, rmdir bool) string {
+	root := runtimeRoot()
+	if root == "" || strings.TrimSpace(p) == "" {
+		return ""
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return ""
+	}
+	target := p
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(absRoot, p)
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(absRoot, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "清理路径不合法"
+	}
+	return clearRuntimeDir(abs, rmdir, false)
+}
+
+func clearRuntimeDir(dir string, rmdir, expireOnly bool) string {
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
 		return ""
 	}
+	var dirs []string
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || path == dir {
 			return nil
@@ -252,12 +306,39 @@ func clearRuntimeDir(dir string) string {
 			return nil
 		}
 		if d.IsDir() {
+			dirs = append(dirs, path)
+			return nil
+		}
+		if expireOnly && !cacheHasExpired(path) {
 			return nil
 		}
 		_ = os.Remove(path)
 		return nil
 	})
+	if rmdir {
+		for i := len(dirs) - 1; i >= 0; i-- {
+			_ = os.Remove(dirs[i])
+		}
+	}
 	return ""
+}
+
+// cacheHasExpired mirrors ThinkPHP Clear::cacheHasExpired:
+// expire = (int) substr($content, 8, 12); expired if expire != 0 && time() - expire > filemtime.
+func cacheHasExpired(filename string) bool {
+	b, err := os.ReadFile(filename)
+	if err != nil || len(b) < 20 {
+		return false
+	}
+	expire, err := strconv.Atoi(strings.TrimSpace(string(b[8:20])))
+	if err != nil || expire == 0 {
+		return false
+	}
+	st, err := os.Stat(filename)
+	if err != nil {
+		return false
+	}
+	return time.Now().Unix()-int64(expire) > st.ModTime().Unix()
 }
 
 func queryRefund() string {

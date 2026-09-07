@@ -127,6 +127,63 @@ func TestClearRuntimeWipesFile(t *testing.T) {
 	}
 }
 
+func TestParseClearArgs(t *testing.T) {
+	o := parseClearArgs([]string{"--cache", "--expire", "--dir"})
+	if !o.cache || !o.expire || !o.rmdir || o.log || o.path != "" {
+		t.Fatalf("%+v", o)
+	}
+	o = parseClearArgs([]string{"-d", "runtime/cache", "-r"})
+	if o.path != "runtime/cache" || !o.rmdir || o.cache {
+		t.Fatalf("%+v", o)
+	}
+	o = parseClearArgs([]string{"--path=/tmp/outside"})
+	if o.path != "/tmp/outside" {
+		t.Fatalf("%+v", o)
+	}
+}
+
+func TestClearPathRejectsEscape(t *testing.T) {
+	dir := t.TempDir()
+	old := config.C.App.PublicDir
+	config.C.App.PublicDir = filepath.Join(dir, "public")
+	defer func() { config.C.App.PublicDir = old }()
+	if msg := runClear([]string{"--path", "/etc"}); msg != "清理路径不合法" {
+		t.Fatalf("escape %q", msg)
+	}
+}
+
+func TestClearExpireAndRmdir(t *testing.T) {
+	dir := t.TempDir()
+	cacheDir := filepath.Join(dir, "runtime", "cache", "la")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(cacheDir, "fresh.php")
+	expired := filepath.Join(cacheDir, "old.php")
+	if err := os.WriteFile(fresh, []byte("<?php\n//000000360000payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(expired, []byte("<?php\n//000000000001payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-10 * time.Second)
+	if err := os.Chtimes(expired, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	config.C.App.PublicDir = filepath.Join(dir, "public")
+	defer func() { config.C.App.PublicDir = old }()
+	if msg := runClear([]string{"--cache", "--expire", "--dir"}); msg != "" {
+		t.Fatal(msg)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatal("unexpired cache should stay")
+	}
+	if _, err := os.Stat(expired); err == nil {
+		t.Fatal("expired cache should be removed")
+	}
+}
+
 func TestRunCommandWithParams(t *testing.T) {
 	if got := runCommand(model.Crontab{Command: "cache", Params: "--unused extra"}); got != "" {
 		t.Fatalf("cache with params: %q", got)

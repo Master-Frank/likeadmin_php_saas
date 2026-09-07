@@ -84,7 +84,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	}
 	content := "验证码" + code
 	if c != nil && bootstrap.DB != nil {
-		found, _, _, notice := findNoticeSetting(c, scene)
+		found, _, _, notice, _, _ := findNoticeSetting(c, scene)
 		if !found {
 			return 0, "", fmt.Errorf("找不到对应场景的配置")
 		}

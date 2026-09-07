@@ -56,7 +56,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -80,7 +80,7 @@ func ArticleUpdateStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyIDPresent(c) {
@@ -151,14 +151,10 @@ func DecorateDataPC(c *gin.Context) {
 }
 
 func DecorateTabbarSave(c *gin.Context) {
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
-	tid, ok := requireTenant(c)
-	if !ok {
-		response.Fail(c, "参数缺失")
-		return
-	}
+	tid := tenantDB(c)
 	if style := httpx.BodyAny(c, "style"); style != nil {
 		cfgsvc.Set(c, "tabbar", "style", style)
 	}
@@ -276,7 +272,7 @@ func UserAdjustMoney(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyPresent(c, "user_id") {
@@ -441,7 +437,7 @@ func RechargeRefund(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyHas(c, "recharge_id") {
@@ -616,7 +612,7 @@ func RechargeRefundAgain(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if !httpx.BodyHas(c, "record_id") {
@@ -697,7 +693,7 @@ func OAReplyAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -738,7 +734,7 @@ func OAReplyEdit(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	p := httpx.Body(c)
@@ -788,7 +784,7 @@ func OAReplyDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
@@ -841,7 +837,7 @@ func OAReplyStatus(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
@@ -867,7 +863,7 @@ func OAReplySort(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := util.OAReplyIDCheck(httpx.Body(c)); msg != "" {
@@ -1020,7 +1016,7 @@ func TenantNoticeDetail(c *gin.Context) {
 }
 
 func TenantNoticeSet(c *gin.Context) {
-	if !requirePlatformTenant(c) {
+	if !guardTenantWrite(c) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")

@@ -498,7 +498,8 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 			if name == "" {
 				name = col.ColumnName
 			}
-			return name + "不能为空"
+			// PHP ValidateGenerator message is the column comment only.
+			return name
 		}
 	}
 	return ""
