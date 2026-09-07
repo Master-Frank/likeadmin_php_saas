@@ -83,6 +83,8 @@ func runCommand(item model.Crontab) string {
 		return ""
 	case cmd == "query_refund":
 		return queryRefund()
+	case cmd == "cancel_unpaid_orders":
+		return cancelUnpaidOrders()
 	default:
 		if ok, msg := runThinkCommand(item); ok {
 			return msg
@@ -137,6 +139,8 @@ func normalizeCommand(raw string) string {
 	switch {
 	case strings.Contains(cmd, "query_refund") || strings.Contains(cmd, "queryrefund"):
 		return "query_refund"
+	case strings.Contains(cmd, "cancel_unpaid") || strings.Contains(cmd, "cancelunpaid"):
+		return "cancel_unpaid_orders"
 	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
 		return "session"
 	case cmd == "clear" || strings.HasSuffix(cmd, "/clear"):
@@ -298,6 +302,65 @@ func updateRefundMsg(lg model.RefundLog, msg string) {
 		q = q.Where("tenant_id = ?", lg.TenantID)
 	}
 	q.Update("refund_msg", msg)
+}
+
+func cancelUnpaidOrders() string {
+	if bootstrap.DB == nil {
+		return ""
+	}
+	now := util.NowUnix()
+	platOn, platMin := txnCancelSettings(0, 1, 30)
+	var tenants []model.Tenant
+	bootstrap.DB.Where("delete_time IS NULL").Find(&tenants)
+	if len(tenants) == 0 {
+		cancelUnpaidForTenant(0, platOn, platMin, now)
+		return ""
+	}
+	for _, t := range tenants {
+		on, minutes := txnCancelSettings(t.ID, platOn, platMin)
+		cancelUnpaidForTenant(t.ID, on, minutes, now)
+	}
+	return ""
+}
+
+func txnCancelSettings(tenantID uint, defOn, defMin int) (enabled, minutes int) {
+	enabled, minutes = defOn, defMin
+	type kv struct {
+		Name  string `gorm:"column:name"`
+		Value string `gorm:"column:value"`
+	}
+	var rows []kv
+	if tenantID > 0 {
+		bootstrap.DB.Model(&model.TenantConfig{}).Where("tenant_id = ? AND type = ?", tenantID, "transaction").
+			Select("name, value").Scan(&rows)
+	} else {
+		bootstrap.DB.Model(&model.ConfigRow{}).Where("type = ?", "transaction").
+			Select("name, value").Scan(&rows)
+	}
+	for _, r := range rows {
+		switch r.Name {
+		case "cancel_unpaid_orders":
+			enabled = util.ToInt(r.Value)
+		case "cancel_unpaid_orders_times":
+			if n := util.ToInt(r.Value); n > 0 {
+				minutes = n
+			}
+		}
+	}
+	return enabled, minutes
+}
+
+func cancelUnpaidForTenant(tenantID uint, enabled, minutes int, now int64) {
+	if enabled != 1 || minutes <= 0 {
+		return
+	}
+	cutoff := now - int64(minutes)*60
+	q := bootstrap.DB.Model(&model.RechargeOrder{}).
+		Where("pay_status = 0 AND delete_time IS NULL AND create_time > 0 AND create_time < ?", cutoff)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	q.Update("delete_time", now)
 }
 
 func Loop(interval time.Duration) {

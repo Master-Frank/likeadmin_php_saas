@@ -299,7 +299,7 @@ func handlePayNotify(c *gin.Context) {
 		n = wechat.ParsePayNotify(raw, form)
 		if len(form) > 0 && (form.Get("trade_status") != "" || form.Get("sign") != "") {
 			tid := ctxutil.Get(c).TenantID
-			if order, err := findRechargeBySN(wechat.RechargeSN(n.OutTradeNo)); err == nil && order != nil {
+			if order, err := findRechargeByNotify(n.OutTradeNo); err == nil && order != nil {
 				tid = order.TenantID
 			}
 			if !pay.AliVerifyNotifyByTenant(tid, form) {
@@ -312,7 +312,7 @@ func handlePayNotify(c *gin.Context) {
 		pay.ApplyRefundNotify(n)
 	}
 	if wechat.ShouldMarkRechargePaid(n) {
-		if order, err := findRechargeBySN(wechat.RechargeSN(n.OutTradeNo)); err == nil && order != nil && order.PayStatus != 1 {
+		if order, err := findRechargeByNotify(n.OutTradeNo); err == nil && order != nil && order.PayStatus != 1 {
 			_ = markRechargePaid(order, n.TransactionID)
 		}
 	}
@@ -324,7 +324,7 @@ func handlePayNotify(c *gin.Context) {
 }
 
 func payNotifyWechatKey(c *gin.Context, sn string) string {
-	if order, err := findRechargeBySN(sn); err == nil && order != nil {
+	if order, err := findRechargeByNotify(sn); err == nil && order != nil {
 		if cfg := pay.WechatCfgByTenant(order.TenantID); cfg.SignKey != "" {
 			return cfg.SignKey
 		}
@@ -332,15 +332,22 @@ func payNotifyWechatKey(c *gin.Context, sn string) string {
 	return pay.WechatCfg(c).SignKey
 }
 
-func findRechargeBySN(sn string) (*model.RechargeOrder, error) {
-	if sn == "" || bootstrap.DB == nil {
+func findRechargeByNotify(outTradeNo string) (*model.RechargeOrder, error) {
+	if outTradeNo == "" || bootstrap.DB == nil {
 		return nil, gorm.ErrRecordNotFound
 	}
-	var order model.RechargeOrder
-	if err := bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&order).Error; err != nil {
-		return nil, err
+	seen := map[string]bool{}
+	for _, sn := range []string{outTradeNo, wechat.RechargeSN(outTradeNo)} {
+		if sn == "" || seen[sn] {
+			continue
+		}
+		seen[sn] = true
+		var order model.RechargeOrder
+		if err := bootstrap.DB.Where("(sn = ? OR pay_sn = ?) AND delete_time IS NULL", sn, sn).First(&order).Error; err == nil {
+			return &order, nil
+		}
 	}
-	return &order, nil
+	return nil, gorm.ErrRecordNotFound
 }
 
 func WechatJsConfigReal(c *gin.Context) {

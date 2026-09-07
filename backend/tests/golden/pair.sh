@@ -1124,6 +1124,24 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
     if [[ "$(jcode <<<"$php_cdel")" != "1" ]]; then
       fail=$((fail + 1))
     fi
+    sname="pairsys$(date +%s)"
+    go_sys="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$sname\",\"type\":1,\"command\":\"cancel_unpaid_orders\",\"status\":2,\"expression\":\"0 * * * *\",\"params\":\"\",\"remark\":\"pair\",\"system\":1}")"
+    sysid="$(python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read())
+print((d.get("data") or {}).get("id") or 0)
+' <<<"$(curl -sS "$GO/platformapi/crontab.crontab/lists?name=$sname" -H "token: $TOKEN")")"
+    if [[ "$sysid" == "0" || -z "$sysid" ]]; then
+      sysid="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT id FROM la_dev_crontab WHERE name='$sname' AND delete_time IS NULL LIMIT 1" 2>/dev/null)"
+    fi
+    sysv="$(mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "SELECT \`system\` FROM la_dev_crontab WHERE name='$sname' ORDER BY id DESC LIMIT 1" 2>/dev/null)"
+    echo "crontab_system go_code=$(jcode <<<"$go_sys") system=$sysv"
+    if [[ "$(jcode <<<"$go_sys")" != "1" || "$sysv" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
+    if [[ -n "$sysid" && "$sysid" != "0" ]]; then
+      curl -sS -X POST "$GO/platformapi/crontab.crontab/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$sysid}" >/dev/null || true
+    fi
   else
     echo "crontab_add could not resolve id"
     fail=$((fail + 1))
@@ -2699,6 +2717,13 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
     if [[ "$go_rfs" != "1" || "$go_rrs" != "1" ]]; then
       fail=$((fail + 1))
     fi
+    mysqlq "INSERT INTO la_recharge_order (sn,pay_sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('ps$now','ps${now}WXSUFFIXEXTRA',$uid,2,0,9,1,0,1,$now)"
+    go_psn="$(curl -sS -X POST "$GO/api/pay/notifyOa" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>ps${now}WXSUFFIXEXTRA</out_trade_no><transaction_id>wxpaysn</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    go_psnp="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE pay_sn='ps${now}WXSUFFIXEXTRA'")"
+    echo "pay_notify_pay_sn go_pay=$go_psnp go_body=${go_psn:0:80}"
+    if [[ "$go_psnp" != "1" ]]; then
+      fail=$((fail + 1))
+    fi
     old_cfg="$(mysqlq "SELECT config FROM la_tenant_pay_config WHERE tenant_id=1 AND pay_way=2 LIMIT 1")"
     if [[ -n "$old_cfg" ]]; then
       new_cfg="$(python3 -c 'import json,sys; m=json.loads(sys.argv[1] or "{}"); m["pay_sign_key"]="pairkey1234567890"; print(json.dumps(m,separators=(",",":")))' "$old_cfg")"
@@ -2943,6 +2968,18 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     fail=$((fail + 1))
   fi
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
+  oldpay="$(mysqlq "SELECT id FROM la_recharge_order WHERE pay_status=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
+  mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('cu$now',1,2,0,1,1,0,1,$((now-7200)))"
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-cancel',1,0,'','cancel_unpaid_orders','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  curl -sS "$GO/crontab" >/dev/null || true
+  cu_del="$(mysqlq "SELECT IFNULL(delete_time,0) FROM la_recharge_order WHERE sn='cu$now'")"
+  echo "crontab_cancel_unpaid deleted=$cu_del leftover=$oldpay"
+  if [[ "$cu_del" == "0" || -z "$cu_del" ]]; then
+    fail=$((fail + 1))
+  fi
+  mysqlq "DELETE FROM la_recharge_order WHERE sn='cu$now'"
+  mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-softdel'"
   mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
   curl -sS "$GO/crontab" >/dev/null || true

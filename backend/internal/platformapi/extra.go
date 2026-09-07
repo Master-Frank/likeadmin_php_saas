@@ -232,7 +232,7 @@ func CrontabAdd(c *gin.Context) {
 	bootstrap.DB.Create(&model.Crontab{
 		Name: httpx.Str(c, "name"), Type: httpx.Int(c, "type"), Command: httpx.Str(c, "command"),
 		Params: httpx.Str(c, "params"), Status: httpx.Int(c, "status"), Expression: httpx.Str(c, "expression"),
-		Remark: httpx.Str(c, "remark"), LastTime: &now, CreateTime: now,
+		Remark: httpx.Str(c, "remark"), System: httpx.Int(c, "system"), LastTime: &now, CreateTime: now,
 	})
 	response.SuccessNotice(c, "添加成功")
 }
@@ -252,7 +252,7 @@ func CrontabEdit(c *gin.Context) {
 	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", r.ID).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "command": httpx.Str(c, "command"), "params": httpx.Str(c, "params"),
 		"status": httpx.Int(c, "status"), "expression": httpx.Str(c, "expression"), "remark": httpx.Str(c, "remark"),
-		"type": httpx.Int(c, "type"), "update_time": now,
+		"type": httpx.Int(c, "type"), "system": httpx.Int(c, "system"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }

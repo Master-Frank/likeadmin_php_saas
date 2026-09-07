@@ -157,6 +157,7 @@ func ApplyFileCID(db *gorm.DB, cateModel any, params map[string]any, tenantID ui
 
 func DeleteStored(c *gin.Context, uris ...string) {
 	for _, uri := range uris {
-		_ = storage.Delete(c, uri)
+		rel := SetFileURL(c, uri)
+		_ = storage.Delete(c, storage.ObjectKey(rel))
 	}
 }

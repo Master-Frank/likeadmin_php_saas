@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func Delete(c *gin.Context, uri string) error {
 	if engine == "" {
 		engine = "local"
 	}
-	key := strings.TrimLeft(uri, "/")
+	key := ObjectKey(uri)
 	if engine == "local" {
 		abs := filepath.Join(config.C.App.PublicDir, key)
 		if _, err := os.Stat(abs); err != nil {
@@ -124,6 +125,27 @@ func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType strin
 		return SaveResult{}, fmt.Errorf("未知存储引擎")
 	}
 	return SaveResult{URI: rel, Engine: engine}, nil
+}
+
+// ObjectKey turns a stored URI or CDN URL into the bucket/local relative key.
+func ObjectKey(uri string) string {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return ""
+	}
+	if i := strings.IndexAny(uri, "?#"); i >= 0 {
+		uri = uri[:i]
+	}
+	if strings.Contains(uri, "://") {
+		if u, err := url.Parse(uri); err == nil {
+			uri = u.Path
+		}
+	}
+	uri = strings.TrimLeft(uri, "/")
+	if i := strings.Index(uri, "uploads/"); i > 0 {
+		uri = uri[i:]
+	}
+	return uri
 }
 
 func asMap(v any) map[string]any {

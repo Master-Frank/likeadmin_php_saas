@@ -2,13 +2,16 @@ package upgrade
 
 import (
 	"archive/zip"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
@@ -28,10 +31,27 @@ func CheckOpenBasedir() error {
 	if basedir == "" {
 		basedir = os.Getenv("PHP_OPEN_BASEDIR")
 	}
+	if basedir == "" {
+		basedir = phpOpenBasedir()
+	}
 	if strings.Contains(basedir, "server") {
 		return errStatus(openBasedirMsg)
 	}
 	return nil
+}
+
+func phpOpenBasedir() string {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, php, "-r", `echo ini_get("open_basedir");`).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // ApplyPackage downloads, extracts, and applies a likeadmin upgrade zip (SQL / menu / files).
@@ -197,7 +217,7 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 		return nil
 	}
 	var tenants []model.Tenant
-	db.Where("delete_time IS NULL").Find(&tenants)
+	db.Find(&tenants)
 	for _, t := range tenants {
 		tdb := tenantdb.ForTenantOn(db, t.ID)
 		if err := tdb.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
