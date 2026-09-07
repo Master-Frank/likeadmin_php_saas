@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -255,6 +256,25 @@ func RoleDetail(c *gin.Context) {
 }
 
 func RoleAll(c *gin.Context) {
+	if _, ok := httpx.Params(c)["tenant_id"]; ok {
+		tid := httpx.Uint(c, "tenant_id")
+		db := tenantdb.ForTenant(tid)
+		if db == nil {
+			db = bootstrap.DB
+		}
+		var rows []model.TenantSystemRole
+		q := db.Where("delete_time IS NULL").Where("tenant_id = ?", tid)
+		q.Order("sort desc, id desc").Find(&rows)
+		out := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, map[string]any{
+				"id": r.ID, "name": r.Name, "desc": r.Desc, "sort": r.Sort,
+				"create_time": util.FormatDateTime(r.CreateTime),
+			})
+		}
+		response.Data(c, out)
+		return
+	}
 	var rows []model.SystemRole
 	bootstrap.DB.Where("delete_time IS NULL").Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))

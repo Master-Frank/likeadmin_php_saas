@@ -400,7 +400,7 @@ print((ls[0] if ls else {}).get("id") or 0)
       fi
       go_cl="$(curl -sS "$GO/api/article/collect" -H "Host: $TENANT_HOST" -H "token: $UT")"
       go_cln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_cl")"
-      expect_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect c JOIN la_article a ON a.id=c.article_id WHERE c.user_id=$uid AND c.status=1 AND c.delete_time IS NULL AND c.tenant_id=1 AND a.is_show=1 AND a.delete_time IS NULL")"
+      expect_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect c JOIN la_article a ON a.id=c.article_id WHERE c.user_id=$uid AND c.status=1 AND c.delete_time IS NULL AND c.tenant_id=1 AND a.tenant_id=1 AND a.is_show=1 AND a.delete_time IS NULL")"
       echo "collect_tenant_scope n=$go_cln expect=$expect_cl"
       if [[ "$go_cln" != "$expect_cl" ]]; then
         echo "  go_cl=${go_cl:0:240}"
@@ -1709,6 +1709,26 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   if [[ "$(jcode <<<"$php_pda")" != "$(jcode <<<"$go_pda")" || "$php_pdn" != "$go_pdn" ]]; then
     echo "  php_pda=${php_pda:0:200}"
     echo "  go_pda=${go_pda:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_pra="$(curl -sS "$PHP/platformapi/auth.role/all?tenant_id=1" -H "token: $TOKEN")"
+  go_pra="$(curl -sS "$GO/platformapi/auth.role/all?tenant_id=1" -H "token: $TOKEN")"
+  php_prn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$php_pra")"
+  go_prn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$go_pra")"
+  echo "platform_role_all_tenant php_code=$(jcode <<<"$php_pra") go_code=$(jcode <<<"$go_pra") php_n=$php_prn go_n=$go_prn"
+  if [[ "$(jcode <<<"$php_pra")" != "$(jcode <<<"$go_pra")" || "$php_prn" != "$go_prn" ]]; then
+    echo "  php_pra=${php_pra:0:200}"
+    echo "  go_pra=${go_pra:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_pja="$(curl -sS "$PHP/platformapi/dept.jobs/all?tenant_id=1" -H "token: $TOKEN")"
+  go_pja="$(curl -sS "$GO/platformapi/dept.jobs/all?tenant_id=1" -H "token: $TOKEN")"
+  php_pjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$php_pja")"
+  go_pjn="$(python3 -c 'import json,sys; d=json.load(sys.stdin); ls=d.get("data") or []; print(len(ls) if isinstance(ls,list) else 0)' <<<"$go_pja")"
+  echo "platform_jobs_all_tenant php_code=$(jcode <<<"$php_pja") go_code=$(jcode <<<"$go_pja") php_n=$php_pjn go_n=$go_pjn"
+  if [[ "$(jcode <<<"$php_pja")" != "$(jcode <<<"$go_pja")" || "$php_pjn" != "$go_pjn" ]]; then
+    echo "  php_pja=${php_pja:0:200}"
+    echo "  go_pja=${go_pja:0:200}"
     fail=$((fail + 1))
   fi
   php_rl="$(curl -sS "$PHP/tenantapi/auth.role/lists" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"

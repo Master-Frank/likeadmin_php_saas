@@ -31,6 +31,11 @@ func ArticleAddCollect(c *gin.Context) {
 		response.Fail(c, "参数错误")
 		return
 	}
+	var article model.Article
+	if scopeTenant(tdb(c).Where("id = ? AND delete_time IS NULL", aid), c).First(&article).Error != nil {
+		response.Fail(c, "资讯不存在")
+		return
+	}
 	var row model.ArticleCollect
 	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
@@ -59,7 +64,7 @@ func ArticleCollect(c *gin.Context) {
 	db := tdb(c).Table(at+" AS a").Joins("JOIN "+ct+" AS c ON c.article_id = a.id").
 		Where("c.user_id = ? AND c.status = 1 AND a.is_show = 1 AND c.delete_time IS NULL AND a.delete_time IS NULL", uid)
 	if tid := ctxutil.Get(c).TenantID; tid > 0 {
-		db = db.Where("c.tenant_id = ?", tid)
+		db = db.Where("c.tenant_id = ? AND a.tenant_id = ?", tid, tid)
 	}
 	var count int64
 	db.Count(&count)
@@ -180,7 +185,11 @@ func PayWay(c *gin.Context) {
 	out := make([]map[string]any, 0)
 	for _, w := range ways {
 		var cfg model.TenantPayConfig
-		if tdb(c).First(&cfg, w.PayConfigID).Error != nil {
+		cfgQ := tdb(c).Where("id = ?", w.PayConfigID)
+		if tid > 0 {
+			cfgQ = cfgQ.Where("tenant_id = ?", tid)
+		}
+		if cfgQ.First(&cfg).Error != nil {
 			continue
 		}
 		if from == "recharge" && cfg.PayWay == 1 {

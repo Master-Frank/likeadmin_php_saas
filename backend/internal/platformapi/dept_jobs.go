@@ -297,6 +297,22 @@ func JobsDetail(c *gin.Context) {
 }
 
 func JobsAll(c *gin.Context) {
+	if _, ok := httpx.Params(c)["tenant_id"]; ok {
+		tid := httpx.Uint(c, "tenant_id")
+		db := tenantdb.ForTenant(tid)
+		if db == nil {
+			db = bootstrap.DB
+		}
+		var rows []model.TenantJobs
+		q := db.Where("delete_time IS NULL AND status = 1").Where("tenant_id = ?", tid)
+		q.Order("sort desc, id desc").Find(&rows)
+		out := make([]map[string]any, 0, len(rows))
+		for _, j := range rows {
+			out = append(out, tenantJobsAsMap(j))
+		}
+		response.Data(c, out)
+		return
+	}
 	var rows []model.Jobs
 	bootstrap.DB.Where("delete_time IS NULL AND status = 1").Order("sort desc, id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
@@ -368,6 +384,18 @@ func deptMap(d model.Dept) map[string]any {
 		"create_time": util.FormatDateTime(d.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(d.UpdateTime),
 		"delete_time": util.FormatDateTimeOrNil(d.DeleteTime),
+	}
+}
+
+func tenantJobsAsMap(j model.TenantJobs) map[string]any {
+	desc := "停用"
+	if j.Status == 1 {
+		desc = "正常"
+	}
+	return map[string]any{
+		"id": j.ID, "name": j.Name, "code": j.Code, "sort": j.Sort, "status": j.Status,
+		"remark": j.Remark, "tenant_id": j.TenantID, "create_time": util.FormatDateTime(j.CreateTime),
+		"update_time": util.FormatDateTimeOrNil(j.UpdateTime), "status_desc": desc,
 	}
 }
 
