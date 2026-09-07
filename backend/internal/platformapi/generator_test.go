@@ -1,6 +1,8 @@
 package platformapi
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"likeadmin/backend/internal/generator"
@@ -31,5 +33,26 @@ func TestGenerateBundleHasPHPShapes(t *testing.T) {
 	}
 	if files[0].Name != "DemoController.php" || files[5].Type != "ts" {
 		t.Fatalf("php preview names: %s %s", files[0].Name, files[5].Name)
+	}
+}
+
+func TestScanGoModelsNestedPHPPaths(t *testing.T) {
+	dir := t.TempDir()
+	src := "package model\n\ntype Article struct {}\n\ntype Config struct {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "article.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := scanGoModels(dir)
+	wantArt, wantCfg := false, false
+	for _, p := range got {
+		if p == `\app\common\model\article\Article` {
+			wantArt = true
+		}
+		if p == `\app\common\model\Config` {
+			wantCfg = true
+		}
+	}
+	if !wantArt || !wantCfg {
+		t.Fatalf("got %v", got)
 	}
 }

@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,6 +136,43 @@ func TestClearRuntimeKeepsCurdZip(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "generate", "php", "x.php")); err == nil {
 		t.Fatal("generated sources should be cleared")
+	}
+}
+
+func TestZipRuntimeUsesGeneratePrefix(t *testing.T) {
+	root := RuntimeDir()
+	if err := os.MkdirAll(filepath.Join(root, "php"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(root, "php", "ZipProbe.php")
+	if err := os.WriteFile(src, []byte("<?php"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(t.TempDir(), "curd-probe.zip")
+	if err := ZipRuntime(zipPath); err != nil {
+		t.Fatal(err)
+	}
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	found := false
+	for _, f := range r.File {
+		if f.Name == "generate/php/ZipProbe.php" {
+			found = true
+			break
+		}
+		if strings.HasPrefix(f.Name, "curd-") {
+			t.Fatalf("zip should skip curd packages, got %s", f.Name)
+		}
+	}
+	if !found {
+		names := make([]string, 0, len(r.File))
+		for _, f := range r.File {
+			names = append(names, f.Name)
+		}
+		t.Fatalf("missing generate/php/ZipProbe.php in %v", names)
 	}
 }
 

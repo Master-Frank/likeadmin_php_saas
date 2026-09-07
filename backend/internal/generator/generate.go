@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"archive/zip"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +53,51 @@ func IsZip(t model.GenerateTable) bool {
 func IsAutoMenu(t model.GenerateTable) bool {
 	c := newCtx(t, nil, time.Now())
 	return c.menuType == GenAuto
+}
+
+// ZipRuntime packs runtime/generate/* into zipPath using PHP addFileZip
+// names (generate/<rel>). Existing curd-*.zip packages are skipped.
+func ZipRuntime(zipPath string) error {
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		return err
+	}
+	zw := zip.NewWriter(zf)
+	root := RuntimeDir()
+	walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if strings.HasPrefix(name, "curd-") && strings.HasSuffix(name, ".zip") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		w, err := zw.Create("generate/" + rel)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(w, f)
+		_ = f.Close()
+		return copyErr
+	})
+	closeErr := zw.Close()
+	_ = zf.Close()
+	if walkErr != nil {
+		return walkErr
+	}
+	return closeErr
 }
 
 // WriteRuntime writes zip-mode files under runtime/generate/.

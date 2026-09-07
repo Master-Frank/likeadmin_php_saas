@@ -1,10 +1,10 @@
 package platformapi
 
 import (
-	"archive/zip"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -152,7 +152,8 @@ func GeneratorDetail(c *gin.Context) {
 	}
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "记录不存在")
+		// PHP findOrEmpty + formatConfigByTableData still returns menu/delete/tree/relations.
+		response.Data(c, formatGeneratorDetail(model.GenerateTable{}, nil))
 		return
 	}
 	var cols []model.GenerateColumn
@@ -342,21 +343,10 @@ func GeneratorGenerate(c *gin.Context) {
 		_ = os.MkdirAll(root, 0755)
 		fileName := fmt.Sprintf("curd-%s.zip", time.Now().Format("20060102150405"))
 		zipPath := filepath.Join(root, fileName)
-		zf, err := os.Create(zipPath)
-		if err != nil {
+		if err := generator.ZipRuntime(zipPath); err != nil {
 			response.Fail(c, err.Error())
 			return
 		}
-		zw := zip.NewWriter(zf)
-		for _, f := range zipFiles {
-			w, err := zw.Create(f.ZipName())
-			if err != nil {
-				continue
-			}
-			_, _ = w.Write([]byte(f.Content))
-		}
-		_ = zw.Close()
-		_ = zf.Close()
 		cache.Set("curd_file_name"+fileName, fileName, time.Hour)
 		fileURL = ctxutil.Domain(c) + "/platformapi/tools.generator/download?file=" + fileName
 	}
@@ -421,22 +411,59 @@ func scanPHPModels(root string) []string {
 	return out
 }
 
+var goStructRe = regexp.MustCompile(`(?m)^type\s+([A-Z][A-Za-z0-9]+)\s+struct\b`)
+
+// phpModelDir maps Go model type names to PHP app/common/model subdirs.
+var phpModelDir = map[string]string{
+	"Article": "article", "ArticleCate": "article", "ArticleCollect": "article",
+	"OfficialAccountReply": "channel",
+	"User":                 "user", "UserAuth": "user", "UserAccountLog": "user", "UserSession": "user",
+	"PayConfig": "pay", "TenantPayConfig": "pay", "PayWay": "pay", "TenantPayWay": "pay",
+	"Tenant": "tenant",
+	"Jobs":   "dept", "Dept": "dept", "TenantJobs": "dept", "TenantDept": "dept",
+	"DecoratePage": "decorate", "DecorateTabbar": "decorate",
+	"DictData": "dict", "DictType": "dict",
+	"File": "file", "FileCate": "file", "TenantFile": "file", "TenantFileCate": "file",
+	"RechargeOrder":  "recharge",
+	"GenerateColumn": "tools", "GenerateTable": "tools",
+	"RefundRecord": "refund", "RefundLog": "refund",
+	"NoticeSetting": "notice", "TenantNoticeRecord": "notice", "SmsLog": "notice",
+	"NoticeRecord": "notice", "TenantNoticeSetting": "notice", "TenantSmsLog": "notice",
+	"Admin": "auth", "AdminJobs": "auth", "AdminDept": "auth", "AdminRole": "auth",
+	"AdminSession": "auth", "SystemMenu": "auth", "SystemRole": "auth", "SystemRoleMenu": "auth",
+	"TenantAdmin": "auth", "TenantAdminRole": "auth", "TenantAdminJobs": "auth",
+	"TenantAdminDept": "auth", "TenantAdminSession": "auth", "TenantSystemMenu": "auth",
+	"TenantSystemRole": "auth", "TenantSystemRoleMenu": "auth",
+}
+
 func scanGoModels(root string) []string {
 	out := []string{}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return out
 	}
+	seen := map[string]bool{}
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		base := strings.TrimSuffix(name, ".go")
-		if base == "base" || base == "doc" {
+		raw, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
 			continue
 		}
-		out = append(out, `\app\common\model\`+strings.ToUpper(base[:1])+base[1:])
+		for _, m := range goStructRe.FindAllSubmatch(raw, -1) {
+			typ := string(m[1])
+			path := `\app\common\model\` + typ
+			if dir := phpModelDir[typ]; dir != "" {
+				path = `\app\common\model\` + dir + `\` + typ
+			}
+			if seen[path] {
+				continue
+			}
+			seen[path] = true
+			out = append(out, path)
+		}
 	}
 	return out
 }

@@ -917,7 +917,7 @@ func FinanceAccountLogLists(c *gin.Context) {
 			"nickname": r.Nickname, "account": r.Account, "sn": r.SN,
 			"avatar": filesvc.GetFileURL(c, r.Avatar), "mobile": r.Mobile,
 			"action": r.Action, "change_amount": sym + util.MoneyString(r.ChangeAmount),
-			"left_amount": r.LeftAmount, "change_type": r.ChangeType, "source_sn": r.SourceSN,
+			"left_amount": util.MoneyString(r.LeftAmount), "change_type": r.ChangeType, "source_sn": r.SourceSN,
 			"create_time":      util.FormatDateTime(r.CreateTime),
 			"change_type_desc": biz.UMChangeTypeDesc[util.ToString(r.ChangeType)],
 		})

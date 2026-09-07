@@ -49,6 +49,7 @@ func CollectEnv() []envItem {
 	out = append(out, probeDir("public/uploads", publicSub("uploads")))
 	out = append(out, probeDir("public/platform", publicSub("platform")))
 	out = append(out, probeDir("public/admin", publicSub("admin")))
+	out = append(out, probeDir("public/mobile", publicSub("mobile")))
 	out = append(out, probeDir("config", configDir()))
 	out = append(out, probeWritableFile(".env", envFilePath()))
 	return out

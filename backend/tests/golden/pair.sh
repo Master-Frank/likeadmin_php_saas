@@ -2288,6 +2288,14 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
       echo "  go_gec=${go_gec:0:200}"
       fail=$((fail + 1))
     fi
+    php_gdm="$(curl -sS "$PHP/platformapi/tools.generator/detail?id=99999999" -H "token: $TOKEN")"
+    go_gdm="$(curl -sS "$GO/platformapi/tools.generator/detail?id=99999999" -H "token: $TOKEN")"
+    echo "generator_detail_missing php_code=$(jcode <<<"$php_gdm") go_code=$(jcode <<<"$go_gdm") php_menu=$(python3 -c 'import json,sys; print(int(isinstance((json.load(sys.stdin).get("data") or {}).get("menu"), dict)))' <<<"$php_gdm") go_menu=$(python3 -c 'import json,sys; print(int(isinstance((json.load(sys.stdin).get("data") or {}).get("menu"), dict)))' <<<"$go_gdm")"
+    if [[ "$(jcode <<<"$php_gdm")" != "1" || "$(jcode <<<"$go_gdm")" != "1" ]]; then
+      echo "  php_gdm=${php_gdm:0:200}"
+      echo "  go_gdm=${go_gdm:0:200}"
+      fail=$((fail + 1))
+    fi
     php_pv0="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
     go_pv0="$(curl -sS -X POST "$GO/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
     echo "generator_preview_missing php_msg=$(jget msg <<<"$php_pv0") go_msg=$(jget msg <<<"$go_pv0")"
@@ -2993,7 +3001,7 @@ fi
 go_ie="$(curl -sS "$GO/install/env")"
 ie_names="$(python3 -c 'import json,sys; print(",".join(i.get("name","") for i in ((json.load(sys.stdin).get("data") or {}).get("items") or [])))' <<<"$go_ie")"
 echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie") names=$ie_names"
-if [[ "$(jcode <<<"$go_ie")" != "1" || "$ie_names" != *"public/uploads"* || "$ie_names" != *".env"* ]]; then
+if [[ "$(jcode <<<"$go_ie")" != "1" || "$ie_names" != *"public/uploads"* || "$ie_names" != *"public/mobile"* || "$ie_names" != *".env"* ]]; then
   echo "  go_ie=${go_ie:0:400}"
   fail=$((fail + 1))
 fi
