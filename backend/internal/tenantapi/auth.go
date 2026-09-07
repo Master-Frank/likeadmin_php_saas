@@ -275,7 +275,7 @@ func AdminDelete(c *gin.Context) {
 		} else {
 			q = q.Where("1 = 0")
 		}
-		if err := q.Update("delete_time", now).Error; err != nil {
+		if err := q.Updates(util.SoftDeleteFields(now)).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -621,7 +621,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(util.SoftDeleteFields(now))
 	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")

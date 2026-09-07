@@ -371,7 +371,7 @@ func DictTypeDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -498,7 +498,7 @@ func DictDataDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

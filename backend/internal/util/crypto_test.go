@@ -2,6 +2,14 @@ package util
 
 import "testing"
 
+func TestSoftDeleteFields(t *testing.T) {
+	now := int64(1700000001)
+	got := SoftDeleteFields(now)
+	if got["delete_time"] != now || got["update_time"] != now {
+		t.Fatalf("%v", got)
+	}
+}
+
 func TestUnixPtr(t *testing.T) {
 	now := int64(1700000000)
 	p := UnixPtr(now)

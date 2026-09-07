@@ -149,7 +149,7 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Update("delete_time", util.NowUnix())
+	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -315,7 +315,7 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Update("delete_time", util.NowUnix())
+	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 

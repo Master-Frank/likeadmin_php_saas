@@ -87,6 +87,10 @@ func TestParseRelations(t *testing.T) {
 	if len(many) != 1 || many[0].Type != "has_many" || many[0].Table != "la_pair_item" || many[0].ForeignKey != "pid" {
 		t.Fatalf("%+v", many)
 	}
+	emptyType := parseRelations(model.GenerateTable{Relations: `[{"name":"owner","model":"User","local_key":"id","foreign_key":"user_id"}]`})
+	if len(emptyType) != 0 {
+		t.Fatalf("empty type must skip like PHP: %+v", emptyType)
+	}
 }
 
 func TestAttachHasMany(t *testing.T) {

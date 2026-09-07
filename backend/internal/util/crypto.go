@@ -80,3 +80,8 @@ func NowUnix() int64 {
 
 // UnixPtr returns a distinct *int64 for ThinkPHP auto_timestamp fields.
 func UnixPtr(v int64) *int64 { return &v }
+
+// SoftDeleteFields matches ThinkPHP SoftDelete save(): delete_time + update_time.
+func SoftDeleteFields(now int64) map[string]any {
+	return map[string]any{"delete_time": now, "update_time": now}
+}

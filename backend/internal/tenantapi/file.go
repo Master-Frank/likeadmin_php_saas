@@ -105,7 +105,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Update("delete_time", util.NowUnix())
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -196,9 +196,9 @@ func FileDelCate(c *gin.Context) {
 	now := util.NowUnix()
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs), c).Update("delete_time", now)
+		scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs), c).Updates(util.SoftDeleteFields(now))
 	}
-	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

@@ -215,7 +215,7 @@ func TenantDelete(c *gin.Context) {
 	}
 	expireTenantAdmins(cur)
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
 	if cur.Tactics == 1 && cur.SN != "" {
 		dropShardedTenantTables(cur.SN)
 	}
@@ -312,7 +312,7 @@ func cleanTenantScopedRows(tid uint) {
 		&model.TenantSmsLog{}, &model.SmsLog{},
 	}
 	for _, m := range soft {
-		db.Model(m).Where("tenant_id = ? AND delete_time IS NULL", tid).Update("delete_time", now)
+		db.Model(m).Where("tenant_id = ? AND delete_time IS NULL", tid).Updates(util.SoftDeleteFields(now))
 	}
 	hard := []any{
 		&model.TenantConfig{}, &model.TenantPayConfig{}, &model.TenantPayWay{},
@@ -581,7 +581,7 @@ func TenantAdminDelete(c *gin.Context) {
 		if a.TenantID > 0 {
 			q = q.Where("tenant_id = ?", a.TenantID)
 		}
-		if err := q.Update("delete_time", now).Error; err != nil {
+		if err := q.Updates(util.SoftDeleteFields(now)).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -1039,7 +1039,7 @@ func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 	for _, item := range created {
 		if item.Pid != 0 {
 			if nid, ok := idMap[item.Pid]; ok {
-				tx.Model(&item).Update("pid", nid)
+				tx.Model(&item).Updates(map[string]any{"pid": nid, "update_time": util.NowUnix()})
 			}
 		}
 	}

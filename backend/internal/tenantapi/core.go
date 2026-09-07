@@ -571,7 +571,7 @@ func ArticleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -699,7 +699,7 @@ func ArticleCateDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Update("delete_time", now)
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

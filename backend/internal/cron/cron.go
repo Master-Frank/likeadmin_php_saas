@@ -438,14 +438,15 @@ func updateRefundSuccess(lg model.RefundLog, rec model.RefundRecord, refundTID s
 	if rec.TenantID > 0 {
 		rq = rq.Where("tenant_id = ?", rec.TenantID)
 	}
-	lq.Update("refund_status", 1)
-	rq.Update("refund_status", 1)
+	now := util.NowUnix()
+	lq.Updates(map[string]any{"refund_status": 1, "update_time": now})
+	rq.Updates(map[string]any{"refund_status": 1, "update_time": now})
 	if rec.OrderType == "recharge" && rec.OrderID > 0 && refundTID != "" {
 		oq := bootstrap.DB.Model(&model.RechargeOrder{}).Where("id = ?", rec.OrderID)
 		if rec.TenantID > 0 {
 			oq = oq.Where("tenant_id = ?", rec.TenantID)
 		}
-		oq.Update("refund_transaction_id", refundTID)
+		oq.Updates(map[string]any{"refund_transaction_id": refundTID, "update_time": now})
 	}
 }
 
@@ -454,7 +455,7 @@ func updateRefundMsg(lg model.RefundLog, msg string) {
 	if lg.TenantID > 0 {
 		q = q.Where("tenant_id = ?", lg.TenantID)
 	}
-	q.Update("refund_msg", msg)
+	q.Updates(map[string]any{"refund_msg": msg, "update_time": util.NowUnix()})
 }
 
 func cancelUnpaidOrders() string {
@@ -517,7 +518,7 @@ func cancelUnpaidForTenant(tenantID uint, enabled, minutes int, now int64) {
 	if tenantID > 0 {
 		q = q.Where("tenant_id = ?", tenantID)
 	}
-	q.Update("delete_time", now)
+	q.Updates(util.SoftDeleteFields(now))
 }
 
 // EnsureNativeJobs inserts the Go-only system jobs a PHP install never shipped,

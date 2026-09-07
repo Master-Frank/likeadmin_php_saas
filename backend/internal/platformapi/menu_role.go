@@ -297,7 +297,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Update("delete_time", now)
+	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
 	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")

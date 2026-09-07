@@ -283,7 +283,7 @@ func CrontabDelete(c *gin.Context) {
 	id := httpx.BodyUint(c, "id")
 	now := util.NowUnix()
 	// PHP CrontabLogic::delete is destroy() and always returns true.
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Update("delete_time", now)
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -314,7 +314,7 @@ func CrontabOperate(c *gin.Context) {
 		status = 2
 	}
 	// PHP switch falls through for unknown operate and still save()s.
-	bootstrap.DB.Model(&r).Update("status", status)
+	bootstrap.DB.Model(&r).Updates(map[string]any{"status": status, "update_time": util.NowUnix()})
 	response.SuccessNotice(c, "操作成功")
 }
 

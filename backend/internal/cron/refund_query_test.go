@@ -6,6 +6,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
 )
 
 func TestUpdateRefundSuccessWritesTradeNo(t *testing.T) {
@@ -55,6 +56,34 @@ func TestUpdateRefundSuccessWritesTradeNo(t *testing.T) {
 	}
 	if gotLog.RefundMsg != "" {
 		t.Fatalf("poll success should not invent refund_msg=%q", gotLog.RefundMsg)
+	}
+	if gotLog.UpdateTime == nil || gotRec.UpdateTime == nil || gotOrder.UpdateTime == nil {
+		t.Fatal("PHP Model::update stamps update_time")
+	}
+}
+
+func TestUpdateRefundMsgStampsUpdateTime(t *testing.T) {
+	if !initCronDB(t) {
+		t.Skip("no database")
+	}
+	old := time.Now().Unix() - 60
+	lg := model.RefundLog{
+		SN: "rmsg" + time.Now().Format("150405.000"), RecordID: 1, UserID: 1, HandleID: 1,
+		OrderAmount: 1, RefundAmount: 1, RefundStatus: 0, TenantID: 1,
+		CreateTime: old, UpdateTime: util.UnixPtr(old),
+	}
+	if err := bootstrap.DB.Create(&lg).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Where("id = ?", lg.ID).Delete(&model.RefundLog{}) })
+	updateRefundMsg(lg, "微信:FAIL")
+	var got model.RefundLog
+	bootstrap.DB.First(&got, lg.ID)
+	if got.RefundMsg != "微信:FAIL" {
+		t.Fatalf("msg=%q", got.RefundMsg)
+	}
+	if got.UpdateTime == nil || *got.UpdateTime <= old {
+		t.Fatalf("update_time=%v", got.UpdateTime)
 	}
 }
 

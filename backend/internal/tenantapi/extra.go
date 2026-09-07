@@ -481,13 +481,15 @@ func RechargeRefund(c *gin.Context) {
 	var rec model.RefundRecord
 	var user model.User
 	err := udb.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&order).Update("refund_status", 1).Error; err != nil {
+		now := util.NowUnix()
+		if err := tx.Model(&order).Updates(map[string]any{"refund_status": 1, "update_time": now}).Error; err != nil {
 			return err
 		}
 		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ?", order.UserID, order.TenantID)
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money - ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount - ?", order.OrderAmount),
+			"update_time":           now,
 		}).Error; err != nil {
 			return err
 		}
@@ -504,7 +506,6 @@ func RechargeRefund(c *gin.Context) {
 		if order.PayWay == 2 || order.PayWay == 3 {
 			way = 1
 		}
-		now := util.NowUnix()
 		rec = model.RefundRecord{
 			SN: util.GenerateSN(exists, "", 4), UserID: order.UserID, OrderID: order.ID, OrderSN: order.SN,
 			OrderType: "recharge", OrderAmount: order.OrderAmount, RefundAmount: order.OrderAmount,
@@ -555,8 +556,9 @@ func refundFailHandle(c *gin.Context, recID, logID uint, msg string) {
 	if recID == 0 {
 		return
 	}
+	now := util.NowUnix()
 	rq := scopeTID(tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID), c)
-	rq.Update("refund_status", 2)
+	rq.Updates(map[string]any{"refund_status": 2, "update_time": now})
 	q := scopeTID(tdb(c).Model(&model.RefundLog{}).Where("record_id = ?", recID), c)
 	if logID > 0 {
 		q = q.Where("id = ?", logID)
@@ -567,7 +569,7 @@ func refundFailHandle(c *gin.Context, recID, logID uint, msg string) {
 			q = scopeTID(tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID), c)
 		}
 	}
-	q.Updates(map[string]any{"refund_status": 2, "refund_msg": msg})
+	q.Updates(map[string]any{"refund_status": 2, "refund_msg": msg, "update_time": now})
 }
 
 func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uint, res pay.AliRefundResult) {
@@ -575,18 +577,19 @@ func applyAliRefundSuccess(c *gin.Context, order *model.RechargeOrder, recID uin
 	if res.Raw != nil {
 		msg = util.EncodeJSON(res.Raw)
 	}
+	now := util.NowUnix()
 	rq := scopeTID(tdb(c).Model(&model.RefundRecord{}).Where("id = ?", recID), c)
-	rq.Update("refund_status", 1)
+	rq.Updates(map[string]any{"refund_status": 1, "update_time": now})
 	var last model.RefundLog
 	lq := scopeTID(tdb(c).Where("record_id = ?", recID), c)
 	if lq.Order("id desc").First(&last).Error == nil {
 		uq := scopeTID(tdb(c).Model(&model.RefundLog{}).Where("id = ?", last.ID), c)
 		uq.Updates(map[string]any{
-			"refund_status": 1, "refund_msg": msg,
+			"refund_status": 1, "refund_msg": msg, "update_time": now,
 		})
 	}
 	if order != nil && recID > 0 {
-		tdb(c).Model(order).Update("refund_transaction_id", res.TradeNo)
+		tdb(c).Model(order).Updates(map[string]any{"refund_transaction_id": res.TradeNo, "update_time": now})
 	}
 }
 

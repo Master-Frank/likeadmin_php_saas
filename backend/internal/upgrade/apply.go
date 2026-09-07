@@ -323,7 +323,7 @@ func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
 	for _, item := range created {
 		if item.Pid != 0 {
 			if nid, ok := idMap[item.Pid]; ok {
-				dest.Model(&item).Update("pid", nid)
+				dest.Model(&item).Updates(map[string]any{"pid": nid, "update_time": util.NowUnix()})
 			}
 		}
 	}

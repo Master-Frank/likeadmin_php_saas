@@ -94,7 +94,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Update("delete_time", util.NowUnix())
+	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -170,9 +170,9 @@ func FileDelCate(c *gin.Context) {
 	now := util.NowUnix()
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		bootstrap.DB.Model(&model.File{}).Where("id IN ?", fileIDs).Update("delete_time", now)
+		bootstrap.DB.Model(&model.File{}).Where("id IN ?", fileIDs).Updates(util.SoftDeleteFields(now))
 	}
-	bootstrap.DB.Model(&model.FileCate{}).Where("id IN ?", ids).Update("delete_time", now)
+	bootstrap.DB.Model(&model.FileCate{}).Where("id IN ?", ids).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

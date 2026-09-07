@@ -224,5 +224,8 @@ func updateSMSLog(c *gin.Context, logID uint, fields map[string]any, extraWhere 
 	if extraWhere != "" {
 		q = q.Where(extraWhere)
 	}
+	if _, ok := fields["update_time"]; !ok {
+		fields["update_time"] = util.NowUnix()
+	}
 	q.Updates(fields)
 }

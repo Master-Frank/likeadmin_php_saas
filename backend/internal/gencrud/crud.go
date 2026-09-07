@@ -283,7 +283,11 @@ func doDelete(c *gin.Context, sp *spec) {
 	var err error
 	if sp.softDelete {
 		now := util.NowUnix()
-		err = q.Updates(map[string]any{sp.deleteCol: now}).Error
+		fields := map[string]any{sp.deleteCol: now}
+		if sp.allowed["update_time"] || tableHasColumn(bootstrap.DB, sp.table.Name, "update_time") {
+			fields["update_time"] = now
+		}
+		err = q.Updates(fields).Error
 	} else {
 		err = q.Delete(map[string]any{}).Error
 	}

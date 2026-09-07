@@ -230,7 +230,7 @@ func AdminDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&admin).Update("delete_time", now)
+	bootstrap.DB.Model(&admin).Updates(util.SoftDeleteFields(now))
 	expireAdminTokens(id)
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminRole{})
 	bootstrap.DB.Where("admin_id = ?", id).Delete(&model.AdminDept{})

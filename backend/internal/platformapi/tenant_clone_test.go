@@ -104,6 +104,32 @@ func TestCopyTenantStampsUpdateTime(t *testing.T) {
 	}
 }
 
+func TestCopyTenantMenusRemapStampsUpdateTime(t *testing.T) {
+	if !initTenantCloneDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990002
+	db := bootstrap.DB
+	cleanup := func() {
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantSystemMenu{})
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+	before := time.Now().Unix() - 1
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return copyTenantMenus(tx, tid)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var child model.TenantSystemMenu
+	if err := db.Where("tenant_id = ? AND pid > 0", tid).First(&child).Error; err != nil {
+		t.Skip("no remapped child menus")
+	}
+	if child.UpdateTime == nil || *child.UpdateTime < before {
+		t.Fatalf("remap update_time=%v", child.UpdateTime)
+	}
+}
+
 func assertFreshTimes(t *testing.T, name string, create int64, update *int64, before int64) {
 	t.Helper()
 	if create < before {

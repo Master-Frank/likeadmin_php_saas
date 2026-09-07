@@ -29,12 +29,17 @@ func parseRelations(t model.GenerateTable) []relSpec {
 		table := modelToTable(util.ToString(m["model"]))
 		local := listsIdent(firstNonEmpty(util.ToString(m["local_key"]), "id"))
 		foreign := listsIdent(firstNonEmpty(util.ToString(m["foreign_key"]), "id"))
+		relType := util.ToString(m["type"])
 		if name == "" || table == "" || local == "" || foreign == "" {
+			continue
+		}
+		// PHP ModelGenerator skips when php/model/{type} stub is missing.
+		if relType != "has_one" && relType != "has_many" {
 			continue
 		}
 		out = append(out, relSpec{
 			Name: name, Table: table,
-			Type:       firstNonEmpty(util.ToString(m["type"]), "has_one"),
+			Type:       relType,
 			LocalKey:   local,
 			ForeignKey: foreign,
 			Label:      listsIdent(firstNonEmpty(util.ToString(m["label"]), util.ToString(m["field"]))),

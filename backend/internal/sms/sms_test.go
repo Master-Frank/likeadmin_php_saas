@@ -10,7 +10,9 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -68,6 +70,38 @@ func TestVerifyIgnoresCacheWhenDBMiss(t *testing.T) {
 	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceUser, TenantID: 1, App: "api"})
 	if Verify(c, mobile, "9999", "YZMDL") {
 		t.Fatal("PHP SmsDriver::verify must not accept a cache-only code when DB is up")
+	}
+}
+
+func TestVerifyStampsUpdateTime(t *testing.T) {
+	if !initSMSDB(t) {
+		t.Skip("no database")
+	}
+	mobile := fmt.Sprintf("135%08d", time.Now().UnixNano()%100000000)
+	old := time.Now().Unix() - 90
+	now := time.Now().Unix()
+	row := model.TenantSmsLog{
+		SceneID: LoginCaptcha, Mobile: mobile, Code: "4321", Content: "code",
+		IsVerify: 0, CheckNum: 0, SendStatus: 1, SendTime: util.UnixPtr(now),
+		TenantID: 1, CreateTime: old, UpdateTime: util.UnixPtr(old),
+	}
+	if err := bootstrap.DB.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Where("id = ?", row.ID).Delete(&model.TenantSmsLog{}) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceUser, TenantID: 1, App: "api"})
+	if !Verify(c, mobile, "4321", "YZMDL") {
+		t.Fatal("verify should succeed")
+	}
+	var got model.TenantSmsLog
+	bootstrap.DB.First(&got, row.ID)
+	if got.IsVerify != 1 || got.CheckNum != 1 {
+		t.Fatalf("verify=%d check=%d", got.IsVerify, got.CheckNum)
+	}
+	if got.UpdateTime == nil || *got.UpdateTime <= old {
+		t.Fatalf("update_time=%v want > %d", got.UpdateTime, old)
 	}
 }
 
