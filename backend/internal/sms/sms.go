@@ -88,7 +88,7 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 		if !found {
 			return 0, "", fmt.Errorf("找不到对应场景的配置")
 		}
-		if _, ok := notice["status"]; ok && util.ToInt(notice["status"]) != 1 {
+		if util.ToInt(notice["status"]) != 1 {
 			return 0, "", fmt.Errorf("发送通知失败")
 		}
 		if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {

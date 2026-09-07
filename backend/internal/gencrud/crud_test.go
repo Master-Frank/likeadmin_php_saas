@@ -1,9 +1,14 @@
 package gencrud
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestRouteKey(t *testing.T) {
@@ -104,6 +109,40 @@ func TestImageCol(t *testing.T) {
 	})
 	if !isImageCol(sp, "cover") || isImageCol(sp, "name") {
 		t.Fatal("image col")
+	}
+}
+
+func TestRequireTenantWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	sp := &spec{allowed: map[string]bool{"tenant_id": true}}
+	plain := &spec{allowed: map[string]bool{"name": true}}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	if !requireTenantWrite(c, plain) {
+		t.Fatal("tables without tenant_id should pass")
+	}
+
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourcePlatform})
+	if requireTenantWrite(c, sp) {
+		t.Fatal("platform without tenant_id should fail")
+	}
+
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourcePlatform, TenantID: 1})
+	if !requireTenantWrite(c, sp) {
+		t.Fatal("platform with tenant_id should pass")
+	}
+
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceTenant})
+	if requireTenantWrite(c, sp) {
+		t.Fatal("tenant without tenant_id should fail")
+	}
+
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceTenant, TenantID: 2})
+	if !requireTenantWrite(c, sp) {
+		t.Fatal("tenant with tenant_id should pass")
 	}
 }
 

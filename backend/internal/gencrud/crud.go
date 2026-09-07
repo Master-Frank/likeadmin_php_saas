@@ -212,6 +212,9 @@ func doAdd(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
 		return
 	}
+	if !requireTenantWrite(c, sp) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := requiredMsg(sp, p, false); msg != "" {
 		response.Fail(c, msg)
@@ -227,6 +230,9 @@ func doAdd(c *gin.Context, sp *spec) {
 
 func doEdit(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
+		return
+	}
+	if !requireTenantWrite(c, sp) {
 		return
 	}
 	p := httpx.Body(c)
@@ -260,6 +266,9 @@ func doEdit(c *gin.Context, sp *spec) {
 
 func doDelete(c *gin.Context, sp *spec) {
 	if !requirePOST(c) {
+		return
+	}
+	if !requireTenantWrite(c, sp) {
 		return
 	}
 	ids := httpx.BodyUints(c, sp.pk)
@@ -306,6 +315,23 @@ func session(c *gin.Context) *gorm.DB {
 		return db
 	}
 	return bootstrap.DB
+}
+
+// requireTenantWrite rejects platform/tenant writes that would land on tenant_id=0.
+func requireTenantWrite(c *gin.Context, sp *spec) bool {
+	if sp == nil || !sp.allowed["tenant_id"] {
+		return true
+	}
+	meta := ctxutil.Get(c)
+	if meta.Source == ctxutil.SourcePlatform && meta.TenantID == 0 {
+		response.Fail(c, "请选择租户标识")
+		return false
+	}
+	if meta.TenantID == 0 {
+		response.Fail(c, "参数缺失")
+		return false
+	}
+	return true
 }
 
 func scoped(c *gin.Context, sp *spec) *gorm.DB {
