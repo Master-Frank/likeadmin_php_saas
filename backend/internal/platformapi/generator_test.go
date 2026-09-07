@@ -36,6 +36,18 @@ func TestGenerateBundleHasPHPShapes(t *testing.T) {
 	}
 }
 
+func TestTableStatusValue(t *testing.T) {
+	if tableStatusValue(nil) != nil {
+		t.Fatal("nil")
+	}
+	if tableStatusValue([]byte("la_config")) != "la_config" {
+		t.Fatal(tableStatusValue([]byte("la_config")))
+	}
+	if tableStatusValue([]byte{}) != "" {
+		t.Fatal("empty bytes")
+	}
+}
+
 func TestScanGoModelsNestedPHPPaths(t *testing.T) {
 	dir := t.TempDir()
 	src := "package model\n\ntype Article struct {}\n\ntype Config struct {}\n"

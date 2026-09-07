@@ -21,6 +21,21 @@ func TestModuleApp(t *testing.T) {
 	}
 }
 
+func TestPHPNotesLabel(t *testing.T) {
+	if phpNotesLabel("对拍生成器", "lists") != "获取对拍生成器列表" {
+		t.Fatal(phpNotesLabel("对拍生成器", "lists"))
+	}
+	if phpNotesLabel("对拍生成器", "add") != "添加对拍生成器" {
+		t.Fatal(phpNotesLabel("对拍生成器", "add"))
+	}
+	if phpNotesLabel("对拍生成器", "detail") != "获取对拍生成器详情" {
+		t.Fatal(phpNotesLabel("对拍生成器", "detail"))
+	}
+	if phpNotesLabel("对拍生成器", "sort") != "" {
+		t.Fatal("unknown action")
+	}
+}
+
 func TestValidIdent(t *testing.T) {
 	if !validIdent("create_time") || !validIdent("la_pair_gencrud") {
 		t.Fatal("valid ident rejected")

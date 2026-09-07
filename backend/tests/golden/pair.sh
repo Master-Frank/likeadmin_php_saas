@@ -2490,6 +2490,47 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
   fi
 fi
 
+php_dt="$(curl -sS "$PHP/platformapi/tools.generator/dataTable?page_size=5" -H "token: $TOKEN")"
+go_dt="$(curl -sS "$GO/platformapi/tools.generator/dataTable?page_size=5" -H "token: $TOKEN")"
+php_dtk="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(",".join(sorted(ls[0].keys())) if ls and isinstance(ls[0], dict) else "")
+' <<<"$php_dt")"
+go_dtk="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(",".join(sorted(ls[0].keys())) if ls and isinstance(ls[0], dict) else "")
+' <<<"$go_dt")"
+echo "generator_datatable_keys php=$php_dtk go=$go_dtk"
+if [[ "$php_dtk" != "$go_dtk" || "$go_dtk" != *name* || "$go_dtk" != *comment* || "$go_dtk" != *create_time* || "$go_dtk" == *Name* ]]; then
+  echo "  php_dt=${php_dt:0:240}"
+  echo "  go_dt=${go_dt:0:240}"
+  fail=$((fail + 1))
+fi
+php_dtn="$(curl -sS "$PHP/platformapi/tools.generator/dataTable?name=la_config&page_size=50" -H "token: $TOKEN")"
+go_dtn="$(curl -sS "$GO/platformapi/tools.generator/dataTable?name=la_config&page_size=50" -H "token: $TOKEN")"
+php_dtnn="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(len(ls), int(all("la_config" in str(x.get("name") or "") for x in ls) if ls else 0))
+' <<<"$php_dtn")"
+go_dtnn="$(python3 -c 'import json,sys
+ls=((json.load(sys.stdin).get("data") or {}).get("lists") or [])
+print(len(ls), int(all("la_config" in str(x.get("name") or "") for x in ls) if ls else 0))
+' <<<"$go_dtn")"
+echo "generator_datatable_name php=$php_dtnn go=$go_dtnn"
+if [[ "$php_dtnn" != "$go_dtnn" || "$go_dtnn" != *\ 1 ]]; then
+  echo "  php_dtn=${php_dtn:0:200}"
+  echo "  go_dtn=${go_dtn:0:200}"
+  fail=$((fail + 1))
+fi
+php_dtp="$(curl -sS -X POST "$PHP/platformapi/tools.generator/dataTable?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+go_dtp="$(curl -sS -X POST "$GO/platformapi/tools.generator/dataTable?page_size=1" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+echo "generator_datatable_post php_msg=$(jget msg <<<"$php_dtp") go_msg=$(jget msg <<<"$go_dtp")"
+if [[ "$(jget msg <<<"$php_dtp")" != "$(jget msg <<<"$go_dtp")" || "$(jget msg <<<"$go_dtp")" != *get请求方式* ]]; then
+  echo "  php_dtp=${php_dtp:0:200}"
+  echo "  go_dtp=${go_dtp:0:200}"
+  fail=$((fail + 1))
+fi
+
 gcomment="pair-gen-${ts:-$RANDOM}"
 php_gsel="$(curl -sS -X POST "$PHP/platformapi/tools.generator/selectTable" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"table\":[{\"name\":\"la_config\",\"comment\":\"$gcomment\"}]}")"
 echo "generator_select php_code=$(jcode <<<"$php_gsel") php_msg=$(jget msg <<<"$php_gsel")"
@@ -3355,6 +3396,11 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     echo "gencrud_add go_code=$(jcode <<<"$go_add") go_msg=$(jget msg <<<"$go_add")"
     if [[ "$(jcode <<<"$go_add")" != "1" ]]; then
       echo "  go_add=${go_add:0:240}"
+      fail=$((fail + 1))
+    fi
+    go_gact="$(mysqlq "SELECT action FROM la_operation_log WHERE url LIKE '%/pair_gencrud/add%' ORDER BY id DESC LIMIT 1")"
+    echo "gencrud_oplog_action=$go_gact"
+    if [[ "$go_gact" != *"添加对拍生成器"* ]]; then
       fail=$((fail + 1))
     fi
     go_ls="$(curl -sS "$GO/platformapi/pair_gencrud/lists?name=n$ts" -H "token: $TOKEN")"

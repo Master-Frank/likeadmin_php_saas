@@ -63,8 +63,9 @@ func OperationLog() gin.HandlerFunc {
 			action += "-数据导出"
 		}
 		result := bw.buf.String()
-		if len(result) > 4000 {
-			result = result[:4000]
+		// MySQL TEXT ~64KiB; PHP stores the full response body.
+		if len(result) > 65535 {
+			result = result[:65535]
 		}
 		adminID := meta.AdminID
 		name, account := "", ""

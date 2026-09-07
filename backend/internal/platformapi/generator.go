@@ -28,22 +28,26 @@ func GeneratorDataTable(c *gin.Context) {
 	if !ok {
 		return
 	}
-	type row struct {
-		Name       string `gorm:"column:Name" json:"Name"`
-		Comment    string `gorm:"column:Comment" json:"Comment"`
-		Engine     string `gorm:"column:Engine" json:"Engine"`
-		Rows       int64  `gorm:"column:Rows" json:"Rows"`
-		Collation  string `gorm:"column:Collation" json:"Collation"`
-		CreateTime string `gorm:"column:Create_time" json:"Create_time"`
-		UpdateTime string `gorm:"column:Update_time" json:"Update_time"`
+	if bootstrap.DB == nil {
+		response.Lists(c, []map[string]any{}, 0, q.PageNo, q.PageSize, nil)
+		return
 	}
-	sql := "SELECT TABLE_NAME AS `Name`, TABLE_COMMENT AS `Comment`, ENGINE AS `Engine`, TABLE_ROWS AS `Rows`, TABLE_COLLATION AS `Collation`, CREATE_TIME AS `Create_time`, UPDATE_TIME AS `Update_time` FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ?"
-	like := config.Prefix() + "%"
-	if kw := lists.Param(q, "table_name"); kw != "" {
-		like = "%" + kw + "%"
+	// PHP DataTableLists: SHOW TABLE STATUS + array_change_key_case, filter name/comment via param().
+	sql := "SHOW TABLE STATUS WHERE 1=1"
+	args := make([]any, 0, 2)
+	if name := lists.Param(q, "name"); name != "" {
+		sql += " AND Name LIKE ?"
+		args = append(args, "%"+name+"%")
 	}
-	var rows []row
-	bootstrap.DB.Raw(sql, like).Scan(&rows)
+	if comment := lists.Param(q, "comment"); comment != "" {
+		sql += " AND Comment LIKE ?"
+		args = append(args, "%"+comment+"%")
+	}
+	rows, err := showTableStatus(bootstrap.DB, sql, args...)
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
 	count := int64(len(rows))
 	start := q.Offset
 	end := q.Offset + q.PageSize
@@ -605,5 +609,50 @@ func formatGeneratorDetail(t model.GenerateTable, cols []model.GenerateColumn) m
 		"table_column": columns,
 		"create_time":  util.FormatDateTime(t.CreateTime),
 		"update_time":  util.FormatDateTimeOrNil(t.UpdateTime),
+	}
+}
+
+func showTableStatus(db *gorm.DB, sql string, args ...any) ([]map[string]any, error) {
+	rs, err := db.Raw(sql, args...).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	cols, err := rs.Columns()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0)
+	for rs.Next() {
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rs.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		row := make(map[string]any, len(cols))
+		for i, col := range cols {
+			row[strings.ToLower(col)] = tableStatusValue(vals[i])
+		}
+		out = append(out, row)
+	}
+	return out, rs.Err()
+}
+
+func tableStatusValue(v any) any {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return string(t)
+	case time.Time:
+		if t.IsZero() {
+			return nil
+		}
+		return t.Format(time.DateTime)
+	default:
+		return v
 	}
 }

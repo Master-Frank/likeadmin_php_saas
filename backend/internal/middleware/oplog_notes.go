@@ -1,6 +1,10 @@
 package middleware
 
-import "strings"
+import (
+	"strings"
+
+	"likeadmin/backend/internal/gencrud"
+)
 
 // actionNotes maps controller/action to the first Unicode word of PHP @notes.
 // PHP OperationLog uses preg_match('/\s(\w+)/u', $doc) and stores $values[0]
@@ -234,8 +238,8 @@ func ActionNotes(controller, action string) string {
 			return " " + n
 		}
 	}
-	if controller == "" && action == "" {
-		return "无法获取操作名称，请给控制器方法注释"
+	if n := gencrud.PHPActionNotes(controller, action); n != "" {
+		return " " + n
 	}
-	return controller + "/" + action
+	return "无法获取操作名称，请给控制器方法注释"
 }

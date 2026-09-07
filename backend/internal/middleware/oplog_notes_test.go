@@ -25,7 +25,7 @@ func TestActionNotesPHPNotes(t *testing.T) {
 
 func TestActionNotesFallback(t *testing.T) {
 	got := ActionNotes("unknown.ctrl", "foo")
-	if got != "unknown.ctrl/foo" {
+	if got != "无法获取操作名称，请给控制器方法注释" {
 		t.Fatalf("%q", got)
 	}
 }
