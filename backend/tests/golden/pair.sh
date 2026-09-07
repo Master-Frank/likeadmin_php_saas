@@ -1681,16 +1681,16 @@ print(json.dumps({
     if [[ "$(jget msg <<<"$php_sl3")" != "$(jget msg <<<"$go_sl3")" ]]; then
       fail=$((fail + 1))
     fi
-    php_js="$(curl -sS -X POST "$PHP/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
-    go_js="$(curl -sS -X POST "$GO/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+    php_js="$(curl -sS "$PHP/api/wechat/jsConfig" -H "Host: $TENANT_HOST")"
+    go_js="$(curl -sS "$GO/api/wechat/jsConfig" -H "Host: $TENANT_HOST")"
     echo "jsconfig_nourl php_msg=$(jget msg <<<"$php_js") go_msg=$(jget msg <<<"$go_js")"
     if [[ "$(jget msg <<<"$php_js")" != "$(jget msg <<<"$go_js")" ]]; then
       echo "  php_js=${php_js:0:200}"
       echo "  go_js=${go_js:0:200}"
       fail=$((fail + 1))
     fi
-    php_js2="$(curl -sS -X POST "$PHP/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"url":"http://'"$TENANT_HOST"'/pc"}')"
-    go_js2="$(curl -sS -X POST "$GO/api/wechat/jsConfig" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{"url":"http://'"$TENANT_HOST"'/pc"}')"
+    php_js2="$(curl -sS "$PHP/api/wechat/jsConfig?url=http://${TENANT_HOST}/pc" -H "Host: $TENANT_HOST")"
+    go_js2="$(curl -sS "$GO/api/wechat/jsConfig?url=http://${TENANT_HOST}/pc" -H "Host: $TENANT_HOST")"
     echo "jsconfig_noconfig php_show=$(jget show <<<"$php_js2") go_show=$(jget show <<<"$go_js2") php_msg=$(jget msg <<<"$php_js2") go_msg=$(jget msg <<<"$go_js2")"
     if [[ "$(jget show <<<"$php_js2")" != "$(jget show <<<"$go_js2")" || "$(jget msg <<<"$php_js2")" != "$(jget msg <<<"$go_js2")" ]]; then
       echo "  php_js2=${php_js2:0:200}"
