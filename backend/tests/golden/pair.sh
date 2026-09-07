@@ -1560,25 +1560,25 @@ print(json.dumps({
   fi
   go_tdw="$(curl -sS -X POST "$GO/tenantapi/setting.dict.dict_type/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","type":"x"}')"
   echo "tenant_dict_write go_msg=$(jget msg <<<"$go_tdw")"
-  if [[ "$(jget msg <<<"$go_tdw")" != *controller not exists* ]]; then
+  if [[ "$(jget msg <<<"$go_tdw")" != *"controller not exists"* ]]; then
     echo "  go_tdw=${go_tdw:0:200}"
     fail=$((fail + 1))
   fi
   go_tsw="$(curl -sS -X POST "$GO/tenantapi/setting.storage/setup" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"engine":"local"}')"
   echo "tenant_storage_write go_msg=$(jget msg <<<"$go_tsw")"
-  if [[ "$(jget msg <<<"$go_tsw")" != *controller not exists* ]]; then
+  if [[ "$(jget msg <<<"$go_tsw")" != *"controller not exists"* ]]; then
     echo "  go_tsw=${go_tsw:0:200}"
     fail=$((fail + 1))
   fi
   go_tcw="$(curl -sS -X POST "$GO/tenantapi/crontab.crontab/add" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x","command":"x","type":1}')"
   echo "tenant_crontab_write go_msg=$(jget msg <<<"$go_tcw")"
-  if [[ "$(jget msg <<<"$go_tcw")" != *controller not exists* ]]; then
+  if [[ "$(jget msg <<<"$go_tcw")" != *"controller not exists"* ]]; then
     echo "  go_tcw=${go_tcw:0:200}"
     fail=$((fail + 1))
   fi
   go_tgw="$(curl -sS -X POST "$GO/tenantapi/tools.generator/selectTable" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"table":[{"name":"la_config","comment":"x"}]}')"
   echo "tenant_generator_write go_msg=$(jget msg <<<"$go_tgw")"
-  if [[ "$(jget msg <<<"$go_tgw")" != *controller not exists* ]]; then
+  if [[ "$(jget msg <<<"$go_tgw")" != *"controller not exists"* ]]; then
     echo "  go_tgw=${go_tgw:0:200}"
     fail=$((fail + 1))
   fi
