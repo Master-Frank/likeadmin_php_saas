@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	TerminalMNP = 1
-	TerminalOA  = 2
-	TerminalH5  = 3
-	TerminalPC  = 4
+	TerminalMNP     = 1
+	TerminalOA      = 2
+	TerminalH5      = 3
+	TerminalPC      = 4
+	TerminalIOS     = 5
+	TerminalAndroid = 6
 )
 
 type Session struct {
@@ -149,12 +151,18 @@ func AccessToken(appID, secret string) (string, error) {
 	if out.AccessToken == "" {
 		return "", fmt.Errorf(firstNonEmpty(out.ErrMsg, "获取access_token失败"))
 	}
-	ttl := time.Duration(out.ExpiresIn-200) * time.Second
-	if ttl < time.Minute {
-		ttl = 60 * time.Minute
+	if ttl, ok := wechatCacheTTL(out.ExpiresIn); ok {
+		cache.Set(key, out.AccessToken, ttl)
 	}
-	cache.Set(key, out.AccessToken, ttl)
 	return out.AccessToken, nil
+}
+
+// wechatCacheTTL mirrors EasyWeChat: cache expires_in-200s, skip when expires_in<=200.
+func wechatCacheTTL(expiresIn int) (time.Duration, bool) {
+	if expiresIn <= 200 {
+		return 0, false
+	}
+	return time.Duration(expiresIn-200) * time.Second, true
 }
 
 // DefaultJSApiList matches PHP WechatLogic::jsConfig / EasyWeChat buildJsSdkConfig.
@@ -222,11 +230,9 @@ func jsapiTicket(appID, secret string) (string, error) {
 	if out.Ticket == "" {
 		return "", fmt.Errorf(firstNonEmpty(out.ErrMsg, "获取jsapi_ticket失败"))
 	}
-	ttl := time.Duration(out.ExpiresIn-200) * time.Second
-	if ttl < time.Minute {
-		ttl = 60 * time.Minute
+	if ttl, ok := wechatCacheTTL(out.ExpiresIn); ok {
+		cache.Set(key, out.Ticket, ttl)
 	}
-	cache.Set(key, out.Ticket, ttl)
 	return out.Ticket, nil
 }
 

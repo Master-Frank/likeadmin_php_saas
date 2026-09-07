@@ -82,15 +82,12 @@ func RunNamed(command string, params ...string) string {
 
 func runCommand(item model.Crontab) string {
 	cmd := normalizeCommand(item.Command)
-	_ = strings.Fields(strings.TrimSpace(item.Params))
+	args := strings.Fields(strings.TrimSpace(item.Params))
 	switch {
 	case cmd == "cache" || cmd == "":
 		return flushCache()
 	case cmd == "clear":
-		if msg := flushCache(); msg != "" {
-			return msg
-		}
-		return clearRuntime()
+		return runClear(args)
 	case cmd == "session":
 		expireSessions()
 		return ""
@@ -187,15 +184,52 @@ func dropSessionTokens(admins []model.AdminSession, tenants []model.TenantAdminS
 	}
 }
 
-func clearRuntime() string {
-	root := ""
-	if pub := config.C.App.PublicDir; pub != "" {
-		root = filepath.Dir(pub)
+func runClear(args []string) string {
+	cacheOnly, logOnly := false, false
+	for _, a := range args {
+		switch a {
+		case "--cache", "-c":
+			cacheOnly = true
+		case "--log", "-l":
+			logOnly = true
+		}
 	}
+	if logOnly && !cacheOnly {
+		return clearRuntimeNamed("log")
+	}
+	if cacheOnly {
+		return clearRuntimeNamed("cache")
+	}
+	if msg := flushCache(); msg != "" {
+		return msg
+	}
+	return clearRuntime()
+}
+
+func runtimeRoot() string {
+	if pub := config.C.App.PublicDir; pub != "" {
+		return filepath.Dir(pub)
+	}
+	return ""
+}
+
+func clearRuntime() string {
+	root := runtimeRoot()
 	if root == "" {
 		return ""
 	}
-	dir := filepath.Join(root, "runtime")
+	return clearRuntimeDir(filepath.Join(root, "runtime"))
+}
+
+func clearRuntimeNamed(name string) string {
+	root := runtimeRoot()
+	if root == "" {
+		return ""
+	}
+	return clearRuntimeDir(filepath.Join(root, "runtime", name))
+}
+
+func clearRuntimeDir(dir string) string {
 	st, err := os.Stat(dir)
 	if err != nil || !st.IsDir() {
 		return ""
@@ -205,17 +239,22 @@ func clearRuntime() string {
 			return nil
 		}
 		name := d.Name()
-		if name == "." || name == ".." {
+		if name == "." || name == ".." || name == ".gitignore" {
+			return nil
+		}
+		if name == ".git" || name == "node_modules" || name == "vendor" {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
 			return nil
 		}
 		if strings.HasPrefix(name, "curd-") && strings.HasSuffix(name, ".zip") {
 			return nil
 		}
-		if d.IsDir() && (name == "cache" || name == "temp" || name == "log" || name == "file") {
-			_ = os.RemoveAll(path)
-			_ = os.MkdirAll(path, 0755)
-			return fs.SkipDir
+		if d.IsDir() {
+			return nil
 		}
+		_ = os.Remove(path)
 		return nil
 	})
 	return ""

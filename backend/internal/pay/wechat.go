@@ -13,6 +13,10 @@ import (
 	"strconv"
 	"time"
 
+	"os"
+	"strings"
+
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/tenantdb"
@@ -25,6 +29,10 @@ import (
 var wechatAPIBase = "https://api.mch.weixin.qq.com"
 
 func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, terminal int, from, redirect string) (any, error) {
+	path, err := wechatPayPath(terminal)
+	if err != nil {
+		return nil, err
+	}
 	cfg := WechatCfg(c)
 	if cfg.MchID == "" || cfg.APIClientKey == "" {
 		return nil, fmt.Errorf("请先完成支付渠道配置")
@@ -51,31 +59,26 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 		"amount":       map[string]any{"total": amount},
 		"attach":       from,
 	}
-	path := "/v3/pay/transactions/native"
 	switch terminal {
 	case wechat.TerminalMNP, wechat.TerminalOA:
-		path = "/v3/pay/transactions/jsapi"
 		openid := lookupOpenid(order.TenantID, order.UserID, terminal)
 		if openid == "" {
 			return nil, fmt.Errorf("请先完成微信授权")
 		}
 		body["payer"] = map[string]any{"openid": openid}
 	case wechat.TerminalH5:
-		path = "/v3/pay/transactions/h5"
 		body["scene_info"] = map[string]any{
-			"payer_client_ip": ctxutil.ClientIP(c),
+			"payer_client_ip": debugPayOverride("LIKEADMIN_TEST_WEB_IP", ctxutil.ClientIP(c)),
 			"h5_info":         map[string]any{"type": "Wap"},
 		}
-	case 5, 6:
-		path = "/v3/pay/transactions/app"
 	}
 	raw, _ := json.Marshal(body)
 	result, err := wechatV3Post(cfg, key, path, raw)
 	if err != nil {
 		return nil, err
 	}
-	if msg := util.ToString(result["message"]); msg != "" && result["prepay_id"] == nil && result["code_url"] == nil && result["h5_url"] == nil {
-		return nil, fmt.Errorf("微信:%s-%s", util.ToString(result["code"]), msg)
+	if err := wechatResultFail(result); err != nil {
+		return nil, err
 	}
 	switch terminal {
 	case wechat.TerminalMNP, wechat.TerminalOA:
@@ -93,9 +96,9 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 		if h5 == "" {
 			return nil, fmt.Errorf("微信下单失败")
 		}
-		ret := ctxutil.Domain(c) + "/mobile" + redirect + "?id=" + util.ToString(order.ID) + "&from=" + from + "&checkPay=true"
+		ret := debugPayOverride("LIKEADMIN_TEST_WEB_DOMAIN", ctxutil.Domain(c)) + "/mobile" + redirect + "?id=" + util.ToString(order.ID) + "&from=" + from + "&checkPay=true"
 		return gin.H{"config": h5 + "&redirect_url=" + url.QueryEscape(ret), "pay_way": WayWechat}, nil
-	case 5, 6:
+	case wechat.TerminalIOS, wechat.TerminalAndroid:
 		return gin.H{"config": util.ToString(result["prepay_id"]), "pay_way": WayWechat}, nil
 	default:
 		codeURL := util.ToString(result["code_url"])
@@ -103,6 +106,33 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 			return nil, fmt.Errorf("微信下单失败")
 		}
 		return gin.H{"config": codeURL, "pay_way": WayWechat}, nil
+	}
+}
+
+// debugPayOverride mirrors PHP WeChatPayService mwebPay test_web_ip/domain when APP_DEBUG.
+func debugPayOverride(envKey, fallback string) string {
+	if !config.C.App.Debug {
+		return fallback
+	}
+	if v := strings.TrimSpace(os.Getenv(envKey)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// wechatPayPath mirrors PHP WeChatPayService::pay terminal switch.
+func wechatPayPath(terminal int) (string, error) {
+	switch terminal {
+	case wechat.TerminalMNP, wechat.TerminalOA:
+		return "/v3/pay/transactions/jsapi", nil
+	case wechat.TerminalH5:
+		return "/v3/pay/transactions/h5", nil
+	case wechat.TerminalIOS, wechat.TerminalAndroid:
+		return "/v3/pay/transactions/app", nil
+	case wechat.TerminalPC:
+		return "/v3/pay/transactions/native", nil
+	default:
+		return "", fmt.Errorf("支付方式错误")
 	}
 }
 
@@ -287,7 +317,7 @@ func notifyPath(terminal int) string {
 	switch terminal {
 	case wechat.TerminalMNP:
 		return "/api/pay/notifyMnp"
-	case 5, 6:
+	case wechat.TerminalIOS, wechat.TerminalAndroid:
 		return "/api/pay/notifyApp"
 	default:
 		return "/api/pay/notifyOa"

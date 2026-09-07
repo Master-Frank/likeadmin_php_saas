@@ -42,7 +42,10 @@ func Delete(c *gin.Context, uri string) error {
 	}
 	key := ObjectKey(uri)
 	if engine == "local" {
-		abs := filepath.Join(config.C.App.PublicDir, key)
+		abs, err := localPublicPath(key)
+		if err != nil {
+			return err
+		}
 		if _, err := os.Stat(abs); err != nil {
 			return nil
 		}
@@ -93,7 +96,10 @@ func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType strin
 		engine = "local"
 	}
 	if engine == "local" {
-		abs := filepath.Join(config.C.App.PublicDir, rel)
+		abs, err := localPublicPath(rel)
+		if err != nil {
+			return SaveResult{}, err
+		}
 		if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
 			return SaveResult{}, err
 		}
@@ -130,6 +136,36 @@ func Save(c *gin.Context, rel string, r io.Reader, size int64, contentType strin
 		return SaveResult{}, fmt.Errorf("未知存储引擎")
 	}
 	return SaveResult{URI: rel, Engine: engine}, nil
+}
+
+// localPublicPath resolves rel under PublicDir and rejects path traversal.
+func localPublicPath(rel string) (string, error) {
+	pub := strings.TrimSpace(config.C.App.PublicDir)
+	if pub == "" {
+		return "", fmt.Errorf("存储目录未配置")
+	}
+	rel = strings.TrimSpace(strings.TrimLeft(rel, `/\`))
+	if rel == "" {
+		return "", fmt.Errorf("文件路径异常")
+	}
+	cleaned := filepath.Clean(rel)
+	if filepath.IsAbs(cleaned) || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("文件路径异常")
+	}
+	absPub, err := filepath.Abs(pub)
+	if err != nil {
+		return "", err
+	}
+	abs := filepath.Join(absPub, cleaned)
+	abs, err = filepath.Abs(abs)
+	if err != nil {
+		return "", err
+	}
+	sep := string(os.PathSeparator)
+	if abs != absPub && !strings.HasPrefix(abs, absPub+sep) {
+		return "", fmt.Errorf("文件路径异常")
+	}
+	return abs, nil
 }
 
 // ObjectKey turns a stored URI or CDN URL into the bucket/local relative key.

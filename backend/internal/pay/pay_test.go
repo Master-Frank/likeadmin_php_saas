@@ -9,8 +9,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"os"
 	"testing"
 
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/wechat"
 )
@@ -118,6 +120,46 @@ func TestAliPrepayMissingConfig(t *testing.T) {
 	_, err := AliPrepay(nil, model.RechargeOrder{OrderAmount: 1}, "recharge", "/", wechat.TerminalOA)
 	if err == nil || err.Error() != "请配置好支付设置" {
 		t.Fatalf("ali prepay cfg %v", err)
+	}
+}
+
+func TestDebugPayOverride(t *testing.T) {
+	oldDebug := config.C.App.Debug
+	t.Cleanup(func() {
+		config.C.App.Debug = oldDebug
+		_ = os.Unsetenv("LIKEADMIN_TEST_WEB_IP")
+	})
+	config.C.App.Debug = false
+	t.Setenv("LIKEADMIN_TEST_WEB_IP", "9.9.9.9")
+	if got := debugPayOverride("LIKEADMIN_TEST_WEB_IP", "1.1.1.1"); got != "1.1.1.1" {
+		t.Fatalf("debug off: %s", got)
+	}
+	config.C.App.Debug = true
+	if got := debugPayOverride("LIKEADMIN_TEST_WEB_IP", "1.1.1.1"); got != "9.9.9.9" {
+		t.Fatalf("debug on: %s", got)
+	}
+}
+
+func TestWechatPayPath(t *testing.T) {
+	cases := map[int]string{
+		wechat.TerminalMNP:     "/v3/pay/transactions/jsapi",
+		wechat.TerminalOA:      "/v3/pay/transactions/jsapi",
+		wechat.TerminalH5:      "/v3/pay/transactions/h5",
+		wechat.TerminalIOS:     "/v3/pay/transactions/app",
+		wechat.TerminalAndroid: "/v3/pay/transactions/app",
+		wechat.TerminalPC:      "/v3/pay/transactions/native",
+	}
+	for term, want := range cases {
+		got, err := wechatPayPath(term)
+		if err != nil || got != want {
+			t.Fatalf("term=%d path=%s err=%v want=%s", term, got, err, want)
+		}
+	}
+	if _, err := wechatPayPath(0); err == nil || err.Error() != "支付方式错误" {
+		t.Fatalf("unknown 0: %v", err)
+	}
+	if _, err := wechatPayPath(99); err == nil || err.Error() != "支付方式错误" {
+		t.Fatalf("unknown 99: %v", err)
 	}
 }
 

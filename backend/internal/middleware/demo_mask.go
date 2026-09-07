@@ -85,8 +85,23 @@ func maskDemoValue(v any) any {
 				out[k] = "******"
 			case map[string]any:
 				out[k] = maskDemoValue(child)
+			case []any:
+				out[k] = maskDemoValue(child)
 			default:
 				out[k] = item
+			}
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, item := range t {
+			switch child := item.(type) {
+			case string:
+				out[i] = "******"
+			case map[string]any, []any:
+				out[i] = maskDemoValue(child)
+			default:
+				out[i] = item
 			}
 		}
 		return out

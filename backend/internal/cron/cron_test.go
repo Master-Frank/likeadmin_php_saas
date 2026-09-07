@@ -92,6 +92,18 @@ func TestClearRuntimeWipesFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "runtime", "curd-keep.zip"), []byte("z"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "runtime", "platformapi", "cache"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "runtime", "platformapi", "cache", "x.php"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "runtime", "extra.dat"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "runtime", ".gitignore"), []byte("*\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	old := config.C.App.PublicDir
 	config.C.App.PublicDir = pub
 	defer func() { config.C.App.PublicDir = old }()
@@ -101,8 +113,17 @@ func TestClearRuntimeWipesFile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fileDir, "x")); err == nil {
 		t.Fatal("runtime/file should be cleared")
 	}
+	if _, err := os.Stat(filepath.Join(dir, "runtime", "extra.dat")); err == nil {
+		t.Fatal("runtime extra files should be cleared")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "runtime", "platformapi", "cache", "x.php")); err == nil {
+		t.Fatal("runtime cache files should be cleared")
+	}
 	if _, err := os.Stat(filepath.Join(dir, "runtime", "curd-keep.zip")); err != nil {
 		t.Fatal("generator zip should stay")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "runtime", ".gitignore")); err != nil {
+		t.Fatal(".gitignore should stay")
 	}
 }
 
@@ -112,5 +133,41 @@ func TestRunCommandWithParams(t *testing.T) {
 	}
 	if got := runCommand(model.Crontab{Command: "not_a_real_command", Params: "foo"}); got != "未定义的定时任务命令: not_a_real_command" {
 		t.Fatalf("unknown with params: %q", got)
+	}
+}
+
+func TestClearRuntimeCacheFlag(t *testing.T) {
+	dir := t.TempDir()
+	cacheDir := filepath.Join(dir, "runtime", "cache")
+	logDir := filepath.Join(dir, "runtime", "log")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "x"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(logDir, "y"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "runtime", "extra.dat"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	config.C.App.PublicDir = filepath.Join(dir, "public")
+	defer func() { config.C.App.PublicDir = old }()
+	if msg := runClear([]string{"--cache"}); msg != "" {
+		t.Fatal(msg)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "x")); err == nil {
+		t.Fatal("runtime/cache should be cleared")
+	}
+	if _, err := os.Stat(filepath.Join(logDir, "y")); err != nil {
+		t.Fatal("runtime/log should stay for --cache")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "runtime", "extra.dat")); err != nil {
+		t.Fatal("runtime extra should stay for --cache")
 	}
 }

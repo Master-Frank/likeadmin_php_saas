@@ -115,12 +115,12 @@ func handlePlatformLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string
 		info = cache.GetAdminInfo(token, ctxutil.ClientIP(c))
 	}
 	if (info == nil || len(info) == 0) && need {
-		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 0)
+		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 1)
 		return
 	}
 	if info != nil && len(info) > 0 {
 		if !renewIfNeed(c, "platform", token, info, config.C.Project.AdminToken) {
-			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 1)
 			return
 		}
 		meta.AdminInfo = info
@@ -139,7 +139,7 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 		info = cache.GetTenantAdminInfo(token, ctxutil.ClientIP(c), tenantdb.Use(c))
 	}
 	if (info == nil || len(info) == 0) && need {
-		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 0)
+		response.AbortFail(c, "登录超时，请重新登录", response.CodeLoginExpire, 1)
 		return
 	}
 	if info != nil && len(info) > 0 {
@@ -149,7 +149,7 @@ func handleTenantLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, 
 			return
 		}
 		if !renewIfNeed(c, "tenant", token, info, config.C.Project.AdminToken) {
-			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 1)
 			return
 		}
 		meta.AdminInfo = info
@@ -178,7 +178,7 @@ func handleUserLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, ne
 			return
 		}
 		if !renewIfNeed(c, "user", token, info, config.C.Project.UserToken) {
-			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 0)
+			response.AbortFail(c, "登录过期", response.CodeLoginExpire, 1)
 			return
 		}
 		meta.UserInfo = info

@@ -7,7 +7,21 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestWechatCacheTTL(t *testing.T) {
+	if _, ok := wechatCacheTTL(0); ok {
+		t.Fatal("expires_in=0 should not cache")
+	}
+	if _, ok := wechatCacheTTL(200); ok {
+		t.Fatal("expires_in<=200 should not cache")
+	}
+	ttl, ok := wechatCacheTTL(7200)
+	if !ok || ttl != 7000*time.Second {
+		t.Fatalf("ttl=%v ok=%v", ttl, ok)
+	}
+}
 
 func TestCheckOASignature(t *testing.T) {
 	if !CheckOASignature("", "", "", "") {

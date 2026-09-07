@@ -13,6 +13,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestCORSAllowMethods(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	CORS()(c)
+	got := w.Header().Get("Access-Control-Allow-Methods")
+	if got != "GET, POST, PATCH, PUT, DELETE, post, OPTIONS" {
+		t.Fatalf("Allow-Methods %q", got)
+	}
+}
+
 func TestPlatformRequestTenantID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	q := func(raw string, body string) string {
