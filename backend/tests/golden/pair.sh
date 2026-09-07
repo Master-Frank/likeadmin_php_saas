@@ -2211,9 +2211,11 @@ print(json.dumps(data,ensure_ascii=False))
   if [[ "$(jget msg <<<"$php_pws")" != "$(jget msg <<<"$go_pws")" ]]; then
     fail=$((fail + 1))
   fi
+  php_pwm="$(curl -sS -X POST "$PHP/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"1":[{"id":99999999,"is_default":1,"status":1}]}')"
   go_pwm="$(curl -sS -X POST "$GO/tenantapi/setting.pay.pay_way/setPayWay" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"1":[{"id":99999999,"is_default":1,"status":1}]}')"
-  echo "payway_set_missing go_msg=$(jget msg <<<"$go_pwm")"
-  if [[ "$(jget msg <<<"$go_pwm")" != *支付方式不存在* ]]; then
+  echo "payway_set_missing php_code=$(jcode <<<"$php_pwm") go_code=$(jcode <<<"$go_pwm") php_msg=$(jget msg <<<"$php_pwm") go_msg=$(jget msg <<<"$go_pwm")"
+  if [[ "$(jcode <<<"$php_pwm")" != "$(jcode <<<"$go_pwm")" || "$(jget msg <<<"$php_pwm")" != "$(jget msg <<<"$go_pwm")" ]]; then
+    echo "  php_pwm=${php_pwm:0:200}"
     echo "  go_pwm=${go_pwm:0:200}"
     fail=$((fail + 1))
   fi
@@ -4602,7 +4604,151 @@ print(first_m(json.load(sys.stdin).get("data") or []))
       fail=$((fail + 1))
     fi
   fi
+  php_pcs0="$(curl -sS -X POST "$PHP/platformapi/setting.pay.pay_config/setConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_pcs0="$(curl -sS -X POST "$GO/platformapi/setting.pay.pay_config/setConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "pay_config_set_empty php_msg=$(jget msg <<<"$php_pcs0") go_msg=$(jget msg <<<"$go_pcs0")"
+  if [[ "$(jget msg <<<"$php_pcs0")" != "$(jget msg <<<"$go_pcs0")" ]]; then
+    echo "  php_pcs0=${php_pcs0:0:200}"
+    echo "  go_pcs0=${go_pcs0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_pcsb="$(curl -sS -X POST "$PHP/platformapi/setting.pay.pay_config/setConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","icon":"x","sort":1,"config":{}}')"
+  go_pcsb="$(curl -sS -X POST "$GO/platformapi/setting.pay.pay_config/setConfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","icon":"x","sort":1,"config":{}}')"
+  echo "pay_config_set_badid php_msg=$(jget msg <<<"$php_pcsb") go_msg=$(jget msg <<<"$go_pcsb")"
+  if [[ "$(jget msg <<<"$php_pcsb")" != "$(jget msg <<<"$go_pcsb")" ]]; then
+    echo "  php_pcsb=${php_pcsb:0:200}"
+    echo "  go_pcsb=${go_pcsb:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ppwm="$(curl -sS -X POST "$PHP/platformapi/setting.pay.pay_way/setPayWay" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"1":[{"id":99999999,"is_default":1,"status":1}]}')"
+  go_ppwm="$(curl -sS -X POST "$GO/platformapi/setting.pay.pay_way/setPayWay" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"1":[{"id":99999999,"is_default":1,"status":1}]}')"
+  echo "platform_payway_missing php_code=$(jcode <<<"$php_ppwm") go_code=$(jcode <<<"$go_ppwm") php_msg=$(jget msg <<<"$php_ppwm") go_msg=$(jget msg <<<"$go_ppwm")"
+  if [[ "$(jcode <<<"$php_ppwm")" != "$(jcode <<<"$go_ppwm")" || "$(jget msg <<<"$php_ppwm")" != "$(jget msg <<<"$go_ppwm")" ]]; then
+    echo "  php_ppwm=${php_ppwm:0:200}"
+    echo "  go_ppwm=${go_ppwm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_dde0="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_dde0="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_data/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "dict_data_edit_empty php_msg=$(jget msg <<<"$php_dde0") go_msg=$(jget msg <<<"$go_dde0")"
+  if [[ "$(jget msg <<<"$php_dde0")" != "$(jget msg <<<"$go_dde0")" ]]; then
+    echo "  php_dde0=${php_dde0:0:200}"
+    echo "  go_dde0=${go_dde0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ddeb="$(curl -sS -X POST "$PHP/platformapi/setting.dict.dict_data/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","value":"x","status":1}')"
+  go_ddeb="$(curl -sS -X POST "$GO/platformapi/setting.dict.dict_data/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","value":"x","status":1}')"
+  echo "dict_data_edit_missing php_msg=$(jget msg <<<"$php_ddeb") go_msg=$(jget msg <<<"$go_ddeb")"
+  if [[ "$(jget msg <<<"$php_ddeb")" != "$(jget msg <<<"$go_ddeb")" ]]; then
+    echo "  php_ddeb=${php_ddeb:0:200}"
+    echo "  go_ddeb=${go_ddeb:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_acs0="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_acs0="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "article_cate_status_empty php_msg=$(jget msg <<<"$php_acs0") go_msg=$(jget msg <<<"$go_acs0")"
+  if [[ "$(jget msg <<<"$php_acs0")" != "$(jget msg <<<"$go_acs0")" ]]; then
+    echo "  php_acs0=${php_acs0:0:200}"
+    echo "  go_acs0=${go_acs0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_acsb="$(curl -sS -X POST "$PHP/tenantapi/article.article_cate/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_show":2}')"
+  go_acsb="$(curl -sS -X POST "$GO/tenantapi/article.article_cate/updateStatus" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"is_show":2}')"
+  echo "article_cate_status_missing php_msg=$(jget msg <<<"$php_acsb") go_msg=$(jget msg <<<"$go_acsb")"
+  if [[ "$(jget msg <<<"$php_acsb")" != "$(jget msg <<<"$go_acsb")" ]]; then
+    echo "  php_acsb=${php_acsb:0:200}"
+    echo "  go_acsb=${go_acsb:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tts0="$(curl -sS -X POST "$PHP/tenantapi/setting.transaction_settings/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_tts0="$(curl -sS -X POST "$GO/tenantapi/setting.transaction_settings/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "tenant_transaction_empty php_msg=$(jget msg <<<"$php_tts0") go_msg=$(jget msg <<<"$go_tts0")"
+  if [[ "$(jget msg <<<"$php_tts0")" != "$(jget msg <<<"$go_tts0")" ]]; then
+    echo "  php_tts0=${php_tts0:0:200}"
+    echo "  go_tts0=${go_tts0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_sms0="$(curl -sS -X POST "$PHP/tenantapi/notice.sms_config/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_sms0="$(curl -sS -X POST "$GO/tenantapi/notice.sms_config/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "tenant_sms_set_empty php_msg=$(jget msg <<<"$php_sms0") go_msg=$(jget msg <<<"$go_sms0")"
+  if [[ "$(jget msg <<<"$php_sms0")" != "$(jget msg <<<"$go_sms0")" ]]; then
+    echo "  php_sms0=${php_sms0:0:200}"
+    echo "  go_sms0=${go_sms0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_smd0="$(curl -sS "$PHP/tenantapi/notice.sms_config/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_smd0="$(curl -sS "$GO/tenantapi/notice.sms_config/detail" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_sms_detail_empty php_msg=$(jget msg <<<"$php_smd0") go_msg=$(jget msg <<<"$go_smd0")"
+  if [[ "$(jget msg <<<"$php_smd0")" != "$(jget msg <<<"$go_smd0")" ]]; then
+    echo "  php_smd0=${php_smd0:0:200}"
+    echo "  go_smd0=${go_smd0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_oa0="$(curl -sS -X POST "$PHP/api/login/oaLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+  go_oa0="$(curl -sS -X POST "$GO/api/login/oaLogin" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d '{}')"
+  echo "oa_login_empty php_msg=$(jget msg <<<"$php_oa0") go_msg=$(jget msg <<<"$go_oa0")"
+  if [[ "$(jget msg <<<"$php_oa0")" != "$(jget msg <<<"$go_oa0")" ]]; then
+    echo "  php_oa0=${php_oa0:0:200}"
+    echo "  go_oa0=${go_oa0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_lo="$(curl -sS -X POST "$PHP/api/login/logout" -H "Host: $TENANT_HOST")"
+  go_lo="$(curl -sS -X POST "$GO/api/login/logout" -H "Host: $TENANT_HOST")"
+  echo "api_logout php_code=$(jcode <<<"$php_lo") go_code=$(jcode <<<"$go_lo") php_msg=$(jget msg <<<"$php_lo") go_msg=$(jget msg <<<"$go_lo")"
+  if [[ "$(jcode <<<"$php_lo")" != "$(jcode <<<"$go_lo")" || "$(jget msg <<<"$php_lo")" != "$(jget msg <<<"$go_lo")" ]]; then
+    echo "  php_lo=${php_lo:0:200}"
+    echo "  go_lo=${go_lo:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_adel0="$(curl -sS -X POST "$PHP/platformapi/auth.admin/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_adel0="$(curl -sS -X POST "$GO/platformapi/auth.admin/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  echo "admin_delete_empty php_msg=$(jget msg <<<"$php_adel0") go_msg=$(jget msg <<<"$go_adel0")"
+  if [[ "$(jget msg <<<"$php_adel0")" != "$(jget msg <<<"$go_adel0")" ]]; then
+    echo "  php_adel0=${php_adel0:0:200}"
+    echo "  go_adel0=${go_adel0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_rdel0="$(curl -sS -X POST "$PHP/platformapi/auth.role/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_rdel0="$(curl -sS -X POST "$GO/platformapi/auth.role/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "role_delete_missing php_msg=$(jget msg <<<"$php_rdel0") go_msg=$(jget msg <<<"$go_rdel0")"
+  if [[ "$(jget msg <<<"$php_rdel0")" != "$(jget msg <<<"$go_rdel0")" ]]; then
+    echo "  php_rdel0=${php_rdel0:0:200}"
+    echo "  go_rdel0=${go_rdel0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_jdel0="$(curl -sS -X POST "$PHP/platformapi/dept.jobs/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_jdel0="$(curl -sS -X POST "$GO/platformapi/dept.jobs/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "jobs_delete_missing php_msg=$(jget msg <<<"$php_jdel0") go_msg=$(jget msg <<<"$go_jdel0")"
+  if [[ "$(jget msg <<<"$php_jdel0")" != "$(jget msg <<<"$go_jdel0")" ]]; then
+    echo "  php_jdel0=${php_jdel0:0:200}"
+    echo "  go_jdel0=${go_jdel0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_ddel0="$(curl -sS -X POST "$PHP/platformapi/dept.dept/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_ddel0="$(curl -sS -X POST "$GO/platformapi/dept.dept/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "dept_delete_missing php_msg=$(jget msg <<<"$php_ddel0") go_msg=$(jget msg <<<"$go_ddel0")"
+  if [[ "$(jget msg <<<"$php_ddel0")" != "$(jget msg <<<"$go_ddel0")" ]]; then
+    echo "  php_ddel0=${php_ddel0:0:200}"
+    echo "  go_ddel0=${go_ddel0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_mdel0="$(curl -sS -X POST "$PHP/platformapi/auth.menu/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_mdel0="$(curl -sS -X POST "$GO/platformapi/auth.menu/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "menu_delete_missing php_code=$(jcode <<<"$php_mdel0") go_code=$(jcode <<<"$go_mdel0") php_msg=$(jget msg <<<"$php_mdel0") go_msg=$(jget msg <<<"$go_mdel0")"
+  if [[ "$(jcode <<<"$php_mdel0")" != "$(jcode <<<"$go_mdel0")" || "$(jget msg <<<"$php_mdel0")" != "$(jget msg <<<"$go_mdel0")" ]]; then
+    echo "  php_mdel0=${php_mdel0:0:200}"
+    echo "  go_mdel0=${go_mdel0:0:200}"
+    fail=$((fail + 1))
+  fi
   if [[ -n "${UT:-}" ]]; then
+    php_cc0="$(curl -sS -X POST "$PHP/api/article/cancelCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    go_cc0="$(curl -sS -X POST "$GO/api/article/cancelCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{}')"
+    echo "cancel_collect_empty php_code=$(jcode <<<"$php_cc0") go_code=$(jcode <<<"$go_cc0") php_msg=$(jget msg <<<"$php_cc0") go_msg=$(jget msg <<<"$go_cc0")"
+    if [[ "$(jcode <<<"$php_cc0")" != "$(jcode <<<"$go_cc0")" || "$(jget msg <<<"$php_cc0")" != "$(jget msg <<<"$go_cc0")" ]]; then
+      echo "  php_cc0=${php_cc0:0:200}"
+      echo "  go_cc0=${go_cc0:0:200}"
+      fail=$((fail + 1))
+    fi
     php_pp99="$(curl -sS -X POST "$PHP/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":99}')"
     go_pp99="$(curl -sS -X POST "$GO/api/pay/prepay" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d '{"from":"recharge","order_id":1,"pay_way":99}')"
     echo "pay_prepay_way99 php_msg=$(jget msg <<<"$php_pp99") go_msg=$(jget msg <<<"$go_pp99")"

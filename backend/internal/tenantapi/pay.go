@@ -175,9 +175,9 @@ func PayWaySet(c *gin.Context) {
 			}
 			q := tdb(c).Model(&model.TenantPayWay{}).Where("id = ? AND tenant_id = ?", id, tid)
 			var row model.TenantPayWay
+			// PHP TenantPayWayLogic::setPayWay skips missing rows; keep tenant scope.
 			if q.First(&row).Error != nil {
-				response.Fail(c, "支付方式不存在")
-				return
+				continue
 			}
 			uq := tdb(c).Model(&model.TenantPayWay{}).Where("id = ? AND tenant_id = ?", row.ID, tid)
 			uq.Updates(map[string]any{

@@ -137,9 +137,9 @@ func PayWaySet(c *gin.Context) {
 				continue
 			}
 			var row model.PayWay
+			// PHP PayWayLogic::setPayWay skips missing rows instead of failing.
 			if bootstrap.DB.Where("id = ?", id).First(&row).Error != nil {
-				response.Fail(c, "支付方式不存在")
-				return
+				continue
 			}
 			bootstrap.DB.Model(&model.PayWay{}).Where("id = ?", row.ID).Updates(map[string]any{
 				"is_default": util.ToInt(m["is_default"]), "status": util.ToInt(m["status"]),
