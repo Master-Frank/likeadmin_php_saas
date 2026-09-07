@@ -152,8 +152,7 @@ func GeneratorDetail(c *gin.Context) {
 	}
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, httpx.Uint(c, "id")).Error != nil {
-		// PHP findOrEmpty + formatConfigByTableData still returns menu/delete/tree/relations.
-		response.Data(c, formatGeneratorDetail(model.GenerateTable{}, nil))
+		response.Fail(c, "信息不存在")
 		return
 	}
 	var cols []model.GenerateColumn

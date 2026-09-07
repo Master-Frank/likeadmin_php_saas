@@ -2290,8 +2290,8 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
     fi
     php_gdm="$(curl -sS "$PHP/platformapi/tools.generator/detail?id=99999999" -H "token: $TOKEN")"
     go_gdm="$(curl -sS "$GO/platformapi/tools.generator/detail?id=99999999" -H "token: $TOKEN")"
-    echo "generator_detail_missing php_code=$(jcode <<<"$php_gdm") go_code=$(jcode <<<"$go_gdm") php_menu=$(python3 -c 'import json,sys; print(int(isinstance((json.load(sys.stdin).get("data") or {}).get("menu"), dict)))' <<<"$php_gdm") go_menu=$(python3 -c 'import json,sys; print(int(isinstance((json.load(sys.stdin).get("data") or {}).get("menu"), dict)))' <<<"$go_gdm")"
-    if [[ "$(jcode <<<"$php_gdm")" != "1" || "$(jcode <<<"$go_gdm")" != "1" ]]; then
+    echo "generator_detail_missing php_msg=$(jget msg <<<"$php_gdm") go_msg=$(jget msg <<<"$go_gdm")"
+    if [[ "$(jget msg <<<"$php_gdm")" != "$(jget msg <<<"$go_gdm")" || "$(jget msg <<<"$go_gdm")" != *"信息不存在"* ]]; then
       echo "  php_gdm=${php_gdm:0:200}"
       echo "  go_gdm=${go_gdm:0:200}"
       fail=$((fail + 1))
