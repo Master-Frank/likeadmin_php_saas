@@ -129,7 +129,7 @@ func GeneratorSelectTable(c *gin.Context) {
 				comment = util.ToString(m["table_comment"])
 			}
 			var n int64
-			if err := tx.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", name).Scan(&n).Error; err != nil {
+			if err := tx.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", physicalTableName(name)).Scan(&n).Error; err != nil {
 				return err
 			}
 			if n == 0 {
@@ -543,10 +543,23 @@ func scanGoModels(root string) []string {
 	return out
 }
 
+// physicalTableName mirrors PHP get_no_prefix_table_name + Db::name():
+// strip the configured prefix if present, then put it back so information_schema
+// sees the real table (la_foo) whether the UI sent la_foo or foo.
+func physicalTableName(name string) string {
+	name = strings.TrimSpace(name)
+	prefix := config.Prefix()
+	if prefix != "" && strings.HasPrefix(name, prefix) {
+		name = strings.TrimPrefix(name, prefix)
+	}
+	return prefix + name
+}
+
 func syncColumns(tx *gorm.DB, tableID uint, tableName string) error {
 	if tx == nil {
 		tx = bootstrap.DB
 	}
+	tableName = physicalTableName(tableName)
 	type col struct {
 		ColumnName    string `gorm:"column:COLUMN_NAME"`
 		ColumnComment string `gorm:"column:COLUMN_COMMENT"`

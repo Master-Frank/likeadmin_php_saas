@@ -345,12 +345,27 @@ func queryRefund() string {
 	if bootstrap.DB == nil {
 		return ""
 	}
-	var logs []model.RefundLog
-	bootstrap.DB.Where("refund_status = 0").Find(&logs)
-	for _, lg := range logs {
+	for _, lg := range listRefundingLogs() {
 		applyRefundQuery(lg)
 	}
 	return ""
+}
+
+// listRefundingLogs mirrors PHP QueryRefund::execute: INNER JOIN refund_record
+// and only refund_status = REFUND_ING (0) logs.
+func listRefundingLogs() []model.RefundLog {
+	var logs []model.RefundLog
+	if bootstrap.DB == nil {
+		return logs
+	}
+	logT := model.RefundLog{}.TableName()
+	recT := model.RefundRecord{}.TableName()
+	bootstrap.DB.Table(logT+" AS l").
+		Select("l.*").
+		Joins("JOIN "+recT+" AS r ON r.id = l.record_id").
+		Where("l.refund_status = ?", 0).
+		Find(&logs)
+	return logs
 }
 
 func applyRefundQuery(lg model.RefundLog) {

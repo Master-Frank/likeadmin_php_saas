@@ -12,3 +12,17 @@ func TestSplitSQL(t *testing.T) {
 		t.Fatalf("prefix %s", rewritePrefix(got[0], "xx_"))
 	}
 }
+
+func TestQualifyInstallSQL(t *testing.T) {
+	stmt := "CREATE TABLE `la_foo` (`id` int)"
+	got := qualifyInstallSQL(stmt, "likeadmin", "xx_")
+	if got != "CREATE TABLE likeadmin.`xx_foo` (`id` int)" {
+		t.Fatalf("got %s", got)
+	}
+	if qualifyInstallSQL(stmt, "", "la_") != stmt {
+		t.Fatalf("empty db keeps stmt")
+	}
+	if qualifyInstallSQL(stmt, "likeadmin", "la_") != "CREATE TABLE likeadmin.`la_foo` (`id` int)" {
+		t.Fatalf("same prefix: %s", qualifyInstallSQL(stmt, "likeadmin", "la_"))
+	}
+}

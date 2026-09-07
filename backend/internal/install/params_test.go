@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"likeadmin/backend/internal/httpx"
@@ -75,5 +77,26 @@ func TestAccountSalt(t *testing.T) {
 	}
 	if !isOn(map[string]any{"clear_db": "on"}, "clear_db") || isOn(map[string]any{"clear_db": "off"}, "clear_db") {
 		t.Fatal("flag")
+	}
+}
+
+func TestCopyDirChmodAccessToken(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "access_token.txt"), []byte("tok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "readme.txt"), []byte("ok"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyDir(src, dest); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(filepath.Join(dest, "access_token.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o777 {
+		t.Fatalf("access_token mode %o", st.Mode().Perm())
 	}
 }

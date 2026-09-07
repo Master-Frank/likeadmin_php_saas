@@ -132,7 +132,7 @@ func Run(c *gin.Context) {
 			response.Fail(c, "创建表格失败")
 			return
 		}
-		imported, err = ImportSQL(db, string(raw), prefix)
+		imported, err = ImportSQL(db, string(raw), prefix, dbName)
 		if err != nil {
 			response.Fail(c, "创建表格失败")
 			return
@@ -160,7 +160,10 @@ func Run(c *gin.Context) {
 	if httpx.BodyStr(c, "env_path") != "" {
 		envPath = httpx.BodyStr(c, "env_path")
 	}
-	_ = WriteEnv(envPath, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
+	if err := WriteEnv(envPath, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt); err != nil {
+		response.Fail(c, "写入环境配置失败："+err.Error())
+		return
+	}
 	goCfg := httpx.BodyStr(c, "go_config_path")
 	_ = WriteGoConfig(goCfg, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
 	// PHP install uses touch() so the lock file is empty.

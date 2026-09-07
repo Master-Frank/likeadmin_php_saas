@@ -138,7 +138,14 @@ func copyDir(src, dest string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o777); err != nil {
 			return err
 		}
-		return os.WriteFile(target, raw, info.Mode())
+		if err := os.WriteFile(target, raw, info.Mode()); err != nil {
+			return err
+		}
+		// PHP installModel::cpFiles chmod 0777 when dest contains access_token.txt.
+		if strings.Contains(target, "access_token.txt") {
+			_ = os.Chmod(target, 0o777)
+		}
+		return nil
 	})
 }
 

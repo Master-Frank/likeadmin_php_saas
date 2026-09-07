@@ -105,6 +105,18 @@ func TestValidModelModule(t *testing.T) {
 	}
 }
 
+func TestPhysicalTableName(t *testing.T) {
+	if got := physicalTableName("la_pair_gencrud"); got != "la_pair_gencrud" {
+		t.Fatalf("prefixed: %s", got)
+	}
+	if got := physicalTableName("pair_gencrud"); got != "la_pair_gencrud" {
+		t.Fatalf("stripped: %s", got)
+	}
+	if got := physicalTableName("  config  "); got != "la_config" {
+		t.Fatalf("trim: %s", got)
+	}
+}
+
 func TestScanPHPModelsModule(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "User.php"), []byte("<?php"), 0644); err != nil {
