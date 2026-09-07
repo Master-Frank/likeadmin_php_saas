@@ -57,7 +57,7 @@ func Delete(c *gin.Context, uri string) error {
 	case "qcloud":
 		return deleteQcloud(cfg, key)
 	default:
-		return nil
+		return fmt.Errorf("未知存储引擎")
 	}
 }
 

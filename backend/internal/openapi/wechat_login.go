@@ -132,6 +132,7 @@ func LoginScanLogin(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	cache.Del("web_scan_" + state)
 	response.Data(c, info)
 }
 

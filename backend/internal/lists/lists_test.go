@@ -134,6 +134,18 @@ func TestParseExportWindow(t *testing.T) {
 	}
 }
 
+func TestHasParamTreatsZeroAsPresent(t *testing.T) {
+	// PHP GET cid=0 is string "0"; "0" == "" is false, so '=' filters apply.
+	// JSON body 0 is int; 0 == "" is true and PHP skips — Params still stores "0".
+	q := Query{Params: map[string]any{"cid": "0", "type": 0}}
+	if !HasParam(q, "cid") || !HasParam(q, "type") {
+		t.Fatal("numeric zero must be present")
+	}
+	if HasParam(q, "missing") || HasParam(Query{Params: map[string]any{"cid": ""}}, "cid") {
+		t.Fatal("empty must be absent")
+	}
+}
+
 func TestParseGETRejectsPOST(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

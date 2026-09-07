@@ -68,10 +68,10 @@ func GetRemoteVersion(pageNo, pageSize int) map[string]any {
 	}
 	var remote string
 	if pageNo == 0 || pageSize == 0 {
-		remote = fmt.Sprintf("%s/indexapi/version/lists?type=2&page=1&action=lists&product_code=%s", BaseURL, ProductCode)
+		remote = fmt.Sprintf("%s/indexapi/version/lists?type=2&page=1&action=lists&product_code=%s", upgradeBase(), ProductCode)
 	} else {
 		remote = fmt.Sprintf("%s/indexapi/version/lists?type=2&page_no=%d&page_size=%d&page=1&action=lists&product_code=%s",
-			BaseURL, pageNo, pageSize, ProductCode)
+			upgradeBase(), pageNo, pageSize, ProductCode)
 	}
 	payload := getJSON(remote)
 	if payload == nil {
@@ -121,7 +121,7 @@ func HasPermission(result map[string]any) bool {
 // Verify mirrors UpgradeLogic::verify.
 func Verify(domain string, versionID any, link string) map[string]any {
 	u := fmt.Sprintf("%s/indexapi/version/verify?domain=%s&type=2&version_id=%s&link=%s&action=verify&product_code=%s",
-		BaseURL, url.QueryEscape(domain), url.QueryEscape(util.ToString(versionID)), url.QueryEscape(link), ProductCode)
+		upgradeBase(), url.QueryEscape(domain), url.QueryEscape(util.ToString(versionID)), url.QueryEscape(link), ProductCode)
 	data := getVerifyJSON(u)
 	if data == nil {
 		return map[string]any{"has_permission": false, "link": "", "msg": ""}
@@ -148,7 +148,10 @@ func AddLog(domain string, versionID any, updateType any, ok bool, errMsg string
 		form.Set("status", "0")
 	}
 	form.Set("error", errMsg)
-	_, _ = httpClient.Post(BaseURL+"/indexapi/version/log", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if fixtureDir() != "" {
+		return
+	}
+	_, _ = httpClient.Post(upgradeBase()+"/indexapi/version/log", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 }
 
 func getJSON(remote string) map[string]any {
@@ -185,6 +188,13 @@ func parseVerifyEnvelope(wrap map[string]any) map[string]any {
 }
 
 func fetchJSON(remote string) map[string]any {
+	if body := readFixture(remote); len(body) > 0 {
+		var wrap map[string]any
+		if json.Unmarshal(body, &wrap) != nil {
+			return nil
+		}
+		return wrap
+	}
 	resp, err := httpClient.Get(remote)
 	if err != nil {
 		return nil
@@ -196,6 +206,36 @@ func fetchJSON(remote string) map[string]any {
 		return nil
 	}
 	return wrap
+}
+
+func upgradeBase() string {
+	if u := strings.TrimSpace(os.Getenv("LIKEADMIN_UPGRADE_BASE_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return BaseURL
+}
+
+func fixtureDir() string {
+	return strings.TrimSpace(os.Getenv("LIKEADMIN_UPGRADE_FIXTURE"))
+}
+
+func readFixture(remote string) []byte {
+	dir := fixtureDir()
+	if dir == "" {
+		return nil
+	}
+	name := "lists.json"
+	switch {
+	case strings.Contains(remote, "/verify") || strings.Contains(remote, "action=verify"):
+		name = "verify.json"
+	case strings.Contains(remote, "/log"):
+		name = "log.json"
+	}
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 var pkgLink = map[int]string{

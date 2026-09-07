@@ -482,10 +482,6 @@ func WechatJsConfig(c *gin.Context) { WechatJsConfigReal(c) }
 func PayNotifyOK(c *gin.Context) { handlePayNotify(c) }
 func AliNotify(c *gin.Context)   { handlePayNotify(c) }
 
-func LoginStub(c *gin.Context) {
-	response.Fail(c, "请先完成微信开放平台配置")
-}
-
 func currentUser(c *gin.Context) model.User {
 	var u model.User
 	id := ctxutil.Get(c).UserID

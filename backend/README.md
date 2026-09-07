@@ -27,6 +27,7 @@ go run ./cmd/strangler
 `LIKEADMIN_PHP_FALLBACK` 默认关闭。只有仍需临时代理未知 PHP 路径时才设为 `1`。
 
 生产 Nginx（无 php-fpm）见 `deploy/nginx.production.conf`。本机切流校验用 `deploy/nginx.local.conf`（`:8091`）。
+systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.service`（把路径改成实际安装目录后 `systemctl enable --now`）。
 
 定时任务：
 
@@ -42,6 +43,10 @@ go run ./cmd/think query_refund
 
 ```bash
 # ApplyLocal / file:// 与远程 link 走同一套解压+SQL+文件管道
+go run ./cmd/think upgrade-local /path/to/package.zip
+
+# 列表/授权走本地夹具（lists.json + verify.json），不打 mddai.cn
+export LIKEADMIN_UPGRADE_FIXTURE=/path/to/upgrade-fixture
 ```
 
 ## 契约
