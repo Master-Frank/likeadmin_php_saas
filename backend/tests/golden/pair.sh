@@ -1936,8 +1936,8 @@ print(json.dumps({
     echo "  go_dag=${go_dag:0:200}"
     fail=$((fail + 1))
   fi
-  php_fnq="$(curl -sS -X POST "$PHP/tenantapi/file.file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
-  go_fnq="$(curl -sS -X POST "$GO/tenantapi/file.file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  php_fnq="$(curl -sS -X POST "$PHP/tenantapi/file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+  go_fnq="$(curl -sS -X POST "$GO/tenantapi/file/rename?id=1&name=hack" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
   echo "file_rename_query_ignored php_msg=$(jget msg <<<"$php_fnq") go_msg=$(jget msg <<<"$go_fnq")"
   if [[ "$(jget msg <<<"$php_fnq")" != "$(jget msg <<<"$go_fnq")" ]]; then
     echo "  php_fnq=${php_fnq:0:200}"
