@@ -243,13 +243,9 @@ func CrontabEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	var r model.Crontab
-	if bootstrap.DB.Where("delete_time IS NULL").First(&r, httpx.Uint(c, "id")).Error != nil {
-		response.Fail(c, "定时任务不存在")
-		return
-	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", r.ID).Updates(map[string]any{
+	// PHP CrontabLogic::edit updates by id with no existence check.
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.Uint(c, "id")).Updates(map[string]any{
 		"name": httpx.Str(c, "name"), "command": httpx.Str(c, "command"), "params": httpx.Str(c, "params"),
 		"status": httpx.Int(c, "status"), "expression": httpx.Str(c, "expression"), "remark": httpx.Str(c, "remark"),
 		"type": httpx.Int(c, "type"), "system": httpx.Int(c, "system"), "update_time": now,
@@ -291,10 +287,8 @@ func CrontabOperate(c *gin.Context) {
 		status = 1
 	case "stop":
 		status = 2
-	default:
-		response.Fail(c, "请选择操作")
-		return
 	}
+	// PHP switch falls through for unknown operate and still save()s.
 	bootstrap.DB.Model(&r).Update("status", status)
 	response.SuccessNotice(c, "操作成功")
 }

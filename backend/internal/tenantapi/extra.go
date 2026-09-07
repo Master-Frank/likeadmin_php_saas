@@ -2,6 +2,7 @@ package tenantapi
 
 import (
 	"fmt"
+	"strings"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
@@ -167,9 +168,10 @@ func DecorateTabbarSave(c *gin.Context) {
 }
 
 func HotSearchSet(c *gin.Context) {
-	status := httpx.Int(c, "status")
-	if status != 1 {
-		status = 0
+	// PHP: empty($params['status']) ? 0 : $params['status'] — keep values like 2.
+	status := 0
+	if _, ok := httpx.Params(c)["status"]; ok && strings.TrimSpace(httpx.Str(c, "status")) != "" && httpx.Int(c, "status") != 0 {
+		status = httpx.Int(c, "status")
 	}
 	cfgsvc.Set(c, "hot_search", "status", status)
 	data := httpx.Any(c, "data")

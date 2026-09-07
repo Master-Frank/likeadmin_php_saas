@@ -922,15 +922,19 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_fec=${go_fec:0:200}"
     fail=$((fail + 1))
   fi
+  php_fdc="$(curl -sS -X POST "$PHP/tenantapi/file/delCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
   go_fdc="$(curl -sS -X POST "$GO/tenantapi/file/delCate" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
-  echo "file_del_cate_missing go_msg=$(jget msg <<<"$go_fdc")"
-  if [[ "$(jget msg <<<"$go_fdc")" != *文件分类不存在* ]]; then
+  echo "file_del_cate_missing php_msg=$(jget msg <<<"$php_fdc") go_msg=$(jget msg <<<"$go_fdc")"
+  if [[ "$(jget msg <<<"$php_fdc")" != "$(jget msg <<<"$go_fdc")" ]]; then
+    echo "  php_fdc=${php_fdc:0:200}"
     echo "  go_fdc=${go_fdc:0:200}"
     fail=$((fail + 1))
   fi
+  php_pfdc="$(curl -sS -X POST "$PHP/platformapi/file/delCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
   go_pfdc="$(curl -sS -X POST "$GO/platformapi/file/delCate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
-  echo "platform_file_del_cate_missing go_msg=$(jget msg <<<"$go_pfdc")"
-  if [[ "$(jget msg <<<"$go_pfdc")" != *文件分类不存在* ]]; then
+  echo "platform_file_del_cate_missing php_msg=$(jget msg <<<"$php_pfdc") go_msg=$(jget msg <<<"$go_pfdc")"
+  if [[ "$(jget msg <<<"$php_pfdc")" != "$(jget msg <<<"$go_pfdc")" ]]; then
+    echo "  php_pfdc=${php_pfdc:0:200}"
     echo "  go_pfdc=${go_pfdc:0:200}"
     fail=$((fail + 1))
   fi
@@ -1171,6 +1175,14 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
     php_cd="$(curl -sS "$PHP/platformapi/crontab.crontab/detail?id=$cid" -H "token: $TOKEN")"
     echo "crontab_detail php_type=$(jget data.type_desc <<<"$php_cd") go_type=$(jget data.type_desc <<<"$go_cd")"
     if [[ "$(jget data.type_desc <<<"$php_cd")" != "$(jget data.type_desc <<<"$go_cd")" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_cop="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/operate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid,\"operate\":\"pause\"}")"
+    go_cop="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/operate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid,\"operate\":\"pause\"}")"
+    echo "crontab_operate_unknown php_code=$(jcode <<<"$php_cop") go_code=$(jcode <<<"$go_cop") php_msg=$(jget msg <<<"$php_cop") go_msg=$(jget msg <<<"$go_cop")"
+    if [[ "$(jcode <<<"$php_cop")" != "$(jcode <<<"$go_cop")" || "$(jget msg <<<"$php_cop")" != "$(jget msg <<<"$go_cop")" ]]; then
+      echo "  php_cop=${php_cop:0:200}"
+      echo "  go_cop=${go_cop:0:200}"
       fail=$((fail + 1))
     fi
     php_cdel="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$cid}")"
@@ -2246,6 +2258,14 @@ print(next((x.get("id") for x in ls if x.get("table_comment")==sys.argv[1]), 0))
     echo "generator_edit_column go_msg=$(jget msg <<<"$go_gec")"
     if [[ "$(jget msg <<<"$go_gec")" != *字段不存在* ]]; then
       echo "  go_gec=${go_gec:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_pv0="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+    go_pv0="$(curl -sS -X POST "$GO/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+    echo "generator_preview_missing php_msg=$(jget msg <<<"$php_pv0") go_msg=$(jget msg <<<"$go_pv0")"
+    if [[ "$(jget msg <<<"$php_pv0")" != "$(jget msg <<<"$go_pv0")" ]]; then
+      echo "  php_pv0=${php_pv0:0:200}"
+      echo "  go_pv0=${go_pv0:0:200}"
       fail=$((fail + 1))
     fi
     php_pv="$(curl -sS -X POST "$PHP/platformapi/tools.generator/preview" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":$gid}")"
@@ -3394,6 +3414,28 @@ print(",".join(sorted(ls[0])) if ls else "")
     echo "  go_cdelm=${go_cdelm:0:200}"
     fail=$((fail + 1))
   fi
+  php_cem="$(curl -sS -X POST "$PHP/platformapi/crontab.crontab/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","type":1,"command":"x","status":2,"expression":"0 * * * *"}')"
+  go_cem="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"x","type":1,"command":"x","status":2,"expression":"0 * * * *"}')"
+  echo "crontab_edit_missing php_code=$(jcode <<<"$php_cem") go_code=$(jcode <<<"$go_cem") php_msg=$(jget msg <<<"$php_cem") go_msg=$(jget msg <<<"$go_cem")"
+  if [[ "$(jcode <<<"$php_cem")" != "$(jcode <<<"$go_cem")" || "$(jget msg <<<"$php_cem")" != "$(jget msg <<<"$go_cem")" ]]; then
+    echo "  php_cem=${php_cem:0:200}"
+    echo "  go_cem=${go_cem:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_hs0="$(curl -sS "$PHP/tenantapi/setting.hot_search/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  hs_old="$(jget data.status <<<"$php_hs0")"
+  php_hsset="$(curl -sS -X POST "$PHP/tenantapi/setting.hot_search/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"status":2,"data":[]}')"
+  go_hsset="$(curl -sS -X POST "$GO/tenantapi/setting.hot_search/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"status":2,"data":[]}')"
+  php_hs2="$(curl -sS "$PHP/tenantapi/setting.hot_search/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_hs2="$(curl -sS "$GO/tenantapi/setting.hot_search/getConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "hot_search_status2 php_set=$(jcode <<<"$php_hsset") go_set=$(jcode <<<"$go_hsset") php_st=$(jget data.status <<<"$php_hs2") go_st=$(jget data.status <<<"$go_hs2")"
+  if [[ "$(jget data.status <<<"$php_hs2")" != "$(jget data.status <<<"$go_hs2")" || "$(jget data.status <<<"$go_hs2")" != "2" ]]; then
+    echo "  php_hs2=${php_hs2:0:200}"
+    echo "  go_hs2=${go_hs2:0:200}"
+    fail=$((fail + 1))
+  fi
+  restore_hs="${hs_old:-0}"
+  curl -sS -X POST "$PHP/tenantapi/setting.hot_search/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d "{\"status\":$restore_hs,\"data\":[]}" >/dev/null || true
 fi
 
 if [[ -n "$GO" ]]; then

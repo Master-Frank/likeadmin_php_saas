@@ -279,7 +279,7 @@ func GeneratorPreview(c *gin.Context) {
 	id := httpx.Uint(c, "id")
 	var t model.GenerateTable
 	if bootstrap.DB.First(&t, id).Error != nil {
-		response.Fail(c, "记录不存在")
+		response.Fail(c, "信息不存在")
 		return
 	}
 	var cols []model.GenerateColumn

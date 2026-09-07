@@ -132,11 +132,7 @@ func FileDelCate(c *gin.Context) {
 		return
 	}
 	id := httpx.Uint(c, "id")
-	var cate model.FileCate
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&cate).Error != nil {
-		response.Fail(c, "文件分类不存在")
-		return
-	}
+	// PHP FileLogic::delCate updates by id with no existence check.
 	ids := filesvc.CateIDsInclusive(bootstrap.DB, &model.FileCate{}, id, 0)
 	var files []model.File
 	bootstrap.DB.Where("cid IN ? AND delete_time IS NULL", ids).Find(&files)
