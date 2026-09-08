@@ -2,18 +2,15 @@ package upgrade
 
 import (
 	"archive/zip"
-	"context"
 	"crypto/md5"
 	"database/sql"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
@@ -28,32 +25,17 @@ import (
 const openBasedirMsg = "请临时关闭服务器本站点的跨域攻击设置，并重启 nginx、PHP，具体参考相关升级文档"
 
 // CheckOpenBasedir mirrors PHP UpgradeLogic::upgrade open_basedir precheck.
+// Go-only deploys have no php.ini, so this reads LIKEADMIN_OPEN_BASEDIR /
+// PHP_OPEN_BASEDIR only — it does not exec `php -r ini_get(...)`.
 func CheckOpenBasedir() error {
 	basedir := os.Getenv("LIKEADMIN_OPEN_BASEDIR")
 	if basedir == "" {
 		basedir = os.Getenv("PHP_OPEN_BASEDIR")
 	}
-	if basedir == "" {
-		basedir = phpOpenBasedir()
-	}
 	if strings.Contains(basedir, "server") {
 		return errStatus(openBasedirMsg)
 	}
 	return nil
-}
-
-func phpOpenBasedir() string {
-	php, err := exec.LookPath("php")
-	if err != nil {
-		return ""
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, php, "-r", `echo ini_get("open_basedir");`).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
 }
 
 // ApplyPackage downloads, extracts, and applies a likeadmin upgrade zip (SQL / menu / files).
@@ -186,7 +168,36 @@ func downFile(remote, saveDir string) (string, error) {
 		_ = os.Remove(path)
 		return "", errStatus("获取文件错误")
 	}
+	// A 200 HTML/JSON error page must fail here (获取文件错误), not later at unzip.
+	head := make([]byte, 4)
+	hf, err := os.Open(path)
+	if err != nil {
+		_ = os.Remove(path)
+		return "", errStatus("获取文件错误")
+	}
+	_, _ = io.ReadFull(hf, head)
+	_ = hf.Close()
+	if !isZipMagic(head) {
+		_ = os.Remove(path)
+		return "", errStatus("获取文件错误")
+	}
 	return path, nil
+}
+
+func isZipMagic(b []byte) bool {
+	if len(b) < 4 || b[0] != 'P' || b[1] != 'K' {
+		return false
+	}
+	switch {
+	case b[2] == 3 && b[3] == 4: // local file header
+		return true
+	case b[2] == 5 && b[3] == 6: // empty archive
+		return true
+	case b[2] == 7 && b[3] == 8: // spanned
+		return true
+	default:
+		return false
+	}
 }
 
 type applyError string

@@ -1,6 +1,7 @@
 package upgrade
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,12 +19,16 @@ import (
 
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 
-// downloadClient matches PHP UpgradeLogic::downFile curl: no FOLLOWLOCATION.
+// downloadClient matches PHP UpgradeLogic::downFile curl:
+// CURLOPT_SSL_VERIFYPEER=false and no FOLLOWLOCATION.
 // A 302 HTML interstitial must not be saved as the upgrade zip.
 var downloadClient = &http.Client{
 	Timeout: 20 * time.Second,
 	CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
+	},
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	},
 }
 

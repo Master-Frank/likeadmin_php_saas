@@ -264,3 +264,44 @@ func TestResolvePackageEmpty(t *testing.T) {
 		t.Fatalf("empty: %v", err)
 	}
 }
+
+func TestDownFileRejectsHTML200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("<!doctype html><html>license denied</html>"))
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := resolvePackage(srv.URL+"/pkg.zip", t.TempDir()); err == nil || !strings.Contains(err.Error(), "获取文件错误") {
+		t.Fatalf("html 200: %v", err)
+	}
+}
+
+func TestDownFileAcceptsSelfSignedTLS(t *testing.T) {
+	body, err := os.ReadFile(writeZip(t, map[string]string{"project/server/ok.txt": "tls"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	got, err := resolvePackage(srv.URL+"/pkg.zip", t.TempDir())
+	if err != nil {
+		t.Fatalf("self-signed TLS should match PHP CURLOPT_SSL_VERIFYPEER=false: %v", err)
+	}
+	raw, err := os.ReadFile(got)
+	if err != nil || string(raw) != string(body) {
+		t.Fatalf("tls bytes mismatch err=%v", err)
+	}
+}
+
+func TestIsZipMagic(t *testing.T) {
+	if isZipMagic([]byte("PK\x03\x04")) && isZipMagic([]byte("PK\x05\x06")) && isZipMagic([]byte("PK\x07\x08")) {
+		if isZipMagic([]byte("<htm")) || isZipMagic([]byte("PK")) || isZipMagic(nil) {
+			t.Fatal("non-zip accepted")
+		}
+		return
+	}
+	t.Fatal("zip magic rejected")
+}
