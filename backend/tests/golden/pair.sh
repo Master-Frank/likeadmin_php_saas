@@ -529,7 +529,7 @@ print((ls[0] if ls else {}).get("id") or 0)
       fail=$((fail + 1))
     fi
     if [[ -n "${uid:-}" ]] && command -v mysql >/dev/null; then
-      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
       now="$(date +%s)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,1,$now)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,999,$now)"
@@ -719,7 +719,7 @@ except Exception:
     fail=$((fail + 1))
   fi
   if command -v mysql >/dev/null; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     now="$(date +%s)"
     if [[ -n "${cid:-}" && "$cid" != "0" ]]; then
       art_title="pairart$now"
@@ -1581,7 +1581,7 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
     fail=$((fail + 1))
   fi
   if command -v mysql >/dev/null; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_tenant_admin (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES (1,0,'dupadm','dupadm$ts','x','',0,UNIX_TIMESTAMP())"
     go_tadup="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":1,\"tenant_id\":1,\"name\":\"超级管理员\",\"disable\":0,\"multipoint_login\":1,\"role_id\":[],\"account\":\"dupadm$ts\"}")"
     echo "tenant_admin_edit_dup go_msg=$(jget msg <<<"$go_tadup")"
@@ -2024,7 +2024,7 @@ print(json.dumps({
       fail=$((fail + 1))
     fi
     if command -v mysql >/dev/null; then
-      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
       self_uid="$(mysqlq "SELECT id FROM la_user WHERE account='$acc' AND delete_time IS NULL LIMIT 1")"
       other_uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL AND id<>IFNULL('$self_uid',0) ORDER BY id LIMIT 1")"
       now="$(date +%s)"
@@ -3218,7 +3218,7 @@ print("ok" if php and go and not diff else (",".join(diff) if diff else "empty")
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     mysqlq "UPDATE la_user SET user_money = user_money + 20, total_recharge_amount = total_recharge_amount + 20 WHERE id=$uid"
@@ -3387,7 +3387,7 @@ import json,sys
 d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
 print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
 ' "$gsn" <<<"$glist")"
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   tpl_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   got_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=$gid AND delete_time IS NULL ORDER BY id LIMIT 1")"
   echo "shared_dept_copy id=$gid tpl=$tpl_dept got=$got_dept"
@@ -3438,7 +3438,7 @@ if [[ "$(jcode <<<"$go_ea1")" != "1" || "$(jcode <<<"$go_ea2")" != "1" ]]; then
   fail=$((fail + 1))
 fi
 if command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   for sn in "$ea1" "$ea2"; do
     eid="$(mysqlq "SELECT id FROM la_tenant WHERE sn='$sn' AND delete_time IS NULL LIMIT 1")"
     if [[ -n "$eid" && "$eid" != "0" ]]; then
@@ -3448,7 +3448,7 @@ if command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   now="$(date +%s)"
   leak_sn="9${now: -8}"
   mysqlq "INSERT INTO la_article_cate (tenant_id,name,sort,is_show,create_time) VALUES (999,'paircateleak',0,1,$now)"
@@ -3573,7 +3573,7 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     now="$(date +%s)"
@@ -3665,7 +3665,7 @@ if [[ "$(jget data.file_name <<<"$php_lexn")" != "自定义导出" || "$(jget da
   fail=$((fail + 1))
 fi
 if command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   curl -sS "$GO/platformapi/auth.admin/detail?id=1" -H "token: $TOKEN" >/dev/null
   go_logu="$(mysqlq "SELECT url FROM la_operation_log WHERE url LIKE '%/platformapi/auth.admin/detail%' ORDER BY id DESC LIMIT 1")"
   echo "oplog_abs_url=$go_logu"
@@ -3683,7 +3683,7 @@ if [[ "$(jget msg <<<"$php_pcp")" != "参数异常" || "$(jget msg <<<"$go_pcp")
   fail=$((fail + 1))
 fi
 if [[ -n "${TENANT_HOST:-}" && -n "${TENANT_TOKEN:-}" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   now="$(date +%s)"
   mysqlq "INSERT INTO la_operation_log (admin_id,admin_name,account,action,type,url,params,result,ip,create_time) VALUES (1,'admin','admin','pair-plat-leak','GET','/platformapi/auth.admin/lists','{}','{}','127.0.0.1',$now)"
   go_tlog="$(curl -sS "$GO/tenantapi/setting.system.log/lists?page_size=50" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -3724,7 +3724,7 @@ if [[ -n "$go_exu" ]]; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     now="$(date +%s)"
@@ -3808,7 +3808,7 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     if [[ "$aid1" != "1" ]]; then
       fail=$((fail + 1))
     fi
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_tenant_admin_$ssn (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES ($sid,0,'nroot','nroot$ssn','x','',0,UNIX_TIMESTAMP())"
     nrid="$(mysqlq "SELECT id FROM la_tenant_admin_$ssn WHERE account='nroot$ssn' LIMIT 1")"
     if [[ -n "$nrid" && "$nrid" != "0" ]]; then
@@ -3830,7 +3830,7 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     fi
   fi
   if command -v mysql >/dev/null && [[ "$sid" != "0" ]]; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_user_$ssn (tenant_id,sn,account,nickname,create_time) VALUES ($sid,900001,'shu$ssn','sharduser',UNIX_TIMESTAMP())"
     go_sul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists?tenant_id=$sid" -H "token: $TOKEN")"
     go_suln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_sul")"
@@ -3854,9 +3854,9 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
       fail=$((fail + 1))
     fi
     now="$(date +%s)"
-    mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30)))"
-    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'"
-    mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+    mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30))) ON DUPLICATE KEY UPDATE token='expiredshard', expire_time=$((now-30))" || true
+    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'" || true
+    mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)" || true
     curl -sS "$GO/crontab" >/dev/null || true
     left_sess="$(mysqlq "SELECT COUNT(*) FROM la_user_session_$ssn WHERE token='expiredshard'")"
     echo "shard_session_cron left=$left_sess"
@@ -3922,7 +3922,7 @@ if [[ "$(jget msg <<<"$go_iq")" != *已经安装* && "$(jget msg <<<"$go_iq")" !
 fi
 
 if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   mysqlq "CREATE TABLE IF NOT EXISTS la_pair_gencrud (
     id int unsigned NOT NULL AUTO_INCREMENT,
@@ -4148,7 +4148,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   mobile="13900${ts: -6}"
   now="$(date +%s)"
@@ -4186,7 +4186,7 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   now="$(date +%s)"
   insert_sms() {
