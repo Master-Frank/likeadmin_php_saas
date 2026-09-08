@@ -169,8 +169,14 @@ func TestUserPasswordCheck(t *testing.T) {
 	if UserPasswordCheck(map[string]any{"password": "abc12", "password_confirm": "abc12"}) != "密码须在6-25位之间" {
 		t.Fatal("length")
 	}
-	if UserPasswordCheck(map[string]any{"password": "abcdef", "password_confirm": "abcdef"}) != "密码须为字母数字组合" {
-		t.Fatal("alphaNum")
+	if UserPasswordCheck(map[string]any{"password": "abcdef", "password_confirm": "abcdef"}) != "" {
+		t.Fatal("PHP alphaNum allows all-letter passwords")
+	}
+	if UserPasswordCheck(map[string]any{"password": "123456", "password_confirm": "123456"}) != "" {
+		t.Fatal("PHP alphaNum allows all-digit passwords")
+	}
+	if UserPasswordCheck(map[string]any{"password": "abc-def", "password_confirm": "abc-def"}) != "密码须为字母数字组合" {
+		t.Fatal("symbols must fail")
 	}
 	if UserPasswordCheck(map[string]any{"password": "abc123"}) != "请确认密码" {
 		t.Fatal("confirm required")

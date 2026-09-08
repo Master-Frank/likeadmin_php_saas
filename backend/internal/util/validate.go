@@ -187,19 +187,12 @@ func UserPasswordCheck(p map[string]any) string {
 	if n := len(pwd); n < 6 || n > 20 {
 		return "密码须在6-25位之间"
 	}
-	var letter, digit bool
+	// PHP PasswordValidate is length:6,20|alphaNum (ctype_alnum).
+	// All-letter / all-digit passwords are valid; symbols are not.
 	for _, r := range pwd {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
-			letter = true
-		case r >= '0' && r <= '9':
-			digit = true
-		default:
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
 			return "密码须为字母数字组合"
 		}
-	}
-	if !letter || !digit {
-		return "密码须为字母数字组合"
 	}
 	if _, ok := p["password_confirm"]; !ok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
 		return "请确认密码"

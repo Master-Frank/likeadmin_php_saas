@@ -208,6 +208,21 @@ func TestPreviewExplicitHasOne(t *testing.T) {
 	}
 }
 
+func TestPreviewEmptyRelationKeysStayEmpty(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.Relations = `[{"name":"owner","model":"User","type":"has_one","local_key":"","foreign_key":""}]`
+	files := Build(tbl, cols)
+	if !strings.Contains(files[2].Content, "hasOne") {
+		t.Fatalf("has_one stub missing: %s", files[2].Content)
+	}
+	if strings.Contains(files[2].Content, "hasOne(User::class, 'id', 'id')") {
+		t.Fatalf("empty keys must not default to id: %s", files[2].Content)
+	}
+	if !strings.Contains(files[2].Content, "hasOne(User::class, '', '')") && !strings.Contains(files[2].Content, "hasOne(User::class, \"\", \"\")") {
+		t.Fatalf("PHP ModelGenerator writes empty keys as-is: %s", files[2].Content)
+	}
+}
+
 func TestClearRuntimeRemovesCurdZip(t *testing.T) {
 	root := RuntimeDir()
 	if err := os.MkdirAll(filepath.Join(root, "generate", "php"), 0755); err != nil {

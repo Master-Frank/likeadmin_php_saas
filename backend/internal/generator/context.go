@@ -95,8 +95,8 @@ func newCtx(t model.GenerateTable, cols []model.GenerateColumn, now time.Time) *
 				"name":        util.ToString(m["name"]),
 				"model":       util.ToString(m["model"]),
 				"type":        util.ToString(m["type"]),
-				"local_key":   firstNonEmpty(util.ToString(m["local_key"]), "id"),
-				"foreign_key": firstNonEmpty(util.ToString(m["foreign_key"]), "id"),
+				"local_key":   util.ToString(m["local_key"]),
+				"foreign_key": util.ToString(m["foreign_key"]),
 			})
 		}
 	}
@@ -239,15 +239,6 @@ func (c *ctx) menuTable() string {
 
 func (c *ctx) replace(tpl string, pairs []string) string {
 	return strings.NewReplacer(pairs...).Replace(tpl)
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func phpDir(parts ...string) string {

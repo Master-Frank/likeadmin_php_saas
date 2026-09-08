@@ -10,11 +10,17 @@ import (
 type CronExpr struct {
 	min, hour, dom, month, dow []int
 	domStar, dowStar           bool
+	domLast                    bool
+	domW                       int // nearest weekday to this DOM; 0 unused
+	dowLast                    int // last weekday 0-6; -1 unused
+	dowNth                     int // 1-5; 0 unused
+	dowNthWeekday              int // 0-6
 }
 
 func ParseCron(expr string) (*CronExpr, error) {
 	expr = expandCronMacros(expr)
 	parts := strings.Fields(strings.TrimSpace(expr))
+	// This dragonmantank build has no YearField; a 6th part fails setPart(5).
 	if len(parts) != 5 {
 		return nil, fmt.Errorf("定时任务运行规则错误")
 	}
@@ -41,33 +47,21 @@ func ParseCron(expr string) (*CronExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	dom, err := parseCronField(parts[2], 1, 31)
-	if err != nil {
-		return nil, err
-	}
 	month, err := parseCronField(parts[3], 1, 12)
 	if err != nil {
 		return nil, err
 	}
-	dow, err := parseCronField(parts[4], 0, 7)
-	if err != nil {
+	e := &CronExpr{
+		min: min, hour: hour, month: month,
+		domStar: domStar, dowStar: dowStar, dowLast: -1,
+	}
+	if err := parseDOM(parts[2], e); err != nil {
 		return nil, err
 	}
-	norm := make([]int, 0, len(dow))
-	seen := map[int]bool{}
-	for _, d := range dow {
-		if d == 7 {
-			d = 0
-		}
-		if !seen[d] {
-			seen[d] = true
-			norm = append(norm, d)
-		}
+	if err := parseDOW(parts[4], e); err != nil {
+		return nil, err
 	}
-	return &CronExpr{
-		min: min, hour: hour, dom: dom, month: month, dow: norm,
-		domStar: domStar, dowStar: dowStar,
-	}, nil
+	return e, nil
 }
 
 func ValidCron(expr string) bool {
@@ -79,12 +73,33 @@ func (e *CronExpr) Match(t time.Time) bool {
 	if !containsInt(e.min, t.Minute()) || !containsInt(e.hour, t.Hour()) || !containsInt(e.month, int(t.Month())) {
 		return false
 	}
-	domOK := containsInt(e.dom, t.Day())
-	dowOK := containsInt(e.dow, int(t.Weekday()))
+	domOK := e.matchDOM(t)
+	dowOK := e.matchDOW(t)
 	if e.domStar || e.dowStar {
 		return (e.domStar || domOK) && (e.dowStar || dowOK)
 	}
 	return domOK || dowOK
+}
+
+func (e *CronExpr) matchDOM(t time.Time) bool {
+	if e.domLast {
+		return t.Day() == lastDayOfMonth(t)
+	}
+	if e.domW > 0 {
+		return t.Day() == nearestWeekday(t.Year(), t.Month(), e.domW)
+	}
+	return containsInt(e.dom, t.Day())
+}
+
+func (e *CronExpr) matchDOW(t time.Time) bool {
+	wd := int(t.Weekday())
+	if e.dowLast >= 0 {
+		return wd == e.dowLast && lastDayOfMonth(t)-t.Day() < 7
+	}
+	if e.dowNth > 0 {
+		return wd == e.dowNthWeekday && t.Day() == nthWeekdayDate(t.Year(), t.Month(), time.Weekday(e.dowNthWeekday), e.dowNth)
+	}
+	return containsInt(e.dow, wd)
 }
 
 func (e *CronExpr) Next(from time.Time) time.Time {
@@ -142,6 +157,118 @@ func CronDue(expr string, last *int64, now int64) bool {
 		return false
 	}
 	return !next.After(time.Unix(now, 0))
+}
+
+func parseDOM(field string, e *CronExpr) error {
+	if field == "L" {
+		e.domLast = true
+		return nil
+	}
+	if strings.Contains(field, ",") && (strings.Contains(field, "W") || strings.Contains(field, "L")) {
+		return fmt.Errorf("定时任务运行规则错误")
+	}
+	if strings.HasSuffix(field, "W") {
+		n, ok := cronFieldValue(strings.TrimSuffix(field, "W"), 1, 31)
+		if !ok || n < 1 || n > 31 {
+			return fmt.Errorf("定时任务运行规则错误")
+		}
+		e.domW = n
+		return nil
+	}
+	vals, err := parseCronField(field, 1, 31)
+	if err != nil {
+		return err
+	}
+	e.dom = vals
+	return nil
+}
+
+func parseDOW(field string, e *CronExpr) error {
+	if i := strings.Index(field, "#"); i >= 0 {
+		wd, ok := cronFieldValue(field[:i], 0, 7)
+		if !ok {
+			return fmt.Errorf("定时任务运行规则错误")
+		}
+		nth, err := strconv.Atoi(field[i+1:])
+		if err != nil || nth < 1 || nth > 5 {
+			return fmt.Errorf("定时任务运行规则错误")
+		}
+		if wd == 7 {
+			wd = 0
+		}
+		e.dowNth = nth
+		e.dowNthWeekday = wd
+		return nil
+	}
+	if strings.HasSuffix(field, "L") && field != "L" {
+		wd, ok := cronFieldValue(strings.TrimSuffix(field, "L"), 0, 7)
+		if !ok {
+			return fmt.Errorf("定时任务运行规则错误")
+		}
+		if wd == 7 {
+			wd = 0
+		}
+		e.dowLast = wd
+		return nil
+	}
+	vals, err := parseCronField(field, 0, 7)
+	if err != nil {
+		return err
+	}
+	norm := make([]int, 0, len(vals))
+	seen := map[int]bool{}
+	for _, d := range vals {
+		if d == 7 {
+			d = 0
+		}
+		if !seen[d] {
+			seen[d] = true
+			norm = append(norm, d)
+		}
+	}
+	e.dow = norm
+	return nil
+}
+
+func lastDayOfMonth(t time.Time) int {
+	return time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, t.Location()).Day()
+}
+
+func nearestWeekday(year int, month time.Month, day int) int {
+	last := time.Date(year, month+1, 0, 0, 0, 0, 0, time.Local).Day()
+	if day < 1 || day > last {
+		return 0
+	}
+	target := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+	if target.Weekday() != time.Saturday && target.Weekday() != time.Sunday {
+		return day
+	}
+	for _, i := range []int{-1, 1, -2, 2} {
+		adj := day + i
+		if adj < 1 || adj > last {
+			continue
+		}
+		t := time.Date(year, month, adj, 0, 0, 0, 0, time.Local)
+		if t.Weekday() != time.Saturday && t.Weekday() != time.Sunday {
+			return adj
+		}
+	}
+	return 0
+}
+
+func nthWeekdayDate(year int, month time.Month, weekday time.Weekday, nth int) int {
+	last := time.Date(year, month+1, 0, 0, 0, 0, 0, time.Local).Day()
+	count := 0
+	for d := 1; d <= last; d++ {
+		t := time.Date(year, month, d, 0, 0, 0, 0, time.Local)
+		if t.Weekday() == weekday {
+			count++
+			if count == nth {
+				return d
+			}
+		}
+	}
+	return 0
 }
 
 func parseCronField(field string, min, max int) ([]int, error) {
