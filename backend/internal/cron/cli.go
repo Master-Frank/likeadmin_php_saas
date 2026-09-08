@@ -8,21 +8,34 @@ import (
 
 // CLI extras that work from cmd/think but are not Register()'d jobs
 // (crontab would recurse; upgrade-local lives in cmd/think).
-var cliExtraNames = []string{"crontab", "upgrade-local"}
+var cliExtraNames = []string{"crontab", "upgrade-local", "run"}
 
 var commandDescs = map[string]string{
+	"build":                "Build App Dirs",
 	"cache":                "Flush application cache",
 	"cancel_unpaid_orders": "Cancel unpaid recharge orders",
 	"clear":                "Clear runtime file",
 	"crontab":              "Run scheduled tasks once",
 	"help":                 "Displays help for a command",
 	"list":                 "Lists commands",
+	"make:command":         "Create a new command class",
+	"make:controller":      "Create a new resource controller class",
+	"make:event":           "Create a new event class",
+	"make:listener":        "Create a new listener class",
+	"make:middleware":      "Create a new middleware class",
+	"make:model":           "Create a new model class",
+	"make:service":         "Create a new Service class",
+	"make:subscribe":       "Create a new subscribe class",
+	"make:validate":        "Create a validate class",
 	"optimize:route":       "Build route cache",
 	"optimize:schema":      "Build schema cache",
 	"query_refund":         "Query refund status",
 	"route:list":           "List application routes",
+	"run":                  "Go HTTP server (php think run drop-in)",
+	"service:discover":     "Discover Services for ThinkPHP",
 	"session":              "Expire stale login sessions",
 	"upgrade-local":        "Apply a local upgrade zip",
+	"vendor:publish":       "Publish any publishable assets from vendor packages",
 	"version":              "Show think framework version",
 }
 
@@ -38,12 +51,21 @@ func allCLINames() []string {
 			seen[n] = true
 		}
 	}
+	for _, n := range hookCLINames() {
+		if !seen[n] {
+			out = append(out, n)
+			seen[n] = true
+		}
+	}
 	sort.Strings(out)
 	return out
 }
 
 func commandDesc(name string) string {
 	if d := commandDescs[name]; d != "" {
+		return d
+	}
+	if d := hookDescription(name); d != "" {
 		return d
 	}
 	return ""
@@ -125,6 +147,11 @@ func runHelp(args []string) string {
 				key = n
 				break
 			}
+		}
+	}
+	if !known {
+		if _, ok := lookupThinkHook(key); ok {
+			known = true
 		}
 	}
 	if !known {

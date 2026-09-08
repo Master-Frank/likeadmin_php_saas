@@ -37,9 +37,13 @@ go run ./cmd/think            # 等价 php think，列出已迁命令
 go run ./cmd/think help clear
 go run ./cmd/think crontab    # 等价 php think crontab，只跑一轮
 go run ./cmd/think query_refund
+go run ./cmd/think run --port 8000
+go run ./cmd/think make:controller tenantapi@Demo
 ```
 
 未知 `la_dev_crontab.command` 记「未定义的定时任务命令」，不再回落 `php think`。
+仓库内 `make:*` / `vendor:publish` / `service:discover` / `build` 已迁；`think run` 起 Go HTTP（默认 `:8000`）。
+第三方仓库命令写 `configs/think-commands.yaml`（绝对路径、禁止 php），或 `cron.Register`。
 
 离线升级包（已下载的 zip，无需 mddai.cn）：
 

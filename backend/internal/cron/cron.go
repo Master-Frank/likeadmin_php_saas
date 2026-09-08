@@ -104,6 +104,18 @@ func registerBuiltins() {
 	Register("optimize:schema", runOptimizeSchema)
 	Register("help", runHelp)
 	Register("list", runList)
+	Register("vendor:publish", runVendorPublish)
+	Register("service:discover", runServiceDiscover)
+	Register("build", runBuild)
+	Register("make:controller", makeRunner("controller"))
+	Register("make:model", makeRunner("model"))
+	Register("make:validate", makeRunner("validate"))
+	Register("make:middleware", makeRunner("middleware"))
+	Register("make:event", makeRunner("event"))
+	Register("make:listener", makeRunner("listener"))
+	Register("make:subscribe", makeRunner("subscribe"))
+	Register("make:service", makeRunner("service"))
+	Register("make:command", makeRunner("command"))
 }
 
 // Register adds a crontab / `think` command. Unknown warehouse commands stay
@@ -168,6 +180,9 @@ func runCommand(item model.Crontab) string {
 	fn := commands[cmd]
 	commandMu.RUnlock()
 	if fn == nil {
+		if msg, ok := runThinkHook(cmd, args); ok {
+			return msg
+		}
 		log.Printf("crontab skip unsupported command %s", cmd)
 		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
 	}

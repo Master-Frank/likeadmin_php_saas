@@ -18,6 +18,7 @@
 | 平台字典 | dict_type 校验 + add/edit/delete | 对拍已过 |
 | 用户端 | `/api` config/decorate/article/search；注册+登录+center/info | 对拍已过（含注册重复、登录后 lists） |
 | 定时/安装 | crontab 执行、`/install` 导入 like.sql 并写 lock/.env | 安装导入已实现；本库 lock 已存在未重装 |
+| Think CLI | 仓库内 `php think` 命令（含 make/publish/discover/build/run） | 已迁；第三方用 yaml 钩子或 `cron.Register`，不 exec PHP |
 | 全量切流 | `cmd/strangler` API→Go，静态/SPA 出自 public；nginx :8091 | 直连/切流/Nginx 对拍 failed=0；PHP 回落默认关 |
 
 允许差异：新签发 `token`、键顺序、工作台随机演示曲线。不允许：`code`/`show`/`msg` 语义、列表字段、空 `data` 形态、时间格式。

@@ -12,7 +12,7 @@ import (
 
 func TestThinkListAndHelp(t *testing.T) {
 	raw := formatCommandList(true, "")
-	for _, name := range []string{"cache", "clear", "help", "list", "crontab", "version"} {
+	for _, name := range []string{"cache", "clear", "help", "list", "crontab", "version", "run", "make:controller", "vendor:publish", "service:discover", "build"} {
 		found := false
 		for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
 			if line == name {
