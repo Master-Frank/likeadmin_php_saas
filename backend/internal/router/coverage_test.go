@@ -65,7 +65,7 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"recharge.recharge/getconfig", "recharge.recharge/setconfig",
 	}
 	tenant := []string{
-		"login/account", "login/logout", "config/getconfig", "workbench/index",
+		"login/account", "login/logout", "config/getconfig", "config/dict", "workbench/index",
 		"auth.admin/lists", "auth.admin/all", "auth.admin/myself",
 		"auth.admin/add", "auth.admin/edit", "auth.admin/delete", "auth.admin/detail", "auth.admin/editself",
 		"auth.menu/lists", "auth.menu/add", "auth.menu/edit", "auth.menu/delete", "auth.menu/detail",
@@ -80,7 +80,9 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"article.articlecate/all",
 		"decorate.data/article", "decorate.data/pc",
 		"setting.web.web_setting/getcopyright", "setting.web.web_setting/getsitestatistics",
-		"setting.user.user/getconfig", "setting.storage/lists", "setting.storage/detail",
+		"setting.user.user/getconfig", "setting.user.user/setconfig",
+		"setting.user.user/getregisterconfig", "setting.user.user/setregisterconfig",
+		"setting.storage/lists", "setting.storage/detail",
 		"setting.storage/setup", "setting.storage/change",
 		"setting.dict.dict_type/add", "setting.dict.dict_type/edit", "setting.dict.dict_type/delete",
 		"setting.dict.dict_data/add", "setting.dict.dict_data/edit", "setting.dict.dict_data/delete",

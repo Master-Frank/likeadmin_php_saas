@@ -194,6 +194,8 @@ if [[ -n "$TENANT_HOST" ]]; then
     /tenantapi/channel.app_setting/getConfig
     /tenantapi/channel.web_page_setting/getConfig
     /tenantapi/setting.user.user/getConfig
+    /tenantapi/setting.user.user/getRegisterConfig
+    /tenantapi/config/dict?type=sex
     /tenantapi/setting.web.web_setting/getCopyright
     /tenantapi/notice.sms_config/getConfig
   )
@@ -1014,6 +1016,14 @@ print(walk((d.get("data") or {}).get("lists") or []))
     echo "  go_fdel=${go_fdel:0:200}"
     fail=$((fail + 1))
   fi
+  php_pfdel="$(curl -sS -X POST "$PHP/platformapi/file/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999]}')"
+  go_pfdel="$(curl -sS -X POST "$GO/platformapi/file/delete" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"ids":[99999999]}')"
+  echo "platform_file_delete_missing php_msg=$(jget msg <<<"$php_pfdel") go_msg=$(jget msg <<<"$go_pfdel")"
+  if [[ "$(jget msg <<<"$php_pfdel")" != "$(jget msg <<<"$go_pfdel")" ]]; then
+    echo "  php_pfdel=${php_pfdel:0:200}"
+    echo "  go_pfdel=${go_pfdel:0:200}"
+    fail=$((fail + 1))
+  fi
   php_frn="$(curl -sS -X POST "$PHP/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
   go_frn="$(curl -sS -X POST "$GO/tenantapi/file/rename" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999,"name":"pairmissing"}')"
   echo "file_rename_missing php_msg=$(jget msg <<<"$php_frn") go_msg=$(jget msg <<<"$go_frn")"
@@ -1449,6 +1459,44 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   echo "register_way_bad php_msg=$(jget msg <<<"$php_rw") go_msg=$(jget msg <<<"$go_rw")"
   if [[ "$(jget msg <<<"$php_rw")" != "$(jget msg <<<"$go_rw")" ]]; then
     fail=$((fail + 1))
+  fi
+  if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
+    php_tdict="$(curl -sS "$PHP/tenantapi/config/dict?type=sex" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_tdict="$(curl -sS "$GO/tenantapi/config/dict?type=sex" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_tdictk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(d.get("code"), ",".join(sorted(data if isinstance(data, dict) else {})))' <<<"$php_tdict")"
+    go_tdictk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); data=d.get("data") or {}; print(d.get("code"), ",".join(sorted(data if isinstance(data, dict) else {})))' <<<"$go_tdict")"
+    echo "tenant_dict php=$php_tdictk go=$go_tdictk"
+    if [[ "$php_tdictk" != "$go_tdictk" ]]; then
+      echo "  php_tdict=${php_tdict:0:240}"
+      echo "  go_tdict=${go_tdict:0:240}"
+      fail=$((fail + 1))
+    fi
+    php_treg="$(curl -sS "$PHP/tenantapi/setting.user.user/getRegisterConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    go_treg="$(curl -sS "$GO/tenantapi/setting.user.user/getRegisterConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+    php_tregk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("code"), ",".join(sorted((d.get("data") or {}).keys())))' <<<"$php_treg")"
+    go_tregk="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("code"), ",".join(sorted((d.get("data") or {}).keys())))' <<<"$go_treg")"
+    echo "tenant_register_get php=$php_tregk go=$go_tregk"
+    if [[ "$php_tregk" != "$go_tregk" ]]; then
+      echo "  php_treg=${php_treg:0:240}"
+      echo "  go_treg=${go_treg:0:240}"
+      fail=$((fail + 1))
+    fi
+    php_tav="$(curl -sS -X POST "$PHP/tenantapi/setting.user.user/setconfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+    go_tav="$(curl -sS -X POST "$GO/tenantapi/setting.user.user/setconfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{}')"
+    echo "tenant_user_avatar_bad php_msg=$(jget msg <<<"$php_tav") go_msg=$(jget msg <<<"$go_tav")"
+    if [[ "$(jget msg <<<"$php_tav")" != "$(jget msg <<<"$go_tav")" ]]; then
+      echo "  php_tav=${php_tav:0:200}"
+      echo "  go_tav=${go_tav:0:200}"
+      fail=$((fail + 1))
+    fi
+    php_trw="$(curl -sS -X POST "$PHP/tenantapi/setting.user.user/setRegisterConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"login_way":"1"}')"
+    go_trw="$(curl -sS -X POST "$GO/tenantapi/setting.user.user/setRegisterConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"login_way":"1"}')"
+    echo "tenant_register_way_bad php_msg=$(jget msg <<<"$php_trw") go_msg=$(jget msg <<<"$go_trw")"
+    if [[ "$(jget msg <<<"$php_trw")" != "$(jget msg <<<"$go_trw")" ]]; then
+      echo "  php_trw=${php_trw:0:200}"
+      echo "  go_trw=${go_trw:0:200}"
+      fail=$((fail + 1))
+    fi
   fi
   php_tr="$(curl -sS -X POST "$PHP/platformapi/setting.transaction_settings/setconfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
   go_tr="$(curl -sS -X POST "$GO/platformapi/setting.transaction_settings/setconfig" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{}')"
@@ -4435,6 +4483,22 @@ print(",".join(sorted(ls[0])) if ls else "")
     echo "  go_jebad=${go_jebad:0:200}"
     fail=$((fail + 1))
   fi
+  php_tdebad="$(curl -sS -X POST "$PHP/tenantapi/dept.dept/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_tdebad="$(curl -sS -X POST "$GO/tenantapi/dept.dept/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "tenant_dept_edit_bad_id php_msg=$(jget msg <<<"$php_tdebad") go_msg=$(jget msg <<<"$go_tdebad")"
+  if [[ "$(jget msg <<<"$php_tdebad")" != "$(jget msg <<<"$go_tdebad")" ]]; then
+    echo "  php_tdebad=${php_tdebad:0:200}"
+    echo "  go_tdebad=${go_tdebad:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tjebad="$(curl -sS -X POST "$PHP/tenantapi/dept.jobs/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  go_tjebad="$(curl -sS -X POST "$GO/tenantapi/dept.jobs/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
+  echo "tenant_jobs_edit_bad_id php_msg=$(jget msg <<<"$php_tjebad") go_msg=$(jget msg <<<"$go_tjebad")"
+  if [[ "$(jget msg <<<"$php_tjebad")" != "$(jget msg <<<"$go_tjebad")" ]]; then
+    echo "  php_tjebad=${php_tjebad:0:200}"
+    echo "  go_tjebad=${go_tjebad:0:200}"
+    fail=$((fail + 1))
+  fi
   php_gebad="$(curl -sS -X POST "$PHP/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
   go_gebad="$(curl -sS -X POST "$GO/platformapi/tools.generator/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
   echo "generator_edit_bad_id php_msg=$(jget msg <<<"$php_gebad") go_msg=$(jget msg <<<"$go_gebad")"
@@ -5338,6 +5402,22 @@ print(first_m(json.load(sys.stdin).get("data") or []))
   if [[ "$(jcode <<<"$php_tcc")" != "$(jcode <<<"$go_tcc")" || "$(jget msg <<<"$php_tcc")" != "$(jget msg <<<"$go_tcc")" || "$(jget show <<<"$php_tcc")" != "$(jget show <<<"$go_tcc")" ]]; then
     echo "  php_tcc=${php_tcc:0:200}"
     echo "  go_tcc=${go_tcc:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_plo="$(curl -sS -X POST "$PHP/platformapi/login/logout" -H "token: $TOKEN")"
+  go_plo="$(curl -sS -X POST "$GO/platformapi/login/logout" -H "token: $TOKEN")"
+  echo "platform_logout php_code=$(jcode <<<"$php_plo") go_code=$(jcode <<<"$go_plo") php_msg=$(jget msg <<<"$php_plo") go_msg=$(jget msg <<<"$go_plo")"
+  if [[ "$(jcode <<<"$php_plo")" != "$(jcode <<<"$go_plo")" || "$(jget msg <<<"$php_plo")" != "$(jget msg <<<"$go_plo")" ]]; then
+    echo "  php_plo=${php_plo:0:200}"
+    echo "  go_plo=${go_plo:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tlo="$(curl -sS -X POST "$PHP/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tlo="$(curl -sS -X POST "$GO/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_logout php_code=$(jcode <<<"$php_tlo") go_code=$(jcode <<<"$go_tlo") php_msg=$(jget msg <<<"$php_tlo") go_msg=$(jget msg <<<"$go_tlo")"
+  if [[ "$(jcode <<<"$php_tlo")" != "$(jcode <<<"$go_tlo")" || "$(jget msg <<<"$php_tlo")" != "$(jget msg <<<"$go_tlo")" ]]; then
+    echo "  php_tlo=${php_tlo:0:200}"
+    echo "  go_tlo=${go_tlo:0:200}"
     fail=$((fail + 1))
   fi
 fi
