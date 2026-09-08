@@ -417,11 +417,11 @@ func generatorDownloadURL(domain, app, fileName string) string {
 }
 
 func GeneratorDownload(c *gin.Context) {
-	fileName := httpx.QueryStr(c, "file")
-	if fileName == "" {
+	if !httpx.QueryPresent(c, "file") {
 		response.Fail(c, "下载失败")
 		return
 	}
+	fileName := httpx.QueryRaw(c, "file")
 	zipPath := filepath.Join(generator.RuntimeDir(), fileName)
 	if _, err := os.Stat(zipPath); err != nil {
 		response.Fail(c, "下载失败")
@@ -436,13 +436,8 @@ func GeneratorDownload(c *gin.Context) {
 }
 
 func GeneratorGetModels(c *gin.Context) {
-	module := strings.TrimSpace(httpx.QueryStr(c, "module"))
-	if module == "" {
-		module = strings.TrimSpace(httpx.BodyStr(c, "module"))
-	}
-	if module == "" {
-		module = "common"
-	}
+	// PHP GeneratorController::getModels calls getAllModels() with no args → common.
+	module := "common"
 	if !validModelModule(module) {
 		response.Result(c, 1, 1, "", []string{})
 		return

@@ -48,7 +48,11 @@ func ChannelOASet(c *gin.Context) {
 	}
 	cfgsvc.Set(c, "oa_setting", "name", httpx.BodyRaw(c, "name"))
 	cfgsvc.Set(c, "oa_setting", "original_id", httpx.BodyRaw(c, "original_id"))
-	cfgsvc.Set(c, "oa_setting", "qr_code", filesvc.SetFileURL(c, httpx.BodyRaw(c, "qr_code")))
+	qr := ""
+	if util.PHPIsset(httpx.Body(c), "qr_code") {
+		qr = filesvc.SetFileURL(c, httpx.BodyRaw(c, "qr_code"))
+	}
+	cfgsvc.Set(c, "oa_setting", "qr_code", qr)
 	cfgsvc.Set(c, "oa_setting", "app_id", httpx.BodyRaw(c, "app_id"))
 	cfgsvc.Set(c, "oa_setting", "app_secret", httpx.BodyRaw(c, "app_secret"))
 	cfgsvc.Set(c, "oa_setting", "token", httpx.BodyRaw(c, "token"))
@@ -92,7 +96,11 @@ func ChannelMnpSet(c *gin.Context) {
 	}
 	cfgsvc.Set(c, "mnp_setting", "name", httpx.BodyRaw(c, "name"))
 	cfgsvc.Set(c, "mnp_setting", "original_id", httpx.BodyRaw(c, "original_id"))
-	cfgsvc.Set(c, "mnp_setting", "qr_code", filesvc.SetFileURL(c, httpx.BodyRaw(c, "qr_code")))
+	qr := ""
+	if util.PHPIsset(httpx.Body(c), "qr_code") {
+		qr = filesvc.SetFileURL(c, httpx.BodyRaw(c, "qr_code"))
+	}
+	cfgsvc.Set(c, "mnp_setting", "qr_code", qr)
 	cfgsvc.Set(c, "mnp_setting", "app_id", httpx.BodyRaw(c, "app_id"))
 	cfgsvc.Set(c, "mnp_setting", "app_secret", httpx.BodyRaw(c, "app_secret"))
 	response.SuccessNotice(c, "操作成功")

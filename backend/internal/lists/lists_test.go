@@ -124,6 +124,11 @@ func TestParseExportWindow(t *testing.T) {
 		t.Fatalf("unpaged export %+v", q)
 	}
 
+	q = parse("?export=2&page_start=&page_end=")
+	if q.PageStart != 0 || q.PageEnd != 0 {
+		t.Fatalf("present empty page_start/end must be 0, got %+v", q)
+	}
+
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/lists?page_size=15", bytes.NewBufferString(`{"export":2,"page_start":2,"page_end":4}`))

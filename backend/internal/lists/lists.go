@@ -79,10 +79,11 @@ func Parse(c *gin.Context) Query {
 	// PHP ListsExcelTrait defaults; applied only for export=2 + page_type=1.
 	q.PageStart = 1
 	q.PageEnd = 200
-	if v, ok := query["page_start"]; ok && strings.TrimSpace(util.ToString(v)) != "" {
+	// PHP get('page_start', default): missing keeps default; present "" / "0" become 0.
+	if v, ok := query["page_start"]; ok {
 		q.PageStart = util.ToInt(v)
 	}
-	if v, ok := query["page_end"]; ok && strings.TrimSpace(util.ToString(v)) != "" {
+	if v, ok := query["page_end"]; ok {
 		q.PageEnd = util.ToInt(v)
 	}
 	if q.Export == 2 && q.PageType == 1 {

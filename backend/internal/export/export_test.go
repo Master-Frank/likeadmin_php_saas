@@ -104,6 +104,9 @@ func TestExportRangeError(t *testing.T) {
 	if msg := exportRangeError(ctx("?export=2&page_type=0"), 0); msg != "没有数据,无法导出" {
 		t.Fatalf("unpaged empty %q", msg)
 	}
+	if msg := exportRangeError(ctx("?export=2&page_type="), 0); msg != "没有数据,无法导出" {
+		t.Fatalf("empty page_type is unpaged %q", msg)
+	}
 	if msg := exportRangeError(ctx("?export=2&page_start=1&page_end=1"), 10); msg != "" {
 		t.Fatalf("has data %q", msg)
 	}
@@ -179,6 +182,27 @@ func TestMaybeQueryFileName(t *testing.T) {
 	}
 	if env.Data["file_name"] != "自定义导出" {
 		t.Fatalf("file_name %v", env.Data["file_name"])
+	}
+}
+
+func TestMaybeFileNameZeroUsesDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?export=1&file_name=0", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists"})
+	c.Set("likeadmin.export_count", int64(1))
+	if !Maybe(c, "export", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=1")
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["file_name"] != "系统日志" {
+		t.Fatalf("file_name=0 must fall back like PHP ?:, got %v", env.Data["file_name"])
 	}
 }
 

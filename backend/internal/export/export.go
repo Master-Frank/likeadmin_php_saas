@@ -30,7 +30,8 @@ type fileInfo struct {
 func Maybe(c *gin.Context, fileName string, rows any) bool {
 	spec := Lookup(ctxutil.Get(c).Controller, ctxutil.Get(c).Action)
 	// PHP initExport: request()->get('file_name') ?: setFileName()
-	if name := httpx.QueryStr(c, "file_name"); name != "" {
+	// ?: treats "" / "0" as empty; whitespace is kept.
+	if name := httpx.QueryRaw(c, "file_name"); !util.PHPEmpty(name) {
 		fileName = name
 	} else if spec.FileName != "" {
 		fileName = spec.FileName
@@ -235,7 +236,8 @@ func min(a, b int) int {
 }
 
 func exportPageType(c *gin.Context) int {
-	if httpx.QueryStr(c, "page_type") == "" {
+	// PHP get('page_type', 1): missing → 1; present "" / "0" → not paginated.
+	if !util.PHPIsset(httpx.Query(c), "page_type") {
 		return 1
 	}
 	return httpx.QueryInt(c, "page_type")
@@ -260,19 +262,17 @@ func exportPageSize(c *gin.Context) int {
 }
 
 func exportPageStart(c *gin.Context) int {
-	n := httpx.QueryInt(c, "page_start")
-	if n == 0 && httpx.QueryStr(c, "page_start") == "" {
+	if !util.PHPIsset(httpx.Query(c), "page_start") {
 		return 1
 	}
-	return n
+	return httpx.QueryInt(c, "page_start")
 }
 
 func exportPageEnd(c *gin.Context) int {
-	n := httpx.QueryInt(c, "page_end")
-	if n == 0 && httpx.QueryStr(c, "page_end") == "" {
+	if !util.PHPIsset(httpx.Query(c), "page_end") {
 		return 200
 	}
-	return n
+	return httpx.QueryInt(c, "page_end")
 }
 
 // exportRangeError matches PHP BaseDataLists::initExport empty-range throw.
