@@ -46,6 +46,15 @@ func AddAccountLog(db *gorm.DB, userID uint, tenantID uint, changeType, action i
 	if db == nil {
 		return
 	}
+	// PHP AccountLogLogic::add returns false when the user is missing
+	// or AccountLogEnum::getChangeObject cannot map the type.
+	if ChangeTypeDesc(changeType) == "" {
+		return
+	}
+	var user model.User
+	if db.Where("id = ? AND delete_time IS NULL", userID).First(&user).Error != nil {
+		return
+	}
 	exists := func(sn string) bool {
 		var n int64
 		q := db.Model(&model.UserAccountLog{}).Where("sn = ?", sn)

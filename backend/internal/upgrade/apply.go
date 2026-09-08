@@ -271,13 +271,21 @@ func upgradeSQL(db *gorm.DB, dir string) error {
 	return nil
 }
 
+// listUpgradeTenants mirrors PHP Tenant::query() SoftDelete: skip deleted rows.
+func listUpgradeTenants(db *gorm.DB) []model.Tenant {
+	var tenants []model.Tenant
+	if db == nil {
+		return tenants
+	}
+	db.Where("delete_time IS NULL").Find(&tenants)
+	return tenants
+}
+
 func upgradeMenu(db *gorm.DB, dir string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return nil
 	}
-	var tenants []model.Tenant
-	db.Find(&tenants)
-	for _, t := range tenants {
+	for _, t := range listUpgradeTenants(db) {
 		tdb := tenantdb.ForTenantOn(db, t.ID)
 		if err := tdb.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
 			return applyError("更新菜单信息失败")

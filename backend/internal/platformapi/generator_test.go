@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
 )
 
 func TestGenerateBundleHasPHPShapes(t *testing.T) {
@@ -139,5 +141,50 @@ func TestScanPHPModelsModule(t *testing.T) {
 	got := scanPHPModels(dir, "tenant")
 	if len(got) != 1 || got[0] != `\app\tenant\model\User` {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestReplaceGenerateColumnsRollsBack(t *testing.T) {
+	cfg := os.Getenv("LIKEADMIN_CONFIG")
+	if cfg == "" {
+		cfg = "/workspace/backend/configs/config.yaml"
+	}
+	if bootstrap.DB == nil {
+		if err := bootstrap.Init(cfg); err != nil {
+			t.Skip(err)
+		}
+	}
+	if bootstrap.DB == nil {
+		t.Skip("no database")
+	}
+	now := util.NowUnix()
+	gt := model.GenerateTable{
+		Name: "la_pair_missing_sync_61", TableComment: "rollback", Author: "pair",
+		ModuleName: "platform", Menu: `{"pid":0,"type":0,"name":"n"}`,
+		Delete: `{"type":0,"name":"delete_time"}`, Tree: `{}`, Relations: `[]`,
+		CreateTime: now, UpdateTime: &now,
+	}
+	if err := bootstrap.DB.Create(&gt).Error; err != nil {
+		t.Fatal(err)
+	}
+	col := model.GenerateColumn{
+		TableID: gt.ID, ColumnName: "keep_me", ColumnComment: "keep",
+		ColumnType: "string", QueryType: "=", ViewType: "input",
+		CreateTime: now, UpdateTime: &now,
+	}
+	if err := bootstrap.DB.Create(&col).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		bootstrap.DB.Where("table_id = ?", gt.ID).Delete(&model.GenerateColumn{})
+		bootstrap.DB.Delete(&gt)
+	})
+	if err := replaceGenerateColumns(bootstrap.DB, gt.ID, "la_pair_missing_sync_61"); err == nil {
+		t.Fatal("missing table should fail like PHP getFields")
+	}
+	var n int64
+	bootstrap.DB.Model(&model.GenerateColumn{}).Where("id = ?", col.ID).Count(&n)
+	if n != 1 {
+		t.Fatal("PHP syncColumn transaction must keep old columns on failure")
 	}
 }

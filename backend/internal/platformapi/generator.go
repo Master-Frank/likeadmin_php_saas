@@ -189,12 +189,24 @@ func GeneratorSyncColumn(c *gin.Context) {
 		response.Fail(c, "信息不存在")
 		return
 	}
-	bootstrap.DB.Where("table_id = ?", id).Delete(&model.GenerateColumn{})
-	if err := syncColumns(bootstrap.DB, id, t.Name); err != nil {
+	if err := replaceGenerateColumns(bootstrap.DB, id, t.Name); err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
 	response.SuccessNotice(c, "操作成功")
+}
+
+// replaceGenerateColumns mirrors PHP GeneratorLogic::syncColumn in one transaction.
+func replaceGenerateColumns(db *gorm.DB, tableID uint, tableName string) error {
+	if db == nil {
+		return fmt.Errorf("信息不存在")
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("table_id = ?", tableID).Delete(&model.GenerateColumn{}).Error; err != nil {
+			return err
+		}
+		return syncColumns(tx, tableID, tableName)
+	})
 }
 
 func GeneratorDelete(c *gin.Context) {
@@ -579,6 +591,9 @@ func syncColumns(tx *gorm.DB, tableID uint, tableName string) error {
 	var cols []col
 	if err := tx.Raw("SELECT COLUMN_NAME, COLUMN_COMMENT, COLUMN_TYPE, COLUMN_KEY, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", tableName).Scan(&cols).Error; err != nil {
 		return err
+	}
+	if len(cols) == 0 {
+		return fmt.Errorf("当前数据库不存在%s表", tableName)
 	}
 	now := util.NowUnix()
 	skip := map[string]bool{"id": true, "create_time": true, "update_time": true, "delete_time": true}

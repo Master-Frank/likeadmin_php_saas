@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
 )
 
 func writeZip(t *testing.T, entries map[string]string) string {
@@ -222,6 +224,38 @@ func TestApplyExtractedSQLDataAndStructure(t *testing.T) {
 	}
 	if err := bootstrap.DB.Raw("SELECT COUNT(*) FROM la_pair_upgrade_probe_s").Scan(&n).Error; err != nil {
 		t.Fatalf("structure sql: %v", err)
+	}
+}
+
+func TestListUpgradeTenantsSkipsDeleted(t *testing.T) {
+	cfg := os.Getenv("LIKEADMIN_CONFIG")
+	if cfg == "" {
+		cfg = "/workspace/backend/configs/config.yaml"
+	}
+	if bootstrap.DB == nil {
+		if err := bootstrap.Init(cfg); err != nil {
+			t.Skip(err)
+		}
+	}
+	if bootstrap.DB == nil {
+		t.Skip("no database")
+	}
+	now := util.NowUnix()
+	row := model.Tenant{
+		SN: "upgdel61", Name: "upgrade-deleted", Tactics: 0,
+		CreateTime: now, UpdateTime: &now, DeleteTime: &now,
+	}
+	if err := bootstrap.DB.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Unscoped().Delete(&row) })
+	for _, tnt := range listUpgradeTenants(bootstrap.DB) {
+		if tnt.ID == row.ID {
+			t.Fatal("PHP Tenant SoftDelete must skip deleted tenants on upgradeMenu")
+		}
+		if tnt.DeleteTime != nil {
+			t.Fatalf("live tenant %d has delete_time", tnt.ID)
+		}
 	}
 }
 
