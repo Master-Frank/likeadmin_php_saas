@@ -89,12 +89,8 @@ func LoginAccount(c *gin.Context) {
 	now := util.NowUnix()
 	tdb(c).Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ctxutil.ClientIP(c), "update_time": now})
 	info := authsvc.SetTenantToken(c, admin.ID, terminal, admin.MultipointLogin)
-	avatar := admin.Avatar
-	if avatar == "" {
-		avatar = config.C.Project.Tenant["admin_avatar"]
-	}
 	response.Data(c, gin.H{
-		"name": info["name"], "avatar": filesvc.GetFileURL(c, avatar),
+		"name": info["name"], "avatar": filesvc.AdminAvatarURL(c, admin.Avatar, config.C.Project.Tenant["admin_avatar"]),
 		"role_name": info["role_name"], "token": info["token"],
 	})
 }
@@ -255,7 +251,7 @@ func tenantSelfUser(c *gin.Context, admin model.TenantAdmin, roleIDs, deptIDs, j
 	}
 	return gin.H{
 		"id": admin.ID, "account": admin.Account, "name": admin.Name,
-		"avatar": filesvc.GetFileURL(c, firstNonEmpty(admin.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"avatar": filesvc.AdminAvatarURL(c, admin.Avatar, config.C.Project.Tenant["admin_avatar"]),
 		"root":   admin.Root, "disable": admin.Disable, "multipoint_login": admin.MultipointLogin,
 		"role_id": roleIDs, "dept_id": deptIDs, "jobs_id": jobIDs,
 	}

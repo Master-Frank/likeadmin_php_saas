@@ -264,7 +264,7 @@ func LoginAccount(c *gin.Context) {
 	info := authsvc.SetUserToken(c, u.ID, terminal)
 	response.Data(c, gin.H{
 		"nickname": u.Nickname, "sn": u.SN, "mobile": u.Mobile,
-		"avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"avatar": filesvc.LoginUserAvatarURL(c, u.Avatar, config.C.Project.DefaultImage["user_avatar"]),
 		"token":  info["token"],
 	})
 }

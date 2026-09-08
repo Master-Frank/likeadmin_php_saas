@@ -43,8 +43,31 @@ func imageTestContext() *gin.Context {
 	return c
 }
 
+func TestLoginUserAvatarURLFallsBack(t *testing.T) {
+	c := imageTestContext()
+	if got := LoginUserAvatarURL(c, "0", "resource/image/common/default_avatar.png"); !strings.Contains(got, "default_avatar.png") {
+		t.Fatalf("login fallback: %s", got)
+	}
+	if got := LoginUserAvatarURL(c, "uploads/u.png", "x"); !strings.Contains(got, "uploads/u.png") {
+		t.Fatalf("login stored: %s", got)
+	}
+}
+
+func TestAdminAvatarURLMatchesPHPEmpty(t *testing.T) {
+	c := imageTestContext()
+	if got := AdminAvatarURL(c, "", "resource/image/admin/avatar.png"); !strings.Contains(got, "resource/image/admin/avatar.png") {
+		t.Fatalf("empty uses fallback: %s", got)
+	}
+	if got := AdminAvatarURL(c, "0", "resource/image/admin/avatar.png"); !strings.Contains(got, "resource/image/admin/avatar.png") {
+		t.Fatalf("PHP empty('0') uses fallback: %s", got)
+	}
+	if got := AdminAvatarURL(c, "/uploads/a.png/", "x"); got != "http://pair1.likeadmin.test/uploads/a.png" && !strings.Contains(got, "uploads/a.png") {
+		t.Fatalf("trim slashes: %s", got)
+	}
+}
+
 func TestGetImageAttrEmpty(t *testing.T) {
-	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" {
+	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" || GetImageAttr(nil, "0") != "" {
 		t.Fatal("empty image must stay empty")
 	}
 	if Format("http://host", "") != "http://host/" {

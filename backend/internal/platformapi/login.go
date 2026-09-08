@@ -76,13 +76,9 @@ func LoginAccount(c *gin.Context) {
 	ip := ctxutil.ClientIP(c)
 	bootstrap.DB.Model(&admin).Updates(map[string]any{"login_time": now, "login_ip": ip, "update_time": now})
 	info := authsvc.SetPlatformToken(c, admin.ID, terminal, admin.MultipointLogin)
-	avatar := admin.Avatar
-	if avatar == "" {
-		avatar = config.C.Project.DefaultImage["admin_avatar"]
-	}
 	response.Data(c, gin.H{
 		"name":      info["name"],
-		"avatar":    filesvc.GetFileURL(c, avatar),
+		"avatar":    filesvc.AdminAvatarURL(c, admin.Avatar, config.C.Project.DefaultImage["admin_avatar"]),
 		"role_name": info["role_name"],
 		"token":     info["token"],
 	})

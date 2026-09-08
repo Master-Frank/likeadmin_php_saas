@@ -14,12 +14,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetImageAttr matches PHP BaseModel::getImageAttr: empty stays "", else getFileUrl.
+// GetImageAttr matches PHP BaseModel::getImageAttr / User::getAvatarAttr:
+// trim($value) ? getFileUrl($value) : ”. "0" is falsy after trim.
 func GetImageAttr(c *gin.Context, uri string) string {
-	if strings.TrimSpace(uri) == "" {
+	if t := strings.TrimSpace(uri); t == "" || t == "0" {
 		return ""
 	}
 	return GetFileURL(c, uri)
+}
+
+// AdminAvatarURL matches Admin/TenantAdmin/Tenant getAvatarAttr:
+// empty($value) ? getFileUrl($fallback) : getFileUrl(trim($value, '/')).
+func AdminAvatarURL(c *gin.Context, stored, fallback string) string {
+	if stored == "" || stored == "0" {
+		stored = fallback
+	} else {
+		stored = strings.Trim(stored, "/")
+	}
+	return GetFileURL(c, stored)
+}
+
+// LoginUserAvatarURL matches LoginLogic: getter then `$avatar ?: default`
+// then getFileUrl. Trim-falsy stored values (including "0") fall back.
+func LoginUserAvatarURL(c *gin.Context, stored, fallback string) string {
+	if got := GetImageAttr(c, stored); got != "" {
+		return got
+	}
+	return GetFileURL(c, fallback)
 }
 
 func GetFileURL(c *gin.Context, uri string) string {

@@ -70,7 +70,7 @@ func tenantAdminListItem(c *gin.Context, a model.TenantAdmin) map[string]any {
 		"login_time":       util.FormatDateTimePtr(a.LoginTime),
 		"login_ip":         a.LoginIP,
 		"multipoint_login": a.MultipointLogin,
-		"avatar":           filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"avatar":           filesvc.AdminAvatarURL(c, a.Avatar, config.C.Project.Tenant["admin_avatar"]),
 		"role_id":          roleIDs,
 		"dept_id":          deptIDs,
 		"jobs_id":          jobIDs,
@@ -310,7 +310,7 @@ func AdminDetail(c *gin.Context) {
 	response.Data(c, gin.H{
 		"id": a.ID, "account": a.Account, "name": a.Name, "disable": a.Disable, "root": a.Root,
 		"multipoint_login": a.MultipointLogin,
-		"avatar":           filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"avatar":           filesvc.AdminAvatarURL(c, a.Avatar, config.C.Project.Tenant["admin_avatar"]),
 		"role_id":          roleIDs, "dept_id": deptIDs, "jobs_id": jobIDs,
 	})
 }

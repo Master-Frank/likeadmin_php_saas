@@ -63,13 +63,9 @@ func TenantLists(c *gin.Context) {
 		if t.DomainAliasEnable == 0 {
 			domain = httpPrefix + t.DomainAlias + "/admin/"
 		}
-		avatar := t.Avatar
-		if avatar == "" {
-			avatar = firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])
-		}
 		out = append(out, map[string]any{
 			"id": t.ID, "sn": t.SN, "name": t.Name,
-			"avatar": filesvc.GetFileURL(c, avatar), "disable": t.Disable,
+			"avatar": filesvc.AdminAvatarURL(c, t.Avatar, firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])), "disable": t.Disable,
 			"create_time":  util.FormatDateTime(t.CreateTime),
 			"update_time":  util.FormatDateTimeOrNil(t.UpdateTime),
 			"delete_time":  util.FormatDateTimeOrNil(t.DeleteTime),
@@ -103,12 +99,8 @@ func TenantDetail(c *gin.Context) {
 	if t.DomainAliasEnable == 0 {
 		domain = httpPrefix + t.DomainAlias + "/admin/"
 	}
-	avatar := t.Avatar
-	if avatar == "" {
-		avatar = firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])
-	}
 	response.Success(c, "获取成功", gin.H{
-		"id": t.ID, "sn": t.SN, "name": t.Name, "avatar": filesvc.GetFileURL(c, avatar),
+		"id": t.ID, "sn": t.SN, "name": t.Name, "avatar": filesvc.AdminAvatarURL(c, t.Avatar, firstNonEmpty(config.C.Project.Tenant["admin_avatar"], config.C.Project.Website["shop_logo"])),
 		"tel": t.Tel, "domain_alias": t.DomainAlias, "domain_alias_enable": t.DomainAliasEnable,
 		"disable": t.Disable, "create_time": util.FormatDateTime(t.CreateTime), "notes": t.Notes,
 		"user_total": users, "default_domain": def, "domain": domain,
@@ -373,7 +365,7 @@ func TenantAdminLists(c *gin.Context) {
 	for _, a := range rows {
 		out = append(out, map[string]any{
 			"id": a.ID, "root": a.Root, "name": a.Name,
-			"avatar": filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])), "account": a.Account,
+			"avatar": filesvc.AdminAvatarURL(c, a.Avatar, config.C.Project.Tenant["admin_avatar"]), "account": a.Account,
 			"multipoint_login": a.MultipointLogin, "disable": a.Disable,
 			"create_time": util.FormatDateTime(a.CreateTime),
 		})
@@ -423,7 +415,7 @@ func TenantAdminDetail(c *gin.Context) {
 	}
 	response.Success(c, "获取成功", gin.H{
 		"id": a.ID, "root": a.Root, "name": a.Name,
-		"avatar":  filesvc.GetFileURL(c, firstNonEmpty(a.Avatar, config.C.Project.Tenant["admin_avatar"])),
+		"avatar":  filesvc.AdminAvatarURL(c, a.Avatar, config.C.Project.Tenant["admin_avatar"]),
 		"account": a.Account, "multipoint_login": a.MultipointLogin, "disable": a.Disable,
 		"create_time": util.FormatDateTime(a.CreateTime),
 	})
