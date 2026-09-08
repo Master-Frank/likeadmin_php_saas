@@ -54,9 +54,3 @@ func TestDeptNamesSkipsSoftDeleted(t *testing.T) {
 		t.Fatalf("PHP Dept SoftDelete must hide deleted dept names, got %v", names)
 	}
 }
-
-func TestDeptExistsAllowsRoot(t *testing.T) {
-	if !deptExists(0) {
-		t.Fatal("pid=0 is the virtual root; do not copy PHP checkDept reject")
-	}
-}

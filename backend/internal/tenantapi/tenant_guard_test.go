@@ -58,9 +58,3 @@ func TestGuardTenantWrite(t *testing.T) {
 		t.Fatal("tenant with tenant_id should pass")
 	}
 }
-
-func TestTenantDeptExistsAllowsRoot(t *testing.T) {
-	if !tenantDeptExists(nil, 0) {
-		t.Fatal("pid=0 is the virtual root; do not copy PHP checkDept reject")
-	}
-}

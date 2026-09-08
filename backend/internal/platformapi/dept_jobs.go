@@ -363,10 +363,6 @@ func JobsAll(c *gin.Context) {
 }
 
 func deptExists(id uint) bool {
-	// PHP checkDept rejects pid=0; keep the virtual root so top-level depts can be added.
-	if id == 0 {
-		return true
-	}
 	var n int64
 	bootstrap.DB.Model(&model.Dept{}).Where("id = ? AND delete_time IS NULL", id).Count(&n)
 	return n > 0
