@@ -116,23 +116,60 @@ func WriteRuntime(files []File) error {
 }
 
 // WriteModule writes generate_type=1 PHP/Vue/menu SQL like PHP BaseGenerator,
-// plus Go runtime metadata for gencrud.
+// plus Go runtime metadata for gencrud. Vue/TS also land in platform/src or
+// tenant/src so this repo's real admin frontends can load the generated pages.
 func WriteModule(t model.GenerateTable, files []File) error {
 	c := newCtx(t, nil, time.Now())
 	admin := filepath.Join(RepoRoot(), "admin", "src")
 	for _, f := range files {
-		dest := moduleDest(c, admin, f)
-		if dest == "" {
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(dest, []byte(f.Content), 0644); err != nil {
-			return err
+		for _, dest := range moduleDests(c, admin, f) {
+			if dest == "" {
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(dest, []byte(f.Content), 0644); err != nil {
+				return err
+			}
 		}
 	}
 	return WriteGoModule(t)
+}
+
+// frontendSrc is the real Vue app for a generator module. PHP still writes
+// admin/src (pair.sh cleans those paths); this repo's UIs live in platform/
+// and tenant/.
+func frontendSrc(module string) string {
+	switch goModuleApp(module) {
+	case "platformapi":
+		return filepath.Join(RepoRoot(), "platform", "src")
+	case "tenantapi":
+		return filepath.Join(RepoRoot(), "tenant", "src")
+	default:
+		return ""
+	}
+}
+
+// moduleDests returns generate_type=1 destinations. Vue/TS are written to
+// admin/src (PHP pairing) and the matching platform/ or tenant/ frontend.
+func moduleDests(c *ctx, admin string, f File) []string {
+	dest := moduleDest(c, admin, f)
+	if dest == "" {
+		return nil
+	}
+	out := []string{dest}
+	extra := frontendSrc(c.module)
+	if extra == "" || extra == admin {
+		return out
+	}
+	switch {
+	case strings.HasSuffix(f.Name, ".ts"), f.Name == "index.vue", f.Name == "edit.vue":
+		if d := moduleDest(c, extra, f); d != "" && d != dest {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // moduleDest returns the generate_type=1 destination, or empty to skip.

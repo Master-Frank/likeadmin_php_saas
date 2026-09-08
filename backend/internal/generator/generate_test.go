@@ -11,6 +11,8 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
+
+	"gorm.io/gorm"
 )
 
 func initGeneratorDB(t *testing.T) bool {
@@ -463,6 +465,218 @@ func TestZipRuntimeFileByFileFromBuild(t *testing.T) {
 		}
 		if body != f.Content {
 			t.Fatalf("%s zip bytes mismatch want %d got %d", f.ZipName(), len(f.Content), len(body))
+		}
+	}
+}
+
+func TestModuleDestsWritesRealFrontend(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.ModuleName = "platform"
+	c := newCtx(tbl, cols, time.Now())
+	var ts File
+	for _, f := range Build(tbl, cols) {
+		if strings.HasSuffix(f.Name, ".ts") {
+			ts = f
+			break
+		}
+	}
+	if ts.Name == "" {
+		t.Fatal("missing vue api")
+	}
+	dests := moduleDests(c, "/tmp/admin", ts)
+	if len(dests) < 2 {
+		t.Fatalf("dests=%v", dests)
+	}
+	if !strings.HasPrefix(dests[0], "/tmp/admin") {
+		t.Fatalf("admin dest %s", dests[0])
+	}
+	plat := filepath.Join(RepoRoot(), "platform", "src", "api", ts.Name)
+	if !containsPath(dests, plat) {
+		t.Fatalf("missing platform dest %s in %v", plat, dests)
+	}
+
+	tbl.ModuleName = "tenant"
+	c = newCtx(tbl, cols, time.Now())
+	dests = moduleDests(c, "/tmp/admin", ts)
+	ten := filepath.Join(RepoRoot(), "tenant", "src", "api", ts.Name)
+	if !containsPath(dests, ten) {
+		t.Fatalf("missing tenant dest %s in %v", ten, dests)
+	}
+
+	phpDests := moduleDests(c, "/tmp/admin", File{Name: "ConfigController.php"})
+	if len(phpDests) != 1 {
+		t.Fatalf("php should stay a single dest: %v", phpDests)
+	}
+}
+
+func TestWriteModuleWritesFrontendFiles(t *testing.T) {
+	tbl, cols := sampleTable()
+	tbl.Name = "la_go_genvue_990016"
+	tbl.ModuleName = "tenant"
+	tbl.GenerateType = 1
+	files := Build(tbl, cols)
+	c := newCtx(tbl, nil, time.Now())
+	admin := filepath.Join(RepoRoot(), "admin", "src")
+	var written []string
+	for _, f := range files {
+		written = append(written, moduleDests(c, admin, f)...)
+	}
+	for _, f := range BuildGo(tbl, nil) {
+		written = append(written, filepath.Join(RepoRoot(), "backend", "internal", "generated", f.Name))
+	}
+	t.Cleanup(func() {
+		for _, p := range written {
+			_ = os.Remove(p)
+		}
+	})
+	if err := WriteModule(tbl, files); err != nil {
+		t.Fatal(err)
+	}
+	tenTS := filepath.Join(RepoRoot(), "tenant", "src", "api", "go_genvue_990016.ts")
+	if _, err := os.Stat(tenTS); err != nil {
+		t.Fatalf("tenant vue api not written: %v", err)
+	}
+	adminTS := filepath.Join(RepoRoot(), "admin", "src", "api", "go_genvue_990016.ts")
+	if _, err := os.Stat(adminTS); err != nil {
+		t.Fatalf("admin vue api not written: %v", err)
+	}
+	tenIndex := filepath.Join(RepoRoot(), "tenant", "src", "views", "go_genvue_990016", "index.vue")
+	if _, err := os.Stat(tenIndex); err != nil {
+		t.Fatalf("tenant index.vue not written: %v", err)
+	}
+}
+
+func TestIsTenantModule(t *testing.T) {
+	if !IsTenantModule(model.GenerateTable{ModuleName: "tenant"}) {
+		t.Fatal("tenant")
+	}
+	if !IsTenantModule(model.GenerateTable{ModuleName: "tenantapi"}) {
+		t.Fatal("tenantapi")
+	}
+	if IsTenantModule(model.GenerateTable{ModuleName: "platform"}) {
+		t.Fatal("platform is not tenant")
+	}
+}
+
+func TestRewriteMenuSQLForTenant(t *testing.T) {
+	src := "INSERT INTO `la_system_menu`(`pid`, `type`, `name`)\n VALUES (0, 'C', 'X');\nSELECT @pid := LAST_INSERT_ID();\nINSERT INTO `la_system_menu`(`pid`, `type`, `name`)\n VALUES (@pid, 'A', '添加');"
+	got := RewriteMenuSQLForTenant(src, "la_tenant_system_menu_t990017", 990017)
+	if !strings.Contains(got, "`la_tenant_system_menu_t990017`") {
+		t.Fatalf("table: %s", got)
+	}
+	if strings.Contains(got, "la_system_menu") {
+		t.Fatalf("still platform table: %s", got)
+	}
+	if !strings.Contains(got, "(`tenant_id`, `pid`,") {
+		t.Fatalf("missing tenant_id column: %s", got)
+	}
+	if !strings.Contains(got, "VALUES (990017, 0, 'C', 'X')") {
+		t.Fatalf("parent values: %s", got)
+	}
+	if !strings.Contains(got, "VALUES (990017, @pid, 'A', '添加')") {
+		t.Fatalf("child values: %s", got)
+	}
+	if !strings.Contains(got, "SELECT @pid := LAST_INSERT_ID()") {
+		t.Fatal("must keep LAST_INSERT_ID")
+	}
+	if RewriteMenuSQLForTenant("", "la_tenant_system_menu", 0) != "" {
+		t.Fatal("empty sql")
+	}
+}
+
+func TestApplyTenantMenusLastInsertIDOnRealDB(t *testing.T) {
+	if !initGeneratorDB(t) {
+		t.Skip("no database")
+	}
+	const sharedID uint = 990016
+	const shardID uint = 990017
+	const shardSN = "t990017"
+	const menuName = "GoTenantMenu990016"
+	db := bootstrap.DB
+	shardTable := "la_tenant_system_menu_" + shardSN
+	cleanup := func() {
+		cleanupTenantMenusByName(db, "la_tenant_system_menu", menuName)
+		cleanupTenantMenusByName(db, shardTable, menuName)
+		_ = db.Exec("DROP TABLE IF EXISTS " + shardTable).Error
+		_ = db.Where("id IN ?", []uint{sharedID, shardID}).Delete(&model.Tenant{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	now := time.Now().Unix()
+	if err := db.Create(&model.Tenant{ID: sharedID, SN: "t990016", Name: "gen-menu-shared", CreateTime: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE " + shardTable + " LIKE la_tenant_system_menu").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.Tenant{ID: shardID, SN: shardSN, Name: "gen-menu-shard", Tactics: 1, CreateTime: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	tbl, cols := sampleTable()
+	tbl.ModuleName = "tenant"
+	tbl.Menu = `{"pid":0,"type":1,"name":"` + menuName + `"}`
+	files := BuildAt(tbl, cols, time.Date(2026, 9, 8, 13, 0, 0, 0, time.Local))
+	var sqlText string
+	for _, f := range files {
+		if f.Name == "menu.sql" {
+			sqlText = f.Content
+			break
+		}
+	}
+	if sqlText == "" || !strings.Contains(sqlText, "la_system_menu") {
+		t.Fatalf("menu.sql: %s", sqlText)
+	}
+	if err := applyTenantMenusTo(db, sqlText, []model.Tenant{
+		{ID: sharedID, SN: "t990016", Tactics: 0},
+		{ID: shardID, SN: shardSN, Tactics: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTenantMenuTree(t, db, "la_tenant_system_menu", menuName, 0)
+	assertTenantMenuTree(t, db, "la_tenant_system_menu", menuName, sharedID)
+	assertTenantMenuTree(t, db, shardTable, menuName, shardID)
+}
+
+func containsPath(paths []string, want string) bool {
+	for _, p := range paths {
+		if p == want {
+			return true
+		}
+	}
+	return false
+}
+
+func cleanupTenantMenusByName(db *gorm.DB, table, name string) {
+	var rows []model.TenantSystemMenu
+	db.Table(table).Where("name = ? AND type = ?", name, "C").Find(&rows)
+	for _, p := range rows {
+		_ = db.Exec("DELETE FROM `"+table+"` WHERE pid = ?", p.ID).Error
+		_ = db.Exec("DELETE FROM `"+table+"` WHERE id = ?", p.ID).Error
+	}
+}
+
+func assertTenantMenuTree(t *testing.T, db *gorm.DB, table, name string, tenantID uint) {
+	t.Helper()
+	var parent model.TenantSystemMenu
+	if err := db.Table(table).Where("name = ? AND type = ? AND tenant_id = ?", name, "C", tenantID).
+		Order("id desc").First(&parent).Error; err != nil {
+		t.Fatalf("%s tenant_id=%d parent: %v", table, tenantID, err)
+	}
+	if parent.Pid != 0 || parent.Perms != "config/lists" {
+		t.Fatalf("%s parent %+v", table, parent)
+	}
+	var kids []model.TenantSystemMenu
+	db.Table(table).Where("pid = ? AND tenant_id = ?", parent.ID, tenantID).Order("id asc").Find(&kids)
+	if len(kids) != 3 {
+		t.Fatalf("%s tenant_id=%d children=%d want 3", table, tenantID, len(kids))
+	}
+	want := []string{"添加", "编辑", "删除"}
+	for i, name := range want {
+		if kids[i].Name != name || kids[i].Type != "A" || kids[i].TenantID != tenantID {
+			t.Fatalf("%s child %d %+v want %s tenant_id=%d", table, i, kids[i], name, tenantID)
 		}
 	}
 }

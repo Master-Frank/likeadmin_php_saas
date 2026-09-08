@@ -392,6 +392,12 @@ func GeneratorGenerate(c *gin.Context) {
 						response.Fail(c, err.Error())
 						return
 					}
+					if generator.IsTenantModule(t) {
+						if err := generator.ApplyTenantMenus(bootstrap.DB, f.Content); err != nil {
+							response.Fail(c, err.Error())
+							return
+						}
+					}
 				}
 			}
 		}
