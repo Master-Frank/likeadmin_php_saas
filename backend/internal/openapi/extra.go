@@ -550,9 +550,10 @@ func PcInfoCenter(c *gin.Context) {
 
 func PcArticleDetail(c *gin.Context) {
 	id := httpx.QueryUint(c, "id")
-	source := httpx.QueryStr(c, "source")
-	if source == "" {
-		source = "default"
+	// PHP: get('source/s', 'default') — missing uses default; "" / "  " stay.
+	source := "default"
+	if util.PHPIsset(httpx.Query(c), "source") {
+		source = httpx.QueryRaw(c, "source")
 	}
 	var a model.Article
 	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {

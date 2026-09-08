@@ -103,7 +103,7 @@ func IndexConfig(c *gin.Context) {
 }
 
 func IndexPolicy(c *gin.Context) {
-	typ := httpx.QueryStr(c, "type")
+	typ := httpx.QueryRaw(c, "type")
 	response.Data(c, gin.H{
 		"title":   cfgsvc.GetString(c, "agreement", typ+"_title", ""),
 		"content": cfgsvc.GetString(c, "agreement", typ+"_content", ""),

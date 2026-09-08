@@ -41,7 +41,7 @@ func LoginCodeURL(c *gin.Context) {
 		return
 	}
 	// PHP LoginController::codeUrl passes request url as-is (may be empty).
-	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, httpx.QueryStr(c, "url"))})
+	response.Success(c, "获取成功", gin.H{"url": wechat.CodeURL(appID, httpx.QueryRaw(c, "url"))})
 }
 
 func LoginOALogin(c *gin.Context) {
@@ -97,7 +97,7 @@ func LoginMnpLogin(c *gin.Context) {
 func LoginGetScanCode(c *gin.Context) {
 	// PHP getScanCode never checks app_id/secret; empty config still returns qrconnect URL.
 	appID, _ := wechat.OpenConfig(c)
-	redirect := httpx.QueryStr(c, "url")
+	redirect := httpx.QueryRaw(c, "url")
 	state := util.MD5(fmt.Sprintf("%d%d", util.NowUnix(), time.Now().UnixNano()%100000))
 	cache.Set("web_scan_"+state, state, 10*time.Minute)
 	response.Data(c, gin.H{"url": wechat.ScanCodeURL(appID, redirect, state)})
@@ -426,7 +426,7 @@ func WechatJsConfigReal(c *gin.Context) {
 		response.FailSilent(c, "获取jssdk失败:请先设置公众号配置")
 		return
 	}
-	cfg, err := wechat.JsConfig(appID, secret, httpx.QueryStr(c, "url"))
+	cfg, err := wechat.JsConfig(appID, secret, httpx.QueryRaw(c, "url"))
 	if err != nil {
 		response.FailSilent(c, "获取jssdk失败:"+err.Error())
 		return

@@ -123,7 +123,7 @@ func AdminAdd(c *gin.Context) {
 		Disable:         adminAddDisable(p),
 		MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 	}
-	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
+	roles, depts, jobs := httpx.BodyUintsUnlessEmpty(c, "role_id"), httpx.BodyUintsUnlessEmpty(c, "dept_id"), httpx.BodyUintsUnlessEmpty(c, "jobs_id")
 	if msg := platformAdminLinksCheck(roles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -181,13 +181,13 @@ func AdminEdit(c *gin.Context) {
 		"avatar":           avatar,
 		"update_time":      now,
 	}
-	if pwd := httpx.BodyRaw(c, "password"); pwd != "" && pwd != "0" {
+	if pwd := httpx.BodyRaw(c, "password"); !util.PHPEmpty(pwd) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
 	bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
-	newRoles := httpx.BodyUints(c, "role_id")
-	depts, jobs := httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
+	newRoles := httpx.BodyUintsUnlessEmpty(c, "role_id")
+	depts, jobs := httpx.BodyUintsUnlessEmpty(c, "dept_id"), httpx.BodyUintsUnlessEmpty(c, "jobs_id")
 	if msg := platformAdminLinksCheck(newRoles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return

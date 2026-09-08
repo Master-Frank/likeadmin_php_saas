@@ -461,7 +461,7 @@ func TenantAdminAdd(c *gin.Context) {
 		Disable:  httpx.BodyInt(c, "disable"), MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
-	roles, depts, jobs := httpx.BodyUints(c, "role_id"), httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
+	roles, depts, jobs := httpx.BodyUintsUnlessEmpty(c, "role_id"), httpx.BodyUintsUnlessEmpty(c, "dept_id"), httpx.BodyUintsUnlessEmpty(c, "jobs_id")
 	if msg := tenantAdminLinksCheck(adb, tid, roles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -517,7 +517,7 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "超级管理员不允许被禁用")
 		return
 	}
-	if account := httpx.BodyRaw(c, "account"); account != "" && account != "0" {
+	if account := httpx.BodyRaw(c, "account"); !util.PHPEmpty(account) {
 		var taken model.TenantAdmin
 		tq := adb.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id)
 		if tenant.ID > 0 {
@@ -542,13 +542,13 @@ func TenantAdminEdit(c *gin.Context) {
 	} else {
 		data["avatar"] = ""
 	}
-	if pwd := httpx.BodyRaw(c, "password"); pwd != "" && pwd != "0" {
+	if pwd := httpx.BodyRaw(c, "password"); !util.PHPEmpty(pwd) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
 	adb.Model(&model.TenantAdminRole{}).Where("admin_id = ?", id).Pluck("role_id", &oldRoles)
-	newRoles := httpx.BodyUints(c, "role_id")
-	depts, jobs := httpx.BodyUints(c, "dept_id"), httpx.BodyUints(c, "jobs_id")
+	newRoles := httpx.BodyUintsUnlessEmpty(c, "role_id")
+	depts, jobs := httpx.BodyUintsUnlessEmpty(c, "dept_id"), httpx.BodyUintsUnlessEmpty(c, "jobs_id")
 	if msg := tenantAdminLinksCheck(adb, tenant.ID, newRoles, depts, jobs); msg != "" {
 		response.Fail(c, msg)
 		return

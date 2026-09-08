@@ -455,7 +455,7 @@ func SmsConfigSet(c *gin.Context) {
 }
 
 func SmsConfigDetail(c *gin.Context) {
-	typ := httpx.QueryStr(c, "type")
+	typ := httpx.QueryRaw(c, "type")
 	if typ == "" {
 		response.Fail(c, "请选择类型")
 		return

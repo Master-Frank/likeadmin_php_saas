@@ -30,7 +30,7 @@ func ConfigGet(c *gin.Context) {
 }
 
 func ConfigDict(c *gin.Context) {
-	typ := httpx.QueryStr(c, "type")
+	typ := httpx.QueryRaw(c, "type")
 	if typ == "" {
 		response.Data(c, []any{})
 		return

@@ -582,7 +582,7 @@ func StorageDetail(c *gin.Context) {
 		response.Fail(c, "engine不能为空")
 		return
 	}
-	engine := httpx.QueryStr(c, "engine")
+	engine := httpx.QueryRaw(c, "engine")
 	def := cfgsvc.GetString(c, "storage", "default", "")
 	row := map[string]any{"status": 0}
 	switch engine {
