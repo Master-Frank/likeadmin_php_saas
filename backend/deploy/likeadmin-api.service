@@ -7,9 +7,13 @@ Wants=mysql.service redis.service
 Type=simple
 User=www-data
 Group=www-data
+RuntimeDirectory=likeadmin
 WorkingDirectory=/opt/likeadmin/backend
 Environment=LIKEADMIN_CONFIG=/opt/likeadmin/backend/configs/config.yaml
 Environment=LIKEADMIN_LISTEN=:8080
+Environment=LIKEADMIN_DEBUG=false
+Environment=LIKEADMIN_REQUIRE_DDL=1
+Environment='LIKEADMIN_UPGRADE_RESTART_COMMAND=["/usr/bin/touch","/run/likeadmin/restart-required"]'
 # Keep PHP fallback off once pair.sh is green on this host.
 Environment=LIKEADMIN_PHP_FALLBACK=0
 # Production (debug=false) rejects unauthenticated GET /crontab. Prefer cmd/crontab.

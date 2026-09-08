@@ -18,6 +18,9 @@ func main() {
 	if err := bootstrap.Init(cfg); err != nil {
 		log.Fatalf("init: %v", err)
 	}
+	if err := bootstrap.RequireDDLPrivileges(); err != nil {
+		log.Fatalf("database privileges: %v (grant CREATE,DROP or set LIKEADMIN_REQUIRE_DDL=0 to disable sharding/upgrades)", err)
+	}
 	r := router.New()
 	addr := config.C.App.Listen
 	if addr == "" {

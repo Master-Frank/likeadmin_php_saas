@@ -8,6 +8,9 @@ import (
 )
 
 func runBuild(args []string) string {
+	if !legacyPHPScaffoldEnabled() {
+		return legacyPHPDisabled
+	}
 	root := runtimeRoot()
 	if root == "" {
 		return "无法解析应用目录"

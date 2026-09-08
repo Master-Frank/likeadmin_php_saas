@@ -85,32 +85,30 @@ func Run(c *gin.Context) {
 		lockPath = filepath.Join(config.C.App.PublicDir, "../config/install.lock")
 	}
 	envPath := filepath.Join(filepath.Dir(lockPath), "..", ".env")
-	if httpx.BodyStr(c, "env_path") != "" {
-		envPath = httpx.BodyStr(c, "env_path")
-	}
 	res, err := Apply(Options{
 		Host: host, Port: port, User: user, Password: pass, Name: dbName, Prefix: prefix,
-		ClearDB: clearDB, ImportTest: importTest, SkipSQL: httpx.BodyInt(c, "skip_sql") == 1,
+		ClearDB: clearDB, ImportTest: importTest, DeferLock: true,
 		AdminUser: adminUser, AdminPassword: adminPass,
 		PublicDir: config.C.App.PublicDir, LockPath: lockPath, EnvPath: envPath,
-		GoConfigPath: httpx.BodyStr(c, "go_config_path"), HTTPHost: ctxutilHost(c),
+		GoConfigPath: config.Path, HTTPHost: ctxutilHost(c),
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
 	}
-	// Empty go_config_path still updates in-memory config + default config.yaml.
-	if httpx.BodyStr(c, "go_config_path") == "" {
-		if err := WriteGoConfig("", host, dbName, user, pass, port, prefix, ctxutilHost(c), res.Salt); err != nil {
-			response.Fail(c, "写入环境配置失败："+err.Error())
-			return
-		}
-	}
 	if err := bootstrap.ReconnectDB(); err != nil {
 		response.Fail(c, "安装成功但数据库重连失败："+err.Error())
 		return
 	}
+	if err := bootstrap.CheckDDLPrivileges(); err != nil {
+		response.Fail(c, "数据库账号缺少建表/删表权限："+err.Error())
+		return
+	}
 	tenantdb.Register(bootstrap.DB)
+	if err := WriteLock(res.Lock); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
 	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "env": res.Env})
 }
 

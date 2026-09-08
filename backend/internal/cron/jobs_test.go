@@ -2,6 +2,8 @@ package cron
 
 import (
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -52,6 +54,41 @@ func TestEnsureNativeJobsInsertsOnce(t *testing.T) {
 	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", "query_refund").Count(&n)
 	if n != 1 {
 		t.Fatalf("query_refund should dedupe to 1, rows=%d", n)
+	}
+	if !bootstrap.DB.Migrator().HasIndex(model.Crontab{}.TableName(), "uniq_active_system_command") {
+		t.Fatal("native jobs need a database unique index")
+	}
+}
+
+func TestAdvisoryLockSerializesProcesses(t *testing.T) {
+	if !initCronDB(t) {
+		t.Skip("no database")
+	}
+	var active, maxActive atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			withAdvisoryLock("test-serialize", func() {
+				n := active.Add(1)
+				for {
+					old := maxActive.Load()
+					if n <= old || maxActive.CompareAndSwap(old, n) {
+						break
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+				active.Add(-1)
+			})
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if maxActive.Load() > 1 {
+		t.Fatalf("advisory lock overlap=%d", maxActive.Load())
 	}
 }
 

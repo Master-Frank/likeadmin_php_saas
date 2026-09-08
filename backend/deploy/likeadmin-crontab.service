@@ -9,6 +9,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/opt/likeadmin/backend
 Environment=LIKEADMIN_CONFIG=/opt/likeadmin/backend/configs/config.yaml
+Environment=LIKEADMIN_DEBUG=false
 # This worker is the production scheduler. Do not rely on HTTP GET /crontab.
 ExecStart=/opt/likeadmin/backend/bin/crontab
 Restart=on-failure

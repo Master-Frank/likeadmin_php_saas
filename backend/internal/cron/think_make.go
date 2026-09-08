@@ -35,6 +35,9 @@ func makeRunner(kind string) CommandFunc {
 }
 
 func runMake(kind string, args []string) string {
+	if !legacyPHPScaffoldEnabled() {
+		return legacyPHPDisabled
+	}
 	mk, ok := makeKinds[kind]
 	if !ok {
 		return fmt.Sprintf("未定义的命令: make:%s", kind)

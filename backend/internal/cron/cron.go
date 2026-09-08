@@ -51,13 +51,17 @@ func RunOnce() {
 		if !due(item, now) {
 			continue
 		}
-		if !claimDueJob(item, now) {
-			continue
-		}
-		start := time.Now()
-		errMsg := runCommand(item)
-		// PHP Crontab::start finally writes last_time = time() after the job.
-		bootstrap.DB.Model(&item).Updates(crontabFinishUpdates(item, start, errMsg))
+		withAdvisoryLock(fmt.Sprintf("crontab:%d", item.ID), func() {
+			if !claimDueJob(item, now) {
+				return
+			}
+			start := time.Now()
+			errMsg := runCommand(item)
+			// Only the worker that claimed last_time=now may finish this run.
+			bootstrap.DB.Model(&model.Crontab{}).
+				Where("id = ? AND last_time = ?", item.ID, now).
+				Updates(crontabFinishUpdates(item, start, errMsg))
+		})
 	}
 }
 
@@ -748,6 +752,10 @@ func EnsureNativeJobs() {
 	if bootstrap.DB == nil {
 		return
 	}
+	withAdvisoryLock("crontab:native-jobs", ensureNativeJobsLocked)
+}
+
+func ensureNativeJobsLocked() {
 	now := util.NowUnix()
 	last := now - 90
 	for _, job := range []model.Crontab{
@@ -781,10 +789,29 @@ func EnsureNativeJobs() {
 			}
 		}
 	}
+	ensureNativeJobUniqueIndex()
 }
 
 func nativeSystemJobs(command string) *gorm.DB {
 	return bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", command)
+}
+
+func ensureNativeJobUniqueIndex() {
+	table := model.Crontab{}.TableName()
+	if !bootstrap.DB.Migrator().HasColumn(table, "active_system_command") {
+		sql := "ALTER TABLE `" + table + "` ADD COLUMN `active_system_command` varchar(64) " +
+			"GENERATED ALWAYS AS (CASE WHEN `system` = 1 AND `delete_time` IS NULL THEN `command` ELSE NULL END) STORED"
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			log.Printf("crontab add active command column: %v", err)
+			return
+		}
+	}
+	if !bootstrap.DB.Migrator().HasIndex(table, "uniq_active_system_command") {
+		sql := "CREATE UNIQUE INDEX `uniq_active_system_command` ON `" + table + "` (`active_system_command`)"
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			log.Printf("crontab add active command index: %v", err)
+		}
+	}
 }
 
 func Loop(interval time.Duration) {

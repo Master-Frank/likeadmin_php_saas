@@ -142,6 +142,7 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 	oldDB := config.C.Database
 	oldSalt := config.C.Project.UniqueIdentification
 	oldHost := config.C.Project.HTTPHost
+	oldPath := config.Path
 	oldBoot := bootstrap.DB
 	t.Cleanup(func() {
 		config.C.App.PublicDir = oldPub
@@ -149,17 +150,20 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 		config.C.Database = oldDB
 		config.C.Project.UniqueIdentification = oldSalt
 		config.C.Project.HTTPHost = oldHost
+		config.Path = oldPath
 		bootstrap.DB = oldBoot
 	})
 	config.C.App.PublicDir = pub
 	config.C.App.InstallLock = filepath.Join(cfgDir, "install.lock")
+	config.Path = goCfg
 
 	gin.SetMode(gin.TestMode)
 	body, _ := json.Marshal(map[string]any{
 		"host": "127.0.0.1", "port": 3306, "user": "likeadmin", "password": "root",
 		"name": smokeDB, "prefix": "la_",
 		"admin_user": "httpadmin", "admin_password": "likeadmin", "admin_confirm_password": "likeadmin",
-		"go_config_path": goCfg, "env_path": filepath.Join(root, ".env"),
+		"skip_sql": 1, "env_path": filepath.Join(root, "attacker.env"),
+		"go_config_path": filepath.Join(root, "attacker.yaml"),
 	})
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -180,6 +184,12 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 	}
 	if _, err := os.Stat(config.C.App.InstallLock); err != nil {
 		t.Fatal("lock not written")
+	}
+	if _, err := os.Stat(filepath.Join(root, "attacker.env")); err == nil {
+		t.Fatal("HTTP installer must ignore caller-controlled env_path")
+	}
+	if _, err := os.Stat(filepath.Join(root, "attacker.yaml")); err == nil {
+		t.Fatal("HTTP installer must ignore caller-controlled go_config_path")
 	}
 	env, err := os.ReadFile(filepath.Join(root, ".env"))
 	if err != nil || !strings.Contains(string(env), smokeDB) {

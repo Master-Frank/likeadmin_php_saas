@@ -357,7 +357,9 @@ CREATE TABLE `la_dev_crontab`
     `create_time` int(10)              DEFAULT NULL COMMENT '创建时间',
     `update_time` int(10)              DEFAULT NULL COMMENT '更新时间',
     `delete_time` int(10)              DEFAULT NULL COMMENT '删除时间',
-    PRIMARY KEY (`id`) USING BTREE
+    `active_system_command` varchar(64) GENERATED ALWAYS AS (CASE WHEN `system` = 1 AND `delete_time` IS NULL THEN `command` ELSE NULL END) STORED,
+    PRIMARY KEY (`id`) USING BTREE,
+    UNIQUE INDEX `uniq_active_system_command` (`active_system_command`) USING BTREE
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='计划任务表';
 

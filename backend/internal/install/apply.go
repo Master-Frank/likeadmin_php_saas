@@ -24,6 +24,7 @@ type Options struct {
 	Host, User, Password, Name, Prefix string
 	Port                               int
 	ClearDB, ImportTest, SkipSQL       bool
+	DeferLock                          bool
 	AdminUser, AdminPassword           string
 	PublicDir, LockPath, EnvPath       string
 	GoConfigPath, HTTPHost             string
@@ -134,12 +135,9 @@ func Apply(opt Options) (*Result, error) {
 			return nil, err
 		}
 	}
-	if lock != "" {
-		if err := os.MkdirAll(filepath.Dir(lock), 0o755); err != nil {
+	if lock != "" && !opt.DeferLock {
+		if err := WriteLock(lock); err != nil {
 			return nil, err
-		}
-		if err := os.WriteFile(lock, []byte{}, 0o644); err != nil {
-			return nil, fmt.Errorf("写入安装锁失败：%w", err)
 		}
 	}
 	if opt.PublicDir != "" {
@@ -149,6 +147,19 @@ func Apply(opt Options) (*Result, error) {
 		_ = sqlDB.Close()
 	}
 	return &Result{Lock: lock, Env: envPath, Imported: imported, Salt: salt}, nil
+}
+
+func WriteLock(lock string) error {
+	if lock == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(lock), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(lock, []byte{}, 0o644); err != nil {
+		return fmt.Errorf("写入安装锁失败：%w", err)
+	}
+	return nil
 }
 
 func ensureDatabase(db *gorm.DB, dbName, prefix string, clearDB bool) error {

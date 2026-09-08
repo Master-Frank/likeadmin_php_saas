@@ -26,7 +26,21 @@ func TestParseRunArgs(t *testing.T) {
 	}
 }
 
+func TestPHPScaffoldDisabledByDefault(t *testing.T) {
+	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "")
+	if got := RunNamed("make:model", "Demo"); got != legacyPHPDisabled {
+		t.Fatalf("make:model=%q", got)
+	}
+	if got := RunNamed("build", "demo"); got != legacyPHPDisabled {
+		t.Fatalf("build=%q", got)
+	}
+	if got := RunNamed("vendor:publish"); got != legacyPHPDisabled {
+		t.Fatalf("vendor:publish=%q", got)
+	}
+}
+
 func TestMakeControllerAndModel(t *testing.T) {
+	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
 	dir := t.TempDir()
 	old := config.C.App.PublicDir
 	config.C.App.PublicDir = filepath.Join(dir, "public")
@@ -86,6 +100,7 @@ func TestMakeControllerAndModel(t *testing.T) {
 }
 
 func TestVendorPublishAndServiceDiscover(t *testing.T) {
+	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
 	dir := t.TempDir()
 	old := config.C.App.PublicDir
 	config.C.App.PublicDir = filepath.Join(dir, "public")
@@ -139,6 +154,7 @@ func TestVendorPublishAndServiceDiscover(t *testing.T) {
 }
 
 func TestBuildAppDirs(t *testing.T) {
+	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
 	dir := t.TempDir()
 	old := config.C.App.PublicDir
 	config.C.App.PublicDir = filepath.Join(dir, "public")

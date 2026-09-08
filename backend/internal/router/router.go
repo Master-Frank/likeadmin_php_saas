@@ -103,6 +103,7 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 		h := lookup(routes, key)
 		if h == nil && gencrud.Match(app, ctrl, action) {
 			h = gencrud.Handle
+			c.Set("likeadmin.gencrud", true)
 		}
 		if h == nil {
 			response.FailCode(c, "controller not exists:"+ctrl, response.CodeNotFound, 0)

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -102,6 +103,13 @@ func Load(path string) error {
 	}
 	if env := os.Getenv("LIKEADMIN_LISTEN"); env != "" {
 		C.App.Listen = env
+	}
+	if env := strings.TrimSpace(os.Getenv("LIKEADMIN_DEBUG")); env != "" {
+		debug, err := strconv.ParseBool(env)
+		if err != nil {
+			return err
+		}
+		C.App.Debug = debug
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"time"
 
 	"likeadmin/backend/internal/config"
@@ -52,6 +53,33 @@ func Installed() bool {
 // ReconnectDB opens the DB after a successful /install (config.C already updated).
 func ReconnectDB() error {
 	return initDB()
+}
+
+var ddlIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+
+// CheckDDLPrivileges verifies the application account can provision sharded
+// tenants and apply schema upgrades. It creates and removes one uniquely named
+// empty table in the configured database.
+func CheckDDLPrivileges() error {
+	if DB == nil {
+		return fmt.Errorf("database unavailable")
+	}
+	name := config.Prefix() + "go_ddl_probe_" + fmt.Sprint(time.Now().UnixNano())
+	name = ddlIdent.ReplaceAllString(name, "_")
+	if err := DB.Exec("CREATE TABLE `" + name + "` (`id` int NOT NULL PRIMARY KEY)").Error; err != nil {
+		return fmt.Errorf("CREATE TABLE: %w", err)
+	}
+	if err := DB.Exec("DROP TABLE `" + name + "`").Error; err != nil {
+		return fmt.Errorf("DROP TABLE: %w", err)
+	}
+	return nil
+}
+
+func RequireDDLPrivileges() error {
+	if os.Getenv("LIKEADMIN_REQUIRE_DDL") == "0" || !Installed() {
+		return nil
+	}
+	return CheckDDLPrivileges()
 }
 
 func initDB() error {
