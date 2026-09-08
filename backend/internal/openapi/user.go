@@ -364,8 +364,8 @@ func ArticleLists(c *gin.Context) {
 	if lists.HasParam(q, "cid") {
 		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
 	}
-	if kw := lists.Param(q, "keyword"); kw != "" {
-		db = db.Where("title LIKE ?", "%"+kw+"%")
+	if lists.PHPTruthy(q, "keyword") {
+		db = db.Where("title LIKE ?", "%"+lists.Param(q, "keyword")+"%")
 	}
 	order := "sort desc, id desc"
 	switch lists.Param(q, "sort") {
@@ -456,7 +456,7 @@ func AccountLogLists(c *gin.Context) {
 	if lists.Param(q, "type") == "um" {
 		db = db.Where("change_type IN ?", biz.UserMoneyChangeTypes())
 	}
-	if action := lists.Param(q, "action"); action != "" {
+	if lists.PHPTruthy(q, "action") {
 		db = db.Where("action = ?", lists.ParamInt(q, "action"))
 	}
 	var count int64

@@ -336,13 +336,13 @@ func UserLists(c *gin.Context) {
 	if lists.PHPTruthy(q, "channel") {
 		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
 	}
-	if start := lists.Param(q, "create_time_start"); start != "" {
-		if ts := util.ParseDateTime(start); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_start") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_start")); ts > 0 {
 			db = db.Where("create_time >= ?", ts)
 		}
 	}
-	if end := lists.Param(q, "create_time_end"); end != "" {
-		if ts := util.ParseDateTime(end); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_end") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_end")); ts > 0 {
 			db = db.Where("create_time <= ?", ts)
 		}
 	}
@@ -451,13 +451,13 @@ func ArticleLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.Article{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
-	if title := lists.Param(q, "title"); title != "" {
-		db = db.Where("title LIKE ?", "%"+title+"%")
+	if lists.PHPTruthy(q, "title") {
+		db = db.Where("title LIKE ?", "%"+lists.Param(q, "title")+"%")
 	}
 	if lists.HasParam(q, "cid") {
 		db = db.Where("cid = ?", lists.ParamInt(q, "cid"))
 	}
-	if lists.Param(q, "is_show") != "" {
+	if lists.HasParam(q, "is_show") {
 		db = db.Where("is_show = ?", lists.ParamInt(q, "is_show"))
 	}
 	var count int64
@@ -929,20 +929,20 @@ func RechargeLists(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(ro+" AS ro").Joins("JOIN "+u+" AS u ON u.id = ro.user_id").
 		Where("ro.delete_time IS NULL AND ro.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	if sn := lists.Param(q, "sn"); sn != "" {
-		db = db.Where("ro.sn = ?", sn)
+	if lists.HasParam(q, "sn") {
+		db = db.Where("ro.sn = ?", lists.Param(q, "sn"))
 	}
-	if lists.Param(q, "pay_way") != "" {
+	if lists.HasParam(q, "pay_way") {
 		db = db.Where("ro.pay_way = ?", lists.ParamInt(q, "pay_way"))
 	}
-	if lists.Param(q, "pay_status") != "" {
+	if lists.HasParam(q, "pay_status") {
 		db = db.Where("ro.pay_status = ?", lists.ParamInt(q, "pay_status"))
 	}
-	if info := lists.Param(q, "user_info"); info != "" {
-		like := "%" + info + "%"
+	if lists.PHPTruthy(q, "user_info") {
+		like := "%" + lists.Param(q, "user_info") + "%"
 		db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
 	}
-	if q.StartTime != "" && q.EndTime != "" {
+	if lists.PHPTruthy(q, "start_time") && lists.PHPTruthy(q, "end_time") {
 		db = db.Where("ro.create_time BETWEEN ? AND ?", util.ParseDateTime(q.StartTime), util.ParseDateTime(q.EndTime))
 	}
 	var count int64
@@ -993,20 +993,20 @@ func FinanceAccountLogLists(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	db := tdb(c).Table(al+" AS al").Joins("JOIN "+u+" AS u ON u.id = al.user_id").
 		Where("al.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	if lists.Param(q, "change_type") != "" {
+	if lists.HasParam(q, "change_type") {
 		db = db.Where("al.change_type = ?", lists.ParamInt(q, "change_type"))
 	}
 	if lists.Param(q, "type") == "um" {
 		db = db.Where("al.change_type IN ?", []int{biz.UMDecAdmin, biz.UMDecRechargeRefund, biz.UMIncAdmin, biz.UMIncRecharge})
 	}
-	if info := lists.Param(q, "user_info"); info != "" {
-		like := "%" + info + "%"
+	if lists.PHPTruthy(q, "user_info") {
+		like := "%" + lists.Param(q, "user_info") + "%"
 		db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
 	}
-	if q.StartTime != "" {
+	if lists.PHPTruthy(q, "start_time") {
 		db = db.Where("al.create_time >= ?", util.ParseDateTime(q.StartTime))
 	}
-	if q.EndTime != "" {
+	if lists.PHPTruthy(q, "end_time") {
 		db = db.Where("al.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
 	var count int64
@@ -1058,50 +1058,50 @@ func FinanceRefundRecord(c *gin.Context) {
 	u := tenantdb.Table(c, model.User{}.TableName())
 	base := tdb(c).Table(rt+" AS r").Joins("JOIN "+u+" AS u ON u.id = r.user_id").
 		Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-	if sn := lists.Param(q, "sn"); sn != "" {
-		base = base.Where("r.sn = ?", sn)
+	if lists.HasParam(q, "sn") {
+		base = base.Where("r.sn = ?", lists.Param(q, "sn"))
 	}
-	if osn := lists.Param(q, "order_sn"); osn != "" {
-		base = base.Where("r.order_sn = ?", osn)
+	if lists.HasParam(q, "order_sn") {
+		base = base.Where("r.order_sn = ?", lists.Param(q, "order_sn"))
 	}
-	if lists.Param(q, "refund_type") != "" {
+	if lists.HasParam(q, "refund_type") {
 		base = base.Where("r.refund_type = ?", lists.ParamInt(q, "refund_type"))
 	}
-	if info := lists.Param(q, "user_info"); info != "" {
-		like := "%" + info + "%"
+	if lists.PHPTruthy(q, "user_info") {
+		like := "%" + lists.Param(q, "user_info") + "%"
 		base = base.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
 	}
-	if q.StartTime != "" {
+	if lists.PHPTruthy(q, "start_time") {
 		base = base.Where("r.create_time >= ?", util.ParseDateTime(q.StartTime))
 	}
-	if q.EndTime != "" {
+	if lists.PHPTruthy(q, "end_time") {
 		base = base.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
 	}
 	extendWhere := func(db *gorm.DB) *gorm.DB {
 		db = db.Table(rt+" AS r").Joins("JOIN "+u+" AS u ON u.id = r.user_id").
 			Where("r.tenant_id = ? AND u.tenant_id = ?", tid, tid)
-		if sn := lists.Param(q, "sn"); sn != "" {
-			db = db.Where("r.sn = ?", sn)
+		if lists.HasParam(q, "sn") {
+			db = db.Where("r.sn = ?", lists.Param(q, "sn"))
 		}
-		if osn := lists.Param(q, "order_sn"); osn != "" {
-			db = db.Where("r.order_sn = ?", osn)
+		if lists.HasParam(q, "order_sn") {
+			db = db.Where("r.order_sn = ?", lists.Param(q, "order_sn"))
 		}
-		if lists.Param(q, "refund_type") != "" {
+		if lists.HasParam(q, "refund_type") {
 			db = db.Where("r.refund_type = ?", lists.ParamInt(q, "refund_type"))
 		}
-		if info := lists.Param(q, "user_info"); info != "" {
-			like := "%" + info + "%"
+		if lists.PHPTruthy(q, "user_info") {
+			like := "%" + lists.Param(q, "user_info") + "%"
 			db = db.Where("u.sn LIKE ? OR u.nickname LIKE ? OR u.mobile LIKE ? OR u.account LIKE ?", like, like, like, like)
 		}
-		if q.StartTime != "" {
+		if lists.PHPTruthy(q, "start_time") {
 			db = db.Where("r.create_time >= ?", util.ParseDateTime(q.StartTime))
 		}
-		if q.EndTime != "" {
+		if lists.PHPTruthy(q, "end_time") {
 			db = db.Where("r.create_time <= ?", util.ParseDateTime(q.EndTime))
 		}
 		return db
 	}
-	if lists.Param(q, "refund_status") != "" {
+	if lists.HasParam(q, "refund_status") {
 		base = base.Where("r.refund_status = ?", lists.ParamInt(q, "refund_status"))
 	}
 	var count int64

@@ -253,17 +253,17 @@ func LogLists(c *gin.Context) {
 			}
 		}
 	}
-	if name := lists.Param(q, "admin_name"); name != "" {
-		db = db.Where("admin_name LIKE ?", "%"+name+"%")
+	if lists.PHPTruthy(q, "admin_name") {
+		db = db.Where("admin_name LIKE ?", "%"+lists.Param(q, "admin_name")+"%")
 	}
-	if url := lists.Param(q, "url"); url != "" {
-		db = db.Where("url LIKE ?", "%"+url+"%")
+	if lists.PHPTruthy(q, "url") {
+		db = db.Where("url LIKE ?", "%"+lists.Param(q, "url")+"%")
 	}
-	if ip := lists.Param(q, "ip"); ip != "" {
-		db = db.Where("ip LIKE ?", "%"+ip+"%")
+	if lists.PHPTruthy(q, "ip") {
+		db = db.Where("ip LIKE ?", "%"+lists.Param(q, "ip")+"%")
 	}
-	if typ := lists.Param(q, "type"); typ != "" {
-		db = db.Where("type LIKE ?", "%"+typ+"%")
+	if lists.PHPTruthy(q, "type") {
+		db = db.Where("type LIKE ?", "%"+lists.Param(q, "type")+"%")
 	}
 	startTS, endTS := util.ParseDateTime(q.StartTime), util.ParseDateTime(q.EndTime)
 	if startTS > 0 && endTS > 0 {
@@ -290,13 +290,13 @@ func DictTypeLists(c *gin.Context) {
 		return
 	}
 	db := bootstrap.DB.Model(&model.DictType{}).Where("delete_time IS NULL")
-	if n := lists.Param(q, "name"); n != "" {
-		db = db.Where("name LIKE ?", "%"+n+"%")
+	if lists.PHPTruthy(q, "name") {
+		db = db.Where("name LIKE ?", "%"+lists.Param(q, "name")+"%")
 	}
-	if t := lists.Param(q, "type"); t != "" {
-		db = db.Where("type LIKE ?", "%"+t+"%")
+	if lists.PHPTruthy(q, "type") {
+		db = db.Where("type LIKE ?", "%"+lists.Param(q, "type")+"%")
 	}
-	if lists.Param(q, "status") != "" {
+	if lists.HasParam(q, "status") {
 		db = db.Where("status = ?", lists.ParamInt(q, "status"))
 	}
 	var count int64
@@ -409,13 +409,13 @@ func DictDataLists(c *gin.Context) {
 		return
 	}
 	db := bootstrap.DB.Model(&model.DictData{}).Where("delete_time IS NULL")
-	if n := lists.Param(q, "name"); n != "" {
-		db = db.Where("name LIKE ?", "%"+n+"%")
+	if lists.PHPTruthy(q, "name") {
+		db = db.Where("name LIKE ?", "%"+lists.Param(q, "name")+"%")
 	}
-	if t := lists.Param(q, "type_value"); t != "" {
-		db = db.Where("type_value LIKE ?", "%"+t+"%")
+	if lists.PHPTruthy(q, "type_value") {
+		db = db.Where("type_value LIKE ?", "%"+lists.Param(q, "type_value")+"%")
 	}
-	if lists.Param(q, "status") != "" {
+	if lists.HasParam(q, "status") {
 		db = db.Where("status = ?", lists.ParamInt(q, "status"))
 	}
 	if lists.HasParam(q, "type_id") {

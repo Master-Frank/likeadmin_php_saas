@@ -261,13 +261,14 @@ func ParamInt(q Query, key string) int {
 	return util.ToInt(q.Params[key])
 }
 
-// HasParam matches PHP ListsSearchTrait '=' filters: skip only when missing or ”.
+// HasParam matches PHP ListsSearchTrait '=' filters: skip only when
+// missing/null or the value loosely equals ”. GET "0" and whitespace stay.
 func HasParam(q Query, key string) bool {
 	v, ok := q.Params[key]
 	if !ok || v == nil {
 		return false
 	}
-	return strings.TrimSpace(util.ToString(v)) != ""
+	return util.ToString(v) != ""
 }
 
 // PHPTruthy matches PHP model searchers that gate with `if ($value)`.

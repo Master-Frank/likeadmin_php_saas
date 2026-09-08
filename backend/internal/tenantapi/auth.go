@@ -25,13 +25,13 @@ func AdminLists(c *gin.Context) {
 	}
 	tid := tenantDB(c)
 	db := tdb(c).Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
-	if name := lists.Param(q, "name"); name != "" {
-		db = db.Where("name LIKE ?", "%"+name+"%")
+	if lists.PHPTruthy(q, "name") {
+		db = db.Where("name LIKE ?", "%"+lists.Param(q, "name")+"%")
 	}
-	if account := lists.Param(q, "account"); account != "" {
-		db = db.Where("account LIKE ?", "%"+account+"%")
+	if lists.PHPTruthy(q, "account") {
+		db = db.Where("account LIKE ?", "%"+lists.Param(q, "account")+"%")
 	}
-	if rid := lists.Param(q, "role_id"); rid != "" {
+	if lists.HasParam(q, "role_id") {
 		var ids []uint
 		tdb(c).Model(&model.TenantAdminRole{}).Where("role_id = ?", lists.ParamInt(q, "role_id")).Pluck("admin_id", &ids)
 		if len(ids) > 0 {

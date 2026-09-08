@@ -23,11 +23,11 @@ func FileLists(c *gin.Context) {
 	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
-	if lists.Param(q, "source") != "" {
+	if lists.HasParam(q, "source") {
 		db = db.Where("source = ?", lists.ParamInt(q, "source"))
 	}
-	if name := lists.Param(q, "name"); name != "" {
-		db = db.Where("name LIKE ?", "%"+name+"%")
+	if lists.PHPTruthy(q, "name") {
+		db = db.Where("name LIKE ?", "%"+lists.Param(q, "name")+"%")
 	}
 	db = filesvc.ApplyFileCID(db, &model.TenantFileCate{}, q.Params, tenantDB(c))
 	var count int64

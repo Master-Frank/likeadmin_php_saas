@@ -36,13 +36,13 @@ func TenantLists(c *gin.Context) {
 		like := "%" + kw + "%"
 		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ? OR domain_alias LIKE ?", like, like, like, like)
 	}
-	if start := lists.Param(q, "create_time_start"); start != "" {
-		if ts := util.ParseDateTime(start); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_start") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_start")); ts > 0 {
 			db = db.Where("create_time >= ?", ts)
 		}
 	}
-	if end := lists.Param(q, "create_time_end"); end != "" {
-		if ts := util.ParseDateTime(end); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_end") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_end")); ts > 0 {
 			db = db.Where("create_time <= ?", ts)
 		}
 	}
@@ -355,13 +355,13 @@ func TenantAdminLists(c *gin.Context) {
 		kw := lists.Param(q, "keyword")
 		db = db.Where("name LIKE ? OR account LIKE ?", "%"+kw+"%", "%"+kw+"%")
 	}
-	if start := lists.Param(q, "create_time_start"); start != "" {
-		if ts := util.ParseDateTime(start); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_start") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_start")); ts > 0 {
 			db = db.Where("create_time >= ?", ts)
 		}
 	}
-	if end := lists.Param(q, "create_time_end"); end != "" {
-		if ts := util.ParseDateTime(end); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_end") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_end")); ts > 0 {
 			db = db.Where("create_time <= ?", ts)
 		}
 	}
@@ -748,13 +748,13 @@ func TenantUserLists(c *gin.Context) {
 	if lists.PHPTruthy(q, "channel") {
 		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
 	}
-	if start := lists.Param(q, "create_time_start"); start != "" {
-		if ts := util.ParseDateTime(start); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_start") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_start")); ts > 0 {
 			db = db.Where("create_time >= ?", ts)
 		}
 	}
-	if end := lists.Param(q, "create_time_end"); end != "" {
-		if ts := util.ParseDateTime(end); ts > 0 {
+	if lists.PHPTruthy(q, "create_time_end") {
+		if ts := util.ParseDateTime(lists.Param(q, "create_time_end")); ts > 0 {
 			db = db.Where("create_time <= ?", ts)
 		}
 	}

@@ -162,6 +162,9 @@ func TestHasParamTreatsZeroAsPresent(t *testing.T) {
 	if HasParam(q, "missing") || HasParam(Query{Params: map[string]any{"cid": ""}}, "cid") {
 		t.Fatal("empty must be absent")
 	}
+	if !HasParam(Query{Params: map[string]any{"cid": "   "}}, "cid") {
+		t.Fatal("whitespace must be present under PHP ==")
+	}
 }
 
 func TestParseGETRejectsPOST(t *testing.T) {

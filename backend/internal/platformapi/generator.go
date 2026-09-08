@@ -35,13 +35,13 @@ func GeneratorDataTable(c *gin.Context) {
 	// PHP DataTableLists: SHOW TABLE STATUS + array_change_key_case, filter name/comment via param().
 	sql := "SHOW TABLE STATUS WHERE 1=1"
 	args := make([]any, 0, 2)
-	if name := lists.Param(q, "name"); name != "" {
+	if lists.PHPTruthy(q, "name") {
 		sql += " AND Name LIKE ?"
-		args = append(args, "%"+name+"%")
+		args = append(args, "%"+lists.Param(q, "name")+"%")
 	}
-	if comment := lists.Param(q, "comment"); comment != "" {
+	if lists.PHPTruthy(q, "comment") {
 		sql += " AND Comment LIKE ?"
-		args = append(args, "%"+comment+"%")
+		args = append(args, "%"+lists.Param(q, "comment")+"%")
 	}
 	rows, err := showTableStatus(bootstrap.DB, sql, args...)
 	if err != nil {
@@ -67,11 +67,11 @@ func GeneratorGenerateTable(c *gin.Context) {
 	}
 	db := bootstrap.DB.Model(&model.GenerateTable{})
 	// PHP ListsSearchTrait %like% on table_name / table_comment independently (AND).
-	if n := lists.Param(q, "table_name"); n != "" {
-		db = db.Where("table_name LIKE ?", "%"+n+"%")
+	if lists.PHPTruthy(q, "table_name") {
+		db = db.Where("table_name LIKE ?", "%"+lists.Param(q, "table_name")+"%")
 	}
-	if cmt := lists.Param(q, "table_comment"); cmt != "" {
-		db = db.Where("table_comment LIKE ?", "%"+cmt+"%")
+	if lists.PHPTruthy(q, "table_comment") {
+		db = db.Where("table_comment LIKE ?", "%"+lists.Param(q, "table_comment")+"%")
 	}
 	var count int64
 	// PHP GenerateTableLists::count() is unfiltered GenerateTable::count().

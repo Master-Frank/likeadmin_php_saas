@@ -371,49 +371,43 @@ func applySearch(db *gorm.DB, sp *spec, q lists.Query) *gorm.DB {
 		}
 		switch qt {
 		case "like", "%like%":
-			if v := lists.Param(q, param); v != "" {
-				db = db.Where(name+" LIKE ?", "%"+v+"%")
+			// PHP ListsSearchTrait %like%: skip when empty() — "0" does not LIKE.
+			if lists.PHPTruthy(q, param) {
+				db = db.Where(name+" LIKE ?", "%"+lists.Param(q, param)+"%")
 			}
 		case "%like":
-			if v := lists.Param(q, param); v != "" {
-				db = db.Where(name+" LIKE ?", "%"+v)
+			if lists.PHPTruthy(q, param) {
+				db = db.Where(name+" LIKE ?", "%"+lists.Param(q, param))
 			}
 		case "like%":
-			if v := lists.Param(q, param); v != "" {
-				db = db.Where(name+" LIKE ?", v+"%")
+			if lists.PHPTruthy(q, param) {
+				db = db.Where(name+" LIKE ?", lists.Param(q, param)+"%")
 			}
 		case "=", "<>", ">", ">=", "<", "<=":
-			if _, ok := q.Params[param]; !ok {
-				continue
+			// PHP '=' family: skip only when !isset or == ''.
+			if lists.HasParam(q, param) {
+				db = db.Where(name+" "+qt+" ?", lists.Param(q, param))
 			}
-			v := lists.Param(q, param)
-			if v == "" {
-				continue
-			}
-			db = db.Where(name+" "+qt+" ?", v)
 		case "in":
-			if raw, ok := q.Params[param]; ok && raw != nil && util.ToString(raw) != "" {
-				db = db.Where(name+" IN ?", toSlice(raw))
+			if lists.HasParam(q, param) {
+				db = db.Where(name+" IN ?", toSlice(q.Params[param]))
 			}
 		case "between":
 			if col.ViewType == "datetime" || col.ViewType == "datetime2" {
 				if start, end, ok := parseSearchTimeRange(q.StartTime, q.EndTime); ok {
 					db = db.Where(name+" BETWEEN ? AND ?", start, end)
 				}
-			} else {
-				start := lists.Param(q, "start")
-				end := lists.Param(q, "end")
-				if start != "" && end != "" {
-					db = db.Where(name+" BETWEEN ? AND ?", start, end)
-				}
+			} else if lists.PHPTruthy(q, "start") && lists.PHPTruthy(q, "end") {
+				// PHP empty($this->start) || empty($this->end)
+				db = db.Where(name+" BETWEEN ? AND ?", lists.Param(q, "start"), lists.Param(q, "end"))
 			}
 		case "between_time":
 			if start, end, ok := parseSearchTimeRange(q.StartTime, q.EndTime); ok {
 				db = db.Where(name+" BETWEEN ? AND ?", start, end)
 			}
 		case "find_in_set":
-			if v := lists.Param(q, param); v != "" {
-				db = db.Where("FIND_IN_SET(?, "+name+")", v)
+			if lists.HasParam(q, param) {
+				db = db.Where("FIND_IN_SET(?, "+name+")", lists.Param(q, param))
 			}
 		}
 	}

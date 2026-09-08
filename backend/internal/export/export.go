@@ -145,7 +145,7 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 }
 
 func Serve(c *gin.Context) {
-	key := httpx.QueryStr(c, "file")
+	key := httpx.QueryRaw(c, "file")
 	var info fileInfo
 	if !cache.GetJSON("export_file_"+key, &info) || info.Name == "" {
 		response.Fail(c, "下载文件不存在")

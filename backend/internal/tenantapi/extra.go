@@ -969,10 +969,10 @@ func TenantNoticeLists(c *gin.Context) {
 		return
 	}
 	db = db.Where("tenant_id = ?", tid)
-	if lists.Param(q, "recipient") != "" {
+	if lists.HasParam(q, "recipient") {
 		db = db.Where("recipient = ?", lists.ParamInt(q, "recipient"))
 	}
-	if lists.Param(q, "type") != "" {
+	if lists.HasParam(q, "type") {
 		db = db.Where("type = ?", lists.ParamInt(q, "type"))
 	}
 	var count int64

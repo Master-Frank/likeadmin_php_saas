@@ -211,13 +211,13 @@ func JobsLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.TenantJobs{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
-	if name := lists.Param(q, "name"); name != "" {
-		db = db.Where("name LIKE ?", "%"+name+"%")
+	if lists.PHPTruthy(q, "name") {
+		db = db.Where("name LIKE ?", "%"+lists.Param(q, "name")+"%")
 	}
-	if code := lists.Param(q, "code"); code != "" {
-		db = db.Where("code = ?", code)
+	if lists.HasParam(q, "code") {
+		db = db.Where("code = ?", lists.Param(q, "code"))
 	}
-	if lists.Param(q, "status") != "" {
+	if lists.HasParam(q, "status") {
 		db = db.Where("status = ?", lists.ParamInt(q, "status"))
 	}
 	var count int64
