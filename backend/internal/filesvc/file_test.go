@@ -73,6 +73,23 @@ func TestRewriteContentDomains(t *testing.T) {
 	}
 }
 
+func TestClearContentDomainsCurrentPrefixOnly(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	in := `<p><img src="https://cdn.example/uploads/a.png" class="x"><img src="https://old.example/uploads/b.png"><img src="uploads/keep.png"></p>`
+	got := ClearContentDomains(nil, in)
+	want := `<p><img src="uploads/a.png" class="x"><img src="https://old.example/uploads/b.png"><img src="uploads/keep.png"></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestClearContentDomains(t *testing.T) {
 	in := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video><img src="uploads/keep.png"></p>`
 	got := mapMediaSrc(in, func(src string) string {

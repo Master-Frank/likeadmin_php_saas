@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,6 +58,46 @@ func TestMergeNoticeParamsFromUser(t *testing.T) {
 	skip := mergeNoticeParams(c, map[string]string{"user_id": "0", "code": "4321"})
 	if skip["nickname"] != "" {
 		t.Fatalf("user_id=0 must not use ctx UserID, got %+v", skip)
+	}
+}
+
+func TestMergeNoticeParamsPlatformTenantZero(t *testing.T) {
+	if !initNoticeDB(t) {
+		t.Skip("no database")
+	}
+	var user model.User
+	if bootstrap.DB.Where("tenant_id = 1 AND delete_time IS NULL AND nickname <> ''").First(&user).Error != nil {
+		t.Skip("no tenant user")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	ctxutil.Get(c).TenantID = 0
+	got := mergeNoticeParams(c, map[string]string{"user_id": strconv.Itoa(int(user.ID))})
+	if got["nickname"] != user.Nickname {
+		t.Fatalf("tid=0 must load user by id: %+v want %s", got, user.Nickname)
+	}
+}
+
+func TestNoticeBySceneRateLimit(t *testing.T) {
+	if !initNoticeDB(t) {
+		t.Skip("no database")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	meta := ctxutil.Get(c)
+	meta.App = "platformapi"
+	meta.Source = ctxutil.SourcePlatform
+	mobile := "13800009992"
+	bootstrap.DB.Where("mobile = ?", mobile).Delete(&model.SmsLog{})
+	now := util.NowUnix()
+	row := model.SmsLog{SceneID: LoginCaptcha, Mobile: mobile, Code: "1111", Content: "x", SendStatus: 1, SendTime: &now}
+	if err := bootstrap.DB.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Where("mobile = ?", mobile).Delete(&model.SmsLog{}) })
+	err := NoticeByScene(c, LoginCaptcha, map[string]string{"mobile": mobile, "code": "9999"})
+	if err == nil || err.Error() != "同一手机号1分钟只能发送1条短信" {
+		t.Fatalf("rate limit: %v", err)
 	}
 }
 

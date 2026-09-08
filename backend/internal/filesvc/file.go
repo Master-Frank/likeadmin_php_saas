@@ -66,7 +66,18 @@ func ClearContentDomains(c *gin.Context, content string) string {
 	if content == "" {
 		return content
 	}
-	strip := func(src string) string { return SetFileURL(c, src) }
+	// PHP clear_file_domain only strips img src that start with the current
+	// FileService::getFileUrl() prefix. Keep other tag attrs (Go-ahead).
+	base := strings.TrimRight(GetFileURL(c, ""), "/") + "/"
+	if base == "/" {
+		return content
+	}
+	strip := func(src string) string {
+		if strings.HasPrefix(src, base) {
+			return strings.TrimPrefix(src, base)
+		}
+		return src
+	}
 	content = imgSrcRe.ReplaceAllStringFunc(content, func(m string) string {
 		return rewriteMediaSrc(imgSrcRe, m, strip)
 	})

@@ -134,6 +134,13 @@ func NoticeByScene(c *gin.Context, sceneID int, params map[string]string) error 
 		logID = createSMSLog(c, sceneID, params["mobile"], params["code"], content, now)
 	}
 	addNoticeRecord(c, sceneID, params, tid)
+	// PHP SmsDriver::sendLimit runs after addSmsLog / addNotice.
+	if params["mobile"] != "" && bootstrap.DB != nil && tooFrequent(c, params["mobile"]) {
+		if logID > 0 {
+			updateSMSLog(c, logID, map[string]any{"send_status": 2, "results": encodeSMSResult("同一手机号1分钟只能发送1条短信")}, "")
+		}
+		return fmt.Errorf("同一手机号1分钟只能发送1条短信")
+	}
 	if params["mobile"] != "" && params["code"] != "" {
 		cache.Set(cacheKey(sceneID, params["mobile"]), params["code"], 5*time.Minute)
 	}
@@ -170,11 +177,11 @@ func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]stri
 		db = bootstrap.DB
 	}
 	q := db.Where("id = ? AND delete_time IS NULL", uid)
+	// PHP User::findOrEmpty($id) has no tenant filter. Keep tenant_id
+	// when the request is already scoped; tid==0 must still load by id.
 	if c != nil {
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
-		} else {
-			q = q.Where("1 = 0")
 		}
 	}
 	var u model.User
