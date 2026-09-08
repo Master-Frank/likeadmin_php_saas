@@ -156,3 +156,54 @@ func TestParseGETRejectsPOST(t *testing.T) {
 		t.Fatal("POST lists must fail")
 	}
 }
+
+func TestValidateQueryMatchesListsValidate(t *testing.T) {
+	oldMax := config.C.Project.Lists.PageSizeMax
+	config.C.Project.Lists.PageSizeMax = 25000
+	t.Cleanup(func() { config.C.Project.Lists.PageSizeMax = oldMax })
+
+	if msg := ValidateQuery(nil); msg != "" {
+		t.Fatal(msg)
+	}
+	if msg := ValidateQuery(map[string]any{"page_size": "25001"}); msg != "已超出系统限制数量，请分页查询或导出，当前最多记录数为：25000" {
+		t.Fatalf("page_size max %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"page_size": "0"}); msg != "page_size必须大于 0" {
+		t.Fatalf("page_size 0 %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"page_type": "2"}); msg != "page_type必须在 0,1 范围内" {
+		t.Fatalf("page_type %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"order_by": "sideways"}); msg != "order_by必须在 desc,asc 范围内" {
+		t.Fatalf("order_by %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"export": "3"}); msg != "export必须在 1,2 范围内" {
+		t.Fatalf("export %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"page_start": "5", "page_end": "2"}); msg != "导出范围设置不正确，请重新选择" {
+		t.Fatalf("page_end %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"start_time": "2024-02-02", "end_time": "2024-01-01"}); msg != "搜索的时间范围不正确" {
+		t.Fatalf("end_time %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"start_time": "not-a-date"}); msg != "start_time不是一个有效的日期" {
+		t.Fatalf("start_time %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"end_time": "2024-01-01"}); msg != "" {
+		t.Fatalf("end only should pass %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"start": "-1"}); msg != "start必须是数字" {
+		t.Fatalf("start %q", msg)
+	}
+	if msg := ValidateQuery(map[string]any{"page_type": "0", "export": "2", "order_by": "desc", "page_size": "10"}); msg != "" {
+		t.Fatalf("valid %q", msg)
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?page_size=25001", nil)
+	if _, ok := ParseGET(c); ok {
+		t.Fatal("oversized page_size must fail ParseGET")
+	}
+}

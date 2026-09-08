@@ -36,6 +36,11 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		fileName = spec.FileName
 	}
 	exp := httpx.QueryInt(c, "export")
+	// PHP BaseDataLists::initExport rejects lists that do not implement ListsExcelInterface.
+	if (exp == 1 || exp == 2) && spec.FileName == "" && len(spec.Fields) == 0 {
+		response.Fail(c, "该列表不支持导出")
+		return true
+	}
 	if exp == 1 {
 		n := rowCount(rows)
 		if v, ok := c.Get("likeadmin.export_count"); ok {
@@ -299,13 +304,6 @@ func formatCell(key string, v any) string {
 			if d := util.ChannelDesc(n); d != "" {
 				return d
 			}
-		}
-	case "disable":
-		if n, ok := asInt(v); ok {
-			if n == 1 {
-				return "禁用"
-			}
-			return "正常"
 		}
 	case "pay_status", "pay_status_text":
 		if n, ok := asInt(v); ok {

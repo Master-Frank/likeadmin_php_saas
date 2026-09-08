@@ -2,7 +2,6 @@ package biz
 
 import (
 	"encoding/json"
-	"strconv"
 	"strings"
 
 	"likeadmin/backend/internal/util"
@@ -48,8 +47,7 @@ func CheckPayConfig(in PayConfigInput) string {
 	if !isNumericValue(in.Sort) {
 		return "排序必须是纯数字"
 	}
-	sortVal := util.ToInt(in.Sort)
-	if len(strconv.Itoa(sortVal)) > 5 {
+	if sortMaxLen(in.Sort) > 5 {
 		return "排序最大不能超过五位数"
 	}
 	if !in.Exists {
@@ -92,17 +90,9 @@ func CheckPayConfig(in PayConfigInput) string {
 		if emptyPay(cfg, "private_key") {
 			return "应用私钥不能为空"
 		}
-		if util.ToString(cfg["mode"]) == "certificate" {
-			if emptyPay(cfg, "public_cert") {
-				return "应用公钥证书不能为空"
-			}
-			if emptyPay(cfg, "ali_public_cert") {
-				return "支付宝公钥证书不能为空"
-			}
-			if emptyPay(cfg, "ali_root_cert") {
-				return "支付宝根证书不能为空"
-			}
-		} else if emptyPay(cfg, "ali_public_key") {
+		// PHP PayConfigValidate::checkConfig always requires ali_public_key,
+		// even when mode=certificate (it never reads the cert fields).
+		if emptyPay(cfg, "ali_public_key") {
 			return "支付宝公钥不能为空"
 		}
 	}
@@ -196,17 +186,33 @@ func emptyPay(m map[string]any, key string) bool {
 }
 
 func isNumericValue(v any) bool {
-	switch t := v.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
-		return true
-	case string:
-		s := strings.TrimSpace(t)
-		if s == "" {
+	// PHP Validate `number` is ctype_digit((string)$value): digits only, no sign.
+	s := sortRaw(v)
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
 			return false
 		}
-		_, err := strconv.Atoi(s)
-		return err == nil
+	}
+	return true
+}
+
+// sortMaxLen mirrors ThinkPHP max:5 = mb_strlen of the submitted value.
+func sortMaxLen(v any) int {
+	n := 0
+	for range sortRaw(v) {
+		n++
+	}
+	return n
+}
+
+func sortRaw(v any) string {
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
 	default:
-		return false
+		return strings.TrimSpace(util.ToString(v))
 	}
 }

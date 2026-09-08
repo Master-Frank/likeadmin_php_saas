@@ -1,8 +1,11 @@
 package lists
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"likeadmin/backend/internal/config"
@@ -103,7 +106,150 @@ func ParseGET(c *gin.Context) (Query, bool) {
 			return Query{}, false
 		}
 	}
+	if msg := ValidateQuery(httpx.Query(c)); msg != "" {
+		response.Fail(c, msg)
+		return Query{}, false
+	}
 	return Parse(c), true
+}
+
+// ValidateQuery mirrors PHP ListsValidate (optional fields, GET only).
+func ValidateQuery(query map[string]any) string {
+	if s, ok := queryNonEmpty(query, "page_no"); ok {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return "page_no必须是整数"
+		}
+		if n <= 0 {
+			return "page_no必须大于 0"
+		}
+	}
+	if s, ok := queryNonEmpty(query, "page_size"); ok {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return "page_size必须是整数"
+		}
+		if n <= 0 {
+			return "page_size必须大于 0"
+		}
+		max := config.C.Project.Lists.PageSizeMax
+		if max > 0 && n > max {
+			return fmt.Sprintf("已超出系统限制数量，请分页查询或导出，当前最多记录数为：%d", max)
+		}
+	}
+	if s, ok := queryNonEmpty(query, "page_start"); ok {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return "page_start必须是整数"
+		}
+		if n <= 0 {
+			return "page_start必须大于 0"
+		}
+	}
+	if s, ok := queryNonEmpty(query, "page_end"); ok {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return "page_end必须是整数"
+		}
+		if n <= 0 {
+			return "page_end必须大于 0"
+		}
+		start := 0
+		if ps, ok := queryNonEmpty(query, "page_start"); ok {
+			start, _ = strconv.Atoi(ps)
+		}
+		if n < start {
+			return "导出范围设置不正确，请重新选择"
+		}
+	}
+	if s, ok := queryNonEmpty(query, "page_type"); ok {
+		if s != "0" && s != "1" {
+			return "page_type必须在 0,1 范围内"
+		}
+	}
+	if s, ok := queryNonEmpty(query, "order_by"); ok {
+		dir := strings.ToLower(s)
+		if dir != "desc" && dir != "asc" {
+			return "order_by必须在 desc,asc 范围内"
+		}
+	}
+	var startTime time.Time
+	var hasStart bool
+	if s, ok := queryNonEmpty(query, "start_time"); ok {
+		t, ok := parseListDate(s)
+		if !ok {
+			return "start_time不是一个有效的日期"
+		}
+		startTime, hasStart = t, true
+	}
+	if s, ok := queryNonEmpty(query, "end_time"); ok {
+		endTime, ok := parseListDate(s)
+		if !ok {
+			return "end_time不是一个有效的日期"
+		}
+		if hasStart && !endTime.After(startTime) {
+			return "搜索的时间范围不正确"
+		}
+	}
+	if s, ok := queryNonEmpty(query, "start"); ok && !digitsOnly(s) {
+		return "start必须是数字"
+	}
+	if s, ok := queryNonEmpty(query, "end"); ok && !digitsOnly(s) {
+		return "end必须是数字"
+	}
+	if s, ok := queryNonEmpty(query, "export"); ok {
+		if s != "1" && s != "2" {
+			return "export必须在 1,2 范围内"
+		}
+	}
+	return ""
+}
+
+func queryNonEmpty(query map[string]any, key string) (string, bool) {
+	if query == nil {
+		return "", false
+	}
+	v, ok := query[key]
+	if !ok || v == nil {
+		return "", false
+	}
+	s := strings.TrimSpace(util.ToString(v))
+	if s == "" {
+		return "", false
+	}
+	return s, true
+}
+
+func parseListDate(s string) (time.Time, bool) {
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+		"2006/01/02 15:04:05",
+		"2006/01/02",
+		time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+			return t, true
+		}
+	}
+	if ts, err := strconv.ParseInt(s, 10, 64); err == nil && ts > 0 {
+		return time.Unix(ts, 0), true
+	}
+	return time.Time{}, false
+}
+
+func digitsOnly(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func Param(q Query, key string) string {

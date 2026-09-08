@@ -60,17 +60,12 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 	if terminal == wechat.TerminalOA || terminal == wechat.TerminalH5 {
 		returnURL = domain + "/mobile" + redirect + "?id=" + util.ToString(order.ID) + "&from=" + from + "&checkPay=true"
 	}
-	subject := "订单:" + order.SN
-	if terminal == wechat.TerminalIOS || terminal == wechat.TerminalAndroid {
-		subject = order.SN
+	quitURL := ""
+	if method == "alipay.trade.wap.pay" {
+		// PHP AliPayService::wapPay passes the same URL as EasySDK quit_url + return_url.
+		quitURL = returnURL
 	}
-	bizJSON, _ := json.Marshal(map[string]any{
-		"out_trade_no":    order.SN,
-		"total_amount":    fmt.Sprintf("%.2f", order.OrderAmount),
-		"subject":         subject,
-		"product_code":    productCode,
-		"passback_params": from,
-	})
+	bizJSON, _ := json.Marshal(aliTradeBiz(order, from, productCode, quitURL, terminal))
 	params := map[string]string{
 		"app_id":      cfg.AppID,
 		"method":      method,
@@ -95,6 +90,25 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 		return gin.H{"config": aliQuery(params), "pay_way": WayAli}, nil
 	}
 	return gin.H{"config": aliForm(params), "pay_way": WayAli}, nil
+}
+
+// aliTradeBiz mirrors EasySDK page/app/wap biz_content. WAP requires quit_url.
+func aliTradeBiz(order model.RechargeOrder, from, productCode, quitURL string, terminal int) map[string]any {
+	subject := "订单:" + order.SN
+	if terminal == wechat.TerminalIOS || terminal == wechat.TerminalAndroid {
+		subject = order.SN
+	}
+	biz := map[string]any{
+		"out_trade_no":    order.SN,
+		"total_amount":    fmt.Sprintf("%.2f", order.OrderAmount),
+		"subject":         subject,
+		"product_code":    productCode,
+		"passback_params": from,
+	}
+	if quitURL != "" {
+		biz["quit_url"] = quitURL
+	}
+	return biz
 }
 
 func AliVerifyNotify(c *gin.Context, form map[string][]string) bool {

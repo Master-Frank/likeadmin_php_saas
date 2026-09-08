@@ -169,6 +169,28 @@ func TestAliPayWay(t *testing.T) {
 	}
 }
 
+func TestAliTradeBizQuitURL(t *testing.T) {
+	order := model.RechargeOrder{SN: "SN1", OrderAmount: 10.5}
+	wap := aliTradeBiz(order, "recharge", "QUICK_WAP_WAY", "https://pair1.likeadmin.test/mobile/pages/x?id=1&from=recharge&checkPay=true", wechat.TerminalH5)
+	if wap["quit_url"] != "https://pair1.likeadmin.test/mobile/pages/x?id=1&from=recharge&checkPay=true" {
+		t.Fatalf("wap quit_url %+v", wap)
+	}
+	if wap["subject"] != "订单:SN1" || wap["product_code"] != "QUICK_WAP_WAY" {
+		t.Fatalf("wap biz %+v", wap)
+	}
+	pc := aliTradeBiz(order, "recharge", "FAST_INSTANT_TRADE_PAY", "", wechat.TerminalPC)
+	if _, ok := pc["quit_url"]; ok {
+		t.Fatalf("pc must not send quit_url %+v", pc)
+	}
+	app := aliTradeBiz(order, "recharge", "QUICK_MSECURITY_PAY", "", wechat.TerminalIOS)
+	if app["subject"] != "SN1" {
+		t.Fatalf("app subject %+v", app)
+	}
+	if _, ok := app["quit_url"]; ok {
+		t.Fatalf("app must not send quit_url %+v", app)
+	}
+}
+
 func TestAliPrepayMissingConfig(t *testing.T) {
 	_, err := AliPrepay(nil, model.RechargeOrder{OrderAmount: 1}, "recharge", "/", wechat.TerminalOA)
 	if err == nil || err.Error() != "请配置好支付设置" {

@@ -61,14 +61,6 @@ var excelSpecs = map[string]Spec{
 			{Key: "disable_desc", Title: "状态"},
 		},
 	},
-	"auth.role/lists": {
-		FileName: "角色表",
-		Fields: []Field{
-			{Key: "name", Title: "角色名称"},
-			{Key: "desc", Title: "备注"},
-			{Key: "create_time", Title: "创建时间"},
-		},
-	},
 	"dept.jobs/lists": {
 		FileName: "岗位列表",
 		Fields: []Field{

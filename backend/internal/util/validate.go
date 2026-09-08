@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var registerAccountChars = regexp.MustCompile(`^[A-Za-z0-9]+$`)
@@ -40,7 +41,7 @@ func ValidRegisterPassword(password string) string {
 	if password == "" {
 		return "请输入密码"
 	}
-	if n := len(password); n < 6 || n > 20 {
+	if n := utf8.RuneCountInString(password); n < 6 || n > 20 {
 		return "密码须在6-25位之间"
 	}
 	var lower, upper, digit, special int
@@ -56,7 +57,7 @@ func ValidRegisterPassword(password string) string {
 			special++
 		}
 	}
-	n := len(password)
+	n := utf8.RuneCountInString(password)
 	if (lower == n) || (upper == n) || (digit == n) || (special == n) {
 		return "密码须为数字,字母或符号组合"
 	}
@@ -117,7 +118,7 @@ func FileMoveCheck(p map[string]any, ids []uint) string {
 	if _, ok := p["cid"]; !ok {
 		return "缺少cid参数"
 	}
-	if !isWholeNumber(p["cid"]) {
+	if !isPHPNumber(p["cid"]) {
 		return "cid必须是数字"
 	}
 	if _, ok := p["ids"]; !ok {
@@ -149,7 +150,7 @@ func FileIDCheck(p map[string]any) string {
 	if _, ok := p["id"]; !ok {
 		return "缺少id参数"
 	}
-	if !isWholeNumber(p["id"]) {
+	if !isPHPNumber(p["id"]) {
 		return "id必须是数字"
 	}
 	return ""
@@ -166,7 +167,7 @@ func FileAddCateCheck(p map[string]any) string {
 	if _, ok := p["pid"]; !ok {
 		return "缺少pid参数"
 	}
-	if !isWholeNumber(p["pid"]) {
+	if !isPHPNumber(p["pid"]) {
 		return "pid必须是数字"
 	}
 	return FileNameCheck(ToString(p["name"]))
@@ -386,6 +387,44 @@ func isWholeNumber(v any) bool {
 	}
 }
 
+// isPHPNumber mirrors ThinkPHP Validate `number` = ctype_digit((string)$value).
+func isPHPNumber(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case uint, uint8, uint16, uint32, uint64:
+		return true
+	case int:
+		return t >= 0
+	case int8:
+		return t >= 0
+	case int16:
+		return t >= 0
+	case int32:
+		return t >= 0
+	case int64:
+		return t >= 0
+	case float64:
+		return t >= 0 && t == float64(int64(t))
+	case float32:
+		return t >= 0 && t == float32(int32(t))
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return false
+		}
+		for _, r := range s {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+		return true
+	default:
+		return isPHPNumber(ToString(v))
+	}
+}
+
 func InZeroOne(v any) bool {
 	return inZeroOne(v)
 }
@@ -468,6 +507,16 @@ func UserAvatarCheck(p map[string]any) string {
 }
 
 func UserRegisterConfigCheck(p map[string]any) string {
+	// PHP requireIf:scene,register looks at the body field `scene`, not the
+	// validation scene name used by goCheck('register').
+	if ToString(p["scene"]) == "register" {
+		if !phpRequired(p, "login_way") {
+			return "请选择登录方式"
+		}
+		if !phpRequired(p, "coerce_mobile") {
+			return "请选择注册强制绑定手机"
+		}
+	}
 	if _, ok := p["login_way"]; ok && !isArrayValue(p["login_way"]) {
 		return "登录方式值错误"
 	}

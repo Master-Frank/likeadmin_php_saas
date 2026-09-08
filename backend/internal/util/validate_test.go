@@ -39,6 +39,8 @@ func TestValidRegisterPassword(t *testing.T) {
 		{"ab!@#$", ""},
 		{"123!@#", ""},
 		{"Pass word", ""},
+		{"密码密码1", "密码须在6-25位之间"},
+		{"密码密码a1", ""},
 	}
 	for _, c := range cases {
 		if got := ValidRegisterPassword(c.in); got != c.want {
@@ -126,6 +128,29 @@ func TestFileIDCheck(t *testing.T) {
 	}
 	if FileIDCheck(map[string]any{"id": 0}) != "" {
 		t.Fatal("id 0 is a number")
+	}
+	if FileIDCheck(map[string]any{"id": -1}) != "id必须是数字" {
+		t.Fatal(FileIDCheck(map[string]any{"id": -1}))
+	}
+	if FileMoveCheck(map[string]any{"cid": -1, "ids": []any{1}}, []uint{1}) != "cid必须是数字" {
+		t.Fatal(FileMoveCheck(map[string]any{"cid": -1, "ids": []any{1}}, []uint{1}))
+	}
+}
+
+func TestUserRegisterConfigCheckRequireIfScene(t *testing.T) {
+	if msg := UserRegisterConfigCheck(map[string]any{}); msg != "" {
+		t.Fatalf("official body without scene %q", msg)
+	}
+	if msg := UserRegisterConfigCheck(map[string]any{"scene": "register"}); msg != "请选择登录方式" {
+		t.Fatalf("scene=register %q", msg)
+	}
+	if msg := UserRegisterConfigCheck(map[string]any{"scene": "register", "login_way": []any{"1"}}); msg != "请选择注册强制绑定手机" {
+		t.Fatalf("missing coerce %q", msg)
+	}
+	if msg := UserRegisterConfigCheck(map[string]any{
+		"scene": "register", "login_way": []any{"1"}, "coerce_mobile": 0,
+	}); msg != "" {
+		t.Fatalf("ok %q", msg)
 	}
 }
 

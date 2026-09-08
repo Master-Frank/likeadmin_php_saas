@@ -218,11 +218,11 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, cache.UserLoginSafeHint())
 			return
 		}
-		if httpx.BodyStr(c, "password") == "" {
+		if !httpx.BodyHas(c, "password") {
 			response.Fail(c, "请输入密码")
 			return
 		}
-	} else if httpx.BodyStr(c, "code") == "" {
+	} else if !httpx.BodyHas(c, "code") {
 		response.Fail(c, "请输入手机验证码")
 		return
 	}

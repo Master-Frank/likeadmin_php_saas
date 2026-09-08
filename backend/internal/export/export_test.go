@@ -50,7 +50,7 @@ func TestFormatCellEnums(t *testing.T) {
 	if formatCell("channel", 1) != "微信小程序" {
 		t.Fatalf("channel %s", formatCell("channel", 1))
 	}
-	if formatCell("disable", 0) != "正常" || formatCell("disable", 1) != "禁用" {
+	if formatCell("disable", 0) != "0" || formatCell("disable", 1) != "1" {
 		t.Fatalf("disable %s %s", formatCell("disable", 0), formatCell("disable", 1))
 	}
 	if formatCell("pay_status_text", 1) != "已支付" {
@@ -60,7 +60,7 @@ func TestFormatCellEnums(t *testing.T) {
 		t.Fatalf("already text %s", formatCell("pay_status_text", "已支付"))
 	}
 	rec := toRecords([]map[string]any{{"channel": 2, "disable": 1}}, []Field{{Key: "channel", Title: "注册来源"}, {Key: "disable", Title: "是否禁用"}})
-	if len(rec) != 2 || rec[1][0] != "微信公众号" || rec[1][1] != "禁用" {
+	if len(rec) != 2 || rec[1][0] != "微信公众号" || rec[1][1] != "1" {
 		t.Fatalf("%v", rec)
 	}
 }
@@ -144,6 +144,20 @@ func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
 	}
 	if strings.Contains(url, "/tenantapi/") {
 		t.Fatalf("tenant prefix leaked: %s", url)
+	}
+}
+
+func TestMaybeRejectsUnsupportedExport(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/auth.role/lists?export=2", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "auth.role", Action: "lists", App: "platformapi"})
+	if !Maybe(c, "角色表", []map[string]any{{"name": "r"}}) {
+		t.Fatal("export=2 should be handled")
+	}
+	if !strings.Contains(w.Body.String(), "该列表不支持导出") {
+		t.Fatalf("body %s", w.Body.String())
 	}
 }
 
