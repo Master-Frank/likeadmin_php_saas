@@ -3856,7 +3856,7 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     now="$(date +%s)"
     mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30))) ON DUPLICATE KEY UPDATE token='expiredshard', expire_time=$((now-30))" || true
     mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'" || true
-    mysqlq "INSERT INTO la_dev_crontab (name,type,`system`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)" || true
+    mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)" || true
     curl -sS "$GO/crontab" >/dev/null || true
     left_sess="$(mysqlq "SELECT COUNT(*) FROM la_user_session_$ssn WHERE token='expiredshard'")"
     echo "shard_session_cron left=$left_sess"
@@ -4108,10 +4108,10 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
 
   now="$(date +%s)"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,`system`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   native_qr="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='query_refund' AND delete_time IS NULL")"
-  native_cu="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='cancel_unpaid_orders' AND `system`=1 AND delete_time IS NULL")"
+  native_cu="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='cancel_unpaid_orders' AND \`system\`=1 AND delete_time IS NULL")"
   echo "crontab_native query_refund=$native_qr cancel_unpaid=$native_cu"
   if [[ "$native_qr" -lt 1 || "$native_cu" -lt 1 ]]; then
     fail=$((fail + 1))
@@ -4126,7 +4126,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   oldpay="$(mysqlq "SELECT id FROM la_recharge_order WHERE pay_status=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('cu$now',1,2,0,1,1,0,1,$((now-7200)))"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,`system`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-cancel',1,0,'','cancel_unpaid_orders','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-cancel',1,0,'','cancel_unpaid_orders','',1,'* * * * *','',$((now-120)),'0','0',$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   cu_del="$(mysqlq "SELECT IFNULL(delete_time,0) FROM la_recharge_order WHERE sn='cu$now'")"
   echo "crontab_cancel_unpaid deleted=$cu_del leftover=$oldpay"
@@ -4136,7 +4136,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   mysqlq "DELETE FROM la_recharge_order WHERE sn='cu$now'"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-softdel'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,`system`,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   softdel_st="$(mysqlq "SELECT status FROM la_dev_crontab WHERE name='pair-softdel'")"
   softdel_err="$(mysqlq "SELECT error FROM la_dev_crontab WHERE name='pair-softdel'")"
