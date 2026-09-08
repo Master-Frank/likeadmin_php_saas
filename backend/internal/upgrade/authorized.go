@@ -19,12 +19,22 @@ func ApplyAuthorized(domain string, versionID any) error {
 		AddLog(domain, versionID, 1, false, msg)
 		return errStatus(msg)
 	}
-	if err := ApplyPackage(util.ToString(result["link"]), ""); err != nil {
+	staged, err := applyPackage(util.ToString(result["link"]), true)
+	if err != nil {
 		AddLog(domain, versionID, 1, false, err.Error())
 		return err
 	}
+	if staged != nil {
+		if err := runRestartCommand(); err != nil {
+			AddLog(domain, versionID, 1, false, err.Error())
+			return err
+		}
+	}
 	if ver := VersionByID(versionID); ver != nil {
-		_ = WriteLocalVersion(util.ToString(ver["version_no"]))
+		if err := WriteLocalVersion(util.ToString(ver["version_no"])); err != nil {
+			AddLog(domain, versionID, 1, false, err.Error())
+			return err
+		}
 	}
 	AddLog(domain, versionID, 1, true, "")
 	return nil

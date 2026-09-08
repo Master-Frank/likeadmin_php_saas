@@ -40,6 +40,11 @@ Live 对拍之后已修的生产缺陷（2026-09-08 后续）：
 - `gencrud` 只服务 `generate_type=1`；zip（0）元数据不能变成 HTTP CRUD。
 - 生产（`debug=false`）下未配置 `LIKEADMIN_CRONTAB_TOKEN` 时拒绝公开 `GET /crontab`；同一进程/同一 tick 用互斥锁 + `last_time` 抢占，避免重复跑任务。
 - 升级包下载默认校验证书；仅 `LIKEADMIN_UPGRADE_INSECURE_TLS=1` 时才等同 PHP `CURLOPT_SSL_VERIFYPEER=false`。
+- crontab 使用 MySQL advisory lock 覆盖整个任务执行期；系统任务用生成列唯一索引阻止跨进程重复入库。
+- HTTP 安装器不再接受 `skip_sql` / `env_path` / `go_config_path`；DB 重连和 DDL 权限检查通过后才写 `install.lock`。
+- 生产 service 显式 `LIKEADMIN_DEBUG=false`，API 启动会验证 `CREATE`/`DROP`；SQL 授权模板在 `backend/deploy/mysql.production.example.sql`。
+- 在线升级含 Go 源码时先构建 `bin/api`/`bin/crontab`，构建或重启配置缺失则失败；systemd path/service 延迟重启两个 Go 服务。
+- 会写 PHP 的旧 Think 脚手架默认关闭；仅 `LIKEADMIN_ENABLE_PHP_SCAFFOLD=1` 时兼容启用。
 
 刻意不迁（无路由或无控制器调用）：
 
@@ -85,6 +90,13 @@ Go **严于** PHP，不要为字节级一致回退：
 3. **真实凭证：** 有微信/支付宝/短信凭证后再验成功下单、退款、公众号菜单发布等路径。对拍目前只覆盖失败/校验。
 4. **前端主路径：** 人工点一遍平台 / 租户 / PC 主流程。已构建的 JS 若仍写 `install.php`，Go 有别名，最好重编前端。
 5. **crontab：** 用 `cmd/crontab` 或 `backend/deploy/likeadmin-crontab.service`，不要 `php think crontab`。上线前确认 `la_dev_crontab` 没有重复的系统任务。
+
+生产部署还需：
+
+- `make build && sudo make install PREFIX=/opt/likeadmin/backend`
+- 安装 API/crontab 及 `likeadmin-upgrade-restart.{path,service}`，启用 path 单元
+- 使用 `backend/deploy/mysql.production.example.sql` 赋予业务库 DDL 权限
+- Nginx `root` 与 systemd 默认统一为 `/opt/likeadmin/server/public`
 
 删树时还要一并处理：PHP vendor、Think 入口、仅对照用的 `index.php` 路由。静态上传目录、装修资源、前端 dist 若仍放在 `server/public`，不要误删。
 

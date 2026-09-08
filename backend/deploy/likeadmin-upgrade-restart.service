@@ -1,0 +1,10 @@
+[Unit]
+Description=Restart likeadmin Go services after a verified upgrade
+After=likeadmin-api.service likeadmin-crontab.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/bin/rm -f /run/likeadmin/restart-required
+ExecStart=/usr/bin/systemctl try-restart likeadmin-crontab.service
+ExecStart=/usr/bin/systemctl try-restart likeadmin-api.service
