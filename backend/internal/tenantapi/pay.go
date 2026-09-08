@@ -78,7 +78,7 @@ func PayConfigSet(c *gin.Context) {
 	id := httpx.BodyUint(c, "id")
 	r, exists := tenantPayConfigByID(c, id)
 	var taken int64
-	if name := httpx.BodyStr(c, "name"); name != "" {
+	if name := httpx.BodyRaw(c, "name"); name != "" {
 		q := tdb(c).Model(&model.TenantPayConfig{}).Where("name = ? AND id <> ?", name, id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
@@ -90,7 +90,7 @@ func PayConfigSet(c *gin.Context) {
 	_, sortOK := p["sort"]
 	_, cfgOK := p["config"]
 	in := biz.PayConfigInput{
-		ID: id, IDPresent: httpx.BodyIDPresent(c), Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
+		ID: id, IDPresent: httpx.BodyIDPresent(c), Name: httpx.BodyRaw(c, "name"), Icon: httpx.BodyRaw(c, "icon"), Remark: httpx.BodyRaw(c, "remark"),
 		Sort: httpx.BodyAny(c, "sort"), SortPresent: sortOK, Config: httpx.BodyAny(c, "config"), ConfigPresent: cfgOK,
 		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
 	}

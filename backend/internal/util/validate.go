@@ -350,6 +350,25 @@ func PHPRequired(p map[string]any, key string) bool {
 	return phpRequired(p, key)
 }
 
+// PHPEmpty mirrors PHP empty() without trim: nil, false, 0, "0", "", [] and {} are empty.
+func PHPEmpty(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch t := v.(type) {
+	case bool:
+		return !t
+	case []any:
+		return len(t) == 0
+	case []string:
+		return len(t) == 0
+	case map[string]any:
+		return len(t) == 0
+	}
+	s := ToString(v)
+	return s == "" || s == "0"
+}
+
 // PHPIsset mirrors PHP isset(): missing or JSON null is absent; "" / 0 / false stay set.
 func PHPIsset(p map[string]any, key string) bool {
 	v, ok := p[key]
@@ -788,7 +807,7 @@ func GeneratorEditFields(p map[string]any) string {
 		if m == nil {
 			return "表字段id参数缺失"
 		}
-			if !PHPIsset(m, "id") {
+		if !PHPIsset(m, "id") {
 			return "表字段id参数缺失"
 		}
 		if !PHPIsset(m, "query_type") {

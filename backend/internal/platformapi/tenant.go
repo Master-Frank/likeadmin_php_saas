@@ -124,13 +124,15 @@ func TenantAdd(c *gin.Context) {
 		response.Fail(c, "请输入用户名")
 		return
 	}
-	alias := stripHost(httpx.BodyStr(c, "domain_alias"))
+	alias := stripHost(httpx.BodyRaw(c, "domain_alias"))
 	if tenantAliasTaken(alias, 0) {
 		response.Fail(c, "租户别名已存在")
 		return
 	}
-	sn := httpx.BodyStr(c, "host_name")
-	if sn == "" {
+	sn := ""
+	if util.PHPIsset(httpx.Body(c), "host_name") {
+		sn = httpx.BodyRaw(c, "host_name")
+	} else {
 		sn = randomSN()
 	}
 	var exist model.Tenant
@@ -141,9 +143,9 @@ func TenantAdd(c *gin.Context) {
 	tactics := httpx.BodyInt(c, "tactics")
 	now := util.NowUnix()
 	tenant := model.Tenant{
-		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
-		Tel: httpx.BodyStr(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.BodyInt(c, "domain_alias_enable"),
-		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyStr(c, "notes"), Tactics: tactics, CreateTime: now, UpdateTime: util.UnixPtr(now),
+		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
+		Tel: httpx.BodyRaw(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.BodyInt(c, "domain_alias_enable"),
+		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyRaw(c, "notes"), Tactics: tactics, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&tenant).Error; err != nil {
@@ -185,7 +187,7 @@ func TenantEdit(c *gin.Context) {
 		response.Fail(c, "请输入用户名")
 		return
 	}
-	alias := stripHost(httpx.BodyStr(c, "domain_alias"))
+	alias := stripHost(httpx.BodyRaw(c, "domain_alias"))
 	if tenantAliasTaken(alias, id) {
 		response.Fail(c, "租户别名已存在")
 		return
@@ -193,11 +195,11 @@ func TenantEdit(c *gin.Context) {
 	now := util.NowUnix()
 	disable := httpx.BodyInt(c, "disable")
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyRaw(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
-		"disable": disable, "tel": httpx.BodyStr(c, "tel"),
+		"name": httpx.BodyRaw(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
+		"disable": disable, "tel": httpx.BodyRaw(c, "tel"),
 		"domain_alias":        alias,
 		"domain_alias_enable": httpx.BodyInt(c, "domain_alias_enable"),
-		"notes":               httpx.BodyStr(c, "notes"), "update_time": now,
+		"notes":               httpx.BodyRaw(c, "notes"), "update_time": now,
 	})
 	if disable == 1 {
 		expireTenantAdmins(cur)
@@ -445,7 +447,10 @@ func TenantAdminAdd(c *gin.Context) {
 	tid := httpx.BodyUint(c, "tenant_id")
 	adb := tenantAdminDB(tenant)
 	account := httpx.BodyRaw(c, "account")
-	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
+	avatar := ""
+	if av := httpx.BodyRaw(c, "avatar"); !util.PHPEmpty(av) {
+		avatar = filesvc.SetFileURL(c, av)
+	}
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
@@ -532,7 +537,7 @@ func TenantAdminEdit(c *gin.Context) {
 		"update_time":      now,
 	}
 	// PHP TenantAdminLogic::edit always writes avatar: empty() → ''.
-	if av := httpx.BodyStr(c, "avatar"); av != "" && av != "0" {
+	if av := httpx.BodyRaw(c, "avatar"); !util.PHPEmpty(av) {
 		data["avatar"] = filesvc.SetFileURL(c, av)
 	} else {
 		data["avatar"] = ""

@@ -107,7 +107,10 @@ func AdminAdd(c *gin.Context) {
 	}
 	password := httpx.BodyRaw(c, "password")
 	now := util.NowUnix()
-	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
+	avatar := ""
+	if av := httpx.BodyRaw(c, "avatar"); !util.PHPEmpty(av) {
+		avatar = filesvc.SetFileURL(c, av)
+	}
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
@@ -167,8 +170,8 @@ func AdminEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	avatar := ""
-	if v := httpx.BodyStr(c, "avatar"); v != "" && v != "0" {
-		avatar = filesvc.SetFileURL(c, v)
+	if av := httpx.BodyRaw(c, "avatar"); !util.PHPEmpty(av) {
+		avatar = filesvc.SetFileURL(c, av)
 	}
 	data := map[string]any{
 		"name":             name,
@@ -308,7 +311,7 @@ func AdminEditSelf(c *gin.Context) {
 	}
 	data := map[string]any{
 		"name":        httpx.BodyRaw(c, "name"),
-		"avatar":      filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
+		"avatar":      filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
 		"update_time": util.NowUnix(),
 	}
 	if util.PHPRequired(p, "password") {

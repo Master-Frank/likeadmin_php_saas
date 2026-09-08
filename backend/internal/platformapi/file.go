@@ -72,7 +72,7 @@ func FileRename(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.File{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "update_time": now,
+		"name": httpx.BodyRaw(c, "name"), "update_time": now,
 	})
 	response.SuccessNotice(c, "重命名成功")
 }
@@ -127,7 +127,7 @@ func FileAddCate(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	row := model.FileCate{Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyStr(c, "name"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
+	row := model.FileCate{Type: httpx.BodyInt(c, "type"), Pid: httpx.BodyUint(c, "pid"), Name: httpx.BodyRaw(c, "name"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	bootstrap.DB.Create(&row)
 	response.SuccessNotice(c, "添加成功")
 }
@@ -142,7 +142,7 @@ func FileEditCate(c *gin.Context) {
 		return
 	}
 	bootstrap.DB.Model(&model.FileCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "update_time": util.NowUnix(),
+		"name": httpx.BodyRaw(c, "name"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
 }

@@ -39,11 +39,11 @@ func WebSetWebsite(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "platform", "name", httpx.BodyStr(c, "name"))
-	cfgsvc.Set(c, "platform", "web_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_favicon")))
-	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo_light")))
-	cfgsvc.Set(c, "platform", "web_logo_dark", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo_dark")))
-	cfgsvc.Set(c, "platform", "login_image", filesvc.SetFileURL(c, httpx.BodyStr(c, "login_image")))
+	cfgsvc.Set(c, "platform", "name", httpx.BodyRaw(c, "name"))
+	cfgsvc.Set(c, "platform", "web_favicon", filesvc.SetFileURL(c, httpx.BodyRaw(c, "web_favicon")))
+	cfgsvc.Set(c, "platform", "web_logo_light", filesvc.SetFileURL(c, httpx.BodyRaw(c, "web_logo_light")))
+	cfgsvc.Set(c, "platform", "web_logo_dark", filesvc.SetFileURL(c, httpx.BodyRaw(c, "web_logo_dark")))
+	cfgsvc.Set(c, "platform", "login_image", filesvc.SetFileURL(c, httpx.BodyRaw(c, "login_image")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -77,10 +77,10 @@ func WebSetAgreement(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
-	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "privacy_content")))
+	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyRaw(c, "service_title"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "service_content")))
+	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyRaw(c, "privacy_title"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -96,7 +96,7 @@ func UserSetConfig(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.BodyStr(c, "default_avatar")))
+	cfgsvc.Set(c, "default_image", "user_avatar", filesvc.SetFileURL(c, httpx.BodyRaw(c, "default_avatar")))
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -446,7 +446,7 @@ func DictDataAdd(c *gin.Context) {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	typeVal := httpx.BodyStr(c, "type_value")
+	typeVal := httpx.BodyRaw(c, "type_value")
 	if typeVal == "" {
 		typeVal = typ.Type
 	}
@@ -616,7 +616,7 @@ func StorageSetup(c *gin.Context) {
 		response.Fail(c, "engine不能为空")
 		return
 	}
-	engine := httpx.BodyStr(c, "engine")
+	engine := httpx.BodyRaw(c, "engine")
 	if !util.PHPRequired(httpx.Body(c), "status") {
 		response.Fail(c, "status不能为空")
 		return
@@ -632,14 +632,14 @@ func StorageSetup(c *gin.Context) {
 		cfgsvc.Set(c, "storage", "local", map[string]any{})
 	case "qiniu", "aliyun":
 		cfgsvc.Set(c, "storage", engine, map[string]any{
-			"bucket": httpx.BodyStr(c, "bucket"), "access_key": httpx.BodyStr(c, "access_key"),
-			"secret_key": httpx.BodyStr(c, "secret_key"), "domain": httpx.BodyStr(c, "domain"),
+			"bucket": httpx.BodyRaw(c, "bucket"), "access_key": httpx.BodyRaw(c, "access_key"),
+			"secret_key": httpx.BodyRaw(c, "secret_key"), "domain": httpx.BodyRaw(c, "domain"),
 		})
 	case "qcloud":
 		cfgsvc.Set(c, "storage", engine, map[string]any{
-			"bucket": httpx.BodyStr(c, "bucket"), "region": httpx.BodyStr(c, "region"),
-			"access_key": httpx.BodyStr(c, "access_key"), "secret_key": httpx.BodyStr(c, "secret_key"),
-			"domain": httpx.BodyStr(c, "domain"),
+			"bucket": httpx.BodyRaw(c, "bucket"), "region": httpx.BodyRaw(c, "region"),
+			"access_key": httpx.BodyRaw(c, "access_key"), "secret_key": httpx.BodyRaw(c, "secret_key"),
+			"domain": httpx.BodyRaw(c, "domain"),
 		})
 	}
 	filesvc.ClearStorageCache(c)
@@ -658,7 +658,7 @@ func StorageChange(c *gin.Context) {
 		response.Fail(c, "engine不能为空")
 		return
 	}
-	engine := httpx.BodyStr(c, "engine")
+	engine := httpx.BodyRaw(c, "engine")
 	def := cfgsvc.GetString(c, "storage", "default", "local")
 	if def == engine {
 		cfgsvc.Set(c, "storage", "default", "local")

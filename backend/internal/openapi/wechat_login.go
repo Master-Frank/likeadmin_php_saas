@@ -56,7 +56,7 @@ func LoginOALogin(c *gin.Context) {
 		response.Fail(c, "请先设置公众号配置")
 		return
 	}
-	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
+	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyRaw(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -81,7 +81,7 @@ func LoginMnpLogin(c *gin.Context) {
 		response.Fail(c, "请先设置小程序配置")
 		return
 	}
-	sess, err := wechat.Code2Session(appID, secret, httpx.BodyStr(c, "code"))
+	sess, err := wechat.Code2Session(appID, secret, httpx.BodyRaw(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -122,7 +122,7 @@ func LoginScanLogin(c *gin.Context) {
 		response.Fail(c, "请先完成微信开放平台配置")
 		return
 	}
-	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
+	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyRaw(c, "code"))
 	if msg := scanLoginAuthErr(sess); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -163,8 +163,8 @@ func LoginUpdateUser(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Model(&u).Updates(map[string]any{
-		"nickname":    httpx.BodyStr(c, "nickname"),
-		"avatar":      filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
+		"nickname":    httpx.BodyRaw(c, "nickname"),
+		"avatar":      filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
 		"is_new_user": 0,
 		"update_time": now,
 	})
@@ -191,14 +191,14 @@ func bindWechatAuth(c *gin.Context, terminal int) {
 			response.Fail(c, "请先设置小程序配置")
 			return
 		}
-		sess, err = wechat.Code2Session(appID, secret, httpx.BodyStr(c, "code"))
+		sess, err = wechat.Code2Session(appID, secret, httpx.BodyRaw(c, "code"))
 	} else {
 		appID, secret, _ := wechat.OAConfig(c)
 		if appID == "" || secret == "" {
 			response.Fail(c, "请先设置公众号配置")
 			return
 		}
-		sess, err = wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
+		sess, err = wechat.OAuthByCode(appID, secret, httpx.BodyRaw(c, "code"))
 	}
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -447,7 +447,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 		response.Fail(c, "请先设置小程序配置")
 		return
 	}
-	phone, err := wechat.PhoneNumber(appID, secret, httpx.BodyStr(c, "code"))
+	phone, err := wechat.PhoneNumber(appID, secret, httpx.BodyRaw(c, "code"))
 	if err != nil {
 		response.Fail(c, err.Error())
 		return

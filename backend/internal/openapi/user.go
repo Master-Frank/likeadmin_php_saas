@@ -337,7 +337,7 @@ func UserSetInfo(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	field := httpx.BodyStr(c, "field")
+	field := httpx.BodyRaw(c, "field")
 	value := httpx.BodyAny(c, "value")
 	if field == "account" {
 		var n int64

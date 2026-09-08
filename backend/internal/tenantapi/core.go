@@ -393,8 +393,8 @@ func UserEdit(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	field := httpx.BodyStr(c, "field")
-	value := httpx.BodyAny(c, "value")
+	var field string
+	var value any
 	// PHP UserValidate: id require|checkUser before field/value.
 	var user model.User
 	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", id), c).First(&user).Error != nil {
@@ -500,8 +500,8 @@ func ArticleAdd(c *gin.Context) {
 	now := util.NowUnix()
 	a := model.Article{
 		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyRaw(c, "title"), Desc: httpx.BodyRaw(c, "desc"),
-		Abstract: httpx.BodyStr(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
-		Author: httpx.BodyStr(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
+		Abstract: httpx.BodyRaw(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyRaw(c, "image")),
+		Author: httpx.BodyRaw(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "content")),
 		IsShow: httpx.BodyInt(c, "is_show"), Sort: httpx.BodyInt(c, "sort"),
 		ClickVirtual: httpx.BodyInt(c, "click_virtual"),
 		TenantID:     tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
@@ -551,8 +551,8 @@ func ArticleEdit(c *gin.Context) {
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyRaw(c, "title"), "desc": httpx.BodyRaw(c, "desc"),
-		"abstract": httpx.BodyStr(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
-		"author": httpx.BodyStr(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
+		"abstract": httpx.BodyRaw(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyRaw(c, "image")),
+		"author": httpx.BodyRaw(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "content")),
 		"is_show": httpx.BodyInt(c, "is_show"), "sort": httpx.BodyInt(c, "sort"),
 		"click_virtual": httpx.BodyInt(c, "click_virtual"), "update_time": now,
 	})
@@ -866,18 +866,18 @@ func SettingSetWebsite(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	cfgsvc.Set(c, "tenant", "name", httpx.BodyStr(c, "name"))
-	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_favicon")))
-	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "web_logo")))
-	cfgsvc.Set(c, "tenant", "login_image", filesvc.SetFileURL(c, httpx.BodyStr(c, "login_image")))
-	cfgsvc.Set(c, "website", "shop_name", httpx.BodyStr(c, "shop_name"))
-	cfgsvc.Set(c, "website", "shop_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "shop_logo")))
-	cfgsvc.Set(c, "website", "pc_logo", filesvc.SetFileURL(c, httpx.BodyStr(c, "pc_logo")))
-	cfgsvc.Set(c, "website", "pc_title", httpx.BodyStr(c, "pc_title"))
-	cfgsvc.Set(c, "website", "pc_ico", filesvc.SetFileURL(c, httpx.BodyStr(c, "pc_ico")))
-	cfgsvc.Set(c, "website", "pc_desc", httpx.BodyStr(c, "pc_desc"))
-	cfgsvc.Set(c, "website", "pc_keywords", httpx.BodyStr(c, "pc_keywords"))
-	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.BodyStr(c, "h5_favicon")))
+	cfgsvc.Set(c, "tenant", "name", httpx.BodyRaw(c, "name"))
+	cfgsvc.Set(c, "tenant", "web_favicon", filesvc.SetFileURL(c, httpx.BodyRaw(c, "web_favicon")))
+	cfgsvc.Set(c, "tenant", "web_logo", filesvc.SetFileURL(c, httpx.BodyRaw(c, "web_logo")))
+	cfgsvc.Set(c, "tenant", "login_image", filesvc.SetFileURL(c, httpx.BodyRaw(c, "login_image")))
+	cfgsvc.Set(c, "website", "shop_name", httpx.BodyRaw(c, "shop_name"))
+	cfgsvc.Set(c, "website", "shop_logo", filesvc.SetFileURL(c, httpx.BodyRaw(c, "shop_logo")))
+	cfgsvc.Set(c, "website", "pc_logo", filesvc.SetFileURL(c, httpx.BodyRaw(c, "pc_logo")))
+	cfgsvc.Set(c, "website", "pc_title", httpx.BodyRaw(c, "pc_title"))
+	cfgsvc.Set(c, "website", "pc_ico", filesvc.SetFileURL(c, httpx.BodyRaw(c, "pc_ico")))
+	cfgsvc.Set(c, "website", "pc_desc", httpx.BodyRaw(c, "pc_desc"))
+	cfgsvc.Set(c, "website", "pc_keywords", httpx.BodyRaw(c, "pc_keywords"))
+	cfgsvc.Set(c, "website", "h5_favicon", filesvc.SetFileURL(c, httpx.BodyRaw(c, "h5_favicon")))
 	response.SuccessNotice(c, "设置成功")
 }
 

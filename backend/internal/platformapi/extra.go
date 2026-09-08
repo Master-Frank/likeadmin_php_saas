@@ -62,13 +62,13 @@ func PayConfigSet(c *gin.Context) {
 	var r model.PayConfig
 	exists := bootstrap.DB.First(&r, id).Error == nil && r.ID > 0
 	var taken int64
-	if name := httpx.BodyStr(c, "name"); name != "" {
+	if name := httpx.BodyRaw(c, "name"); name != "" {
 		bootstrap.DB.Model(&model.PayConfig{}).Where("name = ? AND id <> ?", name, id).Count(&taken)
 	}
 	_, sortOK := p["sort"]
 	_, cfgOK := p["config"]
 	in := biz.PayConfigInput{
-		ID: id, IDPresent: httpx.BodyIDPresent(c), Name: httpx.BodyStr(c, "name"), Icon: httpx.BodyStr(c, "icon"), Remark: httpx.BodyStr(c, "remark"),
+		ID: id, IDPresent: httpx.BodyIDPresent(c), Name: httpx.BodyRaw(c, "name"), Icon: httpx.BodyRaw(c, "icon"), Remark: httpx.BodyRaw(c, "remark"),
 		Sort: httpx.BodyAny(c, "sort"), SortPresent: sortOK, Config: httpx.BodyAny(c, "config"), ConfigPresent: cfgOK,
 		PayWay: r.PayWay, Exists: exists, NameTaken: taken > 0,
 	}
@@ -242,9 +242,9 @@ func CrontabAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Create(&model.Crontab{
-		Name: httpx.BodyStr(c, "name"), Type: httpx.BodyInt(c, "type"), Command: httpx.BodyStr(c, "command"),
-		Params: httpx.BodyStr(c, "params"), Status: httpx.BodyInt(c, "status"), Expression: httpx.BodyStr(c, "expression"),
-		Remark: httpx.BodyStr(c, "remark"), System: httpx.BodyInt(c, "system"), LastTime: &now, CreateTime: now, UpdateTime: util.UnixPtr(now),
+		Name: httpx.BodyRaw(c, "name"), Type: httpx.BodyInt(c, "type"), Command: httpx.BodyRaw(c, "command"),
+		Params: httpx.BodyRaw(c, "params"), Status: httpx.BodyInt(c, "status"), Expression: httpx.BodyRaw(c, "expression"),
+		Remark: httpx.BodyRaw(c, "remark"), System: httpx.BodyInt(c, "system"), LastTime: &now, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
@@ -261,8 +261,8 @@ func CrontabEdit(c *gin.Context) {
 	now := util.NowUnix()
 	// PHP CrontabLogic::edit updates by id with no existence check.
 	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "command": httpx.BodyStr(c, "command"), "params": httpx.BodyStr(c, "params"),
-		"status": httpx.BodyInt(c, "status"), "expression": httpx.BodyStr(c, "expression"), "remark": httpx.BodyStr(c, "remark"),
+		"name": httpx.BodyRaw(c, "name"), "command": httpx.BodyRaw(c, "command"), "params": httpx.BodyRaw(c, "params"),
+		"status": httpx.BodyInt(c, "status"), "expression": httpx.BodyRaw(c, "expression"), "remark": httpx.BodyRaw(c, "remark"),
 		"type": httpx.BodyInt(c, "type"), "system": httpx.BodyInt(c, "system"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -296,7 +296,7 @@ func CrontabOperate(c *gin.Context) {
 		response.Fail(c, "请选择操作")
 		return
 	}
-	operate := httpx.BodyStr(c, "operate")
+	operate := httpx.BodyRaw(c, "operate")
 	var r model.Crontab
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Fail(c, "定时任务不存在")

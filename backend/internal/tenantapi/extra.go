@@ -2,7 +2,6 @@ package tenantapi
 
 import (
 	"fmt"
-	"strings"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
@@ -162,7 +161,7 @@ func DecorateTabbarSave(c *gin.Context) {
 		return
 	}
 	tid := tenantDB(c)
-	if style := httpx.BodyAny(c, "style"); style != nil {
+	if style := httpx.BodyAny(c, "style"); !util.PHPEmpty(style) {
 		cfgsvc.Set(c, "tabbar", "style", style)
 	}
 	list := httpx.BodyAny(c, "list")
@@ -193,10 +192,10 @@ func HotSearchSet(c *gin.Context) {
 	if !requirePlatformTenant(c) {
 		return
 	}
-	// PHP: empty($params['status']) ? 0 : $params['status'] — keep values like 2.
-	status := 0
-	if httpx.BodyHas(c, "status") && strings.TrimSpace(httpx.BodyStr(c, "status")) != "" && httpx.BodyInt(c, "status") != 0 {
-		status = httpx.BodyInt(c, "status")
+	// PHP: empty($params['status']) ? 0 : $params['status']
+	var status any = 0
+	if st := httpx.BodyAny(c, "status"); !util.PHPEmpty(st) {
+		status = st
 	}
 	cfgsvc.Set(c, "hot_search", "status", status)
 	data := httpx.BodyAny(c, "data")
@@ -262,10 +261,10 @@ func SettingSetAgreement(c *gin.Context) {
 	if !guardTenantWrite(c) {
 		return
 	}
-	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
-	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
-	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
-	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "privacy_content")))
+	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyRaw(c, "service_title"))
+	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "service_content")))
+	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyRaw(c, "privacy_title"))
+	cfgsvc.Set(c, "agreement", "privacy_content", filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "privacy_content")))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -280,7 +279,7 @@ func SettingSetSiteStatistics(c *gin.Context) {
 	if !requirePlatformTenant(c) {
 		return
 	}
-	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.BodyStr(c, "clarity_code"))
+	cfgsvc.Set(c, "siteStatistics", "clarity_code", httpx.BodyRaw(c, "clarity_code"))
 	response.SuccessNotice(c, "设置成功")
 }
 
@@ -299,7 +298,7 @@ func UserAdjustMoney(c *gin.Context) {
 	uid := httpx.BodyUint(c, "user_id")
 	action := httpx.BodyInt(c, "action")
 	num := httpx.BodyFloat(c, "num")
-	remark := httpx.BodyStr(c, "remark")
+	remark := httpx.BodyRaw(c, "remark")
 	p := httpx.Body(c)
 	if !util.PHPRequired(p, "action") {
 		response.Fail(c, "请选择调整类型")
@@ -326,6 +325,11 @@ func UserAdjustMoney(c *gin.Context) {
 		response.Fail(c, "用户不存在")
 		return
 	}
+	// PHP AdjustUserMoney::checkMoney rejects DEC below zero.
+	if action == biz.DEC && user.UserMoney < num {
+		response.Fail(c, "用户可用余额仅剩"+util.MoneyString(user.UserMoney))
+		return
+	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		if action == biz.INC {
 			if err := tx.Model(&user).Updates(map[string]any{
@@ -334,7 +338,7 @@ func UserAdjustMoney(c *gin.Context) {
 				return err
 			}
 			user.UserMoney += num
-			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", httpx.BodyStr(c, "remark"))
+			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", remark)
 			return nil
 		}
 		if err := tx.Model(&user).Updates(map[string]any{
@@ -343,7 +347,7 @@ func UserAdjustMoney(c *gin.Context) {
 			return err
 		}
 		user.UserMoney -= num
-		biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, user.UserMoney, "", httpx.BodyStr(c, "remark"))
+		biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMDecAdmin, biz.DEC, num, user.UserMoney, "", remark)
 		return nil
 	})
 	if err != nil {
@@ -704,9 +708,9 @@ func OAReplyAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	row := model.OfficialAccountReply{
-		TenantID: tenantDB(c), Name: httpx.BodyStr(c, "name"), Keyword: httpx.BodyStr(c, "keyword"),
+		TenantID: tenantDB(c), Name: httpx.BodyRaw(c, "name"), Keyword: httpx.BodyRaw(c, "keyword"),
 		ReplyType: httpx.BodyInt(c, "reply_type"), MatchingType: httpx.BodyInt(c, "matching_type"),
-		ContentType: httpx.BodyInt(c, "content_type"), Content: httpx.BodyStr(c, "content"),
+		ContentType: httpx.BodyInt(c, "content_type"), Content: httpx.BodyRaw(c, "content"),
 		Status: httpx.BodyInt(c, "status"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if row.TenantID == 0 {
@@ -758,9 +762,9 @@ func OAReplyEdit(c *gin.Context) {
 	}
 	q := tdb(c).Model(&model.OfficialAccountReply{}).Where("id = ? AND tenant_id = ?", httpx.BodyUint(c, "id"), tid)
 	q.Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "keyword": httpx.BodyStr(c, "keyword"),
+		"name": httpx.BodyRaw(c, "name"), "keyword": httpx.BodyRaw(c, "keyword"),
 		"reply_type": replyType, "matching_type": httpx.BodyInt(c, "matching_type"),
-		"content_type": httpx.BodyInt(c, "content_type"), "content": httpx.BodyStr(c, "content"),
+		"content_type": httpx.BodyInt(c, "content_type"), "content": httpx.BodyRaw(c, "content"),
 		"status": status, "sort": httpx.BodyInt(c, "sort"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "操作成功")

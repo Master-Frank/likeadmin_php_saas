@@ -250,11 +250,11 @@ func GeneratorEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	data := map[string]any{
-		"table_name": httpx.BodyStr(c, "table_name"), "table_comment": httpx.BodyStr(c, "table_comment"),
-		"template_type": httpx.BodyInt(c, "template_type"), "author": httpx.BodyStr(c, "author"),
-		"remark": httpx.BodyStr(c, "remark"), "generate_type": httpx.BodyInt(c, "generate_type"),
-		"module_name": httpx.BodyStr(c, "module_name"), "class_dir": httpx.BodyStr(c, "class_dir"),
-		"class_comment": httpx.BodyStr(c, "class_comment"), "update_time": now,
+		"table_name": httpx.BodyRaw(c, "table_name"), "table_comment": httpx.BodyRaw(c, "table_comment"),
+		"template_type": httpx.BodyInt(c, "template_type"), "author": httpx.BodyRaw(c, "author"),
+		"remark": httpx.BodyRaw(c, "remark"), "generate_type": httpx.BodyInt(c, "generate_type"),
+		"module_name": httpx.BodyRaw(c, "module_name"), "class_dir": httpx.BodyRaw(c, "class_dir"),
+		"class_comment": httpx.BodyRaw(c, "class_comment"), "update_time": now,
 	}
 	if v := httpx.BodyAny(c, "menu"); v != nil {
 		data["menu"] = util.EncodeJSON(v)

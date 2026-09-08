@@ -700,6 +700,45 @@ func TestUserRegisterConfigCheckNullLoginWay(t *testing.T) {
 	}
 }
 
+func TestPHPEmpty(t *testing.T) {
+	if !PHPEmpty(nil) {
+		t.Fatal("nil")
+	}
+	if !PHPEmpty(false) {
+		t.Fatal("false")
+	}
+	if PHPEmpty(true) {
+		t.Fatal("true")
+	}
+	if !PHPEmpty(0) {
+		t.Fatal("0")
+	}
+	if !PHPEmpty("0") {
+		t.Fatal(`"0"`)
+	}
+	if !PHPEmpty("") {
+		t.Fatal("empty string")
+	}
+	if PHPEmpty("   ") {
+		t.Fatal("whitespace is not empty()")
+	}
+	if !PHPEmpty([]any{}) {
+		t.Fatal("empty array")
+	}
+	if !PHPEmpty([]string{}) {
+		t.Fatal("empty string array")
+	}
+	if !PHPEmpty(map[string]any{}) {
+		t.Fatal("empty object")
+	}
+	if PHPEmpty("2") {
+		t.Fatal(`"2"`)
+	}
+	if PHPEmpty(2) {
+		t.Fatal("2")
+	}
+}
+
 func TestPHPRequiredThinkPHP(t *testing.T) {
 	if PHPRequired(map[string]any{}, "name") {
 		t.Fatal("missing")
