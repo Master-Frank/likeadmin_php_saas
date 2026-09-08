@@ -208,11 +208,13 @@ func attachRelations(c *gin.Context, sp *spec, rows []map[string]any) {
 			}
 			continue
 		}
-		var related []map[string]any
-		q := db.Table(rel.Table).Where(rel.ForeignKey+" IN ?", ids)
 		relTable := rel.Table
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			relTable = tenantdb.Table(c, rel.Table)
+		}
+		var related []map[string]any
+		q := db.Table(relTable).Where(rel.ForeignKey+" IN ?", ids)
+		if tid := ctxutil.Get(c).TenantID; tid > 0 {
 			if tableHasColumn(db, relTable, "tenant_id") {
 				q = q.Where("tenant_id = ?", tid)
 			}

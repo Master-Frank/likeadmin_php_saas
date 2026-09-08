@@ -2,6 +2,7 @@ package platformapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,7 +11,9 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -258,6 +261,127 @@ func TestInitSharedTenantChain(t *testing.T) {
 	db.Model(&model.TenantSystemMenu{}).Where("tenant_id = 1").Count(&pair1Menus)
 	if pair1Menus == 0 {
 		t.Fatal("must not wipe pair1 menus")
+	}
+}
+
+func TestInitShardedTenantChain(t *testing.T) {
+	if !initTenantCloneDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990005
+	const sn = "t990005"
+	db := bootstrap.DB
+	cleanup := func() {
+		dropShardedTenantTables(sn)
+		_ = db.Where("id = ?", tid).Delete(&model.Tenant{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	tenantdb.Register(db)
+	if err := runTenantSQL(sn); err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/tenant.tenant/add",
+		bytes.NewBufferString(`{"account":"t990005","password":"likeadmin"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	tenant := model.Tenant{ID: tid, SN: sn, Name: "shard-chain", Tactics: 1}
+	if err := initShardedTenant(db, tenant, c); err != nil {
+		t.Fatal(err)
+	}
+
+	sdb := tenantdb.UseSN(sn)
+	var admin model.TenantAdmin
+	if err := sdb.Where("id = 1 AND tenant_id = ? AND delete_time IS NULL", tid).First(&admin).Error; err != nil {
+		t.Fatalf("shard super admin: %v", err)
+	}
+	if admin.Account != "t990005" || admin.Root != 1 {
+		t.Fatalf("admin %+v", admin)
+	}
+	var notices, arts, pays, menus, links int64
+	sdb.Model(&model.TenantNoticeSetting{}).Where("tenant_id = ?", tid).Count(&notices)
+	sdb.Model(&model.Article{}).Where("tenant_id = ?", tid).Count(&arts)
+	sdb.Model(&model.TenantPayConfig{}).Where("tenant_id = ?", tid).Count(&pays)
+	sdb.Model(&model.TenantSystemMenu{}).Where("tenant_id = ?", tid).Count(&menus)
+	sdb.Table("la_tenant_admin_dept_" + sn).Where("admin_id = 1").Count(&links)
+	if notices < 1 || arts < 1 || pays < 1 || menus < 1 || links != 1 {
+		t.Fatalf("shard chain notice=%d article=%d pay=%d menu=%d admin_dept=%d",
+			notices, arts, pays, menus, links)
+	}
+
+	var pair1Menus int64
+	db.Model(&model.TenantSystemMenu{}).Where("tenant_id = 1").Count(&pair1Menus)
+	if pair1Menus == 0 {
+		t.Fatal("must not wipe pair1 menus")
+	}
+}
+
+func TestTenantAdminDetailUsesShardTable(t *testing.T) {
+	if !initTenantCloneDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990008
+	const sn = "t990008"
+	const adminID uint = 9900081
+	db := bootstrap.DB
+	cleanup := func() {
+		_ = db.Exec("DROP TABLE IF EXISTS la_tenant_admin_" + sn).Error
+		_ = db.Where("id = ?", tid).Delete(&model.Tenant{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	if err := db.Exec("CREATE TABLE la_tenant_admin_" + sn + " LIKE la_tenant_admin").Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	tenant := model.Tenant{ID: tid, SN: sn, Name: "shard-admin", Tactics: 1, CreateTime: now, UpdateTime: util.UnixPtr(now)}
+	if err := db.Create(&tenant).Error; err != nil {
+		t.Fatal(err)
+	}
+	admin := newTenantSuperAdmin(adminID, tid, "shardadmin", "x", now)
+	if err := tenantdb.UseSN(sn).Create(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tenant.tenant_admin/detail?id=9900081&tenant_id=990008", nil)
+	TenantAdminDetail(c)
+
+	var wrap response.Body
+	if err := json.Unmarshal(w.Body.Bytes(), &wrap); err != nil {
+		t.Fatalf("json %s: %v", w.Body.String(), err)
+	}
+	if wrap.Code != 1 {
+		t.Fatalf("detail %+v body=%s", wrap, w.Body.String())
+	}
+	data, _ := wrap.Data.(map[string]any)
+	if util.ToString(data["account"]) != "shardadmin" {
+		t.Fatalf("account %v", data["account"])
+	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodPost, "/platformapi/tenant.tenant_admin/edit",
+		bytes.NewBufferString(`{"id":9900081,"tenant_id":990008,"name":"分表管理员","account":"shardadmin","multipoint_login":1}`))
+	c2.Request.Header.Set("Content-Type", "application/json")
+	TenantAdminEdit(c2)
+	if err := json.Unmarshal(w2.Body.Bytes(), &wrap); err != nil {
+		t.Fatalf("edit json %s: %v", w2.Body.String(), err)
+	}
+	if wrap.Code != 1 {
+		t.Fatalf("edit %+v body=%s", wrap, w2.Body.String())
+	}
+	var got model.TenantAdmin
+	if err := tenantdb.UseSN(sn).Where("id = ?", adminID).First(&got).Error; err != nil || got.Name != "分表管理员" {
+		t.Fatalf("edited %+v err=%v", got, err)
 	}
 }
 

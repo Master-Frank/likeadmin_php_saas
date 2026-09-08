@@ -217,3 +217,62 @@ func TestGencrudHTTPRuntimeCRUD(t *testing.T) {
 		t.Fatalf("soft delete left=%d", left)
 	}
 }
+
+func TestAttachRelationsUsesShardTable(t *testing.T) {
+	if !initGencrudDB(t) {
+		t.Skip("no database")
+	}
+	const sn = "t990007"
+	const tid uint = 990007
+	db := bootstrap.DB
+	parent := "la_go_rel_rt"
+	t.Cleanup(func() {
+		_ = db.Exec("DROP TABLE IF EXISTS " + parent).Error
+		_ = db.Exec("DROP TABLE IF EXISTS la_user_" + sn).Error
+	})
+	if err := db.Exec("DROP TABLE IF EXISTS la_user_" + sn).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE la_user_" + sn + " LIKE la_user").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE IF NOT EXISTS ` + parent + ` (
+		id int unsigned NOT NULL AUTO_INCREMENT,
+		user_id int unsigned NOT NULL DEFAULT 0,
+		name varchar(64) NOT NULL DEFAULT '',
+		PRIMARY KEY (id)
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO la_user_"+sn+" (id, nickname, tenant_id, create_time) VALUES (1, 'shard-nick', ?, ?)",
+		tid, time.Now().Unix()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO " + parent + " (id, user_id, name) VALUES (1, 1, 'row')").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{TenantID: tid, TenantSN: sn, Tactics: 1})
+
+	sp := newSpec(model.GenerateTable{
+		Name:      parent,
+		Relations: `[{"name":"user","model":"User","type":"has_one","local_key":"user_id","foreign_key":"id","label":"nickname"}]`,
+	}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1, IsLists: 1},
+		{ColumnName: "user_id", IsLists: 1},
+		{ColumnName: "name", IsLists: 1},
+	})
+	rows := []map[string]any{{"id": 1, "user_id": 1, "name": "row"}}
+	attachRelations(c, sp, rows)
+	user, _ := rows[0]["user"].(map[string]any)
+	if user == nil || util.ToString(user["nickname"]) != "shard-nick" {
+		t.Fatalf("want shard user, got %+v", rows[0]["user"])
+	}
+	if util.ToString(rows[0]["user_name"]) != "shard-nick" {
+		t.Fatalf("user_name %v", rows[0]["user_name"])
+	}
+}

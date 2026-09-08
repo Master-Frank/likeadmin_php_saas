@@ -17,8 +17,8 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
-	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -373,9 +373,12 @@ func TenantAdminLists(c *gin.Context) {
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
 }
 
-func tenantAdminIDExists(id uint) bool {
-	var a model.TenantAdmin
-	return bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&a).Error == nil
+// tenantAdminIDExists mirrors PHP TenantAdminValidate::checkUser.
+// Platform middleware copies request tenant_id onto the model scope, so
+// tactics=1 admins are resolved on la_tenant_admin_{sn}, not the shared table.
+func tenantAdminIDExists(id, tenantID uint) bool {
+	_, _, ok := resolveTenantAdmin(tenantID, id)
+	return ok
 }
 
 func TenantAdminDetail(c *gin.Context) {
@@ -386,7 +389,7 @@ func TenantAdminDetail(c *gin.Context) {
 	}
 	// PHP sceneDetail is id.require|checkUser then tenant_id.require;
 	// ThinkPHP require treats 0 as present, so id=0 hits checkUser first.
-	if !tenantAdminIDExists(httpx.QueryUint(c, "id")) {
+	if !tenantAdminIDExists(httpx.QueryUint(c, "id"), httpx.QueryUint(c, "tenant_id")) {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -475,7 +478,7 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	if !tenantAdminIDExists(httpx.BodyUint(c, "id")) {
+	if !tenantAdminIDExists(httpx.BodyUint(c, "id"), httpx.BodyUint(c, "tenant_id")) {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
@@ -823,6 +826,9 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 
 func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	_ = tx
+	if bootstrap.DB != nil {
+		tenantdb.Register(bootstrap.DB)
+	}
 	if err := runTenantDataSQL(tenant.ID, tenant.SN); err != nil {
 		return err
 	}
