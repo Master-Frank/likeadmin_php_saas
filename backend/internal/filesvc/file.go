@@ -23,6 +23,15 @@ func GetImageAttr(c *gin.Context, uri string) string {
 	return GetFileURL(c, uri)
 }
 
+// EmptyFileURL matches PayConfig/TenantPayConfig getIconAttr:
+// empty($value) ? '' : getFileUrl($value). No trim; "0" is empty.
+func EmptyFileURL(c *gin.Context, uri string) string {
+	if uri == "" || uri == "0" {
+		return ""
+	}
+	return GetFileURL(c, uri)
+}
+
 // AdminAvatarURL matches Admin/TenantAdmin/Tenant getAvatarAttr:
 // empty($value) ? getFileUrl($fallback) : getFileUrl(trim($value, '/')).
 func AdminAvatarURL(c *gin.Context, stored, fallback string) string {

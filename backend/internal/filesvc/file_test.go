@@ -70,6 +70,20 @@ func TestGetImageAttrEmpty(t *testing.T) {
 	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" || GetImageAttr(nil, "0") != "" {
 		t.Fatal("empty image must stay empty")
 	}
+}
+
+func TestEmptyFileURLMatchesPayConfigGetter(t *testing.T) {
+	if EmptyFileURL(nil, "") != "" || EmptyFileURL(nil, "0") != "" {
+		t.Fatal("PHP empty() icon stays empty")
+	}
+	c := imageTestContext()
+	if EmptyFileURL(c, "   ") == "" {
+		t.Fatal("PHP empty('   ') is false; whitespace icon is kept")
+	}
+	if got := EmptyFileURL(c, "uploads/pay.png"); !strings.Contains(got, "uploads/pay.png") {
+		t.Fatalf("icon: %s", got)
+	}
+}
 	if Format("http://host", "") != "http://host/" {
 		t.Fatal("Format empty still prefixes domain")
 	}

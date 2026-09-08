@@ -135,7 +135,8 @@ func TenantAdd(c *gin.Context) {
 	tactics := httpx.BodyInt(c, "tactics")
 	now := util.NowUnix()
 	tenant := model.Tenant{
-		SN: sn, Name: name, Avatar: filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
+		// PHP TenantLogic::add stores $params['avatar'] raw (no setFileUrl).
+		SN: sn, Name: name, Avatar: httpx.BodyRaw(c, "avatar"),
 		Tel: httpx.BodyRaw(c, "tel"), DomainAlias: alias, DomainAliasEnable: httpx.BodyInt(c, "domain_alias_enable"),
 		Disable: httpx.BodyInt(c, "disable"), Notes: httpx.BodyRaw(c, "notes"), Tactics: tactics, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
@@ -187,7 +188,8 @@ func TenantEdit(c *gin.Context) {
 	now := util.NowUnix()
 	disable := httpx.BodyInt(c, "disable")
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyRaw(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyRaw(c, "avatar")),
+		// PHP TenantLogic::edit stores $params['avatar'] raw (no setFileUrl).
+		"name": httpx.BodyRaw(c, "name"), "avatar": httpx.BodyRaw(c, "avatar"),
 		"disable": disable, "tel": httpx.BodyRaw(c, "tel"),
 		"domain_alias":        alias,
 		"domain_alias_enable": httpx.BodyInt(c, "domain_alias_enable"),
@@ -757,7 +759,7 @@ func TenantUserLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, u := range rows {
 		out = append(out, map[string]any{
-			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetFileURL(c, u.Avatar),
+			"id": u.ID, "sn": u.SN, "avatar": filesvc.GetImageAttr(c, u.Avatar),
 			"nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 			"sex": util.SexDesc(u.Sex), "channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
 			"create_time": util.FormatDateTime(u.CreateTime),
@@ -1182,7 +1184,7 @@ func rootDomain(c *gin.Context) string {
 func userMap(c *gin.Context, u model.User) map[string]any {
 	return map[string]any{
 		"id": u.ID, "sn": u.SN,
-		"avatar":    filesvc.GetFileURL(c, u.Avatar),
+		"avatar":    filesvc.GetImageAttr(c, u.Avatar),
 		"real_name": u.RealName, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
 		"sex": util.SexDesc(u.Sex), "sexCode": u.Sex, "channel": util.ChannelDesc(u.Channel),
 		"is_disable": u.IsDisable,

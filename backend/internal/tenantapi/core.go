@@ -350,7 +350,7 @@ func UserLists(c *gin.Context) {
 	for _, u := range rows {
 		out = append(out, map[string]any{
 			"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-			"avatar": filesvc.GetFileURL(c, u.Avatar), "sex": util.SexDesc(u.Sex),
+			"avatar": filesvc.GetImageAttr(c, u.Avatar), "sex": util.SexDesc(u.Sex),
 			"channel": util.ChannelDesc(u.Channel), "is_disable": u.IsDisable,
 			"create_time": util.FormatDateTime(u.CreateTime),
 		})
@@ -370,7 +370,7 @@ func UserDetail(c *gin.Context) {
 	}
 	response.Data(c, gin.H{
 		"id": u.ID, "sn": u.SN, "nickname": u.Nickname, "account": u.Account, "mobile": u.Mobile,
-		"avatar": filesvc.GetFileURL(c, u.Avatar), "real_name": u.RealName,
+		"avatar": filesvc.GetImageAttr(c, u.Avatar), "real_name": u.RealName,
 		"sex": util.SexDesc(u.Sex), "sexCode": u.Sex, "channel": util.ChannelDesc(u.Channel),
 		"is_disable": u.IsDisable, "user_money": util.MoneyString(u.UserMoney),
 		"login_time": util.FormatDateTimePtr(u.LoginTime), "create_time": util.FormatDateTime(u.CreateTime),

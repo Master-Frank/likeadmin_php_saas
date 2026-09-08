@@ -28,7 +28,7 @@ func PayConfigLists(c *gin.Context) {
 	names := map[int]string{1: "余额支付", 2: "微信支付", 3: "支付宝支付"}
 	for _, r := range rows {
 		out = append(out, map[string]any{
-			"id": r.ID, "name": r.Name, "pay_way": r.PayWay, "icon": filesvc.GetFileURL(c, r.Icon),
+			"id": r.ID, "name": r.Name, "pay_way": r.PayWay, "icon": filesvc.EmptyFileURL(c, r.Icon),
 			"sort": r.Sort, "pay_way_name": names[r.PayWay],
 		})
 	}
