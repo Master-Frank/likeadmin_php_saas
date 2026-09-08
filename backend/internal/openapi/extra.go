@@ -24,6 +24,9 @@ import (
 )
 
 func ArticleAddCollect(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	if uid == 0 {
 		response.Fail(c, "参数错误")
@@ -45,6 +48,9 @@ func ArticleAddCollect(c *gin.Context) {
 }
 
 func ArticleCancelCollect(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	uid := ctxutil.Get(c).UserID
 	aid := httpx.BodyUint(c, "id")
 	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
@@ -689,6 +695,9 @@ func decoratePageMap(page model.DecoratePage) gin.H {
 }
 
 func UploadImage(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	// PHP UploadController::image always stores cid=0 and ignores the form field.
 	name, rel, errMsg := filesvc.ReceiveUpload(c, "image", "uploads/images")
 	if errMsg != "" {

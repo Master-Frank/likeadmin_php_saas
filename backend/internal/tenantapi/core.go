@@ -892,6 +892,9 @@ func RechargeGetConfig(c *gin.Context) {
 }
 
 func RechargeSetConfig(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !requirePlatformTenant(c) {
 		return
 	}

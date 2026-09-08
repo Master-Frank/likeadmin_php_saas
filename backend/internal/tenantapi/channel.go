@@ -39,6 +39,9 @@ func ChannelOASet(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	if msg := util.ChannelOASetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -80,6 +83,9 @@ func ChannelMnpSet(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	if msg := util.ChannelMnpSetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -101,6 +107,9 @@ func ChannelOpenGet(c *gin.Context) {
 
 func ChannelOpenSet(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	if msg := util.ChannelOpenSetCheck(httpx.Body(c)); msg != "" {
@@ -125,6 +134,9 @@ func ChannelH5Set(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	if msg := util.ChannelH5SetCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -145,6 +157,9 @@ func ChannelAppGet(c *gin.Context) {
 
 func ChannelAppSet(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	cfgsvc.Set(c, "app", "ios_download_url", httpx.BodyStr(c, "ios_download_url"))

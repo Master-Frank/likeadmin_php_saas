@@ -155,6 +155,9 @@ func DecorateDataPC(c *gin.Context) {
 }
 
 func DecorateTabbarSave(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !guardTenantWrite(c) {
 		return
 	}
@@ -914,6 +917,12 @@ func OAMenuDetail(c *gin.Context) {
 }
 
 func OAMenuSave(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	menu := httpx.List(c)
 	if menu == nil {
 		if v := httpx.BodyAny(c, "menu"); v != nil {
@@ -935,6 +944,12 @@ func OAMenuSave(c *gin.Context) {
 }
 
 func OAMenuSaveAndPublish(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
+		return
+	}
 	menu := httpx.List(c)
 	if menu == nil {
 		if v := httpx.BodyAny(c, "menu"); v != nil {

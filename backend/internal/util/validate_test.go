@@ -323,6 +323,12 @@ func TestDictTypeWriteCheck(t *testing.T) {
 	if DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 2}) != "status必须在 0,1 范围内" {
 		t.Fatal(DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": 2}))
 	}
+	if DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": nil}) != "请选择状态" {
+		t.Fatal(DictTypeWriteCheck(map[string]any{"name": "n", "type": "t", "status": nil}))
+	}
+	if DictDataWriteCheck(map[string]any{"name": "n", "value": "v", "status": nil}, false) != "请选择字典数据状态" {
+		t.Fatal(DictDataWriteCheck(map[string]any{"name": "n", "value": "v", "status": nil}, false))
+	}
 	if msg := DictTypeWriteCheckTaken(map[string]any{"name": "n", "type": "taken"}, func(string) bool { return true }); msg != "字典类型已存在" {
 		t.Fatal(msg)
 	}

@@ -295,7 +295,7 @@ func DictTypeWriteCheckTaken(p map[string]any, typeTaken func(string) bool) stri
 	if typeTaken != nil && typeTaken(strings.TrimSpace(ToString(p["type"]))) {
 		return "字典类型已存在"
 	}
-	if _, ok := p["status"]; !ok {
+	if !phpRequired(p, "status") {
 		return "请选择状态"
 	}
 	if !inZeroOne(p["status"]) {
@@ -323,7 +323,7 @@ func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
 			return "字典类型缺失"
 		}
 	}
-	if _, ok := p["status"]; !ok {
+	if !phpRequired(p, "status") {
 		return "请选择字典数据状态"
 	}
 	st := ToInt(p["status"])
