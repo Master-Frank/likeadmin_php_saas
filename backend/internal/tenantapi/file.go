@@ -207,6 +207,9 @@ func UploadVideo(c *gin.Context) { tenantUpload(c, 20, "uploads/video", "video")
 func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", "file") }
 
 func tenantUpload(c *gin.Context, typ int, dir, scene string) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !guardTenantWrite(c) {
 		return
 	}

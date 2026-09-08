@@ -135,6 +135,15 @@ func TestFileIDCheck(t *testing.T) {
 	if FileMoveCheck(map[string]any{"cid": -1, "ids": []any{1}}, []uint{1}) != "cid必须是数字" {
 		t.Fatal(FileMoveCheck(map[string]any{"cid": -1, "ids": []any{1}}, []uint{1}))
 	}
+	if FileIDCheck(map[string]any{"id": nil}) != "缺少id参数" {
+		t.Fatal(FileIDCheck(map[string]any{"id": nil}))
+	}
+	if FileMoveCheck(map[string]any{"cid": nil, "ids": []any{1}}, []uint{1}) != "缺少cid参数" {
+		t.Fatal(FileMoveCheck(map[string]any{"cid": nil, "ids": []any{1}}, []uint{1}))
+	}
+	if FileDeleteCheck(map[string]any{"ids": nil}, nil) != "缺少ids参数" {
+		t.Fatal(FileDeleteCheck(map[string]any{"ids": nil}, nil))
+	}
 }
 
 func TestUserRegisterConfigCheckRequireIfScene(t *testing.T) {
@@ -247,6 +256,9 @@ func TestTransactionSettingCheck(t *testing.T) {
 	}
 	if TransactionSettingCheck(map[string]any{"cancel_unpaid_orders": 1, "cancel_unpaid_orders_times": 1.5, "verification_orders": 0}) != "系统取消待付款订单时间须为整型" {
 		t.Fatal("float")
+	}
+	if TransactionSettingCheck(map[string]any{"cancel_unpaid_orders": 1, "cancel_unpaid_orders_times": nil, "verification_orders": 0}) != "系统取消待付款订单时间未填写" {
+		t.Fatal("null times")
 	}
 }
 

@@ -115,13 +115,13 @@ func FileNameCheck(name string) string {
 
 func FileMoveCheck(p map[string]any, ids []uint) string {
 	// PHP FileValidate $rule lists cid before ids: require|number then require|array.
-	if _, ok := p["cid"]; !ok {
+	if !phpRequired(p, "cid") {
 		return "缺少cid参数"
 	}
 	if !isPHPNumber(p["cid"]) {
 		return "cid必须是数字"
 	}
-	if _, ok := p["ids"]; !ok {
+	if !phpRequired(p, "ids") {
 		return "缺少ids参数"
 	}
 	if !isArrayValue(p["ids"]) {
@@ -134,7 +134,7 @@ func FileMoveCheck(p map[string]any, ids []uint) string {
 }
 
 func FileDeleteCheck(p map[string]any, ids []uint) string {
-	if _, ok := p["ids"]; !ok {
+	if !phpRequired(p, "ids") {
 		return "缺少ids参数"
 	}
 	if !isArrayValue(p["ids"]) {
@@ -147,7 +147,7 @@ func FileDeleteCheck(p map[string]any, ids []uint) string {
 }
 
 func FileIDCheck(p map[string]any) string {
-	if _, ok := p["id"]; !ok {
+	if !phpRequired(p, "id") {
 		return "缺少id参数"
 	}
 	if !isPHPNumber(p["id"]) {
@@ -157,14 +157,14 @@ func FileIDCheck(p map[string]any) string {
 }
 
 func FileAddCateCheck(p map[string]any) string {
-	if _, ok := p["type"]; !ok {
+	if !phpRequired(p, "type") {
 		return "缺少type参数"
 	}
 	typ := ToInt(p["type"])
 	if typ != 10 && typ != 20 && typ != 30 {
 		return "type必须在 10,20,30 范围内"
 	}
-	if _, ok := p["pid"]; !ok {
+	if !phpRequired(p, "pid") {
 		return "缺少pid参数"
 	}
 	if !isPHPNumber(p["pid"]) {
@@ -547,7 +547,7 @@ func TransactionSettingCheck(p map[string]any) string {
 		return "系统取消待付款订单状态值有误"
 	}
 	if ToInt(p["cancel_unpaid_orders"]) == 1 {
-		if _, ok := p["cancel_unpaid_orders_times"]; !ok {
+		if !phpRequired(p, "cancel_unpaid_orders_times") {
 			return "系统取消待付款订单时间未填写"
 		}
 		if !isWholeNumber(p["cancel_unpaid_orders_times"]) {
@@ -564,7 +564,7 @@ func TransactionSettingCheck(p map[string]any) string {
 		return "系统自动核销订单状态值有误"
 	}
 	if ToInt(p["verification_orders"]) == 1 {
-		if _, ok := p["verification_orders_times"]; !ok {
+		if !phpRequired(p, "verification_orders_times") {
 			return "系统自动核销订单时间未填写"
 		}
 		if !isWholeNumber(p["verification_orders_times"]) {

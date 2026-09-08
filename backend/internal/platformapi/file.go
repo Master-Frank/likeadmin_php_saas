@@ -181,6 +181,9 @@ func UploadVideo(c *gin.Context) { uploadSave(c, 20, "uploads/video", "video") }
 func UploadFile(c *gin.Context)  { uploadSave(c, 30, "uploads/file", "file") }
 
 func uploadSave(c *gin.Context, typ int, dir, scene string) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	cid := filesvc.UploadCID(c)
 	if msg := filesvc.UploadCateOK(bootstrap.DB, &model.FileCate{}, cid, 0); msg != "" {
 		response.Fail(c, msg)

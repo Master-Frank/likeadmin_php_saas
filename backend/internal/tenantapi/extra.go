@@ -231,7 +231,10 @@ func SettingGetCopyright(c *gin.Context) {
 }
 
 func SettingSetCopyright(c *gin.Context) {
-	if !requirePlatformTenant(c) {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	cfg := httpx.BodyAny(c, "config")
@@ -253,7 +256,10 @@ func SettingGetAgreement(c *gin.Context) {
 }
 
 func SettingSetAgreement(c *gin.Context) {
-	if !requirePlatformTenant(c) {
+	if !response.RequirePOST(c) {
+		return
+	}
+	if !guardTenantWrite(c) {
 		return
 	}
 	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
