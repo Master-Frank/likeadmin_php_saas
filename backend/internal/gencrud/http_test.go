@@ -218,6 +218,43 @@ func TestGencrudHTTPRuntimeCRUD(t *testing.T) {
 	}
 }
 
+func TestTreeAncestorStaysOnOwnTenant(t *testing.T) {
+	if !initGencrudDB(t) {
+		t.Skip("no database")
+	}
+	const table = "la_go_tree_rt"
+	db := bootstrap.DB
+	t.Cleanup(func() { _ = db.Exec("DROP TABLE IF EXISTS " + table).Error })
+	_ = db.Exec("DROP TABLE IF EXISTS " + table).Error
+	if err := db.Exec(`CREATE TABLE ` + table + ` (
+		id int unsigned NOT NULL,
+		pid int unsigned NOT NULL DEFAULT 0,
+		tenant_id int unsigned NOT NULL DEFAULT 0,
+		PRIMARY KEY (id)
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO " + table + " (id, pid, tenant_id) VALUES (10, 20, 990013), (20, 10, 990014)").Error; err != nil {
+		t.Fatal(err)
+	}
+	sp := &spec{
+		table: model.GenerateTable{Name: table},
+		pk:    "id", tree: true, treeID: "id", treePID: "pid",
+		allowed: map[string]bool{"id": true, "pid": true, "tenant_id": true},
+	}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Source: ctxutil.SourceTenant, TenantID: 990013})
+	if isTreeAncestor(c, sp, 20, 10) {
+		t.Fatal("must not walk another tenant's pid chain")
+	}
+	if msg := treeCycleMsg(c, sp, 10, map[string]any{"pid": 20}); msg != "" {
+		t.Fatalf("cross-tenant pid should not report cycle: %s", msg)
+	}
+}
+
 func TestAttachRelationsUsesShardTable(t *testing.T) {
 	if !initGencrudDB(t) {
 		t.Skip("no database")

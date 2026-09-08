@@ -477,15 +477,20 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
+	if bootstrap.DB == nil {
+		response.Fail(c, "系统错误")
+		return
+	}
 	adminID := ctxutil.Get(c).AdminID
 	var rec model.RefundRecord
 	var user model.User
-	err := udb.Transaction(func(tx *gorm.DB) error {
+	err := bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
 		if err := tx.Model(&order).Updates(map[string]any{"refund_status": 1, "update_time": now}).Error; err != nil {
 			return err
 		}
-		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
+		userDB := tenantdb.ForTenantOn(tx, order.TenantID)
+		uq := userDB.Model(&model.User{}).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money - ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount - ?", order.OrderAmount),
@@ -493,9 +498,8 @@ func RechargeRefund(c *gin.Context) {
 		}).Error; err != nil {
 			return err
 		}
-		uq = tx.Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
-		uq.First(&user)
-		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncAdmin, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
+		userDB.Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID).First(&user)
+		biz.AddAccountLog(userDB, order.UserID, order.TenantID, biz.UMIncAdmin, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
 		exists := func(sn string) bool {
 			var n int64
 			q := tx.Model(&model.RefundRecord{}).Where("sn = ? AND tenant_id = ?", sn, order.TenantID)

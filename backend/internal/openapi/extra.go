@@ -345,11 +345,12 @@ func PayStatus(c *gin.Context) {
 }
 
 func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
-	db := bootstrap.DB
-	if order != nil {
-		db = tenantdb.ForTenant(order.TenantID)
+	if order == nil || bootstrap.DB == nil {
+		return nil
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	// RechargeOrder stays on the shared table (PHP $notCheckTables). User /
+	// account log rewrite onto la_user_{sn} when tactics=1, on the same txn.
+	return bootstrap.DB.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
 		q := tx.Model(&model.RechargeOrder{}).Where("id = ? AND pay_status = 0 AND delete_time IS NULL AND tenant_id = ?", order.ID, order.TenantID)
 		res := q.Updates(map[string]any{
@@ -361,7 +362,8 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 		if res.RowsAffected == 0 {
 			return nil
 		}
-		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
+		udb := tenantdb.ForTenantOn(tx, order.TenantID)
+		uq := udb.Model(&model.User{}).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money + ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount + ?", order.OrderAmount),
@@ -370,9 +372,8 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 			return err
 		}
 		var user model.User
-		uq = tx.Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
-		uq.First(&user)
-		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, user.UserMoney, order.SN, "用户充值")
+		udb.Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID).First(&user)
+		biz.AddAccountLog(udb, order.UserID, order.TenantID, biz.UMIncRecharge, biz.INC, order.OrderAmount, user.UserMoney, order.SN, "用户充值")
 		return nil
 	})
 }

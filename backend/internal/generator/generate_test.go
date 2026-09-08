@@ -9,8 +9,25 @@ import (
 	"testing"
 	"time"
 
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
 )
+
+func initGeneratorDB(t *testing.T) bool {
+	t.Helper()
+	if bootstrap.DB != nil {
+		return true
+	}
+	cfg := os.Getenv("LIKEADMIN_CONFIG")
+	if cfg == "" {
+		cfg = "/workspace/backend/configs/config.yaml"
+	}
+	if err := bootstrap.Init(cfg); err != nil {
+		t.Log(err)
+		return false
+	}
+	return bootstrap.DB != nil
+}
 
 func sampleTable() (model.GenerateTable, []model.GenerateColumn) {
 	t := model.GenerateTable{
@@ -346,6 +363,55 @@ func TestApplyMenuSQLEmpty(t *testing.T) {
 	}
 	if err := ApplyMenuSQL(nil, ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestApplyMenuSQLLastInsertIDOnRealDB(t *testing.T) {
+	if !initGeneratorDB(t) {
+		t.Skip("no database")
+	}
+	tbl, cols := sampleTable()
+	tbl.Menu = `{"pid":0,"type":1,"name":"GoMenu990014"}`
+	files := BuildAt(tbl, cols, time.Date(2026, 9, 8, 12, 0, 0, 0, time.Local))
+	var sqlText string
+	for _, f := range files {
+		if f.Name == "menu.sql" {
+			sqlText = f.Content
+			break
+		}
+	}
+	if sqlText == "" || !strings.Contains(sqlText, "LAST_INSERT_ID") || !strings.Contains(sqlText, "@pid") {
+		t.Fatalf("menu.sql missing LAST_INSERT_ID/@pid: %s", sqlText)
+	}
+	t.Cleanup(func() {
+		var rows []model.SystemMenu
+		bootstrap.DB.Where("name = ? AND type = ? AND perms = ?", "GoMenu990014", "C", "config/lists").Find(&rows)
+		for _, p := range rows {
+			_ = bootstrap.DB.Where("pid = ?", p.ID).Delete(&model.SystemMenu{}).Error
+			_ = bootstrap.DB.Where("id = ?", p.ID).Delete(&model.SystemMenu{}).Error
+		}
+	})
+	if err := ApplyMenuSQL(bootstrap.DB, sqlText); err != nil {
+		t.Fatal(err)
+	}
+	var parent model.SystemMenu
+	if err := bootstrap.DB.Where("name = ? AND type = ? AND perms = ?", "GoMenu990014", "C", "config/lists").
+		Order("id desc").First(&parent).Error; err != nil {
+		t.Fatalf("parent menu: %v", err)
+	}
+	if parent.Pid != 0 {
+		t.Fatalf("parent pid=%d", parent.Pid)
+	}
+	var kids []model.SystemMenu
+	bootstrap.DB.Where("pid = ?", parent.ID).Order("id asc").Find(&kids)
+	if len(kids) != 3 {
+		t.Fatalf("children=%d want 3 (LAST_INSERT_ID/@pid)", len(kids))
+	}
+	want := []string{"添加", "编辑", "删除"}
+	for i, name := range want {
+		if kids[i].Name != name || kids[i].Type != "A" {
+			t.Fatalf("child %d %+v want %s", i, kids[i], name)
+		}
 	}
 }
 

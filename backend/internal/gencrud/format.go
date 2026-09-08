@@ -329,13 +329,15 @@ func treeCycleMsg(c *gin.Context, sp *spec, id uint, data map[string]any) string
 	if pid == id {
 		return "上级不能选择自己"
 	}
-	if isTreeAncestor(session(c), sp, pid, id) {
+	if isTreeAncestor(c, sp, pid, id) {
 		return "上级不能选择自己的子级"
 	}
 	return ""
 }
 
-func isTreeAncestor(db *gorm.DB, sp *spec, start, forbid uint) bool {
+// isTreeAncestor walks pid on the same tenant-scoped table PHP BaseModel would use.
+func isTreeAncestor(c *gin.Context, sp *spec, start, forbid uint) bool {
+	db := scoped(c, sp)
 	if db == nil || start == 0 || forbid == 0 {
 		return false
 	}
@@ -347,10 +349,7 @@ func isTreeAncestor(db *gorm.DB, sp *spec, start, forbid uint) bool {
 		}
 		seen[cur] = true
 		row := map[string]any{}
-		q := db.Table(sp.table.Name).Select(sp.pk, sp.treePID).Where(sp.pk+" = ?", cur)
-		if sp.softDelete {
-			q = q.Where(sp.deleteCol + " IS NULL")
-		}
+		q := db.Select(sp.pk, sp.treePID).Where(sp.pk+" = ?", cur)
 		if q.Take(&row).Error != nil {
 			return false
 		}

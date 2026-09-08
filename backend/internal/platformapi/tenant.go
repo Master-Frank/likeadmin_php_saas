@@ -278,7 +278,7 @@ func expireTenantAdmins(tenant model.Tenant) {
 		adb.Where("user_id = ?", u.ID).Find(&sess)
 		for _, s := range sess {
 			adb.Model(&s).Updates(map[string]any{"expire_time": now, "update_time": now})
-			cache.Del("token_user_" + s.Token)
+			cache.DeleteUserInfo(s.Token)
 		}
 	}
 }

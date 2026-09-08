@@ -17,6 +17,8 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/pay"
+	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
 
 	"github.com/gin-gonic/gin"
@@ -85,6 +87,79 @@ func TestMarkRechargePaidMovesMoney(t *testing.T) {
 	bootstrap.DB.Model(&model.UserAccountLog{}).Where("source_sn = ? AND change_type = 201", sn).Count(&logs)
 	if logs != 1 {
 		t.Fatalf("double pay logs=%d", logs)
+	}
+}
+
+func TestMarkRechargePaidCreditsShardedUser(t *testing.T) {
+	if !initPayDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990012
+	const sn = "t990012"
+	const uid uint = 99001201
+	db := bootstrap.DB
+	tenantdb.Register(db)
+	cleanup := func() {
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.RechargeOrder{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.UserAccountLog{}).Error
+		_ = db.Exec("DROP TABLE IF EXISTS la_user_" + sn).Error
+		_ = db.Exec("DROP TABLE IF EXISTS la_user_account_log_" + sn).Error
+		_ = db.Where("id = ?", tid).Delete(&model.Tenant{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+	if err := db.Exec("CREATE TABLE la_user_" + sn + " LIKE la_user").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE la_user_account_log_" + sn + " LIKE la_user_account_log").Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	if err := db.Create(&model.Tenant{
+		ID: tid, SN: sn, Name: "pay-shard", Tactics: 1, CreateTime: now, UpdateTime: util.UnixPtr(now),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	sdb := tenantdb.UseSN(sn)
+	user := model.User{
+		ID: uid, TenantID: tid, Account: "pay-shard", Nickname: "pay-shard", SN: 990012,
+		UserMoney: 10, TotalRechargeAmount: 10, LoginTime: util.UnixPtr(now),
+		CreateTime: now, UpdateTime: util.UnixPtr(now),
+	}
+	if err := sdb.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	orderSN := "itshard" + time.Now().Format("150405.000")
+	order := model.RechargeOrder{
+		SN: orderSN, UserID: uid, PayWay: 2, PayStatus: 0, OrderAmount: 3.5,
+		OrderTerminal: 1, TenantID: tid, CreateTime: now,
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := markRechargePaid(&order, "wx-shard"); err != nil {
+		t.Fatal(err)
+	}
+	var gotOrder model.RechargeOrder
+	if err := db.Where("id = ?", order.ID).First(&gotOrder).Error; err != nil || gotOrder.PayStatus != 1 {
+		t.Fatalf("shared order %+v err=%v", gotOrder, err)
+	}
+	var shardUser model.User
+	if err := sdb.Where("id = ?", uid).First(&shardUser).Error; err != nil {
+		t.Fatal(err)
+	}
+	if shardUser.UserMoney < 13.4 || shardUser.TotalRechargeAmount < 13.4 {
+		t.Fatalf("shard money=%v total=%v", shardUser.UserMoney, shardUser.TotalRechargeAmount)
+	}
+	var sharedHit int64
+	db.Model(&model.User{}).Where("id = ? AND tenant_id = ?", uid, tid).Count(&sharedHit)
+	if sharedHit != 0 {
+		t.Fatalf("credit leaked onto shared la_user rows=%d", sharedHit)
+	}
+	var logs int64
+	sdb.Model(&model.UserAccountLog{}).Where("source_sn = ? AND change_type = 201", orderSN).Count(&logs)
+	if logs != 1 {
+		t.Fatalf("shard account logs=%d", logs)
 	}
 }
 
