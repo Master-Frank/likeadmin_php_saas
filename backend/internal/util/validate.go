@@ -104,7 +104,8 @@ func ValidChinaMobile(mobile string) string {
 }
 
 func FileNameCheck(name string) string {
-	if strings.TrimSpace(name) == "" {
+	// ThinkPHP FileValidate name.require: only exact "" fails; whitespace passes.
+	if name == "" {
 		return "请填写分组名称"
 	}
 	if n := len([]rune(name)); n > 20 {
@@ -170,12 +171,18 @@ func FileAddCateCheck(p map[string]any) string {
 	if !isPHPNumber(p["pid"]) {
 		return "pid必须是数字"
 	}
+	if !phpRequired(p, "name") {
+		return "请填写分组名称"
+	}
 	return FileNameCheck(ToString(p["name"]))
 }
 
 func FileEditCateCheck(p map[string]any) string {
 	if msg := FileIDCheck(p); msg != "" {
 		return msg
+	}
+	if !phpRequired(p, "name") {
+		return "请填写分组名称"
 	}
 	return FileNameCheck(ToString(p["name"]))
 }
@@ -593,7 +600,7 @@ func SmsConfigWriteCheck(p map[string]any) string {
 	if !phpRequired(p, "sign") {
 		return "请输入签名"
 	}
-	typ := strings.TrimSpace(ToString(p["type"]))
+	typ := ToString(p["type"])
 	if typ == "tencent" && !phpRequired(p, "app_id") {
 		return "请输入app_id"
 	}

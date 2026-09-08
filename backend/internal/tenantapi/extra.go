@@ -461,7 +461,7 @@ func RechargeRefund(c *gin.Context) {
 	if !guardTenantWrite(c) {
 		return
 	}
-	if !httpx.BodyHas(c, "recharge_id") {
+	if !util.PHPRequired(httpx.Body(c), "recharge_id") {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -644,7 +644,7 @@ func RechargeRefundAgain(c *gin.Context) {
 	if !guardTenantWrite(c) {
 		return
 	}
-	if !httpx.BodyHas(c, "record_id") {
+	if !util.PHPRequired(httpx.Body(c), "record_id") {
 		response.Fail(c, "参数缺失")
 		return
 	}

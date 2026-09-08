@@ -772,7 +772,7 @@ func decorateDataPresent(c *gin.Context) bool {
 	}
 	switch t := v.(type) {
 	case string:
-		return strings.TrimSpace(t) != ""
+		return t != ""
 	case []any:
 		return len(t) > 0
 	case []map[string]any:

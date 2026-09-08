@@ -218,11 +218,12 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, cache.UserLoginSafeHint())
 			return
 		}
-		if !httpx.BodyHas(c, "password") {
+		// PHP LoginAccountValidate::checkConfig uses isset(), not require.
+		if !util.PHPIsset(httpx.Body(c), "password") {
 			response.Fail(c, "请输入密码")
 			return
 		}
-	} else if !httpx.BodyHas(c, "code") {
+	} else if !util.PHPIsset(httpx.Body(c), "code") {
 		response.Fail(c, "请输入手机验证码")
 		return
 	}

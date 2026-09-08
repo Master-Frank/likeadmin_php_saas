@@ -99,6 +99,12 @@ func TestFileNameCheck(t *testing.T) {
 	if FileNameCheck("图片") != "" {
 		t.Fatal("expected ok")
 	}
+	if FileNameCheck("   ") != "" {
+		t.Fatal("ThinkPHP require accepts whitespace group name")
+	}
+	if FileAddCateCheck(map[string]any{"type": 10, "pid": 0, "name": nil}) != "请填写分组名称" {
+		t.Fatal(FileAddCateCheck(map[string]any{"type": 10, "pid": 0, "name": nil}))
+	}
 }
 
 func TestFileMoveCheck(t *testing.T) {

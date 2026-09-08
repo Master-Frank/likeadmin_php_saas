@@ -477,7 +477,7 @@ func MenuUpdateStatus(c *gin.Context) {
 		response.Fail(c, "参数缺失")
 		return
 	}
-	if !httpx.BodyHas(c, "is_disable") {
+	if !util.PHPRequired(httpx.Body(c), "is_disable") {
 		response.Fail(c, "请选择菜单状态")
 		return
 	}
