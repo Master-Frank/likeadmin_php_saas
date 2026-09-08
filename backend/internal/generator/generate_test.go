@@ -190,6 +190,27 @@ func TestPreviewRelationsCheckboxAndBetweenTime(t *testing.T) {
 	}
 }
 
+func TestPreviewDatetime2FormDataBindsRange(t *testing.T) {
+	tbl, cols := sampleTable()
+	cols = append(cols, model.GenerateColumn{
+		ColumnName: "event_time", ColumnComment: "活动时间", ColumnType: "int",
+		IsInsert: 1, IsUpdate: 1, IsLists: 1, ViewType: "datetime2",
+	})
+	files := Build(tbl, cols)
+	var editVue string
+	for _, f := range files {
+		if f.Name == "edit.vue" {
+			editVue = f.Content
+		}
+	}
+	if !strings.Contains(editVue, "formData.start_event_time") || !strings.Contains(editVue, "formData.end_event_time") {
+		t.Fatalf("datetime2 stub binds start_/end_ keys: %s", editVue)
+	}
+	if !strings.Contains(editVue, "start_event_time: ''") || !strings.Contains(editVue, "end_event_time: ''") {
+		t.Fatalf("formData must seed start_/end_ for datetime2: %s", editVue)
+	}
+}
+
 func TestPreviewEmptyRelationTypeSkipped(t *testing.T) {
 	tbl, cols := sampleTable()
 	tbl.Relations = `[{"name":"owner","model":"User","local_key":"id","foreign_key":"user_id"}]`

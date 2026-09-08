@@ -178,6 +178,12 @@ func (c *ctx) formData() string {
 		} else {
 			content += col.Name + ": '',\n"
 		}
+		// datetime2.stub binds start_{col}/end_{col}; PHP getFormDataContent
+		// only seeds {col}, so the picker never writes. Seed both keys.
+		if col.ViewType == "datetime2" {
+			content += "start_" + col.Name + ": '',\n"
+			content += "end_" + col.Name + ": '',\n"
+		}
 		exist[col.Name] = true
 	}
 	if content != "" {

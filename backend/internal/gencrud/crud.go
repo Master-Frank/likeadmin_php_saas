@@ -396,7 +396,7 @@ func applySearch(db *gorm.DB, sp *spec, q lists.Query) *gorm.DB {
 				db = db.Where(name+" IN ?", toSlice(raw))
 			}
 		case "between":
-			if col.ViewType == "datetime" {
+			if col.ViewType == "datetime" || col.ViewType == "datetime2" {
 				if start, end, ok := parseSearchTimeRange(q.StartTime, q.EndTime); ok {
 					db = db.Where(name+" BETWEEN ? AND ?", start, end)
 				}
