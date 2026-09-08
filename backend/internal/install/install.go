@@ -39,6 +39,10 @@ func Run(c *gin.Context) {
 			return
 		}
 	}
+	if msg := EnvBlocking(); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	p := httpx.Body(c)
 	if msg := CheckParams(p); msg != "" {
 		response.Fail(c, msg)

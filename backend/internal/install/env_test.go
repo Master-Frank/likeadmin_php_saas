@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
 )
 
 func TestRestoreIndexFile(t *testing.T) {
@@ -50,8 +53,11 @@ func TestProbeWritableFile(t *testing.T) {
 		t.Fatalf("%+v", item)
 	}
 	missing := probeWritableFile(".env", filepath.Join(dir, "no-such.env"))
-	if missing.Status != "fail" || missing.Value != "文件不存在" {
-		t.Fatalf("%+v", missing)
+	if missing.Status != "ok" {
+		t.Fatalf("missing .env in writable dir should be created: %+v", missing)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "no-such.env")); err != nil {
+		t.Fatalf("makeEnv should create file: %v", err)
 	}
 	empty := probeWritableFile(".env", "")
 	if empty.Status != "fail" || empty.Value != "未配置" {
@@ -91,6 +97,43 @@ func TestCollectEnvServerInfo(t *testing.T) {
 	}
 	if names["服务器操作系统"] == "" || names["程序安装目录"] == "" {
 		t.Fatalf("empty server info %+v", names)
+	}
+}
+
+func TestProbeMySQLNilIsSoft(t *testing.T) {
+	if bootstrap.DB != nil {
+		t.Skip("bootstrap.DB already connected")
+	}
+	item := probeMySQL()
+	if item.Status != "ok" || item.Value != "安装时填写" {
+		t.Fatalf("%+v", item)
+	}
+}
+
+func TestEnvBlockingWritableTree(t *testing.T) {
+	root := t.TempDir()
+	pub := filepath.Join(root, "public")
+	for _, d := range []string{"uploads", "platform", "admin", "mobile"} {
+		if err := os.MkdirAll(filepath.Join(pub, d), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "runtime"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgDir := filepath.Join(root, "config")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	oldPub, oldLock := config.C.App.PublicDir, config.C.App.InstallLock
+	t.Cleanup(func() {
+		config.C.App.PublicDir = oldPub
+		config.C.App.InstallLock = oldLock
+	})
+	config.C.App.PublicDir = pub
+	config.C.App.InstallLock = filepath.Join(cfgDir, "install.lock")
+	if msg := EnvBlocking(); msg != "" {
+		t.Fatalf("writable tree: %s", msg)
 	}
 }
 

@@ -88,6 +88,9 @@ func probeUploadLimit() envItem {
 func probeMySQL() envItem {
 	item := envItem{Name: "MySQL", Status: "fail", Value: "未连接"}
 	if bootstrap.DB == nil {
+		// PHP install step 2 never pings MySQL; credentials are entered in step 3.
+		item.Status = "ok"
+		item.Value = "安装时填写"
 		return item
 	}
 	sqlDB, err := bootstrap.DB.DB()
@@ -152,8 +155,16 @@ func probeWritableFile(name, path string) envItem {
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		item.Value = "文件不存在"
-		return item
+		// PHP install.php calls YxEnv::makeEnv before checkDirWrite('.env').
+		if mkErr := makeEnv(path); mkErr != nil {
+			item.Value = mkErr.Error()
+			return item
+		}
+		info, err = os.Stat(path)
+		if err != nil {
+			item.Value = "文件不存在"
+			return item
+		}
 	}
 	if info.IsDir() {
 		item.Value = "不是文件"
@@ -229,6 +240,21 @@ func configDir() string {
 		return filepath.Join(config.C.App.PublicDir, "..", "config")
 	}
 	return "config"
+}
+
+// EnvBlocking returns the first PHP-wizard directory/file that is not writable.
+// public/ and public/mobile are Go extras and do not block install.
+func EnvBlocking() string {
+	need := map[string]bool{
+		"runtime": true, "public/uploads": true, "public/platform": true,
+		"public/admin": true, "config": true, ".env": true,
+	}
+	for _, it := range CollectEnv() {
+		if need[it.Name] && it.Status != "ok" {
+			return it.Name + "不可写"
+		}
+	}
+	return ""
 }
 
 func restoreIndexLock() {
