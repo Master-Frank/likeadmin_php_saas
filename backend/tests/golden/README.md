@@ -14,13 +14,13 @@ PHP 源文件与 Go 路由的 1:1 清单由 `backend/internal/router/php_module_
 | 平台登录/RBAC/组织 | `platformapi/logic/{Login,auth,dept}` | `platformapi/login.go` `admin.go` `menu_role.go` `dept_jobs.go` | 对拍已过 |
 | 平台租户生命周期 | `TenantLogic` `TenantAdminLogic` `TenantCreatService` | `platformapi/tenant.go` `tenantdb` | 对拍已过（分表走 shard；删除/停用比 PHP 多清理） |
 | 平台设置 | storage/dict/notice/pay/web/user/system | `platformapi/setting.go` `extra.go` | 对拍已过 |
-| 代码生成 / 升级 | `GeneratorLogic` `UpgradeLogic` | `generator/` `gencrud/` `upgrade/` | 对拍已过 |
+| 代码生成 / 升级 | `GeneratorLogic` `UpgradeLogic` | `generator/`（内嵌 stub）`gencrud/` `upgrade/` | 生成写入 Vue + 菜单 + gencrud 运行时，不再写 PHP 后端文件 |
+| 定时/安装 | `Crontab` `QueryRefund` `public/install` | `cron/` `cmd/crontab` `install/` | `query_refund`/`cancel_unpaid_orders`/`verification_orders` 已注册；独立 worker 含 `route:list` |
 | 租户内核 | login/config/workbench/RBAC/dept | `tenantapi/core.go` `auth.go` `org.go` | 对拍已过 |
 | 租户业务 | 文章/用户/装修/渠道/财务/充值/文件/通知 | `tenantapi/core.go` `extra.go` `channel.go` `file.go` `pay.go` | 对拍已过 |
 | 用户端 `/api` | `api/logic/*` + lists | `openapi/` | 对拍已过 |
 | 支付/短信/微信/存储 | `common/service/{pay,sms,wechat,storage}` | `pay/` `sms/` `wechat/` `storage/` `filesvc/` | 已迁；未使用的 AliPay transfer / silentLogin 不迁 |
 | 中间件 | Login/Auth/Demo/CORS/租户识别/操作日志 | `middleware/` | 已迁 |
-| 定时/安装 | `Crontab` `QueryRefund` `public/install` | `cron/` `install/` | 已迁 |
 | Think CLI | `php think` + console.php | `cmd/think` `cron/think_*.go` | 已迁；不 exec PHP |
 | 全量切流 | nginx / strangler | `cmd/strangler` `deploy/nginx.local.conf` | 直连/切流/Nginx 对拍 failed=0；PHP 回落默认关 |
 

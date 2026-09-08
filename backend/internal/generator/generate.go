@@ -115,9 +115,9 @@ func WriteRuntime(files []File) error {
 	return nil
 }
 
-// WriteModule writes generate_type=1 PHP/Vue/menu SQL like PHP BaseGenerator,
-// plus Go runtime metadata for gencrud. Vue/TS also land in platform/src or
-// tenant/src so this repo's real admin frontends can load the generated pages.
+// WriteModule writes generate_type=1 Vue/menu SQL plus Go gencrud metadata.
+// PHP Controller/Logic/Lists/Validate/Model are not written: runtime CRUD is
+// served by gencrud from la_generate_table so the PHP tree can be deleted.
 func WriteModule(t model.GenerateTable, files []File) error {
 	c := newCtx(t, nil, time.Now())
 	admin := filepath.Join(RepoRoot(), "admin", "src")
@@ -137,9 +137,7 @@ func WriteModule(t model.GenerateTable, files []File) error {
 	return WriteGoModule(t)
 }
 
-// frontendSrc is the real Vue app for a generator module. PHP still writes
-// admin/src (pair.sh cleans those paths); this repo's UIs live in platform/
-// and tenant/.
+// frontendSrc is the real Vue app for a generator module (platform/ or tenant/).
 func frontendSrc(module string) string {
 	switch goModuleApp(module) {
 	case "platformapi":
@@ -151,8 +149,8 @@ func frontendSrc(module string) string {
 	}
 }
 
-// moduleDests returns generate_type=1 destinations. Vue/TS are written to
-// admin/src (PHP pairing) and the matching platform/ or tenant/ frontend.
+// moduleDests returns generate_type=1 destinations. Vue/TS land in platform/
+// or tenant/ (and admin/src when that tree still exists for dual-stack pairing).
 func moduleDests(c *ctx, admin string, f File) []string {
 	dest := moduleDest(c, admin, f)
 	if dest == "" {
@@ -173,19 +171,11 @@ func moduleDests(c *ctx, admin string, f File) []string {
 }
 
 // moduleDest returns the generate_type=1 destination, or empty to skip.
+// PHP backend files are skipped: gencrud serves those routes from metadata.
 func moduleDest(c *ctx, admin string, f File) string {
-	app := filepath.Join(ServerRoot(), "app")
 	switch {
-	case strings.HasSuffix(f.Name, "Controller.php"):
-		return filepath.Join(joinClassDir(filepath.Join(app, c.module, "controller"), c.classDir), f.Name)
-	case strings.HasSuffix(f.Name, "Lists.php"):
-		return filepath.Join(joinClassDir(filepath.Join(app, c.module, "lists"), c.classDir), f.Name)
-	case strings.HasSuffix(f.Name, "Logic.php"):
-		return filepath.Join(joinClassDir(filepath.Join(app, c.module, "logic"), c.classDir), f.Name)
-	case strings.HasSuffix(f.Name, "Validate.php"):
-		return filepath.Join(joinClassDir(filepath.Join(app, c.module, "validate"), c.classDir), f.Name)
 	case strings.HasSuffix(f.Name, ".php"):
-		return filepath.Join(joinClassDir(filepath.Join(app, "common", "model"), c.classDir), f.Name)
+		return ""
 	case strings.HasSuffix(f.Name, ".ts"):
 		return filepath.Join(admin, "api", f.Name)
 	case f.Name == "index.vue":

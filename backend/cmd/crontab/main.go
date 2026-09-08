@@ -8,6 +8,8 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cron"
 	"likeadmin/backend/internal/tenantdb"
+
+	_ "likeadmin/backend/internal/router"
 )
 
 func main() {

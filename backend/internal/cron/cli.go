@@ -36,6 +36,7 @@ var commandDescs = map[string]string{
 	"session":              "Expire stale login sessions",
 	"upgrade-local":        "Apply a local upgrade zip",
 	"vendor:publish":       "Publish any publishable assets from vendor packages",
+	"verification_orders":  "Auto-verify aged orders",
 	"version":              "Show think framework version",
 }
 

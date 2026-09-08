@@ -100,6 +100,7 @@ func registerBuiltins() {
 	})
 	Register("query_refund", func([]string) string { return queryRefund() })
 	Register("cancel_unpaid_orders", func([]string) string { return cancelUnpaidOrders() })
+	Register("verification_orders", func([]string) string { return verificationOrders() })
 	Register("version", runVersion)
 	Register("optimize:schema", runOptimizeSchema)
 	Register("help", runHelp)
@@ -197,6 +198,8 @@ func normalizeCommand(raw string) string {
 		return "query_refund"
 	case strings.Contains(cmd, "cancel_unpaid") || strings.Contains(cmd, "cancelunpaid"):
 		return "cancel_unpaid_orders"
+	case strings.Contains(cmd, "verification_order") || strings.Contains(cmd, "verificationorder"):
+		return "verification_orders"
 	case strings.Contains(cmd, "session") || strings.Contains(cmd, "token"):
 		return "session"
 	case cmd == "clear" || strings.HasSuffix(cmd, "/clear"):
@@ -618,6 +621,100 @@ func cancelUnpaidForTenant(tenantID uint, enabled, minutes int, now int64) {
 		q = q.Where("tenant_id = ?", tenantID)
 	}
 	q.Updates(util.SoftDeleteFields(now))
+}
+
+// verificationOrders is the worker behind transaction.verification_orders.
+// Stock likeadmin has no pickup/verify order table (only recharge); the
+// command is registered so crontab rows and think CLI succeed without PHP.
+func verificationOrders() string {
+	if bootstrap.DB == nil {
+		return ""
+	}
+	now := util.NowUnix()
+	platOn, platHours := txnVerifySettings(0, 1, 24)
+	var tenants []model.Tenant
+	bootstrap.DB.Where("delete_time IS NULL").Find(&tenants)
+	if len(tenants) == 0 {
+		verifyOrdersForTenant(0, platOn, platHours, now)
+		return ""
+	}
+	for _, t := range tenants {
+		on, hours := txnVerifySettings(t.ID, platOn, platHours)
+		verifyOrdersForTenant(t.ID, on, hours, now)
+	}
+	return ""
+}
+
+func txnVerifySettings(tenantID uint, defOn, defHours int) (enabled, hours int) {
+	enabled, hours = defOn, defHours
+	type kv struct {
+		Name  string `gorm:"column:name"`
+		Value string `gorm:"column:value"`
+	}
+	var rows []kv
+	if tenantID > 0 {
+		db := tenantdb.ForTenant(tenantID)
+		if db == nil {
+			return enabled, hours
+		}
+		db.Model(&model.TenantConfig{}).Where("tenant_id = ? AND type = ?", tenantID, "transaction").
+			Select("name, value").Scan(&rows)
+	} else {
+		bootstrap.DB.Model(&model.ConfigRow{}).Where("type = ?", "transaction").
+			Select("name, value").Scan(&rows)
+	}
+	for _, r := range rows {
+		switch r.Name {
+		case "verification_orders":
+			enabled = util.ToInt(r.Value)
+		case "verification_orders_times":
+			if n := util.ToInt(r.Value); n > 0 {
+				hours = n
+			}
+		}
+	}
+	return enabled, hours
+}
+
+func verifyOrdersForTenant(tenantID uint, enabled, hours int, now int64) {
+	if enabled != 1 || hours <= 0 {
+		return
+	}
+	cutoff := now - int64(hours)*3600
+	verifyTableOrders(bootstrap.DB, tenantID, cutoff, now, "la_recharge_order")
+}
+
+func verifyTableOrders(db *gorm.DB, tenantID uint, cutoff, now int64, table string) {
+	if db == nil || table == "" {
+		return
+	}
+	if !tableHasColumn(db, table, "verify_status") && !tableHasColumn(db, table, "is_verify") {
+		return
+	}
+	col := "verify_status"
+	if !tableHasColumn(db, table, col) {
+		col = "is_verify"
+	}
+	q := db.Table(table).Where(col+" = 0 AND delete_time IS NULL AND create_time > 0 AND create_time < ?", cutoff)
+	if tenantID > 0 && tableHasColumn(db, table, "tenant_id") {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	fields := map[string]any{col: 1, "update_time": now}
+	if tableHasColumn(db, table, "verify_time") {
+		fields["verify_time"] = now
+	}
+	_ = q.Updates(fields).Error
+}
+
+func tableHasColumn(db *gorm.DB, table, col string) bool {
+	if db == nil || table == "" || col == "" {
+		return false
+	}
+	var n int64
+	if db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", table, col).Scan(&n).Error != nil {
+		return false
+	}
+	return n > 0
 }
 
 // EnsureNativeJobs inserts the Go-only system jobs a PHP install never shipped,

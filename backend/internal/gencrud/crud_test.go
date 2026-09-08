@@ -193,6 +193,32 @@ func TestWriteDataFileAndCheckbox(t *testing.T) {
 	}
 }
 
+func TestWriteDataDatetime2Range(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	sp := newSpec(model.GenerateTable{Name: "la_go_gencrud_rt"}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1},
+		{ColumnName: "event_time", ViewType: "datetime2", ColumnType: "string", IsInsert: 1, IsUpdate: 1, IsRequired: 1},
+	})
+	if got := requiredMsg(sp, map[string]any{}, false); got != "event_time" {
+		t.Fatalf("required datetime2 %q", got)
+	}
+	data := writeData(c, sp, map[string]any{
+		"start_event_time": "2026-01-01 00:00:00",
+		"end_event_time":   "2026-01-02 00:00:00",
+	}, false)
+	if data["event_time"] != "2026-01-01 00:00:00,2026-01-02 00:00:00" {
+		t.Fatalf("event_time %v", data["event_time"])
+	}
+	row := formatRow(c, sp, map[string]any{"event_time": data["event_time"]})
+	if row["start_event_time"] != "2026-01-01 00:00:00" || row["end_event_time"] != "2026-01-02 00:00:00" {
+		t.Fatalf("format %+v", row)
+	}
+}
+
 func TestSelectColsRespectsIsLists(t *testing.T) {
 	sp := newSpec(model.GenerateTable{Name: "la_pair_gencrud"}, []model.GenerateColumn{
 		{ColumnName: "id", IsPk: 1, IsLists: 1},

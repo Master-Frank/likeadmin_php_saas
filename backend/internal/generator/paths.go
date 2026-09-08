@@ -1,15 +1,23 @@
 package generator
 
 import (
+	"embed"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"likeadmin/backend/internal/config"
 )
 
+//go:embed stub
+var stubFS embed.FS
+
 func findServerRoot() string {
 	if pub := config.C.App.PublicDir; pub != "" {
-		return filepath.Dir(pub)
+		root := filepath.Dir(pub)
+		if st, err := os.Stat(root); err == nil && st.IsDir() {
+			return root
+		}
 	}
 	wd, _ := os.Getwd()
 	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
@@ -23,32 +31,60 @@ func findServerRoot() string {
 	return "server"
 }
 
-// ServerRoot is the PHP project root (the directory that contains app/ and runtime/).
+func findBackendRoot() string {
+	wd, _ := os.Getwd()
+	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "internal", "generator")); err == nil {
+			if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+				return d
+			}
+		}
+		if _, err := os.Stat(filepath.Join(d, "backend", "internal", "generator")); err == nil {
+			return filepath.Join(d, "backend")
+		}
+		if d == filepath.Dir(d) {
+			break
+		}
+	}
+	if pub := config.C.App.PublicDir; pub != "" {
+		repo := filepath.Dir(filepath.Dir(pub))
+		if st, err := os.Stat(filepath.Join(repo, "backend")); err == nil && st.IsDir() {
+			return filepath.Join(repo, "backend")
+		}
+	}
+	return "backend"
+}
+
+// ServerRoot is the PHP project root when it still exists (pair / dual-stack).
 func ServerRoot() string {
 	return findServerRoot()
 }
 
-// RepoRoot is the parent of the PHP server root (where admin/ would live).
+// RepoRoot is the parent of the PHP server root (where platform/ and tenant/ live).
 func RepoRoot() string {
+	backend := findBackendRoot()
+	if filepath.Base(backend) == "backend" {
+		return filepath.Dir(backend)
+	}
 	return filepath.Dir(ServerRoot())
 }
 
-// StubDir is PHP stub/ used by the generators.
+// StubDir is the embedded stub tree. Kept for test error messages.
 func StubDir() string {
-	return filepath.Join(ServerRoot(), "app", "common", "service", "generator", "stub")
+	return "embed:stub"
 }
 
-// RuntimeDir is PHP runtime/generate/.
+// RuntimeDir is backend/runtime/generate — independent of server/.
 func RuntimeDir() string {
-	return filepath.Join(ServerRoot(), "runtime", "generate")
+	return filepath.Join(findBackendRoot(), "runtime", "generate")
 }
 
-func stubPath(name string) string {
-	return filepath.Join(StubDir(), name+".stub")
+func stubName(name string) string {
+	return "stub/" + strings.TrimSuffix(filepath.ToSlash(name), ".stub") + ".stub"
 }
 
 func readStub(name string) string {
-	b, err := os.ReadFile(stubPath(name))
+	b, err := stubFS.ReadFile(stubName(name))
 	if err != nil {
 		return ""
 	}
@@ -56,13 +92,10 @@ func readStub(name string) string {
 }
 
 func stubExists(name string) bool {
-	_, err := os.Stat(stubPath(name))
-	return err == nil
-}
-
-func joinClassDir(base, classDir string) string {
-	if classDir == "" {
-		return base
+	f, err := stubFS.Open(stubName(name))
+	if err != nil {
+		return false
 	}
-	return filepath.Join(base, classDir)
+	_ = f.Close()
+	return true
 }

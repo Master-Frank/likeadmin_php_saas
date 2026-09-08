@@ -357,7 +357,7 @@ func TestNaming(t *testing.T) {
 	}
 }
 
-func TestWriteModuleWritesPHP(t *testing.T) {
+func TestWriteModuleSkipsPHPBackend(t *testing.T) {
 	tbl, cols := sampleTable()
 	tbl.GenerateType = 1
 	files := Build(tbl, cols)
@@ -367,13 +367,8 @@ func TestWriteModuleWritesPHP(t *testing.T) {
 		dest := moduleDest(c, "/tmp/admin", f)
 		if strings.HasSuffix(f.Name, ".php") {
 			php++
-			if dest == "" {
-				t.Fatalf("php should be written: %s", f.Name)
-			}
-			inModule := strings.Contains(dest, filepath.Join("app", c.module))
-			inModel := strings.Contains(dest, filepath.Join("app", "common", "model"))
-			if !inModule && !inModel {
-				t.Fatalf("php dest unexpected: %s -> %s", f.Name, dest)
+			if dest != "" {
+				t.Fatalf("php backend must not be written (gencrud serves it): %s -> %s", f.Name, dest)
 			}
 		}
 		if strings.HasSuffix(f.Name, ".ts") || strings.HasSuffix(f.Name, ".vue") || f.Name == "menu.sql" {
@@ -540,8 +535,8 @@ func TestModuleDestsWritesRealFrontend(t *testing.T) {
 	}
 
 	phpDests := moduleDests(c, "/tmp/admin", File{Name: "ConfigController.php"})
-	if len(phpDests) != 1 {
-		t.Fatalf("php should stay a single dest: %v", phpDests)
+	if len(phpDests) != 0 {
+		t.Fatalf("php backend dests must be empty: %v", phpDests)
 	}
 }
 
