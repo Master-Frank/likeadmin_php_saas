@@ -443,8 +443,7 @@ func GeneratorDownload(c *gin.Context) {
 		return
 	}
 	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
-		// File still on disk after a prior download (strangler pair hits the same URL twice).
-		c.FileAttachment(zipPath, "likeadmin-curd.zip")
+		response.Fail(c, "请重新生成代码")
 		return
 	}
 	cache.Del("curd_file_name" + fileName)

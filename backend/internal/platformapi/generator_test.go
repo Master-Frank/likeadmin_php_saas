@@ -1,14 +1,23 @@
 package platformapi
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestGenerateBundleHasPHPShapes(t *testing.T) {
@@ -116,6 +125,56 @@ func TestPhysicalTableName(t *testing.T) {
 	}
 	if got := physicalTableName("  config  "); got != "la_config" {
 		t.Fatalf("trim: %s", got)
+	}
+}
+
+func TestGeneratorDownloadRejectsCacheMiss(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	root := generator.RuntimeDir()
+	if err := os.MkdirAll(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	name := "curd-miss-990022.zip"
+	zipPath := filepath.Join(root, name)
+	if err := os.WriteFile(zipPath, []byte("PK\x03\x04miss"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(zipPath) })
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download?file="+name, nil)
+	GeneratorDownload(c)
+	var wrap response.Body
+	if err := json.Unmarshal(w.Body.Bytes(), &wrap); err != nil {
+		t.Fatalf("json %s: %v", w.Body.String(), err)
+	}
+	if wrap.Code == 1 || wrap.Msg != "请重新生成代码" {
+		t.Fatalf("cache-miss %+v body=%s", wrap, w.Body.String())
+	}
+
+	cache.Set("curd_file_name"+name, name, time.Hour)
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download?file="+name, nil)
+	GeneratorDownload(c2)
+	if w2.Code != http.StatusOK || !bytes.Contains(w2.Body.Bytes(), []byte("PK")) {
+		t.Fatalf("cache-hit status=%d body=%q", w2.Code, w2.Body.String())
+	}
+	if _, ok := cache.Get("curd_file_name" + name); ok {
+		t.Fatal("PHP download must consume the cache token")
+	}
+
+	w3 := httptest.NewRecorder()
+	c3, _ := gin.CreateTestContext(w3)
+	c3.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download?file="+name, nil)
+	GeneratorDownload(c3)
+	var wrap2 response.Body
+	if err := json.Unmarshal(w3.Body.Bytes(), &wrap2); err != nil {
+		t.Fatalf("second json %s: %v", w3.Body.String(), err)
+	}
+	if wrap2.Msg != "请重新生成代码" {
+		t.Fatalf("second download %+v", wrap2)
 	}
 }
 

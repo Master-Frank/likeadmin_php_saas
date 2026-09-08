@@ -208,7 +208,7 @@ func TestPreviewExplicitHasOne(t *testing.T) {
 	}
 }
 
-func TestClearRuntimeKeepsCurdZip(t *testing.T) {
+func TestClearRuntimeRemovesCurdZip(t *testing.T) {
 	root := RuntimeDir()
 	if err := os.MkdirAll(filepath.Join(root, "generate", "php"), 0755); err != nil {
 		t.Fatal(err)
@@ -223,8 +223,8 @@ func TestClearRuntimeKeepsCurdZip(t *testing.T) {
 	if err := ClearRuntime(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(zipPath); err != nil {
-		t.Fatalf("curd zip should remain: %v", err)
+	if _, err := os.Stat(zipPath); err == nil {
+		t.Fatal("PHP delGenerateDirContent removes prior curd-*.zip")
 	}
 	if _, err := os.Stat(filepath.Join(root, "generate", "php", "x.php")); err == nil {
 		t.Fatal("generated sources should be cleared")
