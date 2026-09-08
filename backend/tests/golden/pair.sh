@@ -5305,6 +5305,14 @@ print(first_m(json.load(sys.stdin).get("data") or []))
     echo "  go_exm=${go_exm:0:200}"
     fail=$((fail + 1))
   fi
+  php_texm="$(curl -sS "$PHP/tenantapi/download/export?file=missing" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_texm="$(curl -sS "$GO/tenantapi/download/export?file=missing" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_export_missing php_msg=$(jget msg <<<"$php_texm") go_msg=$(jget msg <<<"$go_texm")"
+  if [[ "$(jget msg <<<"$php_texm")" != "$(jget msg <<<"$go_texm")" ]]; then
+    echo "  php_texm=${php_texm:0:200}"
+    echo "  go_texm=${go_texm:0:200}"
+    fail=$((fail + 1))
+  fi
   echo 'pair-file' >/tmp/likeadmin-pair-file.txt
   php_ufok="$(curl -sS -X POST "$PHP/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair-file.txt")"
   go_ufok="$(curl -sS -X POST "$GO/tenantapi/upload/file" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -F "file=@/tmp/likeadmin-pair-file.txt")"
@@ -5322,6 +5330,14 @@ print(first_m(json.load(sys.stdin).get("data") or []))
   if [[ "$(jcode <<<"$php_cclear")" != "$(jcode <<<"$go_cclear")" || "$(jget msg <<<"$php_cclear")" != "$(jget msg <<<"$go_cclear")" || "$(jget show <<<"$php_cclear")" != "$(jget show <<<"$go_cclear")" ]]; then
     echo "  php_cclear=${php_cclear:0:200}"
     echo "  go_cclear=${go_cclear:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_tcc="$(curl -sS -X POST "$PHP/tenantapi/setting.system.cache/clear" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tcc="$(curl -sS -X POST "$GO/tenantapi/setting.system.cache/clear" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  echo "tenant_cache_clear php_code=$(jcode <<<"$php_tcc") go_code=$(jcode <<<"$go_tcc") php_msg=$(jget msg <<<"$php_tcc") go_msg=$(jget msg <<<"$go_tcc") php_show=$(jget show <<<"$php_tcc") go_show=$(jget show <<<"$go_tcc")"
+  if [[ "$(jcode <<<"$php_tcc")" != "$(jcode <<<"$go_tcc")" || "$(jget msg <<<"$php_tcc")" != "$(jget msg <<<"$go_tcc")" || "$(jget show <<<"$php_tcc")" != "$(jget show <<<"$go_tcc")" ]]; then
+    echo "  php_tcc=${php_tcc:0:200}"
+    echo "  go_tcc=${go_tcc:0:200}"
     fail=$((fail + 1))
   fi
 fi

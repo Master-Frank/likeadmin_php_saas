@@ -94,10 +94,12 @@ func TestFrontendRoutesCovered(t *testing.T) {
 		"channel.official_account_reply/add", "channel.official_account_reply/status",
 		"channel.official_account_reply/sort", "channel.official_account_reply/index",
 		"dept.dept/leaderdept",
-		"file/lists", "file/addcate", "file/editcate", "file/delcate",
+		"file/lists", "file/move", "file/rename", "file/delete", "file/listcate",
+		"file/addcate", "file/editcate", "file/delcate",
 		"upload/image", "upload/video", "upload/file", "download/export",
 		"notice.sms_config/getconfig", "notice.sms_config/setconfig",
-		"setting.system.log/lists", "setting.web.web_setting/setcopyright",
+		"setting.system.cache/clear", "setting.system.log/lists",
+		"setting.web.web_setting/setcopyright",
 		"setting.web.web_setting/setagreement", "setting.hot_search/setconfig",
 	}
 	api := []string{
