@@ -105,19 +105,29 @@ func TestWechatUserInfoFields(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-	info := wechatUserInfo(c, model.User{
+	created := wechatUserInfo(c, model.User{
 		ID: 9, SN: 1001, Account: "u1001", Mobile: "13800000000", Nickname: "n",
 		Avatar: "uploads/a.png", Channel: 2, IsDisable: 0, IsNewUser: 1,
-	}, "tok")
+	}, "tok", true)
 	for _, key := range []string{"id", "sn", "account", "channel", "mobile", "nickname", "avatar", "is_disable", "is_new_user", "token"} {
-		if _, ok := info[key]; !ok {
-			t.Fatalf("missing %s in %v", key, info)
+		if _, ok := created[key]; !ok {
+			t.Fatalf("missing %s in %v", key, created)
 		}
 	}
-	if info["is_disable"] != 0 || info["token"] != "tok" || info["id"] != uint(9) || info["account"] != "u1001" || info["channel"] != 2 {
-		t.Fatalf("%v", info)
+	if created["is_disable"] != 0 || created["token"] != "tok" || created["id"] != uint(9) || created["account"] != "u1001" || created["channel"] != 2 {
+		t.Fatalf("%v", created)
 	}
-	empty := wechatUserInfo(c, model.User{ID: 1, Avatar: ""}, "t")
+	existing := wechatUserInfo(c, model.User{
+		ID: 9, SN: 1001, Account: "u1001", Mobile: "13800000000", Nickname: "n",
+		Avatar: "uploads/a.png", Channel: 2,
+	}, "tok", false)
+	if _, ok := existing["account"]; ok {
+		t.Fatalf("existing wechat user must omit account: %v", existing)
+	}
+	if _, ok := existing["channel"]; ok {
+		t.Fatalf("existing wechat user must omit channel: %v", existing)
+	}
+	empty := wechatUserInfo(c, model.User{ID: 1, Avatar: ""}, "t", false)
 	if empty["avatar"] != "" {
 		t.Fatalf("empty avatar should stay empty, got %v", empty["avatar"])
 	}

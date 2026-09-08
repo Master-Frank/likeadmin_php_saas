@@ -11,6 +11,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestSmsNameDesc(t *testing.T) {
+	if smsNameDesc("ali") != "阿里云短信" || smsNameDesc("ALI") != "阿里云短信" {
+		t.Fatal(smsNameDesc("ali"))
+	}
+	if smsNameDesc("tencent") != "腾讯云短信" {
+		t.Fatal(smsNameDesc("tencent"))
+	}
+	if smsNameDesc("unknown") != "" {
+		t.Fatal("unknown type must wipe name like PHP getNameDesc")
+	}
+}
+
 func TestCrontabWriteCheck(t *testing.T) {
 	if crontabWriteCheck(map[string]any{}, false) != "请输入定时任务名称" {
 		t.Fatal(crontabWriteCheck(map[string]any{}, false))

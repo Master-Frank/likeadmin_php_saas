@@ -429,13 +429,8 @@ func SmsConfigSet(c *gin.Context) {
 	}
 	typ := util.ToString(p["type"])
 	p["type"] = typ
-	if util.ToString(p["name"]) == "" {
-		if typ == "tencent" {
-			p["name"] = "腾讯云短信"
-		} else {
-			p["name"] = "阿里云短信"
-		}
-	}
+	// PHP SmsConfigLogic::setConfig always overwrites name via getNameDesc.
+	p["name"] = smsNameDesc(typ)
 	cfgsvc.Set(c, "sms", typ, p)
 	if util.ToInt(p["status"]) == 1 {
 		engine := strings.ToUpper(typ)
@@ -470,6 +465,18 @@ func SmsConfigDetail(c *gin.Context) {
 	row := asCfgMap(cfgsvc.Get(c, "sms", typ, def))
 	row["status"] = util.ToInt(row["status"])
 	response.Data(c, row)
+}
+
+// smsNameDesc mirrors PHP SmsConfigLogic::getNameDesc(strtoupper($type)).
+func smsNameDesc(typ string) string {
+	switch strings.ToUpper(typ) {
+	case "ALI":
+		return "阿里云短信"
+	case "TENCENT":
+		return "腾讯云短信"
+	default:
+		return ""
+	}
 }
 
 func smsEngineRow(c *gin.Context, typ, name string, status int) map[string]any {

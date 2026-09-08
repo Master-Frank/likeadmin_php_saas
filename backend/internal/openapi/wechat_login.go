@@ -244,6 +244,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	}
 	now := util.NowUnix()
 	ip := ctxutil.ClientIP(c)
+	created := false
 	if user.ID == 0 {
 		if !create {
 			return map[string]any{}, nil
@@ -277,6 +278,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		}); err != nil {
 			return nil, err
 		}
+		created = true
 	} else {
 		if user.IsDisable == 1 {
 			return nil, fmt.Errorf("您的账号异常，请联系客服。")
@@ -312,7 +314,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 		}
 	}
 	info := authsvc.SetUserToken(c, user.ID, terminal)
-	return wechatUserInfo(c, user, util.ToString(info["token"])), nil
+	return wechatUserInfo(c, user, util.ToString(info["token"]), created), nil
 }
 
 // scanLoginAuthErr mirrors PHP LoginLogic::scanLogin:
@@ -324,14 +326,21 @@ func scanLoginAuthErr(sess wechat.Session) string {
 	return ""
 }
 
-// wechatUserInfo matches PHP WechatUserService::getUserInfo field() + token.
-func wechatUserInfo(c *gin.Context, user model.User, token string) gin.H {
-	return gin.H{
-		"id": user.ID, "sn": user.SN, "account": user.Account, "mobile": user.Mobile,
-		"nickname": user.Nickname, "channel": user.Channel,
+// wechatUserInfo matches PHP WechatUserService::getUserInfo.
+// Existing users come from field('u.id,u.sn,u.mobile,u.nickname,u.avatar,u.is_disable,u.is_new_user')
+// and have no account/channel. Newly created users expose those columns after createUser().
+func wechatUserInfo(c *gin.Context, user model.User, token string, created bool) gin.H {
+	out := gin.H{
+		"id": user.ID, "sn": user.SN, "mobile": user.Mobile,
+		"nickname": user.Nickname,
 		"avatar":     filesvc.GetImageAttr(c, user.Avatar),
 		"is_disable": user.IsDisable, "is_new_user": user.IsNewUser, "token": token,
 	}
+	if created {
+		out["account"] = user.Account
+		out["channel"] = user.Channel
+	}
+	return out
 }
 
 func handlePayNotify(c *gin.Context) {
