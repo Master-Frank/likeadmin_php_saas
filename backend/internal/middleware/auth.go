@@ -68,16 +68,19 @@ func Auth() gin.HandlerFunc {
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
 		all, mine := adminURIs(c, meta)
-		if !containsURI(all, accessURI) {
-			c.Next()
+		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI) {
+			response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
 			return
 		}
-		if containsURI(mine, accessURI) {
-			c.Next()
-			return
-		}
-		response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
+		c.Next()
 	}
+}
+
+func adminURIAllowed(dynamic bool, all, mine []string, accessURI string) bool {
+	if dynamic {
+		return containsURI(mine, accessURI)
+	}
+	return !containsURI(all, accessURI) || containsURI(mine, accessURI)
 }
 
 // loginIPChanged matches PHP `$adminInfo['login_ip'] != request()->ip()`:

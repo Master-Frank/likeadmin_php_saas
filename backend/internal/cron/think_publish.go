@@ -10,6 +10,9 @@ import (
 )
 
 func runVendorPublish(args []string) string {
+	if !legacyPHPScaffoldEnabled() {
+		return legacyPHPDisabled
+	}
 	force := false
 	for _, a := range args {
 		if a == "--force" || a == "-f" {
@@ -83,6 +86,9 @@ func thinkConfigFiles(cfg any) map[string]string {
 }
 
 func runServiceDiscover(args []string) string {
+	if !legacyPHPScaffoldEnabled() {
+		return legacyPHPDisabled
+	}
 	root := runtimeRoot()
 	if root == "" {
 		return ""

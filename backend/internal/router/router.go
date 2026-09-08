@@ -43,10 +43,7 @@ func New() *gin.Engine {
 	r.Any("/tenantapi/*path", dispatch("tenantapi", tenantRoutes(), notNeed["tenantapi"]))
 	r.Any("/api/*path", dispatch("api", apiRoutes(), notNeed["api"]))
 
-	r.GET("/crontab", func(c *gin.Context) {
-		cron.RunOnce()
-		c.String(http.StatusOK, "ok")
-	})
+	r.GET("/crontab", cron.HTTP)
 	r.GET("/install", install.Wizard)
 	r.GET("/install/", install.Wizard)
 	// PHP index.php and old Vue builds may still request install.php; nginx /install is Go.
@@ -106,6 +103,7 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 		h := lookup(routes, key)
 		if h == nil && gencrud.Match(app, ctrl, action) {
 			h = gencrud.Handle
+			c.Set("likeadmin.gencrud", true)
 		}
 		if h == nil {
 			response.FailCode(c, "controller not exists:"+ctrl, response.CodeNotFound, 0)

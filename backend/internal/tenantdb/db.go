@@ -33,13 +33,13 @@ func ShardableNames() []string {
 	return out
 }
 
-var callbacksOnce bool
+var registeredDB *gorm.DB
 
 func Register(db *gorm.DB) {
-	if db == nil || callbacksOnce {
+	if db == nil || registeredDB == db {
 		return
 	}
-	callbacksOnce = true
+	registeredDB = db
 	_ = db.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
 	_ = db.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
 	_ = db.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)

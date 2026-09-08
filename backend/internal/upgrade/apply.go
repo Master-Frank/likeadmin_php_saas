@@ -16,8 +16,8 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
-	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/tenantmenu"
 
 	"gorm.io/gorm"
 )
@@ -40,28 +40,48 @@ func CheckOpenBasedir() error {
 
 // ApplyPackage downloads, extracts, and applies a likeadmin upgrade zip (SQL / menu / files).
 func ApplyPackage(link, zipName string) error {
+	_, err := applyPackage(link, false)
+	return err
+}
+
+func applyPackage(link string, requireRestart bool) (*stagedGoUpgrade, error) {
 	if err := CheckOpenBasedir(); err != nil {
-		return err
+		return nil, err
 	}
 	root := serverRoot()
 	localDir := filepath.Join(root, "upgrade")
 	tempDir := filepath.Join(localDir, "temp")
 	if err := os.MkdirAll(localDir, 0755); err != nil {
-		return err
+		return nil, err
 	}
 	savePath, err := resolvePackage(link, localDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_ = os.RemoveAll(tempDir)
 	if err := unzip(savePath, tempDir); err != nil {
-		return err
+		return nil, err
+	}
+	staged, err := stageGoUpgrade(tempDir, backendRoot())
+	if err != nil {
+		return nil, err
+	}
+	if staged != nil {
+		defer staged.cleanup()
+		if requireRestart {
+			if err := requireRestartCommand(); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := applyExtracted(tempDir, filepath.Dir(root)+string(os.PathSeparator), backendRoot(), bootstrap.DB); err != nil {
-		return err
+		return nil, err
+	}
+	if err := staged.install(backendRoot()); err != nil {
+		return nil, fmt.Errorf("安装 Go 二进制失败: %w", err)
 	}
 	_ = os.RemoveAll(tempDir)
-	return nil
+	return staged, nil
 }
 
 // ApplyLocal applies an already-downloaded upgrade zip (offline / fixture).
@@ -136,7 +156,7 @@ func applyExtracted(tempDir, projectDest, backendDest string, db *gorm.DB) error
 }
 
 func downFile(remote, saveDir string) (string, error) {
-	resp, err := downloadClient.Get(remote)
+	resp, err := downloadClient().Get(remote)
 	if err != nil {
 		return "", err
 	}

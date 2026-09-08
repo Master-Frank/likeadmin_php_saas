@@ -17,6 +17,17 @@ go run ./cmd/api
 
 默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。
 
+生产构建及初次安装：
+
+```bash
+make build
+sudo make install PREFIX=/opt/likeadmin/backend
+```
+
+生产 systemd 单元会设置 `LIKEADMIN_DEBUG=false`、检查数据库账号具备
+`CREATE`/`DROP`（分表租户及结构升级需要）。授权模板见
+`deploy/mysql.production.example.sql`。
+
 切流前门（API → Go，静态 / SPA 出自 `LIKEADMIN_PUBLIC`，默认 `server/public`）：
 
 ```bash
@@ -30,6 +41,10 @@ go run ./cmd/strangler
 
 生产 Nginx（无 php-fpm）见 `deploy/nginx.production.conf`。本机切流校验用 `deploy/nginx.local.conf`（`:8091`）。
 systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.service`（把路径改成实际安装目录后 `systemctl enable --now`）。
+在线升级若包含 `project/backend/`，会先在完整源码副本中构建新
+`bin/api`/`bin/crontab`，构建失败不应用升级。启用
+`likeadmin-upgrade-restart.path` + `.service` 后，升级成功会延迟重启两个
+Go 服务；没有 `LIKEADMIN_UPGRADE_RESTART_COMMAND` 时拒绝在线应用 Go 后端包。
 
 定时任务：
 
@@ -40,8 +55,12 @@ go run ./cmd/think help clear
 go run ./cmd/think crontab    # 等价 php think crontab，只跑一轮
 go run ./cmd/think query_refund
 go run ./cmd/think run --port 8000
-go run ./cmd/think make:controller tenantapi@Demo
+LIKEADMIN_ENABLE_PHP_SCAFFOLD=1 go run ./cmd/think make:controller tenantapi@Demo
 ```
+
+`make:*`、`build`、`vendor:publish`、`service:discover` 会产生 PHP 文件，
+默认关闭；只有兼容旧开发流程时显式设置
+`LIKEADMIN_ENABLE_PHP_SCAFFOLD=1`。Go 运行时和生产部署不需要这些产物。
 
 未知 `la_dev_crontab.command` 记「未定义的定时任务命令」，不再回落 `php think`。
 仓库内 `make:*` / `vendor:publish` / `service:discover` / `build` 已迁；`think run` 起 Go HTTP（默认 `:8000`）。

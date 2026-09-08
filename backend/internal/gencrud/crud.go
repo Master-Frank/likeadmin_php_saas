@@ -93,6 +93,9 @@ func resolve(app, ctrl string) *spec {
 	}
 	ctrl = strings.ToLower(strings.TrimSpace(ctrl))
 	for _, t := range tables {
+		if t.GenerateType != generator.GenerateTypeModule {
+			continue
+		}
 		if ModuleApp(t.ModuleName) != app {
 			continue
 		}

@@ -311,7 +311,23 @@ func TestDownFileRejectsHTML200(t *testing.T) {
 	}
 }
 
+func TestDownFileRejectsSelfSignedTLS(t *testing.T) {
+	t.Setenv("LIKEADMIN_UPGRADE_INSECURE_TLS", "")
+	body, err := os.ReadFile(writeZip(t, map[string]string{"project/server/ok.txt": "tls"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := resolvePackage(srv.URL+"/pkg.zip", t.TempDir()); err == nil {
+		t.Fatal("self-signed TLS must fail unless LIKEADMIN_UPGRADE_INSECURE_TLS=1")
+	}
+}
+
 func TestDownFileAcceptsSelfSignedTLS(t *testing.T) {
+	t.Setenv("LIKEADMIN_UPGRADE_INSECURE_TLS", "1")
 	body, err := os.ReadFile(writeZip(t, map[string]string{"project/server/ok.txt": "tls"}))
 	if err != nil {
 		t.Fatal(err)
@@ -322,7 +338,7 @@ func TestDownFileAcceptsSelfSignedTLS(t *testing.T) {
 	t.Cleanup(srv.Close)
 	got, err := resolvePackage(srv.URL+"/pkg.zip", t.TempDir())
 	if err != nil {
-		t.Fatalf("self-signed TLS should match PHP CURLOPT_SSL_VERIFYPEER=false: %v", err)
+		t.Fatalf("LIKEADMIN_UPGRADE_INSECURE_TLS=1 should match PHP CURLOPT_SSL_VERIFYPEER=false: %v", err)
 	}
 	raw, err := os.ReadFile(got)
 	if err != nil || string(raw) != string(body) {

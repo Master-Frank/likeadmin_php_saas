@@ -319,3 +319,26 @@ func TestAttachRelationsUsesShardTable(t *testing.T) {
 		t.Fatalf("user_name %v", rows[0]["user_name"])
 	}
 }
+
+func TestGencrudMatchSkipsZipType(t *testing.T) {
+	if !initGencrudDB(t) {
+		t.Skip("no database")
+	}
+	db := bootstrap.DB
+	name := "la_zip_only_pair"
+	db.Where("table_name = ?", name).Delete(&model.GenerateTable{})
+	tbl := model.GenerateTable{
+		Name: name, TableComment: "zip only", TemplateType: 0,
+		Author: "likeadmin", GenerateType: 0, ModuleName: "platform",
+		CreateTime: time.Now().Unix(),
+	}
+	if err := db.Create(&tbl).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("id = ?", tbl.ID).Delete(&model.GenerateTable{})
+	})
+	if Match("platformapi", "zip_only_pair", "lists") {
+		t.Fatal("generate_type=0 zip metadata must not become an HTTP CRUD route")
+	}
+}

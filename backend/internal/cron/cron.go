@@ -29,6 +29,10 @@ func RunOnce() {
 	if bootstrap.DB == nil {
 		return
 	}
+	if !runOnceMu.TryLock() {
+		return
+	}
+	defer runOnceMu.Unlock()
 	tenantdb.Register(bootstrap.DB)
 	EnsureNativeJobs()
 	var rows []model.Crontab
@@ -47,10 +51,17 @@ func RunOnce() {
 		if !due(item, now) {
 			continue
 		}
-		start := time.Now()
-		errMsg := runCommand(item)
-		// PHP Crontab::start finally writes last_time = time() after the job.
-		bootstrap.DB.Model(&item).Updates(crontabFinishUpdates(item, start, errMsg))
+		withAdvisoryLock(fmt.Sprintf("crontab:%d", item.ID), func() {
+			if !claimDueJob(item, now) {
+				return
+			}
+			start := time.Now()
+			errMsg := runCommand(item)
+			// Only the worker that claimed last_time=now may finish this run.
+			bootstrap.DB.Model(&model.Crontab{}).
+				Where("id = ? AND last_time = ?", item.ID, now).
+				Updates(crontabFinishUpdates(item, start, errMsg))
+		})
 	}
 }
 
@@ -78,6 +89,22 @@ func due(item model.Crontab, now int64) bool {
 	return biz.CronDue(item.Expression, item.LastTime, now)
 }
 
+// claimDueJob marks a due row as started so a concurrent worker or HTTP
+// /crontab hit cannot run the same job in the same tick.
+func claimDueJob(item model.Crontab, now int64) bool {
+	if bootstrap.DB == nil || item.ID == 0 {
+		return false
+	}
+	q := bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND status = 1 AND delete_time IS NULL", item.ID)
+	if item.LastTime != nil {
+		q = q.Where("last_time = ?", *item.LastTime)
+	} else {
+		q = q.Where("last_time IS NULL")
+	}
+	res := q.Update("last_time", now)
+	return res.Error == nil && res.RowsAffected == 1
+}
+
 // CommandFunc is a php-think compatible job. Return "" on success or an
 // error string (PHP Crontab writes that into la_dev_crontab.error).
 type CommandFunc func(args []string) string
@@ -85,6 +112,7 @@ type CommandFunc func(args []string) string
 var (
 	commandMu sync.RWMutex
 	commands  = map[string]CommandFunc{}
+	runOnceMu sync.Mutex
 )
 
 func init() {
@@ -724,6 +752,10 @@ func EnsureNativeJobs() {
 	if bootstrap.DB == nil {
 		return
 	}
+	withAdvisoryLock("crontab:native-jobs", ensureNativeJobsLocked)
+}
+
+func ensureNativeJobsLocked() {
 	now := util.NowUnix()
 	last := now - 90
 	for _, job := range []model.Crontab{
@@ -731,21 +763,54 @@ func EnsureNativeJobs() {
 		{Name: "取消超时未支付订单", Command: "cancel_unpaid_orders", Remark: "按交易设置取消超时未支付充值单"},
 		{Name: "自动核销订单", Command: "verification_orders", Remark: "按交易设置核销超时未核销订单"},
 	} {
-		var n int64
-		bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", job.Command).Count(&n)
-		if n > 0 {
+		var rows []model.Crontab
+		if err := nativeSystemJobs(job.Command).Order("id asc").Find(&rows).Error; err != nil {
+			log.Printf("crontab native job lookup %s: %v", job.Command, err)
 			continue
 		}
-		job.Type = 1
-		job.System = 1
-		job.Status = 1
-		job.Expression = "* * * * *"
-		job.LastTime = &last
-		job.Time = "0"
-		job.MaxTime = "0"
-		job.CreateTime = now
-		job.UpdateTime = util.UnixPtr(now)
-		_ = bootstrap.DB.Create(&job).Error
+		if len(rows) == 0 {
+			job.Type = 1
+			job.System = 1
+			job.Status = 1
+			job.Expression = "* * * * *"
+			job.LastTime = &last
+			job.Time = "0"
+			job.MaxTime = "0"
+			job.CreateTime = now
+			job.UpdateTime = util.UnixPtr(now)
+			if err := bootstrap.DB.Create(&job).Error; err != nil {
+				log.Printf("crontab native job insert %s: %v", job.Command, err)
+			}
+			continue
+		}
+		for _, extra := range rows[1:] {
+			if err := bootstrap.DB.Model(&extra).Update("delete_time", now).Error; err != nil {
+				log.Printf("crontab native job dedupe %s id=%d: %v", job.Command, extra.ID, err)
+			}
+		}
+	}
+	ensureNativeJobUniqueIndex()
+}
+
+func nativeSystemJobs(command string) *gorm.DB {
+	return bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", command)
+}
+
+func ensureNativeJobUniqueIndex() {
+	table := model.Crontab{}.TableName()
+	if !bootstrap.DB.Migrator().HasColumn(table, "active_system_command") {
+		sql := "ALTER TABLE `" + table + "` ADD COLUMN `active_system_command` varchar(64) " +
+			"GENERATED ALWAYS AS (CASE WHEN `system` = 1 AND `delete_time` IS NULL THEN `command` ELSE NULL END) STORED"
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			log.Printf("crontab add active command column: %v", err)
+			return
+		}
+	}
+	if !bootstrap.DB.Migrator().HasIndex(table, "uniq_active_system_command") {
+		sql := "CREATE UNIQUE INDEX `uniq_active_system_command` ON `" + table + "` (`active_system_command`)"
+		if err := bootstrap.DB.Exec(sql).Error; err != nil {
+			log.Printf("crontab add active command index: %v", err)
+		}
 	}
 }
 

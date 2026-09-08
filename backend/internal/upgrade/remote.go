@@ -19,17 +19,21 @@ import (
 
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 
-// downloadClient matches PHP UpgradeLogic::downFile curl:
-// CURLOPT_SSL_VERIFYPEER=false and no FOLLOWLOCATION.
+// downloadClient matches PHP UpgradeLogic::downFile curl: no FOLLOWLOCATION.
 // A 302 HTML interstitial must not be saved as the upgrade zip.
-var downloadClient = &http.Client{
-	Timeout: 20 * time.Second,
-	CheckRedirect: func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
-	},
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	},
+// TLS is verified unless LIKEADMIN_UPGRADE_INSECURE_TLS=1 (PHP CURLOPT_SSL_VERIFYPEER=false).
+func downloadClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if os.Getenv("LIKEADMIN_UPGRADE_INSECURE_TLS") == "1" {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	return &http.Client{
+		Timeout: 20 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Transport: transport,
+	}
 }
 
 func serverRoot() string {

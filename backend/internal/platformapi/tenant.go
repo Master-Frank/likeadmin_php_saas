@@ -17,6 +17,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/sqlassets"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/util"
@@ -1028,18 +1029,7 @@ func copyTenantMenus(tx *gorm.DB, tenantID uint) error {
 }
 
 func runTenantDataSQL(tenantID uint, sn string) error {
-	candidates := []string{
-		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db/tenantData.sql"),
-		"/workspace/server/app/platformapi/db/tenantData.sql",
-	}
-	var raw []byte
-	var err error
-	for _, p := range candidates {
-		raw, err = os.ReadFile(p)
-		if err == nil {
-			break
-		}
-	}
+	raw, err := readTenantSQL("tenantData.sql")
 	if err != nil {
 		return err
 	}
@@ -1093,22 +1083,34 @@ func execSQLScript(db *gorm.DB, content string) error {
 }
 
 func runTenantSQL(sn string) error {
-	candidates := []string{
-		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db/tenant.sql"),
-		"/workspace/server/app/platformapi/db/tenant.sql",
-	}
-	var raw []byte
-	var err error
-	for _, p := range candidates {
-		raw, err = os.ReadFile(p)
-		if err == nil {
-			break
-		}
-	}
+	raw, err := readTenantSQL("tenant.sql")
 	if err != nil {
 		return err
 	}
 	return execSQLScript(bootstrap.DB, applyTenantSQLPlaceholders(string(raw), sn, 0))
+}
+
+func readTenantSQL(name string) ([]byte, error) {
+	candidates := []string{
+		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db", name),
+	}
+	for _, p := range candidates {
+		raw, err := os.ReadFile(p)
+		if err == nil {
+			return raw, nil
+		}
+	}
+	switch name {
+	case "tenant.sql":
+		if sqlassets.TenantSQL != "" {
+			return []byte(sqlassets.TenantSQL), nil
+		}
+	case "tenantData.sql":
+		if sqlassets.TenantDataSQL != "" {
+			return []byte(sqlassets.TenantDataSQL), nil
+		}
+	}
+	return nil, fmt.Errorf("missing %s", name)
 }
 
 func randomSN() string {

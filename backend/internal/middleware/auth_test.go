@@ -164,3 +164,16 @@ func TestAuthURIListCache(t *testing.T) {
 		t.Fatalf("got %#v want %#v", got, want)
 	}
 }
+
+func TestDynamicCRUDRequiresExplicitPermission(t *testing.T) {
+	all := []string{"generated.demo/lists"}
+	if adminURIAllowed(true, all, nil, "generated.demo/lists") {
+		t.Fatal("dynamic CRUD must not inherit the PHP missing-menu fail-open")
+	}
+	if !adminURIAllowed(true, all, []string{"generated.demo/lists"}, "generated.demo/lists") {
+		t.Fatal("explicit dynamic CRUD permission should pass")
+	}
+	if !adminURIAllowed(false, all, nil, "unregistered/path") {
+		t.Fatal("static PHP compatibility routes keep existing behavior")
+	}
+}

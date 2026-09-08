@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"likeadmin/backend/internal/sqlassets"
+
 	"gorm.io/gorm"
 )
 
@@ -70,4 +72,15 @@ func FindLikeSQL(publicDir string) string {
 		}
 	}
 	return ""
+}
+
+// ReadLikeSQL prefers a customized dump under public_dir, then the embed.
+func ReadLikeSQL(publicDir string) ([]byte, error) {
+	if p := FindLikeSQL(publicDir); p != "" {
+		return os.ReadFile(p)
+	}
+	if sqlassets.LikeSQL != "" {
+		return []byte(sqlassets.LikeSQL), nil
+	}
+	return nil, fmt.Errorf("创建表格失败")
 }
