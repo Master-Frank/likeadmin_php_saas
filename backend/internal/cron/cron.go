@@ -102,6 +102,8 @@ func registerBuiltins() {
 	Register("cancel_unpaid_orders", func([]string) string { return cancelUnpaidOrders() })
 	Register("version", runVersion)
 	Register("optimize:schema", runOptimizeSchema)
+	Register("help", runHelp)
+	Register("list", runList)
 }
 
 // Register adds a crontab / `think` command. Unknown warehouse commands stay
@@ -262,7 +264,7 @@ func dropSessionTokens(admins []model.AdminSession, tenants []model.TenantAdminS
 
 type clearOpts struct {
 	cache, log, rmdir, expire bool
-	path                      string
+	path, app                 string
 }
 
 func parseClearArgs(args []string) clearOpts {
@@ -287,6 +289,11 @@ func parseClearArgs(args []string) clearOpts {
 			o.path = strings.TrimPrefix(a, "--path=")
 		case strings.HasPrefix(a, "-d="):
 			o.path = strings.TrimPrefix(a, "-d=")
+		default:
+			// PHP think-multi-app: optional app argument → runtime/<app>
+			if !strings.HasPrefix(a, "-") && o.app == "" {
+				o.app = a
+			}
 		}
 	}
 	return o
@@ -295,19 +302,26 @@ func parseClearArgs(args []string) clearOpts {
 func runClear(args []string) string {
 	o := parseClearArgs(args)
 	expireOnly := o.expire && o.cache
-	if o.log && !o.cache {
-		return clearRuntimeNamed("log", o.rmdir, false)
+	var msg string
+	switch {
+	case o.log && !o.cache:
+		msg = clearRuntimeNamed("log", o.rmdir, false)
+	case o.cache:
+		msg = clearRuntimeNamed("cache", o.rmdir, expireOnly)
+	case o.path != "":
+		msg = clearCustomPath(o.path, o.rmdir)
+	case o.app != "":
+		msg = clearRuntimeNamed(o.app, o.rmdir, false)
+	default:
+		// PHP Clear (multi-app + framework) only wipes runtime files.
+		// Application/Redis cache stays; use `think cache` for that.
+		msg = clearRuntimeDir(filepath.Join(runtimeRoot(), "runtime"), o.rmdir, false)
 	}
-	if o.cache {
-		return clearRuntimeNamed("cache", o.rmdir, expireOnly)
-	}
-	if o.path != "" {
-		return clearCustomPath(o.path, o.rmdir)
-	}
-	if msg := flushCache(); msg != "" {
+	if msg != "" {
 		return msg
 	}
-	return clearRuntimeDir(filepath.Join(runtimeRoot(), "runtime"), o.rmdir, false)
+	fmt.Println("Clear Successed")
+	return ""
 }
 
 func runtimeRoot() string {

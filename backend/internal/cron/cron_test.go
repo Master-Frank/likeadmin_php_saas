@@ -67,6 +67,7 @@ func TestCommandRegistry(t *testing.T) {
 	want := map[string]bool{
 		"cache": true, "clear": true, "session": true, "query_refund": true,
 		"cancel_unpaid_orders": true, "version": true, "optimize:schema": true,
+		"help": true, "list": true,
 	}
 	for _, n := range names {
 		delete(want, n)
@@ -206,6 +207,10 @@ func TestParseClearArgs(t *testing.T) {
 	if o.path != "/tmp/outside" {
 		t.Fatalf("%+v", o)
 	}
+	o = parseClearArgs([]string{"platform", "--dir"})
+	if o.app != "platform" || !o.rmdir {
+		t.Fatalf("app arg %+v", o)
+	}
 }
 
 func TestClearPathRejectsEscape(t *testing.T) {
@@ -292,5 +297,56 @@ func TestClearRuntimeCacheFlag(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "runtime", "extra.dat")); err != nil {
 		t.Fatal("runtime extra should stay for --cache")
+	}
+}
+
+func TestRunClearDoesNotFlushAppCache(t *testing.T) {
+	cache.Set("think_clear_keep", "1", time.Hour)
+	t.Cleanup(func() { cache.Del("think_clear_keep") })
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "runtime"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "runtime", "extra.dat"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	config.C.App.PublicDir = filepath.Join(dir, "public")
+	defer func() { config.C.App.PublicDir = old }()
+	if msg := runClear(nil); msg != "" {
+		t.Fatal(msg)
+	}
+	if _, ok := cache.Get("think_clear_keep"); !ok {
+		t.Fatal("think clear must not flush application cache")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "runtime", "extra.dat")); err == nil {
+		t.Fatal("runtime extra should be cleared")
+	}
+}
+
+func TestRunClearAppArgument(t *testing.T) {
+	dir := t.TempDir()
+	appDir := filepath.Join(dir, "runtime", "platform")
+	other := filepath.Join(dir, "runtime", "keep.dat")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "x.php"), []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	config.C.App.PublicDir = filepath.Join(dir, "public")
+	defer func() { config.C.App.PublicDir = old }()
+	if msg := runClear([]string{"platform"}); msg != "" {
+		t.Fatal(msg)
+	}
+	if _, err := os.Stat(filepath.Join(appDir, "x.php")); err == nil {
+		t.Fatal("runtime/platform should be cleared")
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatal("other runtime files should stay for app clear")
 	}
 }

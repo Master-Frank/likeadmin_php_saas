@@ -121,6 +121,32 @@ func TestMaybeIgnoresBodyExport(t *testing.T) {
 	}
 }
 
+func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/user.user/lists?export=2&page_start=1&page_end=1", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "user.user", Action: "lists", App: "tenantapi"})
+	if !Maybe(c, "用户列表", []map[string]any{{"id": 1, "account": "a"}}) {
+		t.Fatal("export=2")
+	}
+	var env struct {
+		Code int            `json:"code"`
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	url, _ := env.Data["url"].(string)
+	if env.Code != 2 || !strings.Contains(url, "/platformapi/download/export?file=") {
+		t.Fatalf("tenant export url must stay platformapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
+	}
+	if strings.Contains(url, "/tenantapi/") {
+		t.Fatalf("tenant prefix leaked: %s", url)
+	}
+}
+
 func TestMaybeQueryFileName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

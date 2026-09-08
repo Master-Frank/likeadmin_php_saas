@@ -10,6 +10,43 @@ import (
 	"likeadmin/backend/internal/config"
 )
 
+func TestThinkListAndHelp(t *testing.T) {
+	raw := formatCommandList(true, "")
+	for _, name := range []string{"cache", "clear", "help", "list", "crontab", "version"} {
+		found := false
+		for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
+			if line == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("raw list missing %s: %s", name, raw)
+		}
+	}
+	if !strings.Contains(formatCommandList(false, ""), "Clear runtime file") {
+		t.Fatal("formatted list should include descriptions")
+	}
+	opt := formatCommandList(true, "optimize")
+	if !strings.Contains(opt, "optimize:schema") {
+		t.Fatalf("namespace filter %s", opt)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(opt), "\n") {
+		if line == "clear" {
+			t.Fatalf("namespace filter leaked clear: %s", opt)
+		}
+	}
+	if got := RunNamed("help", "clear"); got != "" {
+		t.Fatalf("help clear: %q", got)
+	}
+	if got := RunNamed("help", "not_a_real_command"); got != "未定义的命令: not_a_real_command" {
+		t.Fatalf("help unknown: %q", got)
+	}
+	if got := RunNamed("list", "--raw"); got != "" {
+		t.Fatalf("list --raw: %q", got)
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	if got := RunNamed("version"); got != "" {
 		t.Fatalf("version: %q", got)

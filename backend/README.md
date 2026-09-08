@@ -33,6 +33,8 @@ systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.serv
 
 ```bash
 go run ./cmd/crontab          # 循环执行 la_dev_crontab
+go run ./cmd/think            # 等价 php think，列出已迁命令
+go run ./cmd/think help clear
 go run ./cmd/think crontab    # 等价 php think crontab，只跑一轮
 go run ./cmd/think query_refund
 ```

@@ -83,11 +83,9 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		response.Fail(c, err.Error())
 		return true
 	}
-	app := ctxutil.Get(c).App
-	if app == "" {
-		app = "platformapi"
-	}
-	u := ctxutil.Domain(c) + "/" + app + "/download/export?file=" + key
+	// PHP ListsExcelTrait::createExcel always url('platformapi/download/export').
+	// Download is notNeedLogin; tenant lists must keep the same prefix.
+	u := ctxutil.Domain(c) + "/platformapi/download/export?file=" + key
 	response.Result(c, response.CodeOpenNewPage, 1, "", gin.H{"url": u})
 	return true
 }

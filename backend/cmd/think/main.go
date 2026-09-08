@@ -29,16 +29,11 @@ func main() {
 		os.Exit(1)
 	}
 	tenantdb.Register(bootstrap.DB)
+	// PHP Console::$defaultCommand = 'list' — bare `php think` lists commands.
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: think <command> [params...]")
-		fmt.Fprintln(os.Stderr, "       think list")
-		os.Exit(1)
-	}
-	if os.Args[1] == "list" {
-		for _, name := range cron.CommandNames() {
-			fmt.Println(name)
-		}
-		return
+		os.Args = []string{os.Args[0], "list"}
+	} else if os.Args[1] == "-h" || os.Args[1] == "--help" {
+		os.Args[1] = "help"
 	}
 	if os.Args[1] == "upgrade-local" {
 		if len(os.Args) < 3 {
