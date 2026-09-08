@@ -374,12 +374,6 @@ func DictTypeDelete(c *gin.Context) {
 		response.Fail(c, "字典类型不存在")
 		return
 	}
-	var used int64
-	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ? AND delete_time IS NULL", id).Count(&used)
-	if used > 0 {
-		response.Fail(c, "字典类型已被使用，请先删除绑定该字典类型的数据")
-		return
-	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.DictType{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")

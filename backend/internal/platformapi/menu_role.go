@@ -290,12 +290,6 @@ func RoleDelete(c *gin.Context) {
 		response.Fail(c, "角色不存在")
 		return
 	}
-	var used int64
-	bootstrap.DB.Model(&model.AdminRole{}).Where("role_id = ?", id).Count(&used)
-	if used > 0 {
-		response.Fail(c, "有管理员在使用该角色，不允许删除")
-		return
-	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})

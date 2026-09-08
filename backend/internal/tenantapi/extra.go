@@ -337,9 +337,6 @@ func UserAdjustMoney(c *gin.Context) {
 			biz.AddAccountLog(tx, user.ID, user.TenantID, biz.UMIncAdmin, biz.INC, num, user.UserMoney, "", httpx.BodyStr(c, "remark"))
 			return nil
 		}
-		if user.UserMoney < num {
-			return errInsufficient
-		}
 		if err := tx.Model(&user).Updates(map[string]any{
 			"user_money": gorm.Expr("user_money - ?", num), "update_time": util.NowUnix(),
 		}).Error; err != nil {
@@ -350,21 +347,11 @@ func UserAdjustMoney(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		if err == errInsufficient {
-			response.Fail(c, "用户可用余额仅剩"+util.MoneyString(user.UserMoney))
-			return
-		}
 		response.Fail(c, err.Error())
 		return
 	}
 	response.SuccessNotice(c, "操作成功")
 }
-
-var errInsufficient = errString("insufficient")
-
-type errString string
-
-func (e errString) Error() string { return string(e) }
 
 func GetUmChangeType(c *gin.Context) {
 	response.Data(c, biz.UMChangeTypeDesc)
@@ -442,18 +429,6 @@ func round2(v float64) float64 {
 	return float64(int(v*100+0.5)) / 100
 }
 
-func rechargeUserMoneyEnough(db *gorm.DB, userID, tenantID uint, amount float64) bool {
-	if db == nil {
-		return false
-	}
-	var user model.User
-	q := db.Where("id = ? AND delete_time IS NULL AND tenant_id = ?", userID, tenantID)
-	if q.First(&user).Error != nil {
-		return false
-	}
-	return user.UserMoney >= amount
-}
-
 func RechargeRefund(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
@@ -480,14 +455,9 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, "订单已发起退款,退款失败请到退款记录重新退款")
 		return
 	}
-	udb := tenantdb.ForTenant(order.TenantID)
 	if order.OrderAmount <= 0 {
 		// PHP RefundLogic::refundBeforeCheck throws before any writes; the outer txn rolls back.
 		response.Fail(c, "订单金额异常")
-		return
-	}
-	if !rechargeUserMoneyEnough(udb, order.UserID, order.TenantID, order.OrderAmount) {
-		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
 	if bootstrap.DB == nil {
@@ -663,10 +633,6 @@ func RechargeRefundAgain(c *gin.Context) {
 	oq.First(&againOrder)
 	if againOrder.OrderAmount <= 0 {
 		response.Fail(c, "订单金额异常")
-		return
-	}
-	if !rechargeUserMoneyEnough(tenantdb.ForTenant(rec.TenantID), rec.UserID, rec.TenantID, againOrder.OrderAmount) {
-		response.Fail(c, "退款失败:用户余额已不足退款金额")
 		return
 	}
 	now := util.NowUnix()
