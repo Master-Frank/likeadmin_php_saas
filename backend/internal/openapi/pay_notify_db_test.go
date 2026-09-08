@@ -88,6 +88,55 @@ func TestMarkRechargePaidMovesMoney(t *testing.T) {
 	}
 }
 
+func TestMarkRechargePaidSkipsSoftDeletedUser(t *testing.T) {
+	if !initPayDB(t) {
+		t.Skip("no database")
+	}
+	var user model.User
+	if bootstrap.DB.Where("tenant_id = 1 AND delete_time IS NULL").First(&user).Error != nil {
+		t.Skip("no tenant user")
+	}
+	now := time.Now().Unix()
+	user.ID = 0
+	user.SN = 80000000 + int(now%9999999)
+	user.Account = "pair-soft-pay-" + time.Now().Format("150405.000")
+	user.Mobile = ""
+	user.UserMoney = 20
+	user.TotalRechargeAmount = 20
+	user.CreateTime = now
+	user.UpdateTime = &now
+	user.DeleteTime = &now
+	if err := bootstrap.DB.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	sn := "itsoftdel" + time.Now().Format("150405.000")
+	order := model.RechargeOrder{
+		SN: sn, UserID: user.ID, PayWay: 2, PayStatus: 0, OrderAmount: 5,
+		OrderTerminal: 1, TenantID: 1, CreateTime: now,
+	}
+	if err := bootstrap.DB.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		bootstrap.DB.Where("id = ?", user.ID).Delete(&model.User{})
+		bootstrap.DB.Where("id = ?", order.ID).Delete(&model.RechargeOrder{})
+		bootstrap.DB.Where("source_sn = ?", sn).Delete(&model.UserAccountLog{})
+	})
+	if err := markRechargePaid(&order, "wx-soft"); err != nil {
+		t.Fatal(err)
+	}
+	var after model.User
+	bootstrap.DB.Where("id = ?", user.ID).First(&after)
+	if after.UserMoney != 20 || after.TotalRechargeAmount != 20 {
+		t.Fatalf("PHP SoftDelete User must not receive pay credit, money=%v total=%v", after.UserMoney, after.TotalRechargeAmount)
+	}
+	var logs int64
+	bootstrap.DB.Model(&model.UserAccountLog{}).Where("source_sn = ?", sn).Count(&logs)
+	if logs != 0 {
+		t.Fatalf("deleted user must not get account log, logs=%d", logs)
+	}
+}
+
 func TestApplyRefundNotifyMarksLog(t *testing.T) {
 	if !initPayDB(t) {
 		t.Skip("no database")

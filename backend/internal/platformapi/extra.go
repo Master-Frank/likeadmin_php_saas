@@ -264,7 +264,7 @@ func CrontabEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	// PHP CrontabLogic::edit updates by id with no existence check.
-	bootstrap.DB.Model(&model.Crontab{}).Where("id = ?", httpx.BodyUint(c, "id")).Updates(map[string]any{
+	bootstrap.DB.Model(&model.Crontab{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "command": httpx.BodyStr(c, "command"), "params": httpx.BodyStr(c, "params"),
 		"status": httpx.BodyInt(c, "status"), "expression": httpx.BodyStr(c, "expression"), "remark": httpx.BodyStr(c, "remark"),
 		"type": httpx.BodyInt(c, "type"), "system": httpx.BodyInt(c, "system"), "update_time": now,

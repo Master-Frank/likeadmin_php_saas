@@ -225,3 +225,19 @@ func TestNewSpecSoftDeleteAndPk(t *testing.T) {
 		t.Fatal("allowlist")
 	}
 }
+
+func TestNewSpecSoftDeleteWithoutDeleteColumn(t *testing.T) {
+	sp := newSpec(model.GenerateTable{
+		Name:   "la_pair_gencrud",
+		Delete: `{"type":1,"name":"delete_time"}`,
+	}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1},
+		{ColumnName: "name"},
+	})
+	if !sp.softDelete || sp.deleteCol != "delete_time" {
+		t.Fatalf("soft delete from delete.type=1: %+v", sp)
+	}
+	if sp.allowed["delete_time"] {
+		t.Fatal("delete_time is not a generate_column")
+	}
+}

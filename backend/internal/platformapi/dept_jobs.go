@@ -111,7 +111,7 @@ func DeptEdit(c *gin.Context) {
 		}
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.Dept{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
 		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 		"update_time": now,
@@ -149,7 +149,7 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	bootstrap.DB.Model(&model.Dept{}).Where("id = ?", id).Updates(util.SoftDeleteFields(util.NowUnix()))
+	bootstrap.DB.Model(&model.Dept{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -288,7 +288,7 @@ func JobsEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.Jobs{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
 		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
 	})
@@ -315,7 +315,7 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	bootstrap.DB.Model(&model.Jobs{}).Where("id = ?", id).Updates(util.SoftDeleteFields(util.NowUnix()))
+	bootstrap.DB.Model(&model.Jobs{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 

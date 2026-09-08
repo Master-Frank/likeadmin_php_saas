@@ -259,7 +259,7 @@ func RoleEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"), "update_time": now,
 	})
 	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
@@ -297,7 +297,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
+	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	bootstrap.DB.Where("role_id = ?", id).Delete(&model.SystemRoleMenu{})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")

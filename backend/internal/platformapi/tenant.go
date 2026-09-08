@@ -186,7 +186,7 @@ func TenantEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	disable := httpx.BodyInt(c, "disable")
-	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		"disable": disable, "tel": httpx.BodyStr(c, "tel"),
 		"domain_alias":        alias,
@@ -215,7 +215,7 @@ func TenantDelete(c *gin.Context) {
 	}
 	expireTenantAdmins(cur)
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.Tenant{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
+	bootstrap.DB.Model(&model.Tenant{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	if cur.Tactics == 1 && cur.SN != "" {
 		dropShardedTenantTables(cur.SN)
 	}
@@ -538,7 +538,7 @@ func TenantAdminEdit(c *gin.Context) {
 		return
 	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.TenantAdmin{}).Where("id = ?", id).Updates(data).Error; err != nil {
+		if err := tx.Model(&model.TenantAdmin{}).Where("id = ? AND delete_time IS NULL", id).Updates(data).Error; err != nil {
 			return err
 		}
 		tx.Where("admin_id = ?", id).Delete(&model.TenantAdminRole{})
@@ -577,7 +577,7 @@ func TenantAdminDelete(c *gin.Context) {
 	}
 	err := adb.Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ? AND delete_time IS NULL", id)
 		if a.TenantID > 0 {
 			q = q.Where("tenant_id = ?", a.TenantID)
 		}

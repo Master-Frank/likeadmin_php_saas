@@ -340,7 +340,9 @@ func requireTenantWrite(c *gin.Context, sp *spec) bool {
 
 func scoped(c *gin.Context, sp *spec) *gorm.DB {
 	db := session(c).Table(sp.table.Name)
-	if sp.softDelete && sp.allowed[sp.deleteCol] {
+	// PHP generated models use SoftDelete whenever delete.type=1,
+	// even if delete_time is not a listed generate_column.
+	if sp.softDelete {
 		db = db.Where(sp.deleteCol + " IS NULL")
 	}
 	if sp.allowed["tenant_id"] {

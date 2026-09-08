@@ -28,7 +28,7 @@ func userSNTaken(c *gin.Context, db *gorm.DB, v int) bool {
 	if db == nil {
 		return false
 	}
-	q := db.Model(&model.User{}).Where("sn = ?", v)
+	q := db.Model(&model.User{}).Where("sn = ? AND delete_time IS NULL", v)
 	tid := uint(0)
 	if c != nil {
 		tid = ctxutil.Get(c).TenantID

@@ -71,7 +71,7 @@ func FileRename(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.File{}).Where("id = ?", httpx.BodyUint(c, "id")).Updates(map[string]any{
+	bootstrap.DB.Model(&model.File{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "update_time": now,
 	})
 	response.SuccessNotice(c, "重命名成功")
@@ -94,7 +94,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	bootstrap.DB.Model(&model.File{}).Where("id IN ?", ids).Updates(util.SoftDeleteFields(util.NowUnix()))
+	bootstrap.DB.Model(&model.File{}).Where("id IN ? AND delete_time IS NULL", ids).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -141,7 +141,7 @@ func FileEditCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	bootstrap.DB.Model(&model.FileCate{}).Where("id = ?", httpx.BodyUint(c, "id")).Updates(map[string]any{
+	bootstrap.DB.Model(&model.FileCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -170,9 +170,9 @@ func FileDelCate(c *gin.Context) {
 	now := util.NowUnix()
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		bootstrap.DB.Model(&model.File{}).Where("id IN ?", fileIDs).Updates(util.SoftDeleteFields(now))
+		bootstrap.DB.Model(&model.File{}).Where("id IN ? AND delete_time IS NULL", fileIDs).Updates(util.SoftDeleteFields(now))
 	}
-	bootstrap.DB.Model(&model.FileCate{}).Where("id IN ?", ids).Updates(util.SoftDeleteFields(now))
+	bootstrap.DB.Model(&model.FileCate{}).Where("id IN ? AND delete_time IS NULL", ids).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

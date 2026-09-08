@@ -120,7 +120,7 @@ func DeptEdit(c *gin.Context) {
 			return
 		}
 	}
-	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
 		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 		"update_time": util.NowUnix(),
@@ -161,7 +161,7 @@ func DeptDelete(c *gin.Context) {
 		response.Fail(c, "顶级部门不可删除")
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ?", id), c).Updates(util.SoftDeleteFields(util.NowUnix()))
+	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -281,7 +281,7 @@ func JobsEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
 		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"),
 		"update_time": util.NowUnix(),
@@ -312,7 +312,7 @@ func JobsDelete(c *gin.Context) {
 		response.Fail(c, "已关联管理员，暂不可删除")
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ?", id), c).Updates(util.SoftDeleteFields(util.NowUnix()))
+	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 

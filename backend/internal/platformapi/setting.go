@@ -343,10 +343,10 @@ func DictTypeEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	typ := httpx.BodyStr(c, "type")
-	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.DictType{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "type": typ, "status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
 	})
-	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ?", id).Update("type_value", typ)
+	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ? AND delete_time IS NULL", id).Update("type_value", typ)
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -371,7 +371,7 @@ func DictTypeDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictType{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
+	bootstrap.DB.Model(&model.DictType{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -475,7 +475,7 @@ func DictDataEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Updates(map[string]any{
+	bootstrap.DB.Model(&model.DictData{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "value": httpx.BodyStr(c, "value"),
 		"sort": httpx.BodyInt(c, "sort"), "status": httpx.BodyInt(c, "status"),
 		"remark": httpx.BodyStr(c, "remark"), "update_time": now,
@@ -498,7 +498,7 @@ func DictDataDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Model(&model.DictData{}).Where("id = ?", id).Updates(util.SoftDeleteFields(now))
+	bootstrap.DB.Model(&model.DictData{}).Where("id = ? AND delete_time IS NULL", id).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

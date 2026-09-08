@@ -58,9 +58,9 @@ func FileMove(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	// PHP FileLogic::move updates by id list and does not check file/cate existence.
+	// PHP FileLogic::move uses SoftDelete File, so deleted rows stay put.
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ? AND delete_time IS NULL", ids), c).Updates(map[string]any{
 		"cid": httpx.BodyUint(c, "cid"), "update_time": now,
 	})
 	response.SuccessNotice(c, "移动成功")
@@ -79,7 +79,7 @@ func FileRename(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "update_time": now,
 	})
 	response.SuccessNotice(c, "重命名成功")
@@ -105,7 +105,7 @@ func FileDelete(c *gin.Context) {
 		uris = append(uris, row.URI)
 	}
 	filesvc.DeleteStored(c, uris...)
-	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", ids), c).Updates(util.SoftDeleteFields(util.NowUnix()))
+	scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ? AND delete_time IS NULL", ids), c).Updates(util.SoftDeleteFields(util.NowUnix()))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -164,7 +164,7 @@ func FileEditCate(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -196,9 +196,9 @@ func FileDelCate(c *gin.Context) {
 	now := util.NowUnix()
 	if len(fileIDs) > 0 {
 		filesvc.DeleteStored(c, uris...)
-		scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ?", fileIDs), c).Updates(util.SoftDeleteFields(now))
+		scopeTID(tdb(c).Model(&model.TenantFile{}).Where("id IN ? AND delete_time IS NULL", fileIDs), c).Updates(util.SoftDeleteFields(now))
 	}
-	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id IN ?", ids), c).Updates(util.SoftDeleteFields(now))
+	scopeTID(tdb(c).Model(&model.TenantFileCate{}).Where("id IN ? AND delete_time IS NULL", ids), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

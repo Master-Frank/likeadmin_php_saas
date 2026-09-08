@@ -72,7 +72,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"is_show": httpx.BodyInt(c, "is_show"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "修改成功")
@@ -98,7 +98,7 @@ func ArticleUpdateStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"is_show": httpx.BodyInt(c, "is_show"), "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "修改成功")
@@ -485,7 +485,7 @@ func RechargeRefund(c *gin.Context) {
 		if err := tx.Model(&order).Updates(map[string]any{"refund_status": 1, "update_time": now}).Error; err != nil {
 			return err
 		}
-		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ?", order.UserID, order.TenantID)
+		uq := tx.Model(&model.User{}).Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money - ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount - ?", order.OrderAmount),
@@ -493,7 +493,7 @@ func RechargeRefund(c *gin.Context) {
 		}).Error; err != nil {
 			return err
 		}
-		uq = tx.Where("id = ? AND tenant_id = ?", order.UserID, order.TenantID)
+		uq = tx.Where("id = ? AND tenant_id = ? AND delete_time IS NULL", order.UserID, order.TenantID)
 		uq.First(&user)
 		biz.AddAccountLog(tx, order.UserID, order.TenantID, biz.UMIncAdmin, biz.DEC, order.OrderAmount, user.UserMoney, order.SN, "充值订单退款")
 		exists := func(sn string) bool {
@@ -642,7 +642,7 @@ func RechargeRefundAgain(c *gin.Context) {
 		return
 	}
 	var againOrder model.RechargeOrder
-	oq := scopeTID(tdb(c).Where("id = ?", rec.OrderID), c)
+	oq := scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", rec.OrderID), c)
 	oq.First(&againOrder)
 	if againOrder.OrderAmount <= 0 {
 		response.Fail(c, "订单金额异常")

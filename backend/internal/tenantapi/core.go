@@ -432,7 +432,7 @@ func UserEdit(c *gin.Context) {
 			return
 		}
 	}
-	scopeTID(tdb(c).Model(&model.User{}).Where("id = ?", id), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.User{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
 		field: value, "update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "操作成功")
@@ -544,7 +544,7 @@ func ArticleEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyStr(c, "title"), "desc": httpx.BodyStr(c, "desc"),
 		"abstract": httpx.BodyStr(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
 		"author": httpx.BodyStr(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
@@ -571,7 +571,7 @@ func ArticleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
+	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -669,7 +669,7 @@ func ArticleCateEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
 		"update_time": util.NowUnix(),
 	})
@@ -699,7 +699,7 @@ func ArticleCateDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ?", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
+	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
 	response.SuccessNotice(c, "删除成功")
 }
 

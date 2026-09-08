@@ -186,7 +186,7 @@ func AdminEdit(c *gin.Context) {
 		return
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
-		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ? AND delete_time IS NULL", id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
 		} else {
@@ -269,7 +269,7 @@ func AdminDelete(c *gin.Context) {
 	}
 	err := tdb(c).Transaction(func(tx *gorm.DB) error {
 		now := util.NowUnix()
-		q := tx.Model(&model.TenantAdmin{}).Where("id = ?", id)
+		q := tx.Model(&model.TenantAdmin{}).Where("id = ? AND delete_time IS NULL", id)
 		if tid := tenantDB(c); tid > 0 {
 			q = q.Where("tenant_id = ?", tid)
 		} else {
@@ -577,7 +577,7 @@ func RoleEdit(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(map[string]any{
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
 		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
 		"update_time": util.NowUnix(),
 	})
@@ -621,7 +621,7 @@ func RoleDelete(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ?", id), c).Updates(util.SoftDeleteFields(now))
+	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(util.SoftDeleteFields(now))
 	tdb(c).Where("role_id = ?", id).Delete(&model.TenantSystemRoleMenu{})
 	cache.ClearAdminAuthCache(0)
 	response.SuccessNotice(c, "删除成功")
