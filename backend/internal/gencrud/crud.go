@@ -448,9 +448,21 @@ func selectCols(sp *spec) []string {
 }
 
 // coerceColumnValue mirrors PHP LogicGenerator: int+datetime columns use strtotime.
+// Other int columns follow ThinkPHP/MySQL int cast (blank/bool → 0/1).
 func coerceColumnValue(col model.GenerateColumn, val any) any {
 	if col.ColumnType == "int" && col.ViewType == "datetime" {
 		return util.ParseDateTime(util.ToString(val))
+	}
+	if col.ColumnType == "int" {
+		switch t := val.(type) {
+		case bool:
+			if t {
+				return 1
+			}
+			return 0
+		case string:
+			return util.ToInt(strings.TrimSpace(t))
+		}
 	}
 	return val
 }
@@ -509,13 +521,12 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 		if col.IsRequired != 1 || col.IsPk == 1 {
 			continue
 		}
-		if update && col.IsUpdate != 1 {
-			continue
-		}
+		// PHP ValidateGenerator edit scene requires every is_required column,
+		// including those with is_update=0. Add still honors is_insert.
 		if !update && col.IsInsert != 1 {
 			continue
 		}
-		if _, ok := p[col.ColumnName]; !ok || isBlankWrite(p[col.ColumnName]) {
+		if _, ok := p[col.ColumnName]; !ok || isRequireEmpty(p[col.ColumnName]) {
 			name := col.ColumnComment
 			if name == "" {
 				name = col.ColumnName

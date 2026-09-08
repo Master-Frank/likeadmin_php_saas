@@ -331,6 +331,15 @@ func TestRequiredMsgUsesColumnComment(t *testing.T) {
 	if got := requiredMsg(sp, map[string]any{"name": ""}, true); got != "名称" {
 		t.Fatalf("empty edit %q", got)
 	}
+	if got := requiredMsg(sp, map[string]any{"name": "   ", "status": 0}, false); got != "" {
+		t.Fatalf("PHP require accepts whitespace %q", got)
+	}
+	readonly := &spec{cols: []model.GenerateColumn{
+		{ColumnName: "code", ColumnComment: "编码", IsRequired: 1, IsInsert: 1, IsUpdate: 0},
+	}}
+	if got := requiredMsg(readonly, map[string]any{}, true); got != "编码" {
+		t.Fatalf("edit still requires is_update=0 column %q", got)
+	}
 }
 
 func TestCoerceColumnValueDatetime(t *testing.T) {
@@ -346,6 +355,13 @@ func TestCoerceColumnValueDatetime(t *testing.T) {
 	plain := model.GenerateColumn{ColumnName: "name", ColumnType: "string", ViewType: "input"}
 	if coerceColumnValue(plain, "2024-06-01 10:00:00") != "2024-06-01 10:00:00" {
 		t.Fatal("non-datetime should stay string")
+	}
+	sel := model.GenerateColumn{ColumnName: "status", ColumnType: "int", ViewType: "select"}
+	if coerceColumnValue(sel, "") != 0 || coerceColumnValue(sel, "3") != 3 {
+		t.Fatalf("int blank/string %v %v", coerceColumnValue(sel, ""), coerceColumnValue(sel, "3"))
+	}
+	if coerceColumnValue(sel, false) != 0 || coerceColumnValue(sel, true) != 1 {
+		t.Fatalf("int bool %v %v", coerceColumnValue(sel, false), coerceColumnValue(sel, true))
 	}
 }
 

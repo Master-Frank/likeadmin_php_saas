@@ -52,6 +52,9 @@ func WebGetCopyright(c *gin.Context) {
 }
 
 func WebSetCopyright(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	cfg := httpx.BodyAny(c, "config")
 	if msg := util.CopyrightConfigCheck(cfg); msg != "" {
 		response.Fail(c, msg)
@@ -71,6 +74,9 @@ func WebGetAgreement(c *gin.Context) {
 }
 
 func WebSetAgreement(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	cfgsvc.Set(c, "agreement", "service_title", httpx.BodyStr(c, "service_title"))
 	cfgsvc.Set(c, "agreement", "service_content", filesvc.ClearContentDomains(c, httpx.BodyStr(c, "service_content")))
 	cfgsvc.Set(c, "agreement", "privacy_title", httpx.BodyStr(c, "privacy_title"))
@@ -162,6 +168,9 @@ func CustomerGet(c *gin.Context) {
 }
 
 func CustomerSet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	// PHP CustomerServiceController::setConfig uses $this->request->post() with no goCheck.
 	p := httpx.Body(c)
 	for _, k := range []string{"qr_code", "wechat", "phone", "service_time"} {

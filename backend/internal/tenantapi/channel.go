@@ -144,6 +144,9 @@ func ChannelAppGet(c *gin.Context) {
 }
 
 func ChannelAppSet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	cfgsvc.Set(c, "app", "ios_download_url", httpx.BodyStr(c, "ios_download_url"))
 	cfgsvc.Set(c, "app", "android_download_url", httpx.BodyStr(c, "android_download_url"))
 	cfgsvc.Set(c, "app", "download_title", httpx.BodyStr(c, "download_title"))

@@ -184,6 +184,9 @@ func DecorateTabbarSave(c *gin.Context) {
 }
 
 func HotSearchSet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !requirePlatformTenant(c) {
 		return
 	}
@@ -1028,6 +1031,9 @@ func TenantNoticeDetail(c *gin.Context) {
 }
 
 func TenantNoticeSet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	if !guardTenantWrite(c) {
 		return
 	}

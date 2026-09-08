@@ -395,6 +395,9 @@ func NoticeDetail(c *gin.Context) {
 }
 
 func NoticeSet(c *gin.Context) {
+	if !response.RequirePOST(c) {
+		return
+	}
 	// PHP NoticeController::set uses $this->request->post() with no goCheck/post() lock.
 	id := httpx.BodyUint(c, "id")
 	var r model.NoticeSetting

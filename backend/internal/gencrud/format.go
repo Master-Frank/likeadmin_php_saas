@@ -169,6 +169,26 @@ func isBlankWrite(v any) bool {
 	}
 }
 
+// isRequireEmpty mirrors ThinkPHP require: missing/null/"" / empty array fail;
+// whitespace, 0, "0", and false pass (PHP empty(false) but false == '0').
+func isRequireEmpty(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch t := v.(type) {
+	case []any:
+		return len(t) == 0
+	case []string:
+		return len(t) == 0
+	case string:
+		return t == ""
+	case bool:
+		return false
+	default:
+		return util.ToString(v) == ""
+	}
+}
+
 func dictLabel(sp *spec, name string, v any) string {
 	if bootstrap.DB == nil {
 		return ""
