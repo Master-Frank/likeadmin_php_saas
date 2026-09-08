@@ -53,6 +53,44 @@ func TestEnsureNativeJobsNilDB(t *testing.T) {
 	EnsureNativeJobs()
 }
 
+func TestCommandRegistry(t *testing.T) {
+	names := CommandNames()
+	want := map[string]bool{"cache": true, "clear": true, "session": true, "query_refund": true, "cancel_unpaid_orders": true}
+	for _, n := range names {
+		delete(want, n)
+	}
+	if len(want) > 0 {
+		t.Fatalf("missing builtins %v in %v", want, names)
+	}
+	Register("warehouse_sync", func(args []string) string {
+		if len(args) == 1 && args[0] == "--once" {
+			return ""
+		}
+		return "bad-args"
+	})
+	t.Cleanup(func() { Unregister("warehouse_sync") })
+	if got := runCommand(model.Crontab{Command: "warehouse_sync", Params: "--once"}); got != "" {
+		t.Fatalf("registered command: %q", got)
+	}
+	if got := RunNamed("warehouse_sync", "--once"); got != "" {
+		t.Fatalf("RunNamed registered: %q", got)
+	}
+	found := false
+	for _, n := range CommandNames() {
+		if n == "warehouse_sync" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("CommandNames missing warehouse_sync")
+	}
+	Unregister("warehouse_sync")
+	if got := runCommand(model.Crontab{Command: "warehouse_sync"}); got != "未定义的定时任务命令: warehouse_sync" {
+		t.Fatalf("unregistered: %q", got)
+	}
+}
+
 func TestRunNamed(t *testing.T) {
 	if RunNamed("not_a_real_command") != "未定义的定时任务命令: not_a_real_command" {
 		t.Fatal(RunNamed("not_a_real_command"))

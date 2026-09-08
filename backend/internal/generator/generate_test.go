@@ -348,3 +348,55 @@ func TestApplyMenuSQLEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestZipRuntimeFileByFileFromBuild(t *testing.T) {
+	if !stubExists("php/controller") {
+		t.Fatalf("php stubs not found under %s", StubDir())
+	}
+	tbl, cols := sampleTable()
+	files := BuildAt(tbl, cols, time.Date(2026, 9, 6, 20, 0, 0, 0, time.Local))
+	root := RuntimeDir()
+	written := make([]string, 0, len(files))
+	t.Cleanup(func() {
+		for _, p := range written {
+			_ = os.Remove(p)
+		}
+	})
+	if err := WriteRuntime(files); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		written = append(written, filepath.Join(root, filepath.FromSlash(f.RelPath)))
+	}
+	zipPath := filepath.Join(t.TempDir(), "curd-build.zip")
+	if err := ZipRuntime(zipPath); err != nil {
+		t.Fatal(err)
+	}
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	got := map[string]string{}
+	for _, zf := range r.File {
+		rc, err := zf.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[zf.Name] = string(b)
+	}
+	for _, f := range files {
+		body, ok := got[f.ZipName()]
+		if !ok {
+			t.Fatalf("zip missing %s (have %d entries)", f.ZipName(), len(got))
+		}
+		if body != f.Content {
+			t.Fatalf("%s zip bytes mismatch want %d got %d", f.ZipName(), len(f.Content), len(body))
+		}
+	}
+}

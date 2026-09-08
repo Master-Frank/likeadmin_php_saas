@@ -30,7 +30,14 @@ func main() {
 	tenantdb.Register(bootstrap.DB)
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: think <command> [params...]")
+		fmt.Fprintln(os.Stderr, "       think list")
 		os.Exit(1)
+	}
+	if os.Args[1] == "list" {
+		for _, name := range cron.CommandNames() {
+			fmt.Println(name)
+		}
+		return
 	}
 	if os.Args[1] == "upgrade-local" {
 		if len(os.Args) < 3 {

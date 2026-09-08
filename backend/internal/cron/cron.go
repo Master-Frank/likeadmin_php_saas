@@ -3,8 +3,10 @@ package cron
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"io/fs"
@@ -76,6 +78,68 @@ func due(item model.Crontab, now int64) bool {
 	return biz.CronDue(item.Expression, item.LastTime, now)
 }
 
+// CommandFunc is a php-think compatible job. Return "" on success or an
+// error string (PHP Crontab writes that into la_dev_crontab.error).
+type CommandFunc func(args []string) string
+
+var (
+	commandMu sync.RWMutex
+	commands  = map[string]CommandFunc{}
+)
+
+func init() {
+	registerBuiltins()
+}
+
+func registerBuiltins() {
+	Register("cache", func([]string) string { return flushCache() })
+	Register("clear", runClear)
+	Register("session", func([]string) string {
+		expireSessions()
+		return ""
+	})
+	Register("query_refund", func([]string) string { return queryRefund() })
+	Register("cancel_unpaid_orders", func([]string) string { return cancelUnpaidOrders() })
+}
+
+// Register adds a crontab / `think` command. Unknown warehouse commands stay
+// undefined unless a Go hook is registered here — never exec `php think`.
+func Register(name string, fn CommandFunc) {
+	if fn == nil {
+		return
+	}
+	key := normalizeCommand(name)
+	if key == "" {
+		key = "cache"
+	}
+	commandMu.Lock()
+	commands[key] = fn
+	commandMu.Unlock()
+}
+
+// Unregister removes a previously registered command (tests / custom hooks).
+func Unregister(name string) {
+	key := normalizeCommand(name)
+	if key == "" {
+		key = "cache"
+	}
+	commandMu.Lock()
+	delete(commands, key)
+	commandMu.Unlock()
+}
+
+// CommandNames lists registered think/crontab commands, sorted.
+func CommandNames() []string {
+	commandMu.RLock()
+	out := make([]string, 0, len(commands))
+	for k := range commands {
+		out = append(out, k)
+	}
+	commandMu.RUnlock()
+	sort.Strings(out)
+	return out
+}
+
 // RunNamed runs a php-think compatible command (cache/clear/session/query_refund/...).
 // `think crontab` is the scheduler once-shot (PHP Crontab::execute), not cache flush.
 func RunNamed(command string, params ...string) string {
@@ -89,25 +153,21 @@ func RunNamed(command string, params ...string) string {
 func runCommand(item model.Crontab) string {
 	cmd := normalizeCommand(item.Command)
 	args := strings.Fields(strings.TrimSpace(item.Params))
-	switch {
-	case cmd == "cache" || cmd == "":
-		return flushCache()
-	case cmd == "clear":
-		return runClear(args)
-	case cmd == "session":
-		expireSessions()
-		return ""
-	case cmd == "query_refund":
-		return queryRefund()
-	case cmd == "cancel_unpaid_orders":
-		return cancelUnpaidOrders()
-	case cmd == "crontab":
+	if cmd == "crontab" {
 		// A la_dev_crontab row must not recurse into RunOnce.
 		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
-	default:
+	}
+	if cmd == "" {
+		cmd = "cache"
+	}
+	commandMu.RLock()
+	fn := commands[cmd]
+	commandMu.RUnlock()
+	if fn == nil {
 		log.Printf("crontab skip unsupported command %s", cmd)
 		return fmt.Sprintf("未定义的定时任务命令: %s", item.Command)
 	}
+	return fn(args)
 }
 
 func normalizeCommand(raw string) string {
