@@ -346,23 +346,34 @@ func PHPRequired(p map[string]any, key string) bool {
 	return phpRequired(p, key)
 }
 
+// PHPIsset mirrors PHP isset(): missing or JSON null is absent; "" / 0 / false stay set.
+func PHPIsset(p map[string]any, key string) bool {
+	v, ok := p[key]
+	return ok && v != nil
+}
+
 func phpRequired(p map[string]any, key string) bool {
 	v, ok := p[key]
 	if !ok || v == nil {
 		return false
 	}
+	// ThinkPHP require is `!empty($value) || '0' == $value`:
+	// fail missing/null/""/[]; pass 0/"0"/false/whitespace.
 	switch t := v.(type) {
 	case string:
-		return strings.TrimSpace(t) != ""
+		return t != ""
 	case []any:
 		return len(t) > 0
 	case []string:
 		return len(t) > 0
+	case []int:
+		return len(t) > 0
+	case []uint:
+		return len(t) > 0
 	case bool:
-		return t
+		return true
 	default:
-		s := strings.TrimSpace(ToString(v))
-		return s != ""
+		return ToString(v) != ""
 	}
 }
 
@@ -521,19 +532,19 @@ func UserRegisterConfigCheck(p map[string]any) string {
 			return "请选择注册强制绑定手机"
 		}
 	}
-	if _, ok := p["login_way"]; ok && !isArrayValue(p["login_way"]) {
+	if PHPIsset(p, "login_way") && !isArrayValue(p["login_way"]) {
 		return "登录方式值错误"
 	}
-	if v, ok := p["coerce_mobile"]; ok && !inZeroOne(v) {
+	if PHPIsset(p, "coerce_mobile") && !inZeroOne(p["coerce_mobile"]) {
 		return "注册强制绑定手机值错误"
 	}
-	if v, ok := p["login_agreement"]; ok && !inZeroOne(v) {
+	if PHPIsset(p, "login_agreement") && !inZeroOne(p["login_agreement"]) {
 		return "政策协议值错误"
 	}
-	if v, ok := p["third_auth"]; ok && !inZeroOne(v) {
+	if PHPIsset(p, "third_auth") && !inZeroOne(p["third_auth"]) {
 		return "第三方登录值错误"
 	}
-	if v, ok := p["wechat_auth"]; ok && !inZeroOne(v) {
+	if PHPIsset(p, "wechat_auth") && !inZeroOne(p["wechat_auth"]) {
 		return "公众号微信授权登录值错误"
 	}
 	return ""
@@ -773,13 +784,13 @@ func GeneratorEditFields(p map[string]any) string {
 		if m == nil {
 			return "表字段id参数缺失"
 		}
-		if _, has := m["id"]; !has {
+			if !PHPIsset(m, "id") {
 			return "表字段id参数缺失"
 		}
-		if _, has := m["query_type"]; !has {
+		if !PHPIsset(m, "query_type") {
 			return "请选择查询方式"
 		}
-		if _, has := m["view_type"]; !has {
+		if !PHPIsset(m, "view_type") {
 			return "请选择显示类型"
 		}
 	}
@@ -1201,7 +1212,7 @@ func DeptWriteCheckTaken(p map[string]any, needID bool, nameTaken func(string) b
 	if !inZeroOne(p["status"]) {
 		return "status必须在 0,1 范围内"
 	}
-	if _, ok := p["sort"]; ok && ToInt(p["sort"]) < 0 {
+	if PHPIsset(p, "sort") && ToInt(p["sort"]) < 0 {
 		return "排序值不正确"
 	}
 	return ""
@@ -1236,7 +1247,7 @@ func JobsWriteCheckTaken(p map[string]any, needID bool, nameTaken, codeTaken fun
 	if !inZeroOne(p["status"]) {
 		return "岗位状态值错误"
 	}
-	if _, ok := p["sort"]; ok && ToInt(p["sort"]) < 0 {
+	if PHPIsset(p, "sort") && ToInt(p["sort"]) < 0 {
 		return "排序值不正确"
 	}
 	return ""

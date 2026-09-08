@@ -383,7 +383,7 @@ func tenantAdminIDExists(id, tenantID uint) bool {
 
 func TenantAdminDetail(c *gin.Context) {
 	p := httpx.Query(c)
-	if !phpRequiredParam(p, "id") {
+	if !util.PHPRequired(p, "id") {
 		response.Fail(c, "请选择用户")
 		return
 	}
@@ -393,7 +393,7 @@ func TenantAdminDetail(c *gin.Context) {
 		response.Fail(c, "租户管理员不存在")
 		return
 	}
-	if !phpRequiredParam(p, "tenant_id") {
+	if !util.PHPRequired(p, "tenant_id") {
 		response.Fail(c, "请选择对应的租户")
 		return
 	}
@@ -474,7 +474,7 @@ func TenantAdminEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !phpRequiredParam(p, "id") {
+	if !util.PHPRequired(p, "id") {
 		response.Fail(c, "请选择用户")
 		return
 	}
@@ -527,7 +527,7 @@ func TenantAdminEdit(c *gin.Context) {
 	}
 	if avatar := httpx.BodyStr(c, "avatar"); avatar != "" {
 		data["avatar"] = filesvc.SetFileURL(c, avatar)
-	} else if _, ok := p["avatar"]; ok {
+	} else if util.PHPIsset(p, "avatar") {
 		data["avatar"] = ""
 	}
 	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
@@ -565,7 +565,7 @@ func TenantAdminDelete(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !phpRequiredParam(httpx.Body(c), "id") {
+	if !util.PHPRequired(httpx.Body(c), "id") {
 		response.Fail(c, "请选择用户")
 		return
 	}
@@ -633,15 +633,6 @@ func resolveTenantAdmin(tid, adminID uint) (*gorm.DB, model.TenantAdmin, bool) {
 	// every la_tenant_admin_{sn} by id alone can soft-delete another tenant's
 	// admin when AUTO_INCREMENT ids collide (each shard typically has id=1).
 	return bootstrap.DB, a, false
-}
-
-func phpRequiredParam(p map[string]any, key string) bool {
-	v, ok := p[key]
-	if !ok || v == nil {
-		return false
-	}
-	s := strings.TrimSpace(util.ToString(v))
-	return s != ""
 }
 
 func tenantAdminLinksCheck(db *gorm.DB, tid uint, roles, depts, jobs []uint) string {
@@ -775,7 +766,7 @@ func TenantUserDetail(c *gin.Context) {
 		response.Fail(c, "请选择用户")
 		return
 	}
-	if !phpRequiredParam(httpx.Query(c), "tenant_id") {
+	if !util.PHPRequired(httpx.Query(c), "tenant_id") {
 		response.Fail(c, "请选择租户标识")
 		return
 	}

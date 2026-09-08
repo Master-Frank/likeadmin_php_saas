@@ -174,36 +174,33 @@ func crontabStatusDesc(s int) string {
 
 func crontabWriteCheck(p map[string]any, needID bool) string {
 	// PHP CrontabValidate $rule lists name/type/command/status/expression before id.
-	if strings.TrimSpace(util.ToString(p["name"])) == "" {
+	if !util.PHPRequired(p, "name") {
 		return "请输入定时任务名称"
 	}
-	if _, ok := p["type"]; !ok {
+	if !util.PHPRequired(p, "type") {
 		return "请选择类型"
 	}
 	if util.ToInt(p["type"]) != 1 {
 		return "类型值错误"
 	}
-	if strings.TrimSpace(util.ToString(p["command"])) == "" {
+	if !util.PHPRequired(p, "command") {
 		return "请输入命令"
 	}
-	if _, ok := p["status"]; !ok {
+	if !util.PHPRequired(p, "status") {
 		return "请选择状态"
 	}
 	st := util.ToInt(p["status"])
 	if st != 1 && st != 2 && st != 3 {
 		return "状态值错误"
 	}
-	expr := strings.TrimSpace(util.ToString(p["expression"]))
-	if expr == "" {
+	if !util.PHPRequired(p, "expression") {
 		return "请输入运行规则"
 	}
-	if !biz.ValidCron(expr) {
+	if !biz.ValidCron(util.ToString(p["expression"])) {
 		return "定时任务运行规则错误"
 	}
-	if needID {
-		if v, ok := p["id"]; !ok || v == nil || strings.TrimSpace(util.ToString(v)) == "" {
-			return "参数缺失"
-		}
+	if needID && !util.PHPRequired(p, "id") {
+		return "参数缺失"
 	}
 	return ""
 }
@@ -295,11 +292,11 @@ func CrontabOperate(c *gin.Context) {
 		return
 	}
 	id := httpx.BodyUint(c, "id")
-	operate := httpx.BodyStr(c, "operate")
-	if operate == "" {
+	if !util.PHPRequired(httpx.Body(c), "operate") {
 		response.Fail(c, "请选择操作")
 		return
 	}
+	operate := httpx.BodyStr(c, "operate")
 	var r model.Crontab
 	if bootstrap.DB.Where("delete_time IS NULL").First(&r, id).Error != nil {
 		response.Fail(c, "定时任务不存在")
@@ -336,11 +333,12 @@ func CrontabDetail(c *gin.Context) {
 }
 
 func CrontabExpression(c *gin.Context) {
-	expr := httpx.QueryStr(c, "expression")
-	if expr == "" {
+	q := httpx.Query(c)
+	if !util.PHPRequired(q, "expression") {
 		response.Fail(c, "请输入运行规则")
 		return
 	}
+	expr := util.ToString(q["expression"])
 	lists, err := biz.CronExpressionLists(expr)
 	if err != nil {
 		response.Fail(c, err.Error())

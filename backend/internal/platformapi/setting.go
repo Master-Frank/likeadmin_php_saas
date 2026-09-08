@@ -145,10 +145,11 @@ func TransactionSet(c *gin.Context) {
 	}
 	cfgsvc.Set(c, "transaction", "cancel_unpaid_orders", httpx.BodyInt(c, "cancel_unpaid_orders"))
 	cfgsvc.Set(c, "transaction", "verification_orders", httpx.BodyInt(c, "verification_orders"))
-	if _, ok := httpx.Body(c)["cancel_unpaid_orders_times"]; ok {
+	p := httpx.Body(c)
+	if util.PHPIsset(p, "cancel_unpaid_orders_times") {
 		cfgsvc.Set(c, "transaction", "cancel_unpaid_orders_times", httpx.BodyInt(c, "cancel_unpaid_orders_times"))
 	}
-	if _, ok := httpx.Body(c)["verification_orders_times"]; ok {
+	if util.PHPIsset(p, "verification_orders_times") {
 		cfgsvc.Set(c, "transaction", "verification_orders_times", httpx.BodyInt(c, "verification_orders_times"))
 	}
 	response.SuccessNotice(c, "操作成功")

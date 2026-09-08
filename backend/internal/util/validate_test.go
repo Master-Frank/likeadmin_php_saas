@@ -678,6 +678,61 @@ func TestUintSlicesChanged(t *testing.T) {
 	}
 }
 
+func TestUserRegisterConfigCheckNullLoginWay(t *testing.T) {
+	p := map[string]any{"scene": "other", "login_way": nil, "coerce_mobile": nil}
+	if UserRegisterConfigCheck(p) != "" {
+		t.Fatal(UserRegisterConfigCheck(p))
+	}
+}
+
+func TestPHPRequiredThinkPHP(t *testing.T) {
+	if PHPRequired(map[string]any{}, "name") {
+		t.Fatal("missing")
+	}
+	if PHPRequired(map[string]any{"name": nil}, "name") {
+		t.Fatal("null")
+	}
+	if PHPRequired(map[string]any{"name": ""}, "name") {
+		t.Fatal("empty string")
+	}
+	if PHPRequired(map[string]any{"name": []any{}}, "name") {
+		t.Fatal("empty array")
+	}
+	if !PHPRequired(map[string]any{"name": "   "}, "name") {
+		t.Fatal("whitespace must pass ThinkPHP require")
+	}
+	if !PHPRequired(map[string]any{"name": 0}, "name") {
+		t.Fatal("0")
+	}
+	if !PHPRequired(map[string]any{"name": "0"}, "name") {
+		t.Fatal(`"0"`)
+	}
+	if !PHPRequired(map[string]any{"name": false}, "name") {
+		t.Fatal("false == '0' passes require")
+	}
+	if PHPIsset(map[string]any{"name": nil}, "name") {
+		t.Fatal("isset null")
+	}
+	if !PHPIsset(map[string]any{"name": ""}, "name") {
+		t.Fatal("isset empty string")
+	}
+}
+
+func TestGeneratorEditFieldsIsset(t *testing.T) {
+	base := map[string]any{
+		"table_name": "la_x", "table_comment": "c", "template_type": 0,
+		"generate_type": 0, "module_name": "platform",
+		"table_column": []any{map[string]any{"id": nil, "query_type": "=", "view_type": "input"}},
+	}
+	if GeneratorEditFields(base) != "表字段id参数缺失" {
+		t.Fatal(GeneratorEditFields(base))
+	}
+	base["table_column"] = []any{map[string]any{"id": 1, "query_type": nil, "view_type": "input"}}
+	if GeneratorEditFields(base) != "请选择查询方式" {
+		t.Fatal(GeneratorEditFields(base))
+	}
+}
+
 func TestWechatJsConfigCheck(t *testing.T) {
 	if WechatJsConfigCheck(map[string]any{}) != "请提供url" {
 		t.Fatal(WechatJsConfigCheck(map[string]any{}))

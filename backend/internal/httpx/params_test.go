@@ -79,6 +79,12 @@ func TestBodyIDPresent(t *testing.T) {
 	if !req(`{"id":12}`) {
 		t.Fatal("id=12 must be present")
 	}
+	if !req(`{"id":"   "}`) {
+		t.Fatal("whitespace id passes ThinkPHP require")
+	}
+	if req(`{"id":null}`) {
+		t.Fatal("JSON null id is absent")
+	}
 }
 
 func TestQueryIDPresent(t *testing.T) {

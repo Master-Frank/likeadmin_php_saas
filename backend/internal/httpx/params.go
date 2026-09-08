@@ -50,11 +50,7 @@ func QueryUint(c *gin.Context, key string) uint {
 // missing/empty string as absent but treats the literal "0" as present
 // (!empty($value) || '0' == $value).
 func QueryPresent(c *gin.Context, key string) bool {
-	v, ok := Query(c)[key]
-	if !ok || v == nil {
-		return false
-	}
-	return strings.TrimSpace(util.ToString(v)) != ""
+	return util.PHPRequired(Query(c), key)
 }
 
 func QueryIDPresent(c *gin.Context) bool {
@@ -148,11 +144,7 @@ func BodyHas(c *gin.Context, key string) bool {
 // value ThinkPHP Validate "require" would accept. Missing/empty string
 // fail; the literal 0/"0" is present.
 func BodyPresent(c *gin.Context, key string) bool {
-	v, ok := Body(c)[key]
-	if !ok || v == nil {
-		return false
-	}
-	return strings.TrimSpace(util.ToString(v)) != ""
+	return util.PHPRequired(Body(c), key)
 }
 
 func BodyIDPresent(c *gin.Context) bool {

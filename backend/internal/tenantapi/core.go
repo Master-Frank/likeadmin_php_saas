@@ -516,13 +516,14 @@ func articleWriteCheck(c *gin.Context, needID bool) string {
 			return "资讯不存在"
 		}
 	}
-	if httpx.BodyStr(c, "title") == "" {
+	p := httpx.Body(c)
+	if !util.PHPRequired(p, "title") {
 		return "标题不能为空"
 	}
-	if len([]rune(httpx.BodyStr(c, "title"))) > 255 {
+	if len([]rune(util.ToString(p["title"]))) > 255 {
 		return "标题长度须在1-255位字符"
 	}
-	if !httpx.BodyPresent(c, "cid") {
+	if !util.PHPRequired(p, "cid") {
 		return "所属栏目必须存在"
 	}
 	// PHP ArticleValidate: is_show require|in:0,1 with no custom messages.
@@ -628,9 +629,11 @@ func articleCateWriteCheck(c *gin.Context, needID bool) string {
 			return "资讯分类不存在"
 		}
 	}
-	if name := httpx.BodyStr(c, "name"); name == "" {
+	p := httpx.Body(c)
+	if !util.PHPRequired(p, "name") {
 		return "资讯分类不能为空"
-	} else if n := len([]rune(name)); n < 1 || n > 90 {
+	}
+	if n := len([]rune(util.ToString(p["name"]))); n < 1 || n > 90 {
 		return "资讯分类长度须在1-90位字符"
 	}
 	if msg := util.ArticleCateShowCheck(httpx.Body(c)); msg != "" {
@@ -899,10 +902,11 @@ func RechargeSetConfig(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if _, ok := p["status"]; ok {
+	// PHP RechargeLogic::setConfig uses isset(); JSON null is absent.
+	if util.PHPIsset(p, "status") {
 		cfgsvc.Set(c, "recharge", "status", httpx.BodyInt(c, "status"))
 	}
-	if _, ok := p["min_amount"]; ok {
+	if util.PHPIsset(p, "min_amount") {
 		cfgsvc.Set(c, "recharge", "min_amount", httpx.BodyAny(c, "min_amount"))
 	}
 	response.SuccessNotice(c, "操作成功")

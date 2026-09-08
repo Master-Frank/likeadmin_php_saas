@@ -27,7 +27,7 @@ import (
 )
 
 func requireWechatCode(c *gin.Context) bool {
-	if !phpRequiredParam(httpx.Body(c), "code") {
+	if !util.PHPRequired(httpx.Body(c), "code") {
 		response.Fail(c, "code缺少")
 		return false
 	}
@@ -438,7 +438,7 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !phpRequiredParam(httpx.Body(c), "code") {
+	if !util.PHPRequired(httpx.Body(c), "code") {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -468,7 +468,7 @@ func SmsSendCodeReal(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if _, ok := p["mobile"]; !ok || strings.TrimSpace(util.ToString(p["mobile"])) == "" {
+	if !util.PHPRequired(p, "mobile") {
 		response.Fail(c, "请输入手机号")
 		return
 	}
@@ -477,7 +477,7 @@ func SmsSendCodeReal(c *gin.Context) {
 		response.Fail(c, "请输入正确手机号")
 		return
 	}
-	if _, ok := p["scene"]; !ok || strings.TrimSpace(util.ToString(p["scene"])) == "" {
+	if !util.PHPRequired(p, "scene") {
 		response.Fail(c, "请输入场景值")
 		return
 	}

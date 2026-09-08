@@ -2,7 +2,6 @@ package openapi
 
 import (
 	"sort"
-	"strings"
 
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/bootstrap"
@@ -442,7 +441,7 @@ func UserBindMobile(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	if !phpRequiredParam(httpx.Body(c), "code") {
+	if !util.PHPRequired(httpx.Body(c), "code") {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -720,10 +719,3 @@ func UploadImage(c *gin.Context) {
 	})
 }
 
-func phpRequiredParam(p map[string]any, key string) bool {
-	v, ok := p[key]
-	if !ok || v == nil {
-		return false
-	}
-	return strings.TrimSpace(util.ToString(v)) != ""
-}

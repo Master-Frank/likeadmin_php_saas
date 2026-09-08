@@ -106,7 +106,7 @@ func AdminAdd(c *gin.Context) {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
 	disable := 0
-	if _, ok := p["disable"]; ok {
+	if util.PHPIsset(p, "disable") {
 		disable = httpx.BodyInt(c, "disable")
 	}
 	now := util.NowUnix()

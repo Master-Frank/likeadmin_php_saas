@@ -88,18 +88,14 @@ func GeneratorSelectTable(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	tables := httpx.BodyAny(c, "table")
-	if tables == nil {
+	if !util.PHPRequired(httpx.Body(c), "table") {
 		response.Fail(c, "参数缺失")
 		return
 	}
+	tables := httpx.BodyAny(c, "table")
 	arr, ok := tables.([]any)
 	if !ok {
 		response.Fail(c, "参数类型错误")
-		return
-	}
-	if len(arr) == 0 {
-		response.Fail(c, "参数缺失")
 		return
 	}
 	adminID := ctxutil.Get(c).AdminID
@@ -110,24 +106,12 @@ func GeneratorSelectTable(c *gin.Context) {
 			if m == nil {
 				return fmt.Errorf("参数缺失")
 			}
-			if _, hasName := m["name"]; !hasName {
-				if _, has := m["table_name"]; !has {
-					return fmt.Errorf("参数缺失")
-				}
-			}
-			if _, hasComment := m["comment"]; !hasComment {
-				if _, has := m["table_comment"]; !has {
-					return fmt.Errorf("参数缺失")
-				}
+			// PHP GenerateTableValidate::checkTable uses isset(name) && isset(comment).
+			if !util.PHPIsset(m, "name") || !util.PHPIsset(m, "comment") {
+				return fmt.Errorf("参数缺失")
 			}
 			name := util.ToString(m["name"])
-			if name == "" {
-				name = util.ToString(m["table_name"])
-			}
 			comment := util.ToString(m["comment"])
-			if comment == "" {
-				comment = util.ToString(m["table_comment"])
-			}
 			var n int64
 			if err := tx.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", physicalTableName(name)).Scan(&n).Error; err != nil {
 				return err
@@ -249,7 +233,7 @@ func GeneratorEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+	if !util.PHPRequired(p, "id") {
 		response.Fail(c, "表id缺失")
 		return
 	}
