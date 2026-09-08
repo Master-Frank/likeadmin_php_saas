@@ -134,6 +134,19 @@ func TestParseExportWindow(t *testing.T) {
 	}
 }
 
+func TestPHPTruthyMatchesIfValue(t *testing.T) {
+	q := Query{Params: map[string]any{"keyword": "0", "channel": 0, "name": " ", "ok": "1"}}
+	if PHPTruthy(q, "keyword") || PHPTruthy(q, "channel") || PHPTruthy(q, "missing") {
+		t.Fatal("PHP if($value) skips 0 / missing")
+	}
+	if !PHPTruthy(q, "name") || !PHPTruthy(q, "ok") {
+		t.Fatal("whitespace and non-zero must apply")
+	}
+	if PHPTruthy(Query{Params: map[string]any{"flag": false}}, "flag") {
+		t.Fatal("false is falsy")
+	}
+}
+
 func TestHasParamTreatsZeroAsPresent(t *testing.T) {
 	// PHP GET cid=0 is string "0"; "0" == "" is false, so '=' filters apply.
 	// JSON body 0 is int; 0 == "" is true and PHP skips — Params still stores "0".

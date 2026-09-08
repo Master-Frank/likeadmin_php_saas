@@ -74,7 +74,8 @@ func GeneratorGenerateTable(c *gin.Context) {
 		db = db.Where("table_comment LIKE ?", "%"+cmt+"%")
 	}
 	var count int64
-	db.Count(&count)
+	// PHP GenerateTableLists::count() is unfiltered GenerateTable::count().
+	bootstrap.DB.Model(&model.GenerateTable{}).Count(&count)
 	var rows []model.GenerateTable
 	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))

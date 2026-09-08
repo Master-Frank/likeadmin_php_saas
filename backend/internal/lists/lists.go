@@ -269,6 +269,23 @@ func HasParam(q Query, key string) bool {
 	return strings.TrimSpace(util.ToString(v)) != ""
 }
 
+// PHPTruthy matches PHP model searchers that gate with `if ($value)`.
+// Missing, null, false, 0, "0", and "" are skipped; whitespace is kept.
+func PHPTruthy(q Query, key string) bool {
+	v, ok := q.Params[key]
+	if !ok || v == nil {
+		return false
+	}
+	switch t := v.(type) {
+	case bool:
+		return t
+	case []any:
+		return len(t) > 0
+	}
+	s := util.ToString(v)
+	return s != "" && s != "0"
+}
+
 // Ident returns a SQL identifier or empty if the name is unsafe.
 func Ident(name string) string {
 	name = strings.TrimSpace(name)

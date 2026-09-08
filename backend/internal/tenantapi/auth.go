@@ -161,7 +161,7 @@ func AdminEdit(c *gin.Context) {
 		return
 	}
 	avatar := ""
-	if v := httpx.BodyStr(c, "avatar"); v != "" {
+	if v := httpx.BodyStr(c, "avatar"); v != "" && v != "0" {
 		avatar = filesvc.SetFileURL(c, v)
 	}
 	data := map[string]any{

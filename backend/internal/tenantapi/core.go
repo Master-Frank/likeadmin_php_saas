@@ -328,11 +328,12 @@ func UserLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.User{}).Where("delete_time IS NULL AND tenant_id = ?", tenantDB(c))
-	if kw := lists.Param(q, "keyword"); kw != "" {
+	if lists.PHPTruthy(q, "keyword") {
+		kw := lists.Param(q, "keyword")
 		like := "%" + kw + "%"
 		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
 	}
-	if ch := lists.Param(q, "channel"); ch != "" {
+	if lists.PHPTruthy(q, "channel") {
 		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
 	}
 	if start := lists.Param(q, "create_time_start"); start != "" {

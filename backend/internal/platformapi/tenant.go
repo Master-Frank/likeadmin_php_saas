@@ -31,7 +31,8 @@ func TenantLists(c *gin.Context) {
 		return
 	}
 	db := bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL")
-	if kw := lists.Param(q, "keyword"); kw != "" {
+	if lists.PHPTruthy(q, "keyword") {
+		kw := lists.Param(q, "keyword")
 		like := "%" + kw + "%"
 		db = db.Where("name LIKE ? OR sn LIKE ? OR tel LIKE ? OR domain_alias LIKE ?", like, like, like, like)
 	}
@@ -344,7 +345,8 @@ func TenantAdminLists(c *gin.Context) {
 		return
 	}
 	db := tenantAdminDB(tenant).Model(&model.TenantAdmin{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
-	if kw := lists.Param(q, "keyword"); kw != "" {
+	if lists.PHPTruthy(q, "keyword") {
+		kw := lists.Param(q, "keyword")
 		db = db.Where("name LIKE ? OR account LIKE ?", "%"+kw+"%", "%"+kw+"%")
 	}
 	if start := lists.Param(q, "create_time_start"); start != "" {
@@ -525,9 +527,10 @@ func TenantAdminEdit(c *gin.Context) {
 		"multipoint_login": httpx.BodyInt(c, "multipoint_login"),
 		"update_time":      now,
 	}
-	if avatar := httpx.BodyStr(c, "avatar"); avatar != "" {
-		data["avatar"] = filesvc.SetFileURL(c, avatar)
-	} else if util.PHPIsset(p, "avatar") {
+	// PHP TenantAdminLogic::edit always writes avatar: empty() → ''.
+	if av := httpx.BodyStr(c, "avatar"); av != "" && av != "0" {
+		data["avatar"] = filesvc.SetFileURL(c, av)
+	} else {
 		data["avatar"] = ""
 	}
 	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
@@ -728,11 +731,12 @@ func TenantUserLists(c *gin.Context) {
 	if tid > 0 {
 		db = db.Where("tenant_id = ?", tid)
 	}
-	if kw := lists.Param(q, "keyword"); kw != "" {
+	if lists.PHPTruthy(q, "keyword") {
+		kw := lists.Param(q, "keyword")
 		like := "%" + kw + "%"
 		db = db.Where("sn LIKE ? OR nickname LIKE ? OR account LIKE ? OR mobile LIKE ?", like, like, like, like)
 	}
-	if ch := lists.Param(q, "channel"); ch != "" {
+	if lists.PHPTruthy(q, "channel") {
 		db = db.Where("channel = ?", lists.ParamInt(q, "channel"))
 	}
 	if start := lists.Param(q, "create_time_start"); start != "" {

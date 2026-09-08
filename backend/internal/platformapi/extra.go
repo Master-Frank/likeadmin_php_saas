@@ -341,7 +341,9 @@ func CrontabExpression(c *gin.Context) {
 	expr := util.ToString(q["expression"])
 	lists, err := biz.CronExpressionLists(expr)
 	if err != nil {
-		response.Fail(c, err.Error())
+		// PHP CrontabLogic::expression returns the exception string;
+		// controller wraps it with data() → code=1, msg="", data=string.
+		response.Data(c, err.Error())
 		return
 	}
 	response.Data(c, lists)
