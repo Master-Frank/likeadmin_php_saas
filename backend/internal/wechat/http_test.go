@@ -57,6 +57,30 @@ func TestOAuthByCodeKeepsAccessToken(t *testing.T) {
 	}
 }
 
+func TestCode2SessionEmptyOpenidMatchesPHP(t *testing.T) {
+	orig := httpClient
+	t.Cleanup(func() { httpClient = orig })
+	httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResp(`{"errcode":40029,"errmsg":"invalid code"}`), nil
+	})}
+	_, err := Code2Session("app", "sec", "bad")
+	if err == nil || err.Error() != "获取openID失败" {
+		t.Fatalf("want 获取openID失败, got %v", err)
+	}
+}
+
+func TestOAuthByCodeEmptyOpenidMatchesPHP(t *testing.T) {
+	orig := httpClient
+	t.Cleanup(func() { httpClient = orig })
+	httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResp(`{"errcode":40029,"errmsg":"invalid code"}`), nil
+	})}
+	_, err := OAuthByCode("app", "sec", "bad")
+	if err == nil || err.Error() != "获取openID失败" {
+		t.Fatalf("want 获取openID失败, got %v", err)
+	}
+}
+
 func TestOAuthByCodeAllowsOpenidWithoutToken(t *testing.T) {
 	// PHP WeChatOaService::getOaResByCode only requires openid.
 	orig := httpClient

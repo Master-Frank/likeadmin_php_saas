@@ -69,7 +69,8 @@ func Code2Session(appID, secret, code string) (Session, error) {
 		return s, err
 	}
 	if s.Openid == "" {
-		return s, fmt.Errorf(firstNonEmpty(s.ErrMsg, "获取openID失败"))
+		// PHP WeChatMnpService::getMnpResByCode always throws this when openid is empty.
+		return s, fmt.Errorf("获取openID失败")
 	}
 	return s, nil
 }
@@ -92,7 +93,8 @@ func OAuthByCode(appID, secret, code string) (Session, error) {
 	}
 	s := Session{Openid: tok.Openid, Unionid: tok.Unionid, AccessToken: tok.AccessToken}
 	if tok.Openid == "" {
-		return s, fmt.Errorf(firstNonEmpty(tok.ErrMsg, "获取openID失败"))
+		// PHP WeChatOaService::getOaResByCode always throws this when openid is empty.
+		return s, fmt.Errorf("获取openID失败")
 	}
 	if tok.AccessToken != "" {
 		var info Session

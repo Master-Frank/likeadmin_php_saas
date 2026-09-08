@@ -252,7 +252,7 @@ func TestWechatChannelMissing(t *testing.T) {
 
 func TestAliRefundMissingConfig(t *testing.T) {
 	_, err := AliRefundByTenant(0, "sn1", "rf1", 1)
-	if err == nil || err.Error() != "请先完成支付渠道配置" {
+	if err == nil || err.Error() != "请配置好支付设置" {
 		t.Fatalf("cfg %v", err)
 	}
 }

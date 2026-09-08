@@ -225,7 +225,8 @@ func AliRefund(c *gin.Context, orderSN, refundSN string, amount float64) (AliRef
 func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) (AliRefundResult, error) {
 	cfg := AliCfgByTenant(tenantID)
 	if cfg.AppID == "" || cfg.PrivateKey == "" {
-		return AliRefundResult{}, fmt.Errorf("请先完成支付渠道配置")
+		// PHP AliPayService constructor throws this before any refund call.
+		return AliRefundResult{}, fmt.Errorf("请配置好支付设置")
 	}
 	if orderSN == "" {
 		return AliRefundResult{}, fmt.Errorf("订单号缺失")
