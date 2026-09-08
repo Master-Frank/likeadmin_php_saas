@@ -10,6 +10,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cron"
+	_ "likeadmin/backend/internal/router"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/upgrade"
 )

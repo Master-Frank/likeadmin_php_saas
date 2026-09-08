@@ -100,6 +100,8 @@ func registerBuiltins() {
 	})
 	Register("query_refund", func([]string) string { return queryRefund() })
 	Register("cancel_unpaid_orders", func([]string) string { return cancelUnpaidOrders() })
+	Register("version", runVersion)
+	Register("optimize:schema", runOptimizeSchema)
 }
 
 // Register adds a crontab / `think` command. Unknown warehouse commands stay
@@ -184,6 +186,14 @@ func normalizeCommand(raw string) string {
 		return "clear"
 	case cmd == "crontab":
 		return "crontab"
+	case cmd == "version" || strings.HasSuffix(cmd, "/version"):
+		return "version"
+	case strings.Contains(cmd, "optimize:schema") || strings.Contains(cmd, "optimizeschema"):
+		return "optimize:schema"
+	case strings.Contains(cmd, "optimize:route") || strings.Contains(cmd, "optimizeroute"):
+		return "optimize:route"
+	case strings.Contains(cmd, "route:list") || strings.Contains(cmd, "routelist"):
+		return "route:list"
 	case cmd == "" || strings.Contains(cmd, "cache"):
 		return "cache"
 	default:

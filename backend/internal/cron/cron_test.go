@@ -24,6 +24,15 @@ func TestNormalizeCommand(t *testing.T) {
 	if normalizeCommand("clear") != "clear" {
 		t.Fatal(normalizeCommand("clear"))
 	}
+	if normalizeCommand("version") != "version" {
+		t.Fatal(normalizeCommand("version"))
+	}
+	if normalizeCommand("optimize:schema") != "optimize:schema" {
+		t.Fatal(normalizeCommand("optimize:schema"))
+	}
+	if normalizeCommand("route:list") != "route:list" {
+		t.Fatal(normalizeCommand("route:list"))
+	}
 }
 
 func TestRunCommandUnknown(t *testing.T) {
@@ -55,7 +64,10 @@ func TestEnsureNativeJobsNilDB(t *testing.T) {
 
 func TestCommandRegistry(t *testing.T) {
 	names := CommandNames()
-	want := map[string]bool{"cache": true, "clear": true, "session": true, "query_refund": true, "cancel_unpaid_orders": true}
+	want := map[string]bool{
+		"cache": true, "clear": true, "session": true, "query_refund": true,
+		"cancel_unpaid_orders": true, "version": true, "optimize:schema": true,
+	}
 	for _, n := range names {
 		delete(want, n)
 	}
