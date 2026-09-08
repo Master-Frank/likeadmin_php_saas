@@ -89,6 +89,12 @@ func TestTencentParams(t *testing.T) {
 	}
 }
 
+func TestEncodeSMSResult(t *testing.T) {
+	if got := encodeSMSResult("请开启短信配置"); got != `"请开启短信配置"` {
+		t.Fatalf("%s", got)
+	}
+}
+
 func TestGatewayConfigError(t *testing.T) {
 	if err := gatewayConfigError("", engineCfg{}, ""); err == nil || err.Error() != "请开启短信配置" {
 		t.Fatalf("empty engine: %v", err)

@@ -127,10 +127,15 @@ func engineConfigEmpty(engine string, cfg engineCfg) bool {
 	}
 }
 
+func encodeSMSResult(v any) string {
+	raw, _ := json.Marshal(v)
+	return string(raw)
+}
+
 func gatewayFail(c *gin.Context, logID uint, content, msg string) error {
 	if logID > 0 {
 		updateSMSLog(c, logID, map[string]any{
-			"send_status": 2, "results": msg, "content": content,
+			"send_status": 2, "results": encodeSMSResult(msg), "content": content,
 		}, "")
 	}
 	return fmt.Errorf("%s", msg)

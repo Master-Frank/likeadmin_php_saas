@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +13,12 @@ import (
 )
 
 func TestPutAndDeleteQiniuFixture(t *testing.T) {
-	var gotKey, gotAuth string
+	var gotKey, gotAuth, gotToken string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/" {
 			_ = r.ParseMultipartForm(1 << 20)
 			gotKey = r.FormValue("key")
+			gotToken = r.FormValue("token")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -37,6 +40,18 @@ func TestPutAndDeleteQiniuFixture(t *testing.T) {
 	}
 	if gotKey != "uploads/a.txt" {
 		t.Fatalf("key=%s", gotKey)
+	}
+	parts := strings.Split(gotToken, ":")
+	if len(parts) < 3 {
+		t.Fatalf("token=%s", gotToken)
+	}
+	policyJSON, err := base64.URLEncoding.DecodeString(parts[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policy map[string]any
+	if json.Unmarshal(policyJSON, &policy) != nil || policy["scope"] != "bucket" {
+		t.Fatalf("qiniu scope should be bucket only: %s", policyJSON)
 	}
 	if err := deleteQiniu(cfg, "uploads/a.txt"); err != nil {
 		t.Fatal(err)

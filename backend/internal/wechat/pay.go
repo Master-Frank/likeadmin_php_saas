@@ -56,7 +56,7 @@ func ParsePayNotify(raw []byte, form map[string][]string) PayNotify {
 			n.OutTradeNo = x.OutTradeNo
 			n.TransactionID = x.TransactionID
 			n.Attach = x.Attach
-			n.Paid = x.ResultCode == "SUCCESS" || x.TradeState == "SUCCESS" || (x.ReturnCode == "SUCCESS" && x.OutTradeNo != "")
+			n.Paid = x.ResultCode == "SUCCESS" || x.TradeState == "SUCCESS"
 		}
 		return n
 	}

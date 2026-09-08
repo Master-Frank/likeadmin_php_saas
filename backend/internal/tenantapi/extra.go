@@ -950,7 +950,7 @@ func OAMenuSaveAndPublish(c *gin.Context) {
 		return
 	}
 	if err := wechat.PublishMenu(appID, secret, menu); err != nil {
-		response.Fail(c, "保存发布菜单失败"+err.Error())
+		response.Fail(c, err.Error())
 		return
 	}
 	cfgsvc.Set(c, "oa_setting", "menu", menu)

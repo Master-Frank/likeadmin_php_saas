@@ -43,10 +43,8 @@ func addNoticeRecord(c *gin.Context, scene int, params map[string]string, tid ui
 	meta := loadNoticeMeta(c, scene)
 	content := formatContent(util.ToString(meta.sms["content"]), params)
 	title := titleByScene(sendTypeSMS, meta.oa, meta.mnp)
-	userID := uint(0)
-	if c != nil {
-		userID = ctxutil.Get(c).UserID
-	}
+	// PHP NoticeLogic::addNotice uses $params['params']['user_id'] ?? 0, not the request admin.
+	userID := uint(util.ToInt(params["user_id"]))
 	now := util.NowUnix()
 	if tid > 0 {
 		db := tenantdb.Use(c)
@@ -156,10 +154,8 @@ func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]stri
 	for k, v := range params {
 		out[k] = v
 	}
+	// PHP NoticeLogic::mergeParams only loads a user when params.user_id is non-empty.
 	uid := uint(util.ToInt(out["user_id"]))
-	if uid == 0 && c != nil {
-		uid = ctxutil.Get(c).UserID
-	}
 	if out["url"] == "" {
 		out["url"] = "/mobile/pages/index/index"
 	}
@@ -185,15 +181,10 @@ func mergeNoticeParams(c *gin.Context, params map[string]string) map[string]stri
 	if q.First(&u).Error != nil {
 		return out
 	}
-	if out["nickname"] == "" {
-		out["nickname"] = u.Nickname
-	}
-	if out["user_name"] == "" {
-		out["user_name"] = u.Nickname
-	}
-	if out["user_sn"] == "" {
-		out["user_sn"] = util.ToString(u.SN)
-	}
+	// PHP always overwrites nickname / user_name / user_sn; mobile only if missing.
+	out["nickname"] = u.Nickname
+	out["user_name"] = u.Nickname
+	out["user_sn"] = util.ToString(u.SN)
 	if out["mobile"] == "" {
 		out["mobile"] = u.Mobile
 	}

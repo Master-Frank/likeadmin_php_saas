@@ -30,13 +30,14 @@ const (
 )
 
 type Session struct {
-	Openid     string `json:"openid"`
-	Unionid    string `json:"unionid"`
-	SessionKey string `json:"session_key"`
-	Nickname   string `json:"nickname"`
-	Headimgurl string `json:"headimgurl"`
-	ErrCode    int    `json:"errcode"`
-	ErrMsg     string `json:"errmsg"`
+	Openid      string `json:"openid"`
+	Unionid     string `json:"unionid"`
+	SessionKey  string `json:"session_key"`
+	AccessToken string `json:"access_token"`
+	Nickname    string `json:"nickname"`
+	Headimgurl  string `json:"headimgurl"`
+	ErrCode     int    `json:"errcode"`
+	ErrMsg      string `json:"errmsg"`
 }
 
 var httpClient = &http.Client{Timeout: 8 * time.Second}
@@ -89,10 +90,10 @@ func OAuthByCode(appID, secret, code string) (Session, error) {
 	if err := getJSON("https://api.weixin.qq.com/sns/oauth2/access_token?"+q.Encode(), &tok); err != nil {
 		return Session{}, err
 	}
+	s := Session{Openid: tok.Openid, Unionid: tok.Unionid, AccessToken: tok.AccessToken}
 	if tok.Openid == "" {
-		return Session{}, fmt.Errorf(firstNonEmpty(tok.ErrMsg, "获取openID失败"))
+		return s, fmt.Errorf(firstNonEmpty(tok.ErrMsg, "获取openID失败"))
 	}
-	s := Session{Openid: tok.Openid, Unionid: tok.Unionid}
 	if tok.AccessToken != "" {
 		var info Session
 		_ = getJSON("https://api.weixin.qq.com/sns/userinfo?access_token="+url.QueryEscape(tok.AccessToken)+
@@ -272,12 +273,16 @@ func PublishMenu(appID, secret string, buttons []any) error {
 		ErrCode int    `json:"errcode"`
 		ErrMsg  string `json:"errmsg"`
 	}
-	if err := postJSON("https://api.weixin.qq.com/cgi-bin/menu/create?access_token="+url.QueryEscape(tok),
-		map[string]any{"button": BuildMenuButtons(buttons)}, &out); err != nil {
+	raw, err := postJSONBytes("https://api.weixin.qq.com/cgi-bin/menu/create?access_token="+url.QueryEscape(tok),
+		map[string]any{"button": BuildMenuButtons(buttons)}, &out)
+	if err != nil {
 		return err
 	}
 	if out.ErrCode != 0 {
-		return fmt.Errorf(firstNonEmpty(out.ErrMsg, "发布菜单失败"))
+		// PHP OfficialAccountMenuLogic::saveAndPublish:
+		// '保存发布菜单失败' . json_encode($result->getContent())
+		quoted, _ := json.Marshal(string(raw))
+		return fmt.Errorf("保存发布菜单失败%s", quoted)
 	}
 	return nil
 }
@@ -306,17 +311,27 @@ func getJSON(rawURL string, dest any) error {
 }
 
 func postJSON(rawURL string, body any, dest any) error {
+	_, err := postJSONBytes(rawURL, body, dest)
+	return err
+}
+
+func postJSONBytes(rawURL string, body any, dest any) ([]byte, error) {
 	raw, _ := json.Marshal(body)
 	resp, err := httpClient.Post(rawURL, "application/json", strings.NewReader(string(raw)))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return json.Unmarshal(b, dest)
+	if dest != nil {
+		if err := json.Unmarshal(b, dest); err != nil {
+			return b, err
+		}
+	}
+	return b, nil
 }
 
 func firstNonEmpty(a, b string) string {

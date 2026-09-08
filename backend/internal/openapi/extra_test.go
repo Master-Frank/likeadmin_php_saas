@@ -7,6 +7,7 @@ import (
 
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/wechat"
 
 	"github.com/gin-gonic/gin"
 )
@@ -115,6 +116,25 @@ func TestWechatUserInfoFields(t *testing.T) {
 	}
 	if info["is_disable"] != 0 || info["token"] != "tok" || info["id"] != uint(9) || info["account"] != "u1001" || info["channel"] != 2 {
 		t.Fatalf("%v", info)
+	}
+	empty := wechatUserInfo(c, model.User{ID: 1, Avatar: ""}, "t")
+	if empty["avatar"] != "" {
+		t.Fatalf("empty avatar should stay empty, got %v", empty["avatar"])
+	}
+}
+
+func TestScanLoginAuthErr(t *testing.T) {
+	if scanLoginAuthErr(wechat.Session{}) != "获取用户授权信息失败" {
+		t.Fatal("empty session")
+	}
+	if scanLoginAuthErr(wechat.Session{Openid: "oid"}) != "获取用户授权信息失败" {
+		t.Fatal("openid without access_token")
+	}
+	if scanLoginAuthErr(wechat.Session{AccessToken: "tok"}) != "获取用户授权信息失败" {
+		t.Fatal("access_token without openid")
+	}
+	if scanLoginAuthErr(wechat.Session{Openid: "oid", AccessToken: "tok"}) != "" {
+		t.Fatal("both present should pass")
 	}
 }
 

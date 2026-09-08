@@ -286,7 +286,7 @@ func UserCenter(c *gin.Context) {
 	}
 	out := gin.H{
 		"id": u.ID, "sn": u.SN, "sex": util.SexDesc(u.Sex), "account": u.Account, "nickname": u.Nickname,
-		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"real_name": u.RealName, "avatar": filesvc.GetImageAttr(c, u.Avatar),
 		"mobile": u.Mobile, "create_time": util.FormatDateTime(u.CreateTime),
 		"is_new_user": u.IsNewUser, "user_money": util.MoneyString(u.UserMoney), "has_password": u.Password != "",
 	}
@@ -315,7 +315,7 @@ func UserInfo(c *gin.Context) {
 	}
 	response.Data(c, gin.H{
 		"id": u.ID, "sn": u.SN, "sex": util.SexDesc(u.Sex), "account": u.Account, "nickname": u.Nickname,
-		"real_name": u.RealName, "avatar": filesvc.GetFileURL(c, firstNonEmpty(u.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"real_name": u.RealName, "avatar": filesvc.GetImageAttr(c, u.Avatar),
 		"mobile": u.Mobile, "has_auth": hasAuth, "has_password": u.Password != "",
 		"create_time": util.FormatDateTime(u.CreateTime), "user_money": util.MoneyString(u.UserMoney),
 		"version": config.C.Project.Version,

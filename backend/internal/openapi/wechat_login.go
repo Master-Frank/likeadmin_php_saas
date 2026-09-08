@@ -10,7 +10,6 @@ import (
 	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
-	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
@@ -124,6 +123,10 @@ func LoginScanLogin(c *gin.Context) {
 		return
 	}
 	sess, err := wechat.OAuthByCode(appID, secret, httpx.BodyStr(c, "code"))
+	if msg := scanLoginAuthErr(sess); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	if err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -312,12 +315,21 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 	return wechatUserInfo(c, user, util.ToString(info["token"])), nil
 }
 
+// scanLoginAuthErr mirrors PHP LoginLogic::scanLogin:
+// empty($userAuth['openid']) || empty($userAuth['access_token']) → 获取用户授权信息失败
+func scanLoginAuthErr(sess wechat.Session) string {
+	if sess.Openid == "" || sess.AccessToken == "" {
+		return "获取用户授权信息失败"
+	}
+	return ""
+}
+
 // wechatUserInfo matches PHP WechatUserService::getUserInfo field() + token.
 func wechatUserInfo(c *gin.Context, user model.User, token string) gin.H {
 	return gin.H{
 		"id": user.ID, "sn": user.SN, "account": user.Account, "mobile": user.Mobile,
 		"nickname": user.Nickname, "channel": user.Channel,
-		"avatar":     filesvc.GetFileURL(c, firstNonEmpty(user.Avatar, config.C.Project.DefaultImage["user_avatar"])),
+		"avatar":     filesvc.GetImageAttr(c, user.Avatar),
 		"is_disable": user.IsDisable, "is_new_user": user.IsNewUser, "token": token,
 	}
 }

@@ -140,6 +140,10 @@ func TestParsePayNotify(t *testing.T) {
 	if !n.Paid || n.Attach != "recharge" || RechargeSN(n.OutTradeNo) != "202401011200001234" {
 		t.Fatalf("xml notify %+v sn=%s", n, RechargeSN(n.OutTradeNo))
 	}
+	loose := ParsePayNotify([]byte(`<xml><out_trade_no>SNFAIL</out_trade_no><return_code>SUCCESS</return_code><result_code>FAIL</result_code></xml>`), nil)
+	if loose.Paid {
+		t.Fatalf("return_code SUCCESS without result/trade SUCCESS must not be paid: %+v", loose)
+	}
 	ali := ParsePayNotify(nil, map[string][]string{
 		"out_trade_no":    {"SN001"},
 		"trade_no":        {"ALI1"},

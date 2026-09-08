@@ -213,7 +213,8 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 	if ak == "" || sk == "" || bucket == "" {
 		return fmt.Errorf("七牛云配置不完整")
 	}
-	policy, _ := json.Marshal(map[string]any{"scope": bucket + ":" + key, "deadline": time.Now().Unix() + 3600})
+	// PHP Qiniu::upload uses Auth::uploadToken($bucket) — scope is bucket only.
+	policy, _ := json.Marshal(map[string]any{"scope": bucket, "deadline": time.Now().Unix() + 3600})
 	encoded := base64.URLEncoding.EncodeToString(policy)
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(encoded))

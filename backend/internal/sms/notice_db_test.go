@@ -3,6 +3,7 @@ package sms
 import (
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -40,8 +41,10 @@ func TestMergeNoticeParamsFromUser(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	meta := ctxutil.Get(c)
 	meta.TenantID = user.TenantID
-	meta.UserID = user.ID
-	got := mergeNoticeParams(c, map[string]string{"user_id": "0", "code": "4321"})
+	meta.UserID = 99990
+	got := mergeNoticeParams(c, map[string]string{
+		"user_id": strconv.Itoa(int(user.ID)), "code": "4321", "nickname": "stale",
+	})
 	if got["nickname"] != user.Nickname || got["user_name"] != user.Nickname {
 		t.Fatalf("nickname %+v user=%s", got, user.Nickname)
 	}
@@ -50,6 +53,10 @@ func TestMergeNoticeParamsFromUser(t *testing.T) {
 	}
 	if user.Mobile != "" && got["mobile"] != user.Mobile {
 		t.Fatalf("mobile %+v want %s", got, user.Mobile)
+	}
+	skip := mergeNoticeParams(c, map[string]string{"user_id": "0", "code": "4321"})
+	if skip["nickname"] != "" {
+		t.Fatalf("user_id=0 must not use ctx UserID, got %+v", skip)
 	}
 }
 
@@ -93,4 +100,34 @@ func TestNoticeBySceneWritesSMSLog(t *testing.T) {
 		t.Fatalf("gateway ok send_status=%d want 1", row.SendStatus)
 	}
 	bootstrap.DB.Delete(&row)
+}
+
+func TestAddNoticeRecordUsesParamsUserID(t *testing.T) {
+	if !initNoticeDB(t) {
+		t.Skip("no database")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	meta := ctxutil.Get(c)
+	meta.UserID = 99991
+	meta.TenantID = 0
+	addNoticeRecord(c, LoginCaptcha, map[string]string{"user_id": "7", "code": "1"}, 0)
+	var row model.NoticeRecord
+	if bootstrap.DB.Where("user_id = ? AND scene_id = ?", 7, LoginCaptcha).Order("id desc").First(&row).Error != nil {
+		t.Fatal("notice_record should use params user_id")
+	}
+	if row.UserID != 7 {
+		t.Fatalf("user_id=%d want 7 (not ctx %d)", row.UserID, meta.UserID)
+	}
+	bootstrap.DB.Delete(&row)
+
+	addNoticeRecord(c, LoginCaptcha, map[string]string{"code": "1"}, 0)
+	var row2 model.NoticeRecord
+	if bootstrap.DB.Where("user_id = 0 AND scene_id = ?", LoginCaptcha).Order("id desc").First(&row2).Error != nil {
+		t.Fatal("missing params user_id should write 0")
+	}
+	if row2.UserID != 0 {
+		t.Fatalf("user_id=%d want 0", row2.UserID)
+	}
+	bootstrap.DB.Delete(&row2)
 }
