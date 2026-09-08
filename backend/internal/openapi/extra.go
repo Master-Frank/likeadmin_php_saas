@@ -176,7 +176,7 @@ func PayWay(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	from := httpx.QueryStr(c, "from")
+	from := httpx.QueryRaw(c, "from")
 	orderID := httpx.QueryUint(c, "order_id")
 	if from != "recharge" {
 		response.Fail(c, "待支付订单不存在")
@@ -245,7 +245,7 @@ func PayPrepay(c *gin.Context) {
 		return
 	}
 	payWay := httpx.BodyInt(c, "pay_way")
-	from := httpx.BodyStr(c, "from")
+	from := httpx.BodyRaw(c, "from")
 	orderID := httpx.BodyUint(c, "order_id")
 	if from != "recharge" {
 		response.FailWithData(c, "充值订单不存在", p)
@@ -284,9 +284,10 @@ func PayPrepay(c *gin.Context) {
 		response.FailWithData(c, "订单异常", p)
 		return
 	}
-	redirect := httpx.BodyStr(c, "redirect")
-	if redirect == "" {
-		redirect = "/pages/payment/payment"
+	// PHP: $params['redirect'] ?? '/pages/payment/payment' — empty string is kept.
+	redirect := "/pages/payment/payment"
+	if util.PHPIsset(p, "redirect") {
+		redirect = httpx.BodyRaw(c, "redirect")
 	}
 	var (
 		data any
@@ -313,7 +314,7 @@ func PayStatus(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	from := httpx.QueryStr(c, "from")
+	from := httpx.QueryRaw(c, "from")
 	orderID := httpx.QueryUint(c, "order_id")
 	uid := ctxutil.Get(c).UserID
 	if from != "recharge" {
