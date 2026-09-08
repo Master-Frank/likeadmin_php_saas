@@ -51,6 +51,14 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "开始安装") {
 		t.Fatalf("expected form: %s", w.Body.String())
 	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/install/install.php", nil)
+	Wizard(c2)
+	if !strings.Contains(w2.Body.String(), "开始安装") {
+		t.Fatalf("php alias should serve the Go wizard: %s", w2.Body.String())
+	}
 }
 
 func TestInstallHTTPFreshDatabase(t *testing.T) {

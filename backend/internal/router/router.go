@@ -49,6 +49,8 @@ func New() *gin.Engine {
 	})
 	r.GET("/install", install.Wizard)
 	r.GET("/install/", install.Wizard)
+	// PHP public/index.php and Vue NOT_INSTALL still jump here; nginx /install is already Go.
+	r.GET("/install/install.php", install.Wizard)
 	r.GET("/install/env", install.Env)
 	r.GET("/install/check", install.Status)
 	r.POST("/install", install.Run)

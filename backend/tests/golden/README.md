@@ -36,7 +36,7 @@ PHP 源文件与 Go 路由的 1:1 清单由 `backend/internal/router/php_module_
 - AliPay `transfer` / `transferQuery`（无控制器调用）
 - `api/pay/notifyApp`（PHP 无此动作；Go 为微信 App 回调 URL 多注册，与 `notifyMnp`/`notifyOa` 同处理器）
 - 本仓库无核销订单业务表时 `verification_orders` 为空跑
-- 安装向导在库已 lock 时不重装（对拍 `/install/env` 与已安装拒绝）
+- 安装向导后端已是 Go（`GET/POST /install`）；`/install/install.php` 兼容旧跳转。库已 lock 时不重装（对拍 `/install/env` 与已安装拒绝）。`like.sql` 仍从 `server/public/install/db/` 读取，删 PHP 应用树前需保留该 dump 或改为内嵌。
 
 生成器 `generate_type=1` 只写 Vue/菜单/`backend/internal/generated`，**不再写** `server/app` PHP 控制器。
 
