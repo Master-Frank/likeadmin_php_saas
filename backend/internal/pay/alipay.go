@@ -85,6 +85,7 @@ func AliPrepay(c *gin.Context, order model.RechargeOrder, from, redirect string,
 	if method != "alipay.trade.app.pay" {
 		params["return_url"] = returnURL
 	}
+	attachAliCertSNs(params, cfg)
 	sig, err := rsaSHA256Base64(key, aliSignContent(params))
 	if err != nil {
 		return nil, err
@@ -248,6 +249,7 @@ func AliRefundByTenant(tenantID uint, orderSN, refundSN string, amount float64) 
 		"version":     "1.0",
 		"biz_content": string(biz),
 	}
+	attachAliCertSNs(params, cfg)
 	sig, err := rsaSHA256Base64(key, aliSignContent(params))
 	if err != nil {
 		return AliRefundResult{}, err
@@ -298,6 +300,7 @@ func AliQueryRefundByTenant(tenantID uint, orderSN, refundSN string) (map[string
 		"version":     "1.0",
 		"biz_content": string(biz),
 	}
+	attachAliCertSNs(params, cfg)
 	sig, err := rsaSHA256Base64(key, aliSignContent(params))
 	if err != nil {
 		return nil, err
