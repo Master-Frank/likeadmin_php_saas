@@ -180,7 +180,7 @@ func WorkbenchIndex(c *gin.Context) {
 func AdminMySelf(c *gin.Context) {
 	meta := ctxutil.Get(c)
 	var admin model.TenantAdmin
-	if scopeTID(tdb(c).Where("id = ?", meta.AdminID), c).First(&admin).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", meta.AdminID), c).First(&admin).Error != nil {
 		response.Fail(c, "管理员不存在")
 		return
 	}

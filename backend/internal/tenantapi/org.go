@@ -330,6 +330,9 @@ func JobsDetail(c *gin.Context) {
 }
 
 func tenantDeptExists(c *gin.Context, id uint) bool {
+	if id == 0 {
+		return true
+	}
 	var n int64
 	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id), c).Count(&n)
 	return n > 0
