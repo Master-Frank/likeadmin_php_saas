@@ -2,7 +2,9 @@
 
 渐进式替换 `server/` 下的 ThinkPHP 后端。接口前缀、JSON 信封、`token` Header、密码算法与 PHP 保持一致。
 
-本机黄金对拍（直连 / 切流 / Nginx）已绿。未覆盖路径不再默认回落 PHP。
+**迁移交接：** 完成范围、live 对拍、删 PHP 前检查清单见仓库根目录 [docs/php-to-go-status.md](../docs/php-to-go-status.md) 与 [AGENTS.md](../AGENTS.md)。
+
+本机黄金对拍（直连 live `pair.sh` `failed=0`，2026-09-08）已绿。未覆盖路径不再默认回落 PHP。`server/` 仍保留静态资源与 `like.sql`，不要整树删除。
 
 ## 运行
 

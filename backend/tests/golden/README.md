@@ -1,6 +1,10 @@
 # 黄金对拍与模块验收
 
-阶段完成定义（与 plan 一致）：**同一请求 PHP vs Go JSON 对拍通过 + 对应前端主路径走通 + Nginx 已切该前缀 + 未迁移模块仍走 PHP**。
+项目级迁移状态、删 PHP 前检查清单：[docs/php-to-go-status.md](../../../docs/php-to-go-status.md)。
+
+阶段完成定义：**同一请求 PHP vs Go JSON 对拍通过 + 对应前端主路径走通 + Nginx 已切该前缀到 Go**。PHP 公开动作已全部迁完，`LIKEADMIN_PHP_FALLBACK` 默认关闭。
+
+2026-09-08 live：`./backend/tests/golden/pair.sh` 直连 Go `:8080` **`failed=0`**。本轮未再跑 strangler `:8090` / Nginx `:8091`。无真实支付/短信凭证时只对拍失败与校验语义。
 
 「路由已注册 / `go test` 绿」不等于验收完成。
 
