@@ -83,6 +83,10 @@ func TenantLists(c *gin.Context) {
 }
 
 func TenantDetail(c *gin.Context) {
+	if !httpx.QueryIDPresent(c) {
+		response.Fail(c, "请选择用户")
+		return
+	}
 	var t model.Tenant
 	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", httpx.QueryUint(c, "id")).First(&t).Error != nil {
 		response.Fail(c, "租户不存在")

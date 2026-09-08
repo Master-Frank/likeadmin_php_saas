@@ -119,6 +119,11 @@ func BodyStr(c *gin.Context, key string) string {
 	return strings.TrimSpace(util.ToString(Body(c)[key]))
 }
 
+// BodyRaw matches ThinkPHP request()->post() scalars: no TrimSpace.
+func BodyRaw(c *gin.Context, key string) string {
+	return util.ToString(Body(c)[key])
+}
+
 func BodyInt(c *gin.Context, key string) int {
 	return util.ToInt(Body(c)[key])
 }

@@ -61,3 +61,18 @@ func TestCrontabExpressionInvalidUsesDataEnvelope(t *testing.T) {
 		t.Fatalf("data should be error string, got %#v", body.Data)
 	}
 }
+
+func TestTenantDetailMissingID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tenant.tenant/detail", nil)
+	TenantDetail(c)
+	var body response.Body
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Msg != "请选择用户" {
+		t.Fatalf("missing id must match TenantValidate, got %q body=%s", body.Msg, w.Body.String())
+	}
+}

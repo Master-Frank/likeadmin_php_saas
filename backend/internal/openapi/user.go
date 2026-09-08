@@ -131,12 +131,12 @@ func LoginRegister(c *gin.Context) {
 		response.Fail(c, "注册来源参数缺失")
 		return
 	}
-	account := httpx.BodyStr(c, "account")
+	account := httpx.BodyRaw(c, "account")
 	if msg := util.ValidRegisterAccount(account); msg != "" {
 		response.Fail(c, msg)
 		return
 	}
-	password := httpx.BodyStr(c, "password")
+	password := httpx.BodyRaw(c, "password")
 	if msg := util.ValidRegisterPassword(password); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -145,7 +145,7 @@ func LoginRegister(c *gin.Context) {
 		response.Fail(c, "请确认密码")
 		return
 	}
-	if password != httpx.BodyStr(c, "password_confirm") {
+	if password != httpx.BodyRaw(c, "password_confirm") {
 		response.Fail(c, "两次输入的密码不一致")
 		return
 	}

@@ -387,8 +387,9 @@ func UserChangePassword(c *gin.Context) {
 		return
 	}
 	if u.Password != "" {
-		old := httpx.BodyStr(c, "old_password")
-		if old == "" {
+		// PHP UserLogic::changePassword uses empty() on the raw old_password.
+		old := httpx.BodyRaw(c, "old_password")
+		if old == "" || old == "0" {
 			response.Fail(c, "请填写旧密码")
 			return
 		}
@@ -397,7 +398,7 @@ func UserChangePassword(c *gin.Context) {
 			return
 		}
 	}
-	pwd := httpx.BodyStr(c, "password")
+	pwd := httpx.BodyRaw(c, "password")
 	tdb(c).Model(&u).Updates(map[string]any{
 		"password": util.CreatePassword(pwd, salt), "update_time": util.NowUnix(),
 	})
@@ -408,20 +409,20 @@ func UserResetPassword(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	mobile := httpx.BodyStr(c, "mobile")
-	code := httpx.BodyStr(c, "code")
+	mobile := httpx.BodyRaw(c, "mobile")
 	if msg := util.ValidChinaMobile(mobile); msg != "" {
-		if mobile == "" {
+		if !util.PHPRequired(httpx.Body(c), "mobile") {
 			response.Fail(c, "请输入手机号")
 			return
 		}
 		response.Fail(c, "请输入正确手机号")
 		return
 	}
-	if code == "" {
+	if !util.PHPRequired(httpx.Body(c), "code") {
 		response.Fail(c, "请填写验证码")
 		return
 	}
+	code := httpx.BodyRaw(c, "code")
 	if msg := util.UserPasswordCheck(httpx.Body(c)); msg != "" {
 		response.Fail(c, msg)
 		return
@@ -430,7 +431,7 @@ func UserResetPassword(c *gin.Context) {
 		response.Fail(c, "验证码错误")
 		return
 	}
-	hashed := util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification)
+	hashed := util.CreatePassword(httpx.BodyRaw(c, "password"), config.C.Project.UniqueIdentification)
 	scopeTenant(tdb(c).Model(&model.User{}).Where("mobile = ? AND delete_time IS NULL", mobile), c).Updates(map[string]any{
 		"password": hashed, "update_time": util.NowUnix(),
 	})

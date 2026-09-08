@@ -188,15 +188,14 @@ func FileEditCateCheck(p map[string]any) string {
 }
 
 func UserPasswordCheck(p map[string]any) string {
-	pwd := strings.TrimSpace(ToString(p["password"]))
-	if pwd == "" {
+	// PHP PasswordValidate uses raw post values (no trim) + mb_strlen + ctype_alnum.
+	if !phpRequired(p, "password") {
 		return "请输入密码"
 	}
-	if n := len(pwd); n < 6 || n > 20 {
+	pwd := ToString(p["password"])
+	if n := utf8.RuneCountInString(pwd); n < 6 || n > 20 {
 		return "密码须在6-25位之间"
 	}
-	// PHP PasswordValidate is length:6,20|alphaNum (ctype_alnum).
-	// All-letter / all-digit passwords are valid; symbols are not.
 	for _, r := range pwd {
 		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
 			return "密码须为字母数字组合"
@@ -205,7 +204,7 @@ func UserPasswordCheck(p map[string]any) string {
 	if !phpRequired(p, "password_confirm") {
 		return "请确认密码"
 	}
-	if pwd != strings.TrimSpace(ToString(p["password_confirm"])) {
+	if pwd != ToString(p["password_confirm"]) {
 		return "两次输入的密码不一致"
 	}
 	return ""

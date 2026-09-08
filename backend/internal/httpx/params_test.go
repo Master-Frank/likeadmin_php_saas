@@ -41,6 +41,20 @@ func TestQueryIgnoresJSONBody(t *testing.T) {
 	}
 }
 
+func TestBodyRawKeepsSpaces(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/login/register", bytes.NewBufferString(`{"account":" ab12 ","mobile":" 13800138000 "}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	if BodyRaw(c, "account") != " ab12 " || BodyStr(c, "account") != "ab12" {
+		t.Fatalf("raw=%q trim=%q", BodyRaw(c, "account"), BodyStr(c, "account"))
+	}
+	if BodyRaw(c, "mobile") != " 13800138000 " {
+		t.Fatalf("mobile raw=%q", BodyRaw(c, "mobile"))
+	}
+}
+
 func TestBodyIgnoresQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

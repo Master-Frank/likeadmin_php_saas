@@ -235,6 +235,9 @@ func TestUserPasswordCheck(t *testing.T) {
 	if UserPasswordCheck(map[string]any{"password": "abc123", "password_confirm": "abc124"}) != "两次输入的密码不一致" {
 		t.Fatal("mismatch")
 	}
+	if UserPasswordCheck(map[string]any{"password": " abc123 ", "password_confirm": " abc123 "}) != "密码须为字母数字组合" {
+		t.Fatal("PHP alphaNum rejects surrounding spaces")
+	}
 	if UserPasswordCheck(map[string]any{"password": "abc123", "password_confirm": "abc123"}) != "" {
 		t.Fatal("expected ok")
 	}

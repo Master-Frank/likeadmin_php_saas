@@ -472,7 +472,7 @@ func SmsSendCodeReal(c *gin.Context) {
 		response.Fail(c, "请输入手机号")
 		return
 	}
-	mobile := httpx.BodyStr(c, "mobile")
+	mobile := httpx.BodyRaw(c, "mobile")
 	if util.ValidChinaMobile(mobile) != "" {
 		response.Fail(c, "请输入正确手机号")
 		return
@@ -481,7 +481,7 @@ func SmsSendCodeReal(c *gin.Context) {
 		response.Fail(c, "请输入场景值")
 		return
 	}
-	scene := httpx.BodyStr(c, "scene")
+	scene := httpx.BodyRaw(c, "scene")
 	if _, _, err := sms.Send(c, mobile, scene); err != nil {
 		response.Fail(c, err.Error())
 		return
