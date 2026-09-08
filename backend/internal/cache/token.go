@@ -44,7 +44,7 @@ func SetAdminInfo(token, ip string) map[string]any {
 	} else {
 		var roles []model.SystemRole
 		if len(roleIDs) > 0 {
-			bootstrap.DB.Where("id IN ?", roleIDs).Find(&roles)
+			bootstrap.DB.Where("id IN ? AND delete_time IS NULL", roleIDs).Find(&roles)
 		}
 		for i, r := range roles {
 			if i > 0 {
@@ -104,7 +104,7 @@ func SetTenantAdminInfo(token, ip string, db *gorm.DB) map[string]any {
 	} else {
 		var roles []model.TenantSystemRole
 		if len(roleIDs) > 0 {
-			db.Where("id IN ?", roleIDs).Find(&roles)
+			db.Where("id IN ? AND delete_time IS NULL", roleIDs).Find(&roles)
 		}
 		for i, r := range roles {
 			if i > 0 {

@@ -428,7 +428,7 @@ func roleNames(ids []uint) []string {
 		return nil
 	}
 	var rows []model.SystemRole
-	bootstrap.DB.Where("id IN ?", ids).Find(&rows)
+	bootstrap.DB.Where("id IN ? AND delete_time IS NULL", ids).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -441,7 +441,7 @@ func deptNames(ids []uint) []string {
 		return nil
 	}
 	var rows []model.Dept
-	bootstrap.DB.Where("id IN ?", ids).Find(&rows)
+	bootstrap.DB.Where("id IN ? AND delete_time IS NULL", ids).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -454,7 +454,7 @@ func jobNames(ids []uint) []string {
 		return nil
 	}
 	var rows []model.Jobs
-	bootstrap.DB.Where("id IN ?", ids).Find(&rows)
+	bootstrap.DB.Where("id IN ? AND delete_time IS NULL", ids).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)

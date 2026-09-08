@@ -42,10 +42,10 @@ func ExpirePlatformToken(token string) bool {
 		return false
 	}
 	var admin model.Admin
-	if err := bootstrap.DB.Where("id = ?", sess.AdminID).First(&admin).Error; err != nil {
-		return false
-	}
-	if admin.MultipointLogin == 1 {
+	// PHP with('admin') SoftDelete: a deleted admin is empty, so multipoint
+	// does not block expiry.
+	found := bootstrap.DB.Where("id = ? AND delete_time IS NULL", sess.AdminID).First(&admin).Error == nil
+	if found && admin.MultipointLogin == 1 {
 		return false
 	}
 	now := util.NowUnix()
@@ -85,10 +85,8 @@ func ExpireTenantToken(c *gin.Context, token string) bool {
 		return false
 	}
 	var admin model.TenantAdmin
-	if err := db.Where("id = ?", sess.AdminID).First(&admin).Error; err != nil {
-		return false
-	}
-	if admin.MultipointLogin == 1 {
+	found := db.Where("id = ? AND delete_time IS NULL", sess.AdminID).First(&admin).Error == nil
+	if found && admin.MultipointLogin == 1 {
 		return false
 	}
 	now := util.NowUnix()

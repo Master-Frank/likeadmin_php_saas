@@ -315,7 +315,7 @@ func AdminDetail(c *gin.Context) {
 
 func MenuRoute(c *gin.Context) {
 	var admin model.TenantAdmin
-	if scopeTID(tdb(c).Where("id = ?", ctxutil.Get(c).AdminID), c).First(&admin).Error != nil {
+	if scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", ctxutil.Get(c).AdminID), c).First(&admin).Error != nil {
 		response.Data(c, []any{})
 		return
 	}
@@ -805,7 +805,7 @@ func tenantRoleNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantSystemRole
-	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ? AND delete_time IS NULL", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -818,7 +818,7 @@ func tenantDeptNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantDept
-	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ? AND delete_time IS NULL", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)
@@ -831,7 +831,7 @@ func tenantJobNames(c *gin.Context, ids []uint) []string {
 		return nil
 	}
 	var rows []model.TenantJobs
-	scopeTID(tdb(c).Where("id IN ?", ids), c).Find(&rows)
+	scopeTID(tdb(c).Where("id IN ? AND delete_time IS NULL", ids), c).Find(&rows)
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Name)

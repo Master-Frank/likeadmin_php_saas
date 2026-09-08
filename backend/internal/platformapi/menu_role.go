@@ -17,7 +17,7 @@ import (
 
 func MenuRoute(c *gin.Context) {
 	var admin model.Admin
-	if bootstrap.DB.Where("id = ?", mustAdminID(c)).First(&admin).Error != nil {
+	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", mustAdminID(c)).First(&admin).Error != nil {
 		response.Data(c, []any{})
 		return
 	}

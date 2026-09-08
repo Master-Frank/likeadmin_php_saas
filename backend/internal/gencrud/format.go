@@ -152,10 +152,15 @@ func attachRelations(c *gin.Context, sp *spec, rows []map[string]any) {
 		}
 		var related []map[string]any
 		q := db.Table(rel.Table).Where(rel.ForeignKey+" IN ?", ids)
+		relTable := rel.Table
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			if tableHasColumn(db, tenantdb.Table(c, rel.Table), "tenant_id") {
+			relTable = tenantdb.Table(c, rel.Table)
+			if tableHasColumn(db, relTable, "tenant_id") {
 				q = q.Where("tenant_id = ?", tid)
 			}
+		}
+		if tableHasColumn(db, relTable, "delete_time") {
+			q = q.Where("delete_time IS NULL")
 		}
 		if q.Find(&related).Error != nil {
 			continue
@@ -282,7 +287,11 @@ func isTreeAncestor(db *gorm.DB, sp *spec, start, forbid uint) bool {
 		}
 		seen[cur] = true
 		row := map[string]any{}
-		if db.Table(sp.table.Name).Select(sp.pk, sp.treePID).Where(sp.pk+" = ?", cur).Take(&row).Error != nil {
+		q := db.Table(sp.table.Name).Select(sp.pk, sp.treePID).Where(sp.pk+" = ?", cur)
+		if sp.softDelete {
+			q = q.Where(sp.deleteCol + " IS NULL")
+		}
+		if q.Take(&row).Error != nil {
 			return false
 		}
 		cur = uint(util.ToInt(row[sp.treePID]))
