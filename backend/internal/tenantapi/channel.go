@@ -14,10 +14,7 @@ import (
 
 func ChannelOAGet(c *gin.Context) {
 	host := wechat.HostName(c)
-	qr := cfgsvc.GetString(c, "oa_setting", "qr_code", "")
-	if qr != "" {
-		qr = filesvc.GetFileURL(c, qr)
-	}
+	qr := filesvc.FileURLUnlessEmpty(c, cfgsvc.GetString(c, "oa_setting", "qr_code", ""))
 	enc := cfgsvc.GetInt(c, "oa_setting", "encryption_type", 1)
 	response.Data(c, gin.H{
 		"name":             cfgsvc.GetString(c, "oa_setting", "name", ""),
@@ -63,10 +60,7 @@ func ChannelOASet(c *gin.Context) {
 
 func ChannelMnpGet(c *gin.Context) {
 	host := wechat.HostName(c)
-	qr := cfgsvc.GetString(c, "mnp_setting", "qr_code", "")
-	if qr != "" {
-		qr = filesvc.GetFileURL(c, qr)
-	}
+	qr := filesvc.FileURLUnlessEmpty(c, cfgsvc.GetString(c, "mnp_setting", "qr_code", ""))
 	httpsHost := "https://" + host
 	response.Data(c, gin.H{
 		"name":                 cfgsvc.GetString(c, "mnp_setting", "name", ""),

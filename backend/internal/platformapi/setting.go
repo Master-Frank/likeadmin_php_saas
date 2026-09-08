@@ -156,10 +156,7 @@ func TransactionSet(c *gin.Context) {
 }
 
 func CustomerGet(c *gin.Context) {
-	qr := cfgsvc.GetString(c, "customer_service", "qr_code", "")
-	if qr != "" {
-		qr = filesvc.GetFileURL(c, qr)
-	}
+	qr := filesvc.EmptyFileURL(c, cfgsvc.GetString(c, "customer_service", "qr_code", ""))
 	response.Data(c, gin.H{
 		"qr_code":      qr,
 		"wechat":       cfgsvc.GetString(c, "customer_service", "wechat", ""),

@@ -48,7 +48,7 @@ func Lists(c *gin.Context) []map[string]any {
 	for _, b := range bars {
 		item := map[string]any{
 			"id": b.ID, "name": b.Name, "tenant_id": b.TenantID, "is_show": b.IsShow,
-			"selected": filesvc.GetFileURL(c, b.Selected), "unselected": filesvc.GetFileURL(c, b.Unselected),
+			"selected": filesvc.FileURLUnlessEmpty(c, b.Selected), "unselected": filesvc.FileURLUnlessEmpty(c, b.Unselected),
 			"link":        util.DecodeJSON(b.Link),
 			"create_time": util.FormatDateTime(b.CreateTime),
 			"update_time": util.FormatDateTimePtr(b.UpdateTime),

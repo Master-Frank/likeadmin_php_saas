@@ -70,6 +70,9 @@ func TestGetImageAttrEmpty(t *testing.T) {
 	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" || GetImageAttr(nil, "0") != "" {
 		t.Fatal("empty image must stay empty")
 	}
+	if Format("http://host", "") != "http://host/" {
+		t.Fatal("Format empty still prefixes domain")
+	}
 }
 
 func TestEmptyFileURLMatchesPayConfigGetter(t *testing.T) {
@@ -84,8 +87,14 @@ func TestEmptyFileURLMatchesPayConfigGetter(t *testing.T) {
 		t.Fatalf("icon: %s", got)
 	}
 }
-	if Format("http://host", "") != "http://host/" {
-		t.Fatal("Format empty still prefixes domain")
+
+func TestFileURLUnlessEmptyKeepsPHPEmpty(t *testing.T) {
+	if FileURLUnlessEmpty(nil, "") != "" || FileURLUnlessEmpty(nil, "0") != "0" {
+		t.Fatal("empty() must keep the stored value")
+	}
+	c := imageTestContext()
+	if got := FileURLUnlessEmpty(c, "uploads/qr.png"); !strings.Contains(got, "uploads/qr.png") {
+		t.Fatalf("qr: %s", got)
 	}
 }
 

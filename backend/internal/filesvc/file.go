@@ -23,11 +23,21 @@ func GetImageAttr(c *gin.Context, uri string) string {
 	return GetFileURL(c, uri)
 }
 
-// EmptyFileURL matches PayConfig/TenantPayConfig getIconAttr:
-// empty($value) ? '' : getFileUrl($value). No trim; "0" is empty.
+// EmptyFileURL matches PayConfig/TenantPayConfig getIconAttr and
+// CustomerServiceLogic: empty($value) ? '' : getFileUrl($value).
+// No trim; "0" is empty.
 func EmptyFileURL(c *gin.Context, uri string) string {
 	if uri == "" || uri == "0" {
 		return ""
+	}
+	return GetFileURL(c, uri)
+}
+
+// FileURLUnlessEmpty matches `empty($uri) ? $uri : getFileUrl($uri)`
+// (OA/MNP qr_code, decorate tabbar icons). "" and "0" stay as stored.
+func FileURLUnlessEmpty(c *gin.Context, uri string) string {
+	if uri == "" || uri == "0" {
+		return uri
 	}
 	return GetFileURL(c, uri)
 }

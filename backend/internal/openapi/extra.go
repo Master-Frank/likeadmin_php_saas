@@ -496,10 +496,7 @@ func PcIndex(c *gin.Context) {
 }
 
 func qrFileURL(c *gin.Context, uri string) any {
-	if uri == "" {
-		return ""
-	}
-	return filesvc.GetFileURL(c, uri)
+	return filesvc.FileURLUnlessEmpty(c, uri)
 }
 
 func PcConfig(c *gin.Context) {
