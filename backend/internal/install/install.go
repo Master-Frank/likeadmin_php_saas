@@ -1,7 +1,6 @@
 package install
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,7 +13,6 @@ import (
 	"likeadmin/backend/internal/response"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -80,106 +78,30 @@ func Run(c *gin.Context) {
 	adminUser := pick(p, "admin_user")
 	adminPass := pick(p, "admin_password")
 
-	if err := CheckPort(host, port); err != nil {
-		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
-		return
+	lockPath := lock
+	if lockPath == "" {
+		lockPath = filepath.Join(config.C.App.PublicDir, "../config/install.lock")
 	}
-	rootDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=false&loc=Local",
-		user, pass, host, port)
-	db, err := gorm.Open(mysql.Open(rootDSN), &gorm.Config{})
-	if err != nil {
-		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
-		return
-	}
-	setPHPSQLMode(db)
-
-	var exists int
-	_ = db.Raw("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?", dbName).Scan(&exists)
-	if exists == 0 {
-		if err := db.Exec("CREATE DATABASE `" + dbName + "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci").Error; err != nil {
-			response.Fail(c, "创建数据库错误")
-			return
-		}
-	} else if tableExists(db, dbName, prefix) && !clearDB {
-		response.Fail(c, "数据表已存在，您之前可能已安装本系统，如需继续安装请选择新的数据库。")
-		return
-	} else if exists > 0 && clearDB {
-		if err := db.Exec("DROP DATABASE `" + dbName + "`").Error; err != nil {
-			response.Fail(c, "数据表已经存在，删除已存在库错误,请手动清除")
-			return
-		}
-		if err := db.Exec("CREATE DATABASE `" + dbName + "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci").Error; err != nil {
-			response.Fail(c, "创建数据库错误!")
-			return
-		}
-	}
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=false&loc=Local&multiStatements=true",
-		user, pass, host, port, dbName)
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		response.Fail(c, "安装错误，请检查连接信息:"+trimErr(err.Error()))
-		return
-	}
-	setPHPSQLMode(db)
-
-	imported := 0
-	salt := ""
-	if httpx.BodyInt(c, "skip_sql") != 1 {
-		sqlPath := FindLikeSQL(config.C.App.PublicDir)
-		if sqlPath == "" {
-			response.Fail(c, "创建表格失败")
-			return
-		}
-		raw, err := os.ReadFile(sqlPath)
-		if err != nil {
-			response.Fail(c, "创建表格失败")
-			return
-		}
-		imported, err = ImportSQL(db, string(raw), prefix, dbName)
-		if err != nil {
-			response.Fail(c, "创建表格失败")
-			return
-		}
-		salt, err = insertAdmin(db, prefix, adminUser, adminPass, nowUnix())
-		if err != nil {
-			response.Fail(c, "创建表格失败")
-			return
-		}
-	}
-	if importTest {
-		if err := importDemo(db, config.C.App.PublicDir, prefix, dbName); err != nil {
-			response.Fail(c, err.Error())
-			return
-		}
-	}
-	if lock == "" {
-		lock = filepath.Join(config.C.App.PublicDir, "../config/install.lock")
-	}
-	if err := os.MkdirAll(filepath.Dir(lock), 0o755); err != nil {
-		response.Fail(c, err.Error())
-		return
-	}
-	envPath := filepath.Join(filepath.Dir(lock), "..", ".env")
+	envPath := filepath.Join(filepath.Dir(lockPath), "..", ".env")
 	if httpx.BodyStr(c, "env_path") != "" {
 		envPath = httpx.BodyStr(c, "env_path")
 	}
-	if err := WriteEnv(envPath, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt); err != nil {
-		response.Fail(c, "写入环境配置失败："+err.Error())
+	res, err := Apply(Options{
+		Host: host, Port: port, User: user, Password: pass, Name: dbName, Prefix: prefix,
+		ClearDB: clearDB, ImportTest: importTest, SkipSQL: httpx.BodyInt(c, "skip_sql") == 1,
+		AdminUser: adminUser, AdminPassword: adminPass,
+		PublicDir: config.C.App.PublicDir, LockPath: lockPath, EnvPath: envPath,
+		GoConfigPath: httpx.BodyStr(c, "go_config_path"), HTTPHost: ctxutilHost(c),
+	})
+	if err != nil {
+		response.Fail(c, err.Error())
 		return
 	}
-	goCfg := httpx.BodyStr(c, "go_config_path")
-	_ = WriteGoConfig(goCfg, host, dbName, user, pass, port, prefix, ctxutilHost(c), salt)
-	// PHP install uses touch() so the lock file is empty.
-	if err := os.WriteFile(lock, []byte{}, 0o644); err != nil {
-		response.Fail(c, "写入安装锁失败："+err.Error())
-		return
+	// Empty go_config_path still updates in-memory config + default config.yaml.
+	if httpx.BodyStr(c, "go_config_path") == "" {
+		_ = WriteGoConfig("", host, dbName, user, pass, port, prefix, ctxutilHost(c), res.Salt)
 	}
-	restoreIndexLock()
-	if sqlDB, err := db.DB(); err == nil {
-		_ = sqlDB.Close()
-	}
-	response.Success(c, "安装成功", gin.H{"lock": lock, "imported": imported, "env": envPath})
+	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "env": res.Env})
 }
 
 func firstNonEmpty(p map[string]any, keys ...string) string {

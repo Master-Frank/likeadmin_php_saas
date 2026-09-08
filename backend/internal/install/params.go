@@ -67,11 +67,28 @@ func insertAdmin(db *gorm.DB, prefix, adminUser, adminPass string, ts int64) (sa
 }
 
 func tableExists(db *gorm.DB, dbName, prefix string) bool {
-	var name string
+	if db == nil || !identOK(dbName) || !identOK(prefix) {
+		return false
+	}
+	// MariaDB rejects placeholders on SHOW TABLES LIKE; PHP interpolates the name.
 	like := prefix + "config"
-	q := fmt.Sprintf("SHOW TABLES FROM `%s` LIKE ?", dbName)
-	_ = db.Raw(q, like).Scan(&name)
+	q := fmt.Sprintf("SHOW TABLES FROM `%s` LIKE '%s'", dbName, like)
+	var name string
+	_ = db.Raw(q).Scan(&name)
 	return name != ""
+}
+
+func identOK(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r == '_' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func importDemo(db *gorm.DB, publicDir, prefix, dbName string) error {

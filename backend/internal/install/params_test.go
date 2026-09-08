@@ -65,6 +65,15 @@ func TestInstallReadsBodyOnly(t *testing.T) {
 	}
 }
 
+func TestIdentOK(t *testing.T) {
+	if !identOK("likeadmin_install_smoke") || !identOK("xx_") || !identOK("la_") {
+		t.Fatal("valid idents")
+	}
+	if identOK("") || identOK("foo.bar") || identOK("la_`x") || identOK("a-b") {
+		t.Fatal("invalid idents")
+	}
+}
+
 func TestAccountSalt(t *testing.T) {
 	got := AccountSalt(1700000000, "admin")
 	want := util.MD5("1700000000admin")[:4]
