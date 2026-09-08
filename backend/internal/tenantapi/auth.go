@@ -544,7 +544,7 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	r := model.TenantSystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)}
+	r := model.TenantSystemRole{Name: httpx.BodyRaw(c, "name"), Desc: httpx.BodyRaw(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	tdb(c).Create(&r)
 	for _, id := range menuIDs {
 		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
@@ -577,7 +577,7 @@ func RoleEdit(c *gin.Context) {
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantSystemRole{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
+		"name": httpx.BodyRaw(c, "name"), "desc": httpx.BodyRaw(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
 		"update_time": util.NowUnix(),
 	})
 	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
@@ -873,10 +873,10 @@ func tenantRoleNameTaken(c *gin.Context, id uint, name string) bool {
 
 func tenantMenuFromReq(c *gin.Context) model.TenantSystemMenu {
 	return model.TenantSystemMenu{
-		Pid: httpx.BodyUint(c, "pid"), Type: httpx.BodyStr(c, "type"), Name: httpx.BodyStr(c, "name"),
-		Icon: httpx.BodyStr(c, "icon"), Sort: httpx.BodyInt(c, "sort"), Perms: httpx.BodyStr(c, "perms"),
-		Paths: httpx.BodyStr(c, "paths"), Component: httpx.BodyStr(c, "component"), Selected: httpx.BodyStr(c, "selected"),
-		Params: httpx.BodyStr(c, "params"), IsCache: httpx.BodyInt(c, "is_cache"), IsShow: httpx.BodyInt(c, "is_show"),
+		Pid: httpx.BodyUint(c, "pid"), Type: httpx.BodyRaw(c, "type"), Name: httpx.BodyRaw(c, "name"),
+		Icon: httpx.BodyRaw(c, "icon"), Sort: httpx.BodyInt(c, "sort"), Perms: httpx.BodyRaw(c, "perms"),
+		Paths: httpx.BodyRaw(c, "paths"), Component: httpx.BodyRaw(c, "component"), Selected: httpx.BodyRaw(c, "selected"),
+		Params: httpx.BodyRaw(c, "params"), IsCache: httpx.BodyInt(c, "is_cache"), IsShow: httpx.BodyInt(c, "is_show"),
 		IsDisable: httpx.BodyInt(c, "is_disable"),
 	}
 }

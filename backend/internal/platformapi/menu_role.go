@@ -226,7 +226,7 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	r := model.SystemRole{Name: httpx.BodyStr(c, "name"), Desc: httpx.BodyStr(c, "desc"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
+	r := model.SystemRole{Name: httpx.BodyRaw(c, "name"), Desc: httpx.BodyRaw(c, "desc"), Sort: httpx.BodyInt(c, "sort"), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	if err := bootstrap.DB.Create(&r).Error; err != nil {
 		response.Fail(c, err.Error())
 		return
@@ -260,7 +260,7 @@ func RoleEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "desc": httpx.BodyStr(c, "desc"), "sort": httpx.BodyInt(c, "sort"), "update_time": now,
+		"name": httpx.BodyRaw(c, "name"), "desc": httpx.BodyRaw(c, "desc"), "sort": httpx.BodyInt(c, "sort"), "update_time": now,
 	})
 	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
 		if !platformMenuIDsOwned(menuIDs) {
@@ -354,15 +354,15 @@ func RoleAll(c *gin.Context) {
 func menuFromReq(c *gin.Context) model.SystemMenu {
 	return model.SystemMenu{
 		Pid:       httpx.BodyUint(c, "pid"),
-		Type:      httpx.BodyStr(c, "type"),
-		Name:      httpx.BodyStr(c, "name"),
-		Icon:      httpx.BodyStr(c, "icon"),
+		Type:      httpx.BodyRaw(c, "type"),
+		Name:      httpx.BodyRaw(c, "name"),
+		Icon:      httpx.BodyRaw(c, "icon"),
 		Sort:      httpx.BodyInt(c, "sort"),
-		Perms:     httpx.BodyStr(c, "perms"),
-		Paths:     httpx.BodyStr(c, "paths"),
-		Component: httpx.BodyStr(c, "component"),
-		Selected:  httpx.BodyStr(c, "selected"),
-		Params:    httpx.BodyStr(c, "params"),
+		Perms:     httpx.BodyRaw(c, "perms"),
+		Paths:     httpx.BodyRaw(c, "paths"),
+		Component: httpx.BodyRaw(c, "component"),
+		Selected:  httpx.BodyRaw(c, "selected"),
+		Params:    httpx.BodyRaw(c, "params"),
 		IsCache:   httpx.BodyInt(c, "is_cache"),
 		IsShow:    httpx.BodyInt(c, "is_show"),
 		IsDisable: httpx.BodyInt(c, "is_disable"),

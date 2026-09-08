@@ -324,7 +324,7 @@ func DictTypeAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyStr(c, "name"), Type: httpx.BodyStr(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now)})
+	bootstrap.DB.Create(&model.DictType{Name: httpx.BodyRaw(c, "name"), Type: httpx.BodyRaw(c, "type"), Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyRaw(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now)})
 	response.SuccessNotice(c, "添加成功")
 }
 
@@ -352,9 +352,9 @@ func DictTypeEdit(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	typ := httpx.BodyStr(c, "type")
+	typ := httpx.BodyRaw(c, "type")
 	bootstrap.DB.Model(&model.DictType{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "type": typ, "status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
+		"name": httpx.BodyRaw(c, "name"), "type": typ, "status": httpx.BodyInt(c, "status"), "remark": httpx.BodyRaw(c, "remark"), "update_time": now,
 	})
 	bootstrap.DB.Model(&model.DictData{}).Where("type_id = ? AND delete_time IS NULL", id).Update("type_value", typ)
 	response.SuccessNotice(c, "编辑成功")
@@ -452,9 +452,9 @@ func DictDataAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Create(&model.DictData{
-		Name: httpx.BodyStr(c, "name"), Value: httpx.BodyStr(c, "value"), TypeID: typ.ID,
+		Name: httpx.BodyRaw(c, "name"), Value: httpx.BodyRaw(c, "value"), TypeID: typ.ID,
 		TypeValue: typeVal, Sort: httpx.BodyInt(c, "sort"), Status: httpx.BodyInt(c, "status"),
-		Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
+		Remark: httpx.BodyRaw(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
@@ -480,9 +480,9 @@ func DictDataEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.DictData{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "value": httpx.BodyStr(c, "value"),
+		"name": httpx.BodyRaw(c, "name"), "value": httpx.BodyRaw(c, "value"),
 		"sort": httpx.BodyInt(c, "sort"), "status": httpx.BodyInt(c, "status"),
-		"remark": httpx.BodyStr(c, "remark"), "update_time": now,
+		"remark": httpx.BodyRaw(c, "remark"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }
