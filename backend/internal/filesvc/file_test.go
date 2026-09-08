@@ -12,6 +12,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestSetImageIfMatchesPHPTruthy(t *testing.T) {
+	if SetImageIf(nil, "") != "" || SetImageIf(nil, "0") != "" {
+		t.Fatal("falsy image must store empty")
+	}
+	if SetImageIf(nil, "   ") != "   " {
+		t.Fatal("whitespace is truthy and must be kept")
+	}
+	if SetImageIf(nil, "uploads/a.png") != "uploads/a.png" {
+		t.Fatal("relative path passthrough")
+	}
+}
+
+func TestSetImageAttrMatchesBaseModel(t *testing.T) {
+	if SetImageAttr(nil, "") != "" || SetImageAttr(nil, "0") != "" || SetImageAttr(nil, "   ") != "" || SetImageAttr(nil, "  0  ") != "" {
+		t.Fatal("trim-falsy image must store empty")
+	}
+	if SetImageAttr(nil, "uploads/a.png") != "uploads/a.png" {
+		t.Fatal("relative path passthrough")
+	}
+}
+
 func TestGetImageAttrEmpty(t *testing.T) {
 	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" {
 		t.Fatal("empty image must stay empty")

@@ -490,7 +490,7 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 		if isCheckboxCol(col) {
 			val = joinCheckbox(val)
 		} else if isImageCol(sp, col.ColumnName) {
-			val = filesvc.SetFileURL(c, util.ToString(val))
+			val = filesvc.SetImageAttr(c, util.ToString(val))
 		} else if isEditorCol(col) {
 			val = filesvc.ClearContentDomains(c, util.ToString(val))
 		}

@@ -459,6 +459,11 @@ func RechargeRefund(c *gin.Context) {
 		response.Fail(c, "订单已发起退款,退款失败请到退款记录重新退款")
 		return
 	}
+	// PHP RechargeRefundValidate::checkRecharge compares user_money before Logic.
+	if refundUserMoney(c, order.UserID, order.TenantID) < order.OrderAmount {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
+		return
+	}
 	if order.OrderAmount <= 0 {
 		// PHP RefundLogic::refundBeforeCheck throws before any writes; the outer txn rolls back.
 		response.Fail(c, "订单金额异常")
@@ -532,6 +537,20 @@ func RechargeRefund(c *gin.Context) {
 		return
 	}
 	response.SuccessNotice(c, "操作成功")
+}
+
+// refundUserMoney matches PHP User::findOrEmpty($userId)->user_money
+// (empty model is 0, which fails the balance compare when amount > 0).
+func refundUserMoney(c *gin.Context, userID, tenantID uint) float64 {
+	var user model.User
+	q := tdb(c).Where("id = ? AND delete_time IS NULL", userID)
+	if tenantID > 0 {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	if q.First(&user).Error != nil {
+		return 0
+	}
+	return user.UserMoney
 }
 
 func lastRefundLogSN(c *gin.Context, recID uint) string {
@@ -635,6 +654,11 @@ func RechargeRefundAgain(c *gin.Context) {
 	var againOrder model.RechargeOrder
 	oq := scopeTID(tdb(c).Where("id = ? AND delete_time IS NULL", rec.OrderID), c)
 	oq.First(&againOrder)
+	// PHP RechargeRefundValidate::checkRecord compares user_money before Logic.
+	if refundUserMoney(c, rec.UserID, rec.TenantID) < againOrder.OrderAmount {
+		response.Fail(c, "退款失败:用户余额已不足退款金额")
+		return
+	}
 	if againOrder.OrderAmount <= 0 {
 		response.Fail(c, "订单金额异常")
 		return

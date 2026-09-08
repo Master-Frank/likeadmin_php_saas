@@ -187,6 +187,10 @@ func TestWriteDataFileAndCheckbox(t *testing.T) {
 	if data["body"] != `<p><img src="uploads/c.png"></p>` {
 		t.Fatalf("body %v", data["body"])
 	}
+	zero := writeData(c, sp, map[string]any{"name": "n2", "cover": "0", "image": "   "}, false)
+	if zero["cover"] != "" || zero["image"] != "" {
+		t.Fatalf("PHP setImageAttr trim-falsy must store empty: cover=%v image=%v", zero["cover"], zero["image"])
+	}
 }
 
 func TestSelectColsRespectsIsLists(t *testing.T) {

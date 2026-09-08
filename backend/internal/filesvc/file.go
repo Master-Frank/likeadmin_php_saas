@@ -105,6 +105,25 @@ func rewriteMediaSrc(re *regexp.Regexp, match string, rewrite func(string) strin
 	return parts[1] + rewrite(parts[2]) + parts[3]
 }
 
+// SetImageIf matches `$value ? FileService::setFileUrl($value) : ”`
+// (ArticleLogic image). Missing, "", "0" become ""; whitespace is kept.
+func SetImageIf(c *gin.Context, uri string) string {
+	if uri == "" || uri == "0" {
+		return ""
+	}
+	return SetFileURL(c, uri)
+}
+
+// SetImageAttr matches PHP BaseModel::setImageAttr:
+// trim($value) ? setFileUrl($value) : ”. The original (untrimmed) value
+// is passed to setFileUrl when the trimmed form is truthy.
+func SetImageAttr(c *gin.Context, uri string) string {
+	if t := strings.TrimSpace(uri); t == "" || t == "0" {
+		return ""
+	}
+	return SetFileURL(c, uri)
+}
+
 func SetFileURL(c *gin.Context, uri string) string {
 	if uri == "" {
 		return ""

@@ -500,7 +500,7 @@ func ArticleAdd(c *gin.Context) {
 	now := util.NowUnix()
 	a := model.Article{
 		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyRaw(c, "title"), Desc: httpx.BodyRaw(c, "desc"),
-		Abstract: httpx.BodyRaw(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyRaw(c, "image")),
+		Abstract: httpx.BodyRaw(c, "abstract"), Image: filesvc.SetImageIf(c, httpx.BodyRaw(c, "image")),
 		Author: httpx.BodyRaw(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "content")),
 		IsShow: httpx.BodyInt(c, "is_show"), Sort: httpx.BodyInt(c, "sort"),
 		ClickVirtual: httpx.BodyInt(c, "click_virtual"),
@@ -551,7 +551,7 @@ func ArticleEdit(c *gin.Context) {
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyRaw(c, "title"), "desc": httpx.BodyRaw(c, "desc"),
-		"abstract": httpx.BodyRaw(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyRaw(c, "image")),
+		"abstract": httpx.BodyRaw(c, "abstract"), "image": filesvc.SetImageIf(c, httpx.BodyRaw(c, "image")),
 		"author": httpx.BodyRaw(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyRaw(c, "content")),
 		"is_show": httpx.BodyInt(c, "is_show"), "sort": httpx.BodyInt(c, "sort"),
 		"click_virtual": httpx.BodyInt(c, "click_virtual"), "update_time": now,
