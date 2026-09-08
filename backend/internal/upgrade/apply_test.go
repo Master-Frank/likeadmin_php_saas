@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/util"
 )
@@ -105,6 +106,39 @@ func TestApplyExtractedCopiesServerAndBackend(t *testing.T) {
 	}
 	if got, err := os.ReadFile(filepath.Join(backendDest, "internal", "pkg", "x.go")); err != nil || string(got) != "package pkg\n" {
 		t.Fatalf("backend file: %q %v", got, err)
+	}
+}
+
+func TestApplyLocalWritesVersionJSON(t *testing.T) {
+	zipPath := writeZip(t, map[string]string{
+		"project/server/public/local-probe.txt": "apply-local",
+	})
+	tree := t.TempDir()
+	public := filepath.Join(tree, "proj", "server", "public")
+	if err := os.MkdirAll(public, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tree, "proj", "server", "upgrade"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	oldPub := config.C.App.PublicDir
+	oldDB := bootstrap.DB
+	t.Cleanup(func() {
+		config.C.App.PublicDir = oldPub
+		bootstrap.DB = oldDB
+	})
+	config.C.App.PublicDir = public
+	bootstrap.DB = nil
+
+	if err := ApplyLocal(zipPath, "2.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if LocalVersion() != "2.1.0" {
+		t.Fatalf("version %s", LocalVersion())
+	}
+	got, err := os.ReadFile(filepath.Join(tree, "proj", "public", "local-probe.txt"))
+	if err != nil || string(got) != "apply-local" {
+		t.Fatalf("probe %q err=%v", got, err)
 	}
 }
 

@@ -114,9 +114,105 @@ func TestImageCol(t *testing.T) {
 	sp := newSpec(model.GenerateTable{Name: "la_pair_gencrud"}, []model.GenerateColumn{
 		{ColumnName: "cover", ViewType: "imageSelect"},
 		{ColumnName: "name", ViewType: "input"},
+		{ColumnName: "image", ViewType: "input"},
+		{ColumnName: "attach", ViewType: "file"},
 	})
 	if !isImageCol(sp, "cover") || isImageCol(sp, "name") {
 		t.Fatal("image col")
+	}
+	if !isImageCol(sp, "image") {
+		t.Fatal("PHP BaseModel image column")
+	}
+	if !isImageCol(sp, "attach") {
+		t.Fatal("file view_type")
+	}
+}
+
+func TestJoinCheckbox(t *testing.T) {
+	if got := joinCheckbox([]any{"a", "b", ""}); got != "a,b" {
+		t.Fatalf("slice %q", got)
+	}
+	if got := joinCheckbox([]string{"x", "y"}); got != "x,y" {
+		t.Fatalf("strings %q", got)
+	}
+	if got := joinCheckbox("already,joined"); got != "already,joined" {
+		t.Fatalf("string %q", got)
+	}
+}
+
+func TestRequiredMsgEmptyCheckbox(t *testing.T) {
+	sp := &spec{cols: []model.GenerateColumn{
+		{ColumnName: "tags", ColumnComment: "标签", ViewType: "checkbox", IsRequired: 1, IsInsert: 1, IsUpdate: 1},
+	}}
+	if got := requiredMsg(sp, map[string]any{"tags": []any{}}, false); got != "标签" {
+		t.Fatalf("empty checkbox %q", got)
+	}
+	if got := requiredMsg(sp, map[string]any{"tags": []any{"a"}}, false); got != "" {
+		t.Fatalf("filled checkbox %q", got)
+	}
+}
+
+func TestWriteDataFileAndCheckbox(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+
+	sp := newSpec(model.GenerateTable{Name: "la_go_gencrud_rt"}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1},
+		{ColumnName: "name", ViewType: "input", IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "cover", ViewType: "imageSelect", IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "tags", ViewType: "checkbox", IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "body", ViewType: "editor", IsInsert: 1, IsUpdate: 1},
+		{ColumnName: "image", ViewType: "input", IsInsert: 1, IsUpdate: 1},
+	})
+	data := writeData(c, sp, map[string]any{
+		"name":  "n1",
+		"cover": "http://pair1.likeadmin.test/uploads/a.png",
+		"tags":  []any{"red", "blue"},
+		"body":  `<p><img src="http://pair1.likeadmin.test/uploads/c.png"></p>`,
+		"image": "http://pair1.likeadmin.test/uploads/b.png",
+	}, false)
+	if data["cover"] != "uploads/a.png" {
+		t.Fatalf("cover %v", data["cover"])
+	}
+	if data["image"] != "uploads/b.png" {
+		t.Fatalf("image %v", data["image"])
+	}
+	if data["tags"] != "red,blue" {
+		t.Fatalf("tags %v", data["tags"])
+	}
+	if data["body"] != `<p><img src="uploads/c.png"></p>` {
+		t.Fatalf("body %v", data["body"])
+	}
+}
+
+func TestFormatRowFileAndEditor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+
+	sp := newSpec(model.GenerateTable{Name: "la_go_gencrud_rt"}, []model.GenerateColumn{
+		{ColumnName: "cover", ViewType: "imageSelect", IsLists: 1},
+		{ColumnName: "body", ViewType: "editor", IsLists: 1},
+		{ColumnName: "name", ViewType: "input", IsLists: 1},
+	})
+	out := formatRow(c, sp, map[string]any{
+		"cover": "uploads/a.png",
+		"body":  `<p><img src="uploads/c.png"></p>`,
+		"name":  "n1",
+	})
+	if out["cover"] != "http://pair1.likeadmin.test/uploads/a.png" {
+		t.Fatalf("cover %v", out["cover"])
+	}
+	if out["body"] != `<p><img src="http://pair1.likeadmin.test/uploads/c.png"></p>` {
+		t.Fatalf("body %v", out["body"])
+	}
+	if out["name"] != "n1" {
+		t.Fatalf("name %v", out["name"])
 	}
 }
 

@@ -483,8 +483,12 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 			continue
 		}
 		val := coerceColumnValue(col, p[col.ColumnName])
-		if col.ColumnName == "image" {
+		if isCheckboxCol(col) {
+			val = joinCheckbox(val)
+		} else if isImageCol(sp, col.ColumnName) {
 			val = filesvc.SetFileURL(c, util.ToString(val))
+		} else if isEditorCol(col) {
+			val = filesvc.ClearContentDomains(c, util.ToString(val))
 		}
 		data[col.ColumnName] = val
 	}
@@ -513,7 +517,7 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 		if !update && col.IsInsert != 1 {
 			continue
 		}
-		if _, ok := p[col.ColumnName]; !ok || strings.TrimSpace(util.ToString(p[col.ColumnName])) == "" {
+		if _, ok := p[col.ColumnName]; !ok || isBlankWrite(p[col.ColumnName]) {
 			name := col.ColumnComment
 			if name == "" {
 				name = col.ColumnName
@@ -535,8 +539,12 @@ func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
 			out[k] = util.FormatDateTime(util.ToInt64(v))
 			continue
 		}
-		if k == "image" {
+		if isImageCol(sp, k) {
 			out[k] = filesvc.GetImageAttr(c, util.ToString(v))
+			continue
+		}
+		if isEditorColName(sp, k) {
+			out[k] = filesvc.RewriteContentDomains(c, util.ToString(v))
 			continue
 		}
 		out[k] = v

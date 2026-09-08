@@ -99,6 +99,10 @@ func listsIdent(s string) string {
 }
 
 func isImageCol(sp *spec, name string) bool {
+	if name == "image" {
+		// PHP BaseModel::getImageAttr / setImageAttr is bound to column "image".
+		return true
+	}
 	for _, col := range sp.cols {
 		if col.ColumnName != name {
 			continue
@@ -109,6 +113,60 @@ func isImageCol(sp *spec, name string) bool {
 		}
 	}
 	return false
+}
+
+func isCheckboxCol(col model.GenerateColumn) bool {
+	return strings.EqualFold(col.ViewType, "checkbox")
+}
+
+func isEditorCol(col model.GenerateColumn) bool {
+	return strings.EqualFold(col.ViewType, "editor")
+}
+
+func isEditorColName(sp *spec, name string) bool {
+	for _, col := range sp.cols {
+		if col.ColumnName == name && isEditorCol(col) {
+			return true
+		}
+	}
+	return false
+}
+
+// joinCheckbox matches VueEditGenerator getCheckBoxJoinContent: array.join(",").
+func joinCheckbox(v any) string {
+	switch t := v.(type) {
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			s := strings.TrimSpace(util.ToString(item))
+			if s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, ",")
+	case []string:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			s := strings.TrimSpace(item)
+			if s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, ",")
+	default:
+		return util.ToString(v)
+	}
+}
+
+func isBlankWrite(v any) bool {
+	switch t := v.(type) {
+	case []any:
+		return len(t) == 0
+	case []string:
+		return len(t) == 0
+	default:
+		return strings.TrimSpace(util.ToString(v)) == ""
+	}
 }
 
 func dictLabel(sp *spec, name string, v any) string {
