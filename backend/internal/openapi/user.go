@@ -141,7 +141,7 @@ func LoginRegister(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	if httpx.BodyStr(c, "password_confirm") == "" {
+	if !util.PHPRequired(httpx.Body(c), "password_confirm") {
 		response.Fail(c, "请确认密码")
 		return
 	}

@@ -424,7 +424,7 @@ func DictDataLists(c *gin.Context) {
 	if lists.Param(q, "status") != "" {
 		db = db.Where("status = ?", lists.ParamInt(q, "status"))
 	}
-	if lists.ParamInt(q, "type_id") > 0 {
+	if lists.HasParam(q, "type_id") {
 		db = db.Where("type_id = ?", lists.ParamInt(q, "type_id"))
 	}
 	var count int64

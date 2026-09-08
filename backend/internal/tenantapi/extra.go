@@ -705,8 +705,9 @@ func OAReplyLists(c *gin.Context) {
 		return
 	}
 	db := tdb(c).Model(&model.OfficialAccountReply{}).Where("delete_time IS NULL AND tenant_id = ?", tid)
-	if t := lists.ParamInt(q, "reply_type"); t > 0 {
-		db = db.Where("reply_type = ?", t)
+	// PHP ListsSearchTrait '=' keeps query "0"; only missing/'' are skipped.
+	if lists.HasParam(q, "reply_type") {
+		db = db.Where("reply_type = ?", lists.ParamInt(q, "reply_type"))
 	}
 	var count int64
 	db.Count(&count)

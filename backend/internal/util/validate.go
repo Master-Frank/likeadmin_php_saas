@@ -473,7 +473,7 @@ func PlatformWebSettingCheck(p map[string]any) string {
 	if !phpRequired(p, "name") {
 		return "请填写网站名称"
 	}
-	if n := len([]rune(strings.TrimSpace(ToString(p["name"])))); n > 30 {
+	if n := len([]rune(ToString(p["name"]))); n > 30 {
 		return "网站名称最长为12个字符"
 	}
 	if !phpRequired(p, "web_favicon") {
@@ -495,7 +495,7 @@ func TenantWebSettingCheck(p map[string]any) string {
 	if !phpRequired(p, "name") {
 		return "请填写网站名称"
 	}
-	if n := len([]rune(strings.TrimSpace(ToString(p["name"])))); n > 30 {
+	if n := len([]rune(ToString(p["name"]))); n > 30 {
 		return "网站名称最长为12个字符"
 	}
 	if !phpRequired(p, "web_favicon") {
