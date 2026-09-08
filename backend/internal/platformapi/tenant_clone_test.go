@@ -1,6 +1,9 @@
 package platformapi
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -9,6 +12,7 @@ import (
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/tenantdb"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -127,6 +131,133 @@ func TestCopyTenantMenusRemapStampsUpdateTime(t *testing.T) {
 	}
 	if child.UpdateTime == nil || *child.UpdateTime < before {
 		t.Fatalf("remap update_time=%v", child.UpdateTime)
+	}
+}
+
+func TestCopyTenantPayRemapOnClone(t *testing.T) {
+	if !initTenantCloneDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990003
+	db := bootstrap.DB
+	cleanup := func() {
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantPayWay{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantPayConfig{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	var tplCfgs, tplWays int64
+	db.Model(&model.TenantPayConfig{}).Where("tenant_id = 0").Count(&tplCfgs)
+	db.Model(&model.TenantPayWay{}).Where("tenant_id = 0").Count(&tplWays)
+	if tplCfgs == 0 || tplWays == 0 {
+		t.Skip("no pay templates")
+	}
+	var tplIDs []uint
+	db.Model(&model.TenantPayConfig{}).Where("tenant_id = 0").Pluck("id", &tplIDs)
+
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return copyTenantPay(tx, tid)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfgs []model.TenantPayConfig
+	if err := db.Where("tenant_id = ?", tid).Find(&cfgs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if int64(len(cfgs)) != tplCfgs {
+		t.Fatalf("pay configs %d want %d", len(cfgs), tplCfgs)
+	}
+	newIDs := map[uint]bool{}
+	for _, c := range cfgs {
+		newIDs[c.ID] = true
+	}
+	for _, old := range tplIDs {
+		if newIDs[old] {
+			t.Fatalf("cloned config reused template id %d", old)
+		}
+	}
+
+	var ways []model.TenantPayWay
+	if err := db.Where("tenant_id = ?", tid).Find(&ways).Error; err != nil {
+		t.Fatal(err)
+	}
+	if int64(len(ways)) != tplWays {
+		t.Fatalf("pay ways %d want %d", len(ways), tplWays)
+	}
+	for _, w := range ways {
+		if !newIDs[w.PayConfigID] {
+			t.Fatalf("way scene=%d pay_config_id=%d not remapped onto cloned configs", w.Scene, w.PayConfigID)
+		}
+	}
+}
+
+func TestInitSharedTenantChain(t *testing.T) {
+	if !initTenantCloneDB(t) {
+		t.Skip("no database")
+	}
+	const tid uint = 990004
+	db := bootstrap.DB
+	cleanup := func() {
+		_ = db.Exec("DELETE ad FROM la_tenant_admin_dept ad INNER JOIN la_tenant_admin a ON ad.admin_id = a.id WHERE a.tenant_id = ?", tid).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantAdmin{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantDept{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantSystemMenu{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.Article{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.ArticleCate{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantPayWay{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantPayConfig{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.TenantNoticeSetting{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.DecoratePage{}).Error
+		_ = db.Where("tenant_id = ?", tid).Delete(&model.DecorateTabbar{}).Error
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/tenant.tenant/add",
+		bytes.NewBufferString(`{"account":"t990004","password":"likeadmin"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	tenant := model.Tenant{ID: tid, SN: "t990004", Name: "clone-chain", Tactics: 0}
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return initSharedTenant(tx, tenant, c)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var admins int64
+	db.Model(&model.TenantAdmin{}).Where("tenant_id = ? AND account = ? AND root = 1 AND delete_time IS NULL", tid, "t990004").Count(&admins)
+	if admins != 1 {
+		t.Fatalf("super admin %d", admins)
+	}
+	var depts, menus, pays, ways, notices, pages, bars int64
+	db.Model(&model.TenantDept{}).Where("tenant_id = ?", tid).Count(&depts)
+	db.Model(&model.TenantSystemMenu{}).Where("tenant_id = ?", tid).Count(&menus)
+	db.Model(&model.TenantPayConfig{}).Where("tenant_id = ?", tid).Count(&pays)
+	db.Model(&model.TenantPayWay{}).Where("tenant_id = ?", tid).Count(&ways)
+	db.Model(&model.TenantNoticeSetting{}).Where("tenant_id = ?", tid).Count(&notices)
+	db.Model(&model.DecoratePage{}).Where("tenant_id = ?", tid).Count(&pages)
+	db.Model(&model.DecorateTabbar{}).Where("tenant_id = ?", tid).Count(&bars)
+	if depts < 1 || menus < 1 || pays < 3 || ways < 1 || notices < 1 || pages < 1 || bars < 1 {
+		t.Fatalf("chain dept=%d menus=%d pay=%d/%d notice=%d page=%d bar=%d",
+			depts, menus, pays, ways, notices, pages, bars)
+	}
+	var admin model.TenantAdmin
+	db.Where("tenant_id = ? AND root = 1", tid).First(&admin)
+	var link int64
+	db.Table("la_tenant_admin_dept").Where("admin_id = ?", admin.ID).Count(&link)
+	if link != 1 {
+		t.Fatalf("admin_dept %d", link)
+	}
+
+	var pair1Menus int64
+	db.Model(&model.TenantSystemMenu{}).Where("tenant_id = 1").Count(&pair1Menus)
+	if pair1Menus == 0 {
+		t.Fatal("must not wipe pair1 menus")
 	}
 }
 

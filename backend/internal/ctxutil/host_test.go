@@ -2,6 +2,12 @@ package ctxutil
 
 import "testing"
 
+func TestGetNilContext(t *testing.T) {
+	if Get(nil) == nil || Get(nil).TenantID != 0 {
+		t.Fatal("nil gin context must not panic")
+	}
+}
+
 func TestSubDomain(t *testing.T) {
 	cases := map[string]string{
 		"tenant.likeadmin.test": "tenant",

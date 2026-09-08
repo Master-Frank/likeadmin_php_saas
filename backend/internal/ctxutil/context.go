@@ -36,6 +36,9 @@ func Set(c *gin.Context, meta *RequestMeta) {
 }
 
 func Get(c *gin.Context) *RequestMeta {
+	if c == nil {
+		return &RequestMeta{}
+	}
 	v, ok := c.Get(key)
 	if !ok {
 		m := &RequestMeta{}

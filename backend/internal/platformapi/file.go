@@ -181,6 +181,11 @@ func UploadVideo(c *gin.Context) { uploadSave(c, 20, "uploads/video", "video") }
 func UploadFile(c *gin.Context)  { uploadSave(c, 30, "uploads/file", "file") }
 
 func uploadSave(c *gin.Context, typ int, dir, scene string) {
+	cid := filesvc.UploadCID(c)
+	if msg := filesvc.UploadCateOK(bootstrap.DB, &model.FileCate{}, cid, 0); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
 	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
 	if errMsg != "" {
 		response.Fail(c, errMsg)
@@ -188,7 +193,7 @@ func uploadSave(c *gin.Context, typ int, dir, scene string) {
 	}
 	now := util.NowUnix()
 	row := model.File{
-		Cid: filesvc.UploadCID(c), Type: typ, Name: name, URI: rel,
+		Cid: cid, Type: typ, Name: name, URI: rel,
 		Source: filesvc.SourceAdmin, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	bootstrap.DB.Create(&row)
