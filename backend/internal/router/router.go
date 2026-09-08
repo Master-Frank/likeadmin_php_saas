@@ -37,32 +37,7 @@ func New() *gin.Engine {
 		return export.Maybe(c, "export", rows)
 	}
 
-	notNeed := map[string]map[string][]string{
-		"platformapi": {
-			"login":           {"account"},
-			"config":          {"getconfig", "dict"},
-			"download":        {"export"},
-			"tools.generator": {"download"},
-		},
-		"tenantapi": {
-			"login":                          {"account"},
-			"config":                         {"getconfig", "dict"},
-			"download":                       {"export"},
-			"tools.generator":                {"download"},
-			"channel.official_account_reply": {"index"},
-		},
-		"api": {
-			"index":   {"index", "config", "policy", "decorate"},
-			"pc":      {"index", "config", "infocenter", "articledetail"},
-			"search":  {"hotlists"},
-			"login":   {"register", "account", "logout", "codeurl", "oalogin", "mnplogin", "getscancode", "scanlogin"},
-			"sms":     {"sendcode"},
-			"user":    {"resetpassword"},
-			"pay":     {"notifymnp", "notifyoa", "notifyapp", "alinotify"},
-			"wechat":  {"jsconfig"},
-			"article": {"lists", "cate", "detail"},
-		},
-	}
+	notNeed := notNeedLogin()
 
 	r.Any("/platformapi/*path", dispatch("platformapi", platformRoutes(), notNeed["platformapi"]))
 	r.Any("/tenantapi/*path", dispatch("tenantapi", tenantRoutes(), notNeed["tenantapi"]))
@@ -151,6 +126,38 @@ func dispatch(app string, routes map[string]Handler, notNeed map[string][]string
 			}
 		}
 		next()
+	}
+}
+
+// notNeedLogin mirrors PHP controller `$notNeedLogin` (lowercased). Extra
+// keys are Vue-shared or notify URLs PHP referenced but never exposed:
+// tenant tools.generator/download, api pay/notifyapp.
+func notNeedLogin() map[string]map[string][]string {
+	return map[string]map[string][]string{
+		"platformapi": {
+			"login":           {"account"},
+			"config":          {"getconfig", "dict"},
+			"download":        {"export"},
+			"tools.generator": {"download"},
+		},
+		"tenantapi": {
+			"login":                          {"account"},
+			"config":                         {"getconfig", "dict"},
+			"download":                       {"export"},
+			"tools.generator":                {"download"},
+			"channel.official_account_reply": {"index"},
+		},
+		"api": {
+			"index":   {"index", "config", "policy", "decorate"},
+			"pc":      {"index", "config", "infocenter", "articledetail"},
+			"search":  {"hotlists"},
+			"login":   {"register", "account", "logout", "codeurl", "oalogin", "mnplogin", "getscancode", "scanlogin"},
+			"sms":     {"sendcode"},
+			"user":    {"resetpassword"},
+			"pay":     {"notifymnp", "notifyoa", "notifyapp", "alinotify"},
+			"wechat":  {"jsconfig"},
+			"article": {"lists", "cate", "detail"},
+		},
 	}
 }
 
