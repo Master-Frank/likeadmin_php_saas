@@ -97,12 +97,8 @@ func Apply(opt Options) (*Result, error) {
 	imported := 0
 	salt := ""
 	if !opt.SkipSQL {
-		sqlPath := FindLikeSQL(opt.PublicDir)
-		if sqlPath == "" {
-			return nil, fmt.Errorf("创建表格失败")
-		}
-		raw, err := os.ReadFile(sqlPath)
-		if err != nil {
+		raw, err := ReadLikeSQL(opt.PublicDir)
+		if err != nil || len(raw) == 0 {
 			return nil, fmt.Errorf("创建表格失败")
 		}
 		imported, err = ImportSQL(db, string(raw), opt.Prefix, opt.Name)

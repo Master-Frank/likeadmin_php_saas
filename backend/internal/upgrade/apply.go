@@ -16,8 +16,8 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
-	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/tenantmenu"
 
 	"gorm.io/gorm"
 )
@@ -136,7 +136,7 @@ func applyExtracted(tempDir, projectDest, backendDest string, db *gorm.DB) error
 }
 
 func downFile(remote, saveDir string) (string, error) {
-	resp, err := downloadClient.Get(remote)
+	resp, err := downloadClient().Get(remote)
 	if err != nil {
 		return "", err
 	}

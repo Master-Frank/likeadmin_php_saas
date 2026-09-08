@@ -175,6 +175,9 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 	if wrap.Code != 1 || wrap.Msg != "安装成功" {
 		t.Fatalf("install http: %+v body=%s", wrap, w.Body.String())
 	}
+	if bootstrap.DB == nil {
+		t.Fatal("install should reconnect bootstrap.DB so tenant sharding can register")
+	}
 	if _, err := os.Stat(config.C.App.InstallLock); err != nil {
 		t.Fatal("lock not written")
 	}

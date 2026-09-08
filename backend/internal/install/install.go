@@ -12,6 +12,7 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -100,11 +101,16 @@ func Run(c *gin.Context) {
 	}
 	// Empty go_config_path still updates in-memory config + default config.yaml.
 	if httpx.BodyStr(c, "go_config_path") == "" {
-		_ = WriteGoConfig("", host, dbName, user, pass, port, prefix, ctxutilHost(c), res.Salt)
+		if err := WriteGoConfig("", host, dbName, user, pass, port, prefix, ctxutilHost(c), res.Salt); err != nil {
+			response.Fail(c, "写入环境配置失败："+err.Error())
+			return
+		}
 	}
-	if bootstrap.DB == nil {
-		_ = bootstrap.ReconnectDB()
+	if err := bootstrap.ReconnectDB(); err != nil {
+		response.Fail(c, "安装成功但数据库重连失败："+err.Error())
+		return
 	}
+	tenantdb.Register(bootstrap.DB)
 	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "env": res.Env})
 }
 

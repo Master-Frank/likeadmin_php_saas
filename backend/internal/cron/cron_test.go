@@ -65,6 +65,12 @@ func TestEnsureNativeJobsNilDB(t *testing.T) {
 	EnsureNativeJobs()
 }
 
+func TestClaimDueJobRequiresID(t *testing.T) {
+	if claimDueJob(model.Crontab{}, 1) {
+		t.Fatal("empty row must not claim")
+	}
+}
+
 func TestCommandRegistry(t *testing.T) {
 	names := CommandNames()
 	want := map[string]bool{

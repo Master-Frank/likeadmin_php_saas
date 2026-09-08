@@ -36,17 +36,22 @@ func TestEnsureNativeJobsInsertsOnce(t *testing.T) {
 	EnsureNativeJobs()
 	EnsureNativeJobs()
 	var n int64
-	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", "query_refund").Count(&n)
+	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", "query_refund").Count(&n)
 	if n < 1 {
 		t.Fatalf("query_refund rows=%d", n)
 	}
-	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", "cancel_unpaid_orders").Count(&n)
+	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", "cancel_unpaid_orders").Count(&n)
 	if n < 1 {
 		t.Fatalf("cancel_unpaid_orders rows=%d", n)
 	}
-	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", "verification_orders").Count(&n)
+	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", "verification_orders").Count(&n)
 	if n < 1 {
 		t.Fatalf("verification_orders rows=%d", n)
+	}
+	EnsureNativeJobs()
+	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND `system` = 1 AND delete_time IS NULL", "query_refund").Count(&n)
+	if n != 1 {
+		t.Fatalf("query_refund should dedupe to 1, rows=%d", n)
 	}
 }
 

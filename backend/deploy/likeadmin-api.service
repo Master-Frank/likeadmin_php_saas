@@ -12,6 +12,9 @@ Environment=LIKEADMIN_CONFIG=/opt/likeadmin/backend/configs/config.yaml
 Environment=LIKEADMIN_LISTEN=:8080
 # Keep PHP fallback off once pair.sh is green on this host.
 Environment=LIKEADMIN_PHP_FALLBACK=0
+# Production (debug=false) rejects unauthenticated GET /crontab. Prefer cmd/crontab.
+# Set a token only if wget-style HTTP triggers are still required:
+# Environment=LIKEADMIN_CRONTAB_TOKEN=change-me
 ExecStart=/opt/likeadmin/backend/bin/api
 Restart=on-failure
 RestartSec=3

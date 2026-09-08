@@ -1,6 +1,9 @@
 package install
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSplitSQL(t *testing.T) {
 	raw := "CREATE TABLE `la_foo` (`id` int);\nINSERT INTO `la_foo` VALUES (1);\n"
@@ -32,5 +35,15 @@ func TestQualifyInstallSQL(t *testing.T) {
 	}
 	if qualifyInstallSQL(stmt, "likeadmin", "la_") != "CREATE TABLE likeadmin.`la_foo` (`id` int)" {
 		t.Fatalf("same prefix: %s", qualifyInstallSQL(stmt, "likeadmin", "la_"))
+	}
+}
+
+func TestReadLikeSQLEmbedFallback(t *testing.T) {
+	raw, err := ReadLikeSQL(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "CREATE TABLE `la_dev_crontab`") {
+		t.Fatal("embed fallback missing like.sql")
 	}
 }
