@@ -48,7 +48,17 @@ func testAliCertPEM(t *testing.T) (string, *rsa.PrivateKey) {
 
 func phpAliCertSN(t *testing.T, pemCert string) string {
 	t.Helper()
-	cmd := exec.Command("php8.3", "-r", `$ssl=openssl_x509_parse(stream_get_contents(STDIN)); $parts=[]; foreach(array_reverse($ssl["issuer"]) as $k=>$v){$parts[]=$k."=".$v;} echo md5(implode(",",$parts).$ssl["serialNumber"]);`)
+	bin := ""
+	for _, name := range []string{"php8.3", "php8.2", "php", "php8.1"} {
+		if p, err := exec.LookPath(name); err == nil {
+			bin = p
+			break
+		}
+	}
+	if bin == "" {
+		t.Skip("php not installed")
+	}
+	cmd := exec.Command(bin, "-r", `$ssl=openssl_x509_parse(stream_get_contents(STDIN)); $parts=[]; foreach(array_reverse($ssl["issuer"]) as $k=>$v){$parts[]=$k."=".$v;} echo md5(implode(",",$parts).$ssl["serialNumber"]);`)
 	cmd.Stdin = strings.NewReader(pemCert)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

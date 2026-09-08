@@ -417,18 +417,20 @@ func generatorDownloadURL(domain, app, fileName string) string {
 }
 
 func GeneratorDownload(c *gin.Context) {
+	// PHP GenerateTableValidate sceneDownload: file.require → "下载失败"
 	if !httpx.QueryPresent(c, "file") {
 		response.Fail(c, "下载失败")
 		return
 	}
 	fileName := httpx.QueryRaw(c, "file")
+	// PHP GeneratorLogic::download checks cache before file_exists.
+	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
+		response.Fail(c, "请重新生成代码")
+		return
+	}
 	zipPath := filepath.Join(generator.RuntimeDir(), fileName)
 	if _, err := os.Stat(zipPath); err != nil {
 		response.Fail(c, "下载失败")
-		return
-	}
-	if _, ok := cache.Get("curd_file_name" + fileName); !ok {
-		response.Fail(c, "请重新生成代码")
 		return
 	}
 	cache.Del("curd_file_name" + fileName)

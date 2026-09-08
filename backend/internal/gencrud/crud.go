@@ -483,16 +483,9 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 		if !update && col.IsInsert != 1 {
 			continue
 		}
-		if _, ok := p[col.ColumnName]; !ok {
+		val, ok := columnWriteValue(c, sp, col, p)
+		if !ok {
 			continue
-		}
-		val := coerceColumnValue(col, p[col.ColumnName])
-		if isCheckboxCol(col) {
-			val = joinCheckbox(val)
-		} else if isImageCol(sp, col.ColumnName) {
-			val = filesvc.SetImageAttr(c, util.ToString(val))
-		} else if isEditorCol(col) {
-			val = filesvc.ClearContentDomains(c, util.ToString(val))
 		}
 		data[col.ColumnName] = val
 	}
@@ -510,6 +503,68 @@ func writeData(c *gin.Context, sp *spec, p map[string]any, update bool) map[stri
 	return data
 }
 
+func columnWriteValue(c *gin.Context, sp *spec, col model.GenerateColumn, p map[string]any) (any, bool) {
+	if isDatetime2Col(col) {
+		startKey, endKey := "start_"+col.ColumnName, "end_"+col.ColumnName
+		_, hasCol := p[col.ColumnName]
+		_, hasStart := p[startKey]
+		_, hasEnd := p[endKey]
+		if !hasCol && !hasStart && !hasEnd {
+			return nil, false
+		}
+		var val any
+		if hasStart || hasEnd {
+			val = joinDatetime2(col, p[startKey], p[endKey])
+		} else {
+			val = coerceColumnValue(col, p[col.ColumnName])
+		}
+		return val, true
+	}
+	if _, ok := p[col.ColumnName]; !ok {
+		return nil, false
+	}
+	val := coerceColumnValue(col, p[col.ColumnName])
+	if isCheckboxCol(col) {
+		val = joinCheckbox(val)
+	} else if isImageCol(sp, col.ColumnName) {
+		val = filesvc.SetImageAttr(c, util.ToString(val))
+	} else if isEditorCol(col) {
+		val = filesvc.ClearContentDomains(c, util.ToString(val))
+	}
+	return val, true
+}
+
+func isDatetime2Col(col model.GenerateColumn) bool {
+	return strings.EqualFold(col.ViewType, "datetime2")
+}
+
+func joinDatetime2(col model.GenerateColumn, start, end any) any {
+	s := strings.TrimSpace(util.ToString(start))
+	e := strings.TrimSpace(util.ToString(end))
+	joined := s
+	if e != "" {
+		if joined != "" {
+			joined += ","
+		}
+		joined += e
+	}
+	if col.ColumnType == "int" && !strings.Contains(joined, ",") {
+		return util.ParseDateTime(joined)
+	}
+	return joined
+}
+
+func splitDatetime2(v any) (start, end string) {
+	s := strings.TrimSpace(util.ToString(v))
+	if s == "" {
+		return "", ""
+	}
+	if i := strings.Index(s, ","); i >= 0 {
+		return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+1:])
+	}
+	return s, ""
+}
+
 func requiredMsg(sp *spec, p map[string]any, update bool) string {
 	for _, col := range sp.cols {
 		if col.IsRequired != 1 || col.IsPk == 1 {
@@ -518,6 +573,16 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 		// PHP ValidateGenerator edit scene requires every is_required column,
 		// including those with is_update=0. Add still honors is_insert.
 		if !update && col.IsInsert != 1 {
+			continue
+		}
+		if isDatetime2Col(col) {
+			if datetime2Empty(p, col.ColumnName) {
+				name := col.ColumnComment
+				if name == "" {
+					name = col.ColumnName
+				}
+				return name
+			}
 			continue
 		}
 		if _, ok := p[col.ColumnName]; !ok || isRequireEmpty(p[col.ColumnName]) {
@@ -532,6 +597,15 @@ func requiredMsg(sp *spec, p map[string]any, update bool) string {
 	return ""
 }
 
+func datetime2Empty(p map[string]any, name string) bool {
+	if _, ok := p[name]; ok && !isRequireEmpty(p[name]) {
+		return false
+	}
+	start := p["start_"+name]
+	end := p["end_"+name]
+	return isRequireEmpty(start) && isRequireEmpty(end)
+}
+
 func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
 	out := make(map[string]any, len(row)+4)
 	for k, v := range row {
@@ -543,8 +617,19 @@ func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
 				// PHP generated lists/detail return raw unix ints; Vue timeFormat()
 				// only treats length-10/13 values as timestamps.
 				out[k] = ts
+				if isDatetime2Name(sp, k) {
+					out["start_"+k] = util.FormatDateTime(ts)
+					out["end_"+k] = ""
+				}
 				continue
 			}
+		}
+		if isDatetime2Name(sp, k) {
+			start, end := splitDatetime2(v)
+			out[k] = v
+			out["start_"+k] = start
+			out["end_"+k] = end
+			continue
 		}
 		if isImageCol(sp, k) {
 			out[k] = filesvc.GetImageAttr(c, util.ToString(v))
@@ -567,7 +652,16 @@ func isTimeCol(sp *spec, name string) bool {
 		return true
 	}
 	for _, col := range sp.cols {
-		if col.ColumnName == name && col.ViewType == "datetime" {
+		if col.ColumnName == name && (col.ViewType == "datetime" || col.ViewType == "datetime2") {
+			return true
+		}
+	}
+	return false
+}
+
+func isDatetime2Name(sp *spec, name string) bool {
+	for _, col := range sp.cols {
+		if col.ColumnName == name && isDatetime2Col(col) {
 			return true
 		}
 	}

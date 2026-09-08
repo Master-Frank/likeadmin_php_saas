@@ -3,6 +3,8 @@
 
  <h1 align="center">likeadmin-SaaS（PHP）
  通用管理后台</h1>
+
+> **后端状态（2026-09-08）：** HTTP / CLI / crontab / 代码生成 / 安装向导已迁到 Go（`backend/`）。PHP `server/` 仍在仓库中，生产应走 Go，删 PHP 应用树前见 **[docs/php-to-go-status.md](docs/php-to-go-status.md)**。给 AI 的短交接：**[AGENTS.md](AGENTS.md)**。
 <h4 align="center">🚀快速开发 🏘️多租户管理 📊租户独立配置 🌍自定义域名</h4> 
 <p align="center">
 <a href="https://www.php.net/"><img src="https://img.shields.io/badge/PHP-8-8892bf"></a>

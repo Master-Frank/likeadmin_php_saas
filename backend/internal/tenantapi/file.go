@@ -213,14 +213,14 @@ func tenantUpload(c *gin.Context, typ int, dir, scene string) {
 	if !guardTenantWrite(c) {
 		return
 	}
-	cid := filesvc.UploadCID(c)
-	if msg := filesvc.UploadCateOK(tdb(c), &model.TenantFileCate{}, cid, tenantDB(c)); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
 	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
 	if errMsg != "" {
 		response.Fail(c, errMsg)
+		return
+	}
+	cid := filesvc.UploadCID(c)
+	if msg := filesvc.UploadCateOK(tdb(c), &model.TenantFileCate{}, cid, tenantDB(c)); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()

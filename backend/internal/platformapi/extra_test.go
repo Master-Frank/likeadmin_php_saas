@@ -55,7 +55,7 @@ func TestCrontabWriteCheck(t *testing.T) {
 	}
 }
 
-func TestCrontabExpressionInvalidUsesDataEnvelope(t *testing.T) {
+func TestCrontabExpressionInvalidMatchesValidate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -65,12 +65,8 @@ func TestCrontabExpressionInvalidUsesDataEnvelope(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Code != response.CodeOK || body.Msg != "" {
-		t.Fatalf("PHP data() envelope, got code=%d msg=%q body=%s", body.Code, body.Msg, w.Body.String())
-	}
-	s, _ := body.Data.(string)
-	if s == "" {
-		t.Fatalf("data should be error string, got %#v", body.Data)
+	if body.Code != 0 || body.Msg != "定时任务运行规则错误" {
+		t.Fatalf("PHP CrontabValidate checkExpression Fail(), got code=%d msg=%q body=%s", body.Code, body.Msg, w.Body.String())
 	}
 }
 

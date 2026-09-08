@@ -73,7 +73,7 @@ export function createRequest(opt?: Partial<FetchOptions>) {
                         userStore.logout()
                         return Promise.reject(data)
                     case RequestCodeEnum.NOT_INSTALL:
-                        window.location.replace('/install/install.php')
+                        window.location.replace('/install')
                         break
                     default:
                         return data

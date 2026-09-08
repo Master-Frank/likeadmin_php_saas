@@ -339,10 +339,15 @@ func CrontabExpression(c *gin.Context) {
 		return
 	}
 	expr := util.ToString(q["expression"])
+	// PHP CrontabValidate::sceneExpression runs checkExpression first and
+	// Fail()s with this message; Logic::expression's data() envelope is only
+	// reached for expressions the validator already accepted.
+	if !biz.ValidCron(expr) {
+		response.Fail(c, "定时任务运行规则错误")
+		return
+	}
 	lists, err := biz.CronExpressionLists(expr)
 	if err != nil {
-		// PHP CrontabLogic::expression returns the exception string;
-		// controller wraps it with data() → code=1, msg="", data=string.
 		response.Data(c, err.Error())
 		return
 	}

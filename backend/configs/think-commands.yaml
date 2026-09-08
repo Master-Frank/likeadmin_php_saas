@@ -1,0 +1,13 @@
+# Optional extra think / crontab commands for warehouse jobs that are not
+# compiled into the Go binary. Commands listed here are dispatched by name
+# from la_dev_crontab.command.
+#
+# Never exec PHP: program must be an absolute path to a non-php binary.
+# Prefer cron.Register in Go for first-party jobs.
+#
+# commands:
+#   warehouse_sync:
+#     description: Sync warehouse stock
+#     program: /usr/local/bin/warehouse-sync
+#     args: ["--once"]
+commands: {}

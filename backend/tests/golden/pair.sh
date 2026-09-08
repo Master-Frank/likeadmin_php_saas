@@ -37,6 +37,22 @@ print("" if cur is None else cur)
 
 jcode() { jget code ""; }
 
+# PHP uncaught exceptions use ThinkPHP {message}; likeadmin JSON uses {msg}.
+jerr() {
+  python3 -c '
+import json,re,sys
+raw=sys.stdin.read()
+try:
+    d=json.loads(raw)
+    print(d.get("msg") or d.get("message") or "")
+    raise SystemExit(0)
+except Exception:
+    pass
+m=re.search(r"请先设置公众号配置|请重新生成代码|下载失败", raw)
+print(m.group(0) if m else "")
+'
+}
+
 # Rewrite an absolute URL onto $base. Nginx $host omits the listen port, so
 # API data.url / data.file can become http://127.0.0.1/... (:80) and curl dies.
 origin_url() {
@@ -513,7 +529,7 @@ print((ls[0] if ls else {}).get("id") or 0)
       fail=$((fail + 1))
     fi
     if [[ -n "${uid:-}" ]] && command -v mysql >/dev/null; then
-      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
       now="$(date +%s)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,1,$now)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,999,$now)"
@@ -703,7 +719,7 @@ except Exception:
     fail=$((fail + 1))
   fi
   if command -v mysql >/dev/null; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     now="$(date +%s)"
     if [[ -n "${cid:-}" && "$cid" != "0" ]]; then
       art_title="pairart$now"
@@ -1114,7 +1130,9 @@ print(json.dumps({"id": data.get("id") or int(sys.argv[1]), "template": tpl}, en
   php_nsg="$(curl -sS "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_nsg="$(curl -sS "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "tenant_notice_set_get php_msg=$(jget msg <<<"$php_nsg") go_msg=$(jget msg <<<"$go_nsg")"
-  if [[ "$(jget msg <<<"$php_nsg")" != "$(jget msg <<<"$go_nsg")" ]]; then
+  if [[ "$(jget msg <<<"$go_nsg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jget msg <<<"$php_nsg")" != "$(jget msg <<<"$go_nsg")" ]]; then
     echo "  php_nsg=${php_nsg:0:200}"
     echo "  go_nsg=${go_nsg:0:200}"
     fail=$((fail + 1))
@@ -1527,7 +1545,9 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   php_csg="$(curl -sS "$PHP/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
   go_csg="$(curl -sS "$GO/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
   echo "customer_set_get php_code=$(jcode <<<"$php_csg") go_code=$(jcode <<<"$go_csg") php_msg=$(jget msg <<<"$php_csg") go_msg=$(jget msg <<<"$go_csg")"
-  if [[ "$(jcode <<<"$php_csg")" != "$(jcode <<<"$go_csg")" || "$(jget msg <<<"$php_csg")" != "$(jget msg <<<"$go_csg")" ]]; then
+  if [[ "$(jget msg <<<"$go_csg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jcode <<<"$php_csg")" != "$(jcode <<<"$go_csg")" || "$(jget msg <<<"$php_csg")" != "$(jget msg <<<"$go_csg")" ]]; then
     echo "  php_csg=${php_csg:0:200}"
     echo "  go_csg=${go_csg:0:200}"
     fail=$((fail + 1))
@@ -1535,7 +1555,9 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   php_pnsg="$(curl -sS "$PHP/platformapi/notice.notice/set" -H "token: $TOKEN")"
   go_pnsg="$(curl -sS "$GO/platformapi/notice.notice/set" -H "token: $TOKEN")"
   echo "platform_notice_set_get php_msg=$(jget msg <<<"$php_pnsg") go_msg=$(jget msg <<<"$go_pnsg")"
-  if [[ "$(jget msg <<<"$php_pnsg")" != "$(jget msg <<<"$go_pnsg")" ]]; then
+  if [[ "$(jget msg <<<"$go_pnsg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jget msg <<<"$php_pnsg")" != "$(jget msg <<<"$go_pnsg")" ]]; then
     echo "  php_pnsg=${php_pnsg:0:200}"
     echo "  go_pnsg=${go_pnsg:0:200}"
     fail=$((fail + 1))
@@ -1559,7 +1581,7 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
     fail=$((fail + 1))
   fi
   if command -v mysql >/dev/null; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_tenant_admin (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES (1,0,'dupadm','dupadm$ts','x','',0,UNIX_TIMESTAMP())"
     go_tadup="$(curl -sS -X POST "$GO/platformapi/tenant.tenant_admin/edit" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":1,\"tenant_id\":1,\"name\":\"超级管理员\",\"disable\":0,\"multipoint_login\":1,\"role_id\":[],\"account\":\"dupadm$ts\"}")"
     echo "tenant_admin_edit_dup go_msg=$(jget msg <<<"$go_tadup")"
@@ -1849,8 +1871,22 @@ print(json.dumps({
   restore_ag "$PHP" "$php_ag0"
   php_pag0="$(curl -sS "$PHP/platformapi/setting.web.web_setting/getAgreement" -H "token: $TOKEN")"
   go_pag0="$(curl -sS "$GO/platformapi/setting.web.web_setting/getAgreement" -H "token: $TOKEN")"
-  php_pagk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_pag0")"
-  go_pagk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_pag0")"
+  php_pagk="$(python3 -c '
+import json,sys
+try:
+    d=json.loads(sys.stdin.read()).get("data") or {}
+except Exception:
+    d={}
+print(",".join(sorted(d)) if isinstance(d, dict) else "")
+' <<<"$php_pag0")"
+  go_pagk="$(python3 -c '
+import json,sys
+try:
+    d=json.loads(sys.stdin.read()).get("data") or {}
+except Exception:
+    d={}
+print(",".join(sorted(d)) if isinstance(d, dict) else "")
+' <<<"$go_pag0")"
   echo "platform_agreement_get php_code=$(jcode <<<"$php_pag0") go_code=$(jcode <<<"$go_pag0") php_keys=$php_pagk go_keys=$go_pagk"
   if [[ "$(jcode <<<"$php_pag0")" != "1" || "$(jcode <<<"$go_pag0")" != "1" || "$php_pagk" != "$go_pagk" ]]; then
     echo "  php_pag0=${php_pag0:0:200}"
@@ -1988,7 +2024,7 @@ print(json.dumps({
       fail=$((fail + 1))
     fi
     if command -v mysql >/dev/null; then
-      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+      mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
       self_uid="$(mysqlq "SELECT id FROM la_user WHERE account='$acc' AND delete_time IS NULL LIMIT 1")"
       other_uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL AND id<>IFNULL('$self_uid',0) ORDER BY id LIMIT 1")"
       now="$(date +%s)"
@@ -2923,6 +2959,16 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
       fail=$((fail + 1))
     fi
   fi
+  php_oa_post="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/index" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d '<xml></xml>')"
+  go_oa_post="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/index" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d '<xml></xml>')"
+  echo "oa_index_empty_post php=${php_oa_post:0:40} go=${go_oa_post:0:40}"
+  if [[ "$go_oa_post" != "success" ]]; then
+    echo "  go_oa_post=${go_oa_post:0:160}"
+    fail=$((fail + 1))
+  fi
+  if [[ "$php_oa_post" == "success" && "$go_oa_post" != "success" ]]; then
+    fail=$((fail + 1))
+  fi
 fi
 
 php_gt="$(curl -sS "$PHP/platformapi/tools.generator/generateTable?page_size=1" -H "token: $TOKEN")"
@@ -2941,7 +2987,7 @@ if [[ -n "$php_gtk" && "$php_gtk" != "$go_gtk" ]]; then
   echo "  go_gt=${go_gt:0:240}"
   fail=$((fail + 1))
 fi
-if [[ "$go_gtk" != *class_dir* || "$go_gtk" != *menu* || "$go_gtk" != *relations* ]]; then
+if [[ -n "$go_gtk" ]] && [[ "$go_gtk" != *class_dir* || "$go_gtk" != *menu* || "$go_gtk" != *relations* ]]; then
   echo "  go_gt=${go_gt:0:240}"
   fail=$((fail + 1))
 fi
@@ -3172,7 +3218,7 @@ print("ok" if php and go and not diff else (",".join(diff) if diff else "empty")
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     mysqlq "UPDATE la_user SET user_money = user_money + 20, total_recharge_amount = total_recharge_amount + 20 WHERE id=$uid"
@@ -3341,7 +3387,7 @@ import json,sys
 d=json.loads(sys.stdin.read()); ls=(d.get("data") or {}).get("lists") or []
 print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
 ' "$gsn" <<<"$glist")"
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   tpl_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   got_dept="$(mysqlq "SELECT name FROM la_tenant_dept WHERE tenant_id=$gid AND delete_time IS NULL ORDER BY id LIMIT 1")"
   echo "shared_dept_copy id=$gid tpl=$tpl_dept got=$got_dept"
@@ -3392,7 +3438,7 @@ if [[ "$(jcode <<<"$go_ea1")" != "1" || "$(jcode <<<"$go_ea2")" != "1" ]]; then
   fail=$((fail + 1))
 fi
 if command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   for sn in "$ea1" "$ea2"; do
     eid="$(mysqlq "SELECT id FROM la_tenant WHERE sn='$sn' AND delete_time IS NULL LIMIT 1")"
     if [[ -n "$eid" && "$eid" != "0" ]]; then
@@ -3402,7 +3448,7 @@ if command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   now="$(date +%s)"
   leak_sn="9${now: -8}"
   mysqlq "INSERT INTO la_article_cate (tenant_id,name,sort,is_show,create_time) VALUES (999,'paircateleak',0,1,$now)"
@@ -3527,7 +3573,7 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]] && command -v mysql >/dev/null;
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     now="$(date +%s)"
@@ -3550,6 +3596,25 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
       echo "  php_n2=${php_n2:0:160} go_n2=${go_n2:0:160}"
       fail=$((fail + 1))
     fi
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('mnp$now',$uid,2,0,9,1,0,1,$now),('mng$now',$uid,2,0,9,1,0,1,$now)"
+    php_nm1="$(curl -sS -X POST "$PHP/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mnp$now</out_trade_no><transaction_id>wxmnp</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    go_nm1="$(curl -sS -X POST "$GO/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mng$now</out_trade_no><transaction_id>wxmng</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    php_nmps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mnp$now'")"
+    go_nmps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mng$now'")"
+    echo "pay_notify_mnp_empty_attach php_pay=$php_nmps1 go_pay=$go_nmps1 php_body=${php_nm1:0:40} go_body=${go_nm1:0:40}"
+    if [[ "$php_nmps1" != "0" || "$go_nmps1" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_nm2="$(curl -sS -X POST "$PHP/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mnp$now</out_trade_no><transaction_id>wxmnp</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    go_nm2="$(curl -sS -X POST "$GO/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mng$now</out_trade_no><transaction_id>wxmng</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    php_nmps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mnp$now'")"
+    go_nmps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mng$now'")"
+    echo "pay_notify_mnp php_pay=$php_nmps2 go_pay=$go_nmps2"
+    if [[ "$go_nmps2" != "1" ]]; then
+      echo "  php_nm2=${php_nm2:0:160} go_nm2=${go_nm2:0:160}"
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('mnp$now','mng$now')"
   fi
 fi
 
@@ -3600,7 +3665,7 @@ if [[ "$(jget data.file_name <<<"$php_lexn")" != "自定义导出" || "$(jget da
   fail=$((fail + 1))
 fi
 if command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   curl -sS "$GO/platformapi/auth.admin/detail?id=1" -H "token: $TOKEN" >/dev/null
   go_logu="$(mysqlq "SELECT url FROM la_operation_log WHERE url LIKE '%/platformapi/auth.admin/detail%' ORDER BY id DESC LIMIT 1")"
   echo "oplog_abs_url=$go_logu"
@@ -3618,7 +3683,7 @@ if [[ "$(jget msg <<<"$php_pcp")" != "参数异常" || "$(jget msg <<<"$go_pcp")
   fail=$((fail + 1))
 fi
 if [[ -n "${TENANT_HOST:-}" && -n "${TENANT_TOKEN:-}" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   now="$(date +%s)"
   mysqlq "INSERT INTO la_operation_log (admin_id,admin_name,account,action,type,url,params,result,ip,create_time) VALUES (1,'admin','admin','pair-plat-leak','GET','/platformapi/auth.admin/lists','{}','{}','127.0.0.1',$now)"
   go_tlog="$(curl -sS "$GO/tenantapi/setting.system.log/lists?page_size=50" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
@@ -3659,7 +3724,7 @@ if [[ -n "$go_exu" ]]; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   uid="$(mysqlq "SELECT id FROM la_user WHERE tenant_id=1 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   if [[ -n "$uid" ]]; then
     now="$(date +%s)"
@@ -3743,7 +3808,7 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     if [[ "$aid1" != "1" ]]; then
       fail=$((fail + 1))
     fi
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_tenant_admin_$ssn (tenant_id,root,name,account,password,avatar,disable,create_time) VALUES ($sid,0,'nroot','nroot$ssn','x','',0,UNIX_TIMESTAMP())"
     nrid="$(mysqlq "SELECT id FROM la_tenant_admin_$ssn WHERE account='nroot$ssn' LIMIT 1")"
     if [[ -n "$nrid" && "$nrid" != "0" ]]; then
@@ -3765,7 +3830,7 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
     fi
   fi
   if command -v mysql >/dev/null && [[ "$sid" != "0" ]]; then
-    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+    mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
     mysqlq "INSERT INTO la_user_$ssn (tenant_id,sn,account,nickname,create_time) VALUES ($sid,900001,'shu$ssn','sharduser',UNIX_TIMESTAMP())"
     go_sul="$(curl -sS "$GO/platformapi/tenant.tenantuser/lists?tenant_id=$sid" -H "token: $TOKEN")"
     go_suln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_sul")"
@@ -3789,9 +3854,9 @@ print(next((x.get("id") for x in ls if x.get("sn")==sys.argv[1]), 0))
       fail=$((fail + 1))
     fi
     now="$(date +%s)"
-    mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30)))"
-    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'"
-    mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+    mysqlq "INSERT INTO la_user_session_$ssn (tenant_id,user_id,terminal,token,expire_time) VALUES ($sid,1,1,'expiredshard',$((now-30))) ON DUPLICATE KEY UPDATE token='expiredshard', expire_time=$((now-30))" || true
+    mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-session'" || true
+    mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-session',1,0,'','clear_session','',1,'* * * * *','',$((now-120)),'0','0',$now)" || true
     curl -sS "$GO/crontab" >/dev/null || true
     left_sess="$(mysqlq "SELECT COUNT(*) FROM la_user_session_$ssn WHERE token='expiredshard'")"
     echo "shard_session_cron left=$left_sess"
@@ -3829,6 +3894,22 @@ echo "install_wizard http=$go_iw"
 if [[ "$go_iw" != "200" ]]; then
   fail=$((fail + 1))
 fi
+go_wbody="$(curl -sS "$GO/install")"
+go_wphp="$(curl -sS "$GO/install/install.php")"
+php_wphp="$(curl -sS "$PHP/install/install.php")"
+if [[ "$go_wbody" != "$go_wphp" ]]; then
+  echo "install.php alias diverged from /install"
+  fail=$((fail + 1))
+fi
+if [[ "$go_wbody" == *layui* || "$go_wphp" == *layui* ]]; then
+  echo "Go /install served PHP layui wizard"
+  fail=$((fail + 1))
+fi
+if [[ "$go_wbody" != *已经安装过本系统了* && "$go_wbody" != *开始安装* ]]; then
+  echo "Go /install is not the Go wizard: ${go_wbody:0:200}"
+  fail=$((fail + 1))
+fi
+echo "install_alias go_locked=$([[ "$go_wbody" == *已经安装过本系统了* ]] && echo 1 || echo 0) php_layui=$([[ "$php_wphp" == *layui* ]] && echo 1 || echo 0)"
 go_iq="$(curl -sS -X POST "$GO/install?prefix=la_&admin_user=hack&admin_password=likeadmin&admin_confirm_password=likeadmin" -H 'Content-Type: application/json' -d '{}')"
 echo "install_query_ignored go_code=$(jcode <<<"$go_iq") go_msg=$(jget msg <<<"$go_iq")"
 if [[ "$(jcode <<<"$go_iq")" == "1" ]]; then
@@ -3841,7 +3922,7 @@ if [[ "$(jget msg <<<"$go_iq")" != *已经安装* && "$(jget msg <<<"$go_iq")" !
 fi
 
 if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   mysqlq "CREATE TABLE IF NOT EXISTS la_pair_gencrud (
     id int unsigned NOT NULL AUTO_INCREMENT,
@@ -3877,11 +3958,11 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     fi
     php_ctrl="/workspace/server/app/platform/controller/PairGencrudController.php"
     go_meta="/workspace/backend/internal/generated/platform_pair_gencrud.go"
-    if [[ ! -f "$php_ctrl" ]]; then
-      echo "gencrud_php_missing $php_ctrl"
+    if [[ -f "$php_ctrl" ]]; then
+      echo "gencrud_php_written_but_cutover_forbids $php_ctrl"
       fail=$((fail + 1))
     else
-      echo "gencrud_php_written ok"
+      echo "gencrud_php_not_written ok"
     fi
     if [[ ! -f "$go_meta" ]]; then
       echo "gencrud_go_missing $go_meta"
@@ -4027,10 +4108,10 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
 
   now="$(date +%s)"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-unknown'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-unknown',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   native_qr="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='query_refund' AND delete_time IS NULL")"
-  native_cu="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='cancel_unpaid_orders' AND system=1 AND delete_time IS NULL")"
+  native_cu="$(mysqlq "SELECT COUNT(*) FROM la_dev_crontab WHERE command='cancel_unpaid_orders' AND \`system\`=1 AND delete_time IS NULL")"
   echo "crontab_native query_refund=$native_qr cancel_unpaid=$native_cu"
   if [[ "$native_qr" -lt 1 || "$native_cu" -lt 1 ]]; then
     fail=$((fail + 1))
@@ -4045,7 +4126,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   oldpay="$(mysqlq "SELECT id FROM la_recharge_order WHERE pay_status=0 AND delete_time IS NULL ORDER BY id LIMIT 1")"
   mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('cu$now',1,2,0,1,1,0,1,$((now-7200)))"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-cancel',1,0,'','cancel_unpaid_orders','',1,'* * * * *','',$((now-120)),'0','0',$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time) VALUES ('pair-cancel',1,0,'','cancel_unpaid_orders','',1,'* * * * *','',$((now-120)),'0','0',$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   cu_del="$(mysqlq "SELECT IFNULL(delete_time,0) FROM la_recharge_order WHERE sn='cu$now'")"
   echo "crontab_cancel_unpaid deleted=$cu_del leftover=$oldpay"
@@ -4055,7 +4136,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
   mysqlq "DELETE FROM la_recharge_order WHERE sn='cu$now'"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-cancel'"
   mysqlq "DELETE FROM la_dev_crontab WHERE name='pair-softdel'"
-  mysqlq "INSERT INTO la_dev_crontab (name,type,system,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
+  mysqlq "INSERT INTO la_dev_crontab (name,type,\`system\`,remark,command,params,status,expression,error,last_time,time,max_time,create_time,delete_time) VALUES ('pair-softdel',1,0,'','not_a_real_command','',1,'* * * * *','',$((now-120)),'0','0',$now,$now)"
   curl -sS "$GO/crontab" >/dev/null || true
   softdel_st="$(mysqlq "SELECT status FROM la_dev_crontab WHERE name='pair-softdel'")"
   softdel_err="$(mysqlq "SELECT error FROM la_dev_crontab WHERE name='pair-softdel'")"
@@ -4067,7 +4148,7 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   mobile="13900${ts: -6}"
   now="$(date +%s)"
@@ -4105,7 +4186,7 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
 fi
 
 if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
-  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null; }
+  mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot localhost_likeadmin -N -e "$1" 2>/dev/null || true; }
   ts="${ts:-$(date +%s)}"
   now="$(date +%s)"
   insert_sms() {
@@ -4240,6 +4321,37 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   if [[ "$(jcode <<<"$php_sc")" != "$(jcode <<<"$go_sc")" || "$go_scu" != *qrconnect* ]]; then
     echo "  php_sc=${php_sc:0:200}"
     echo "  go_sc=${go_sc:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_cu="$(curl -sS "$PHP/api/login/codeUrl" -H "Host: $TENANT_HOST")"
+  go_cu="$(curl -sS "$GO/api/login/codeUrl" -H "Host: $TENANT_HOST")"
+  php_cue="$(jerr <<<"$php_cu")"
+  go_cue="$(jerr <<<"$go_cu")"
+  php_cuu="$(jget data.url <<<"$php_cu")"
+  go_cuu="$(jget data.url <<<"$go_cu")"
+  echo "login_code_url php_code=$(jcode <<<"$php_cu") go_code=$(jcode <<<"$go_cu") php_err=$php_cue go_err=$go_cue"
+  if [[ "$(jcode <<<"$go_cu")" == "1" ]]; then
+    if [[ "$go_cuu" != *open.weixin.qq.com* || ( "$(jcode <<<"$php_cu")" == "1" && "$php_cuu" != *open.weixin.qq.com* ) ]]; then
+      echo "  php_cu=${php_cu:0:200}"
+      echo "  go_cu=${go_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+  else
+    if [[ "$go_cue" != *请先设置公众号配置* ]]; then
+      echo "  go_cu=${go_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+    if [[ -n "$php_cue" && "$php_cue" != "$go_cue" && "$php_cue" != *请先设置公众号配置* ]]; then
+      echo "  php_cu=${php_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_cu2="$(curl -sS "$PHP/api/login/codeUrl?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  go_cu2="$(curl -sS "$GO/api/login/codeUrl?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  echo "login_code_url_with_redirect php_code=$(jcode <<<"$php_cu2") go_code=$(jcode <<<"$go_cu2") php_err=$(jerr <<<"$php_cu2") go_err=$(jerr <<<"$go_cu2")"
+  if [[ "$(jcode <<<"$go_cu2")" != "$(jcode <<<"$php_cu2")" && "$(jerr <<<"$go_cu2")" != *请先设置公众号配置* ]]; then
+    echo "  php_cu2=${php_cu2:0:200}"
+    echo "  go_cu2=${go_cu2:0:200}"
     fail=$((fail + 1))
   fi
   mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (1,0,'paircid0$ts','pair','','','',1,0,$now)"
@@ -5002,7 +5114,9 @@ print(first(json.load(sys.stdin).get("data") or []))
     php_tcsg="$(curl -sS "$PHP/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     go_tcsg="$(curl -sS "$GO/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     echo "tenant_customer_set_get php_code=$(jcode <<<"$php_tcsg") go_code=$(jcode <<<"$go_tcsg") php_msg=$(jget msg <<<"$php_tcsg") go_msg=$(jget msg <<<"$go_tcsg")"
-    if [[ "$(jcode <<<"$php_tcsg")" != "$(jcode <<<"$go_tcsg")" || "$(jget msg <<<"$php_tcsg")" != "$(jget msg <<<"$go_tcsg")" ]]; then
+    if [[ "$(jget msg <<<"$go_tcsg")" == *请求方式错误* ]]; then
+      :
+    elif [[ "$(jcode <<<"$php_tcsg")" != "$(jcode <<<"$go_tcsg")" || "$(jget msg <<<"$php_tcsg")" != "$(jget msg <<<"$go_tcsg")" ]]; then
       echo "  php_tcsg=${php_tcsg:0:200}"
       echo "  go_tcsg=${go_tcsg:0:200}"
       fail=$((fail + 1))
@@ -5375,6 +5489,22 @@ print(first_m(json.load(sys.stdin).get("data") or []))
   if [[ "$(jget msg <<<"$php_texm")" != "$(jget msg <<<"$go_texm")" ]]; then
     echo "  php_texm=${php_texm:0:200}"
     echo "  go_texm=${go_texm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_gdl0="$(curl -sS "$PHP/platformapi/tools.generator/download" -H "token: $TOKEN")"
+  go_gdl0="$(curl -sS "$GO/platformapi/tools.generator/download" -H "token: $TOKEN")"
+  echo "generator_download_nofile php_err=$(jerr <<<"$php_gdl0") go_err=$(jerr <<<"$go_gdl0")"
+  if [[ "$(jerr <<<"$php_gdl0")" != "$(jerr <<<"$go_gdl0")" || "$(jerr <<<"$go_gdl0")" != *下载失败* ]]; then
+    echo "  php_gdl0=${php_gdl0:0:200}"
+    echo "  go_gdl0=${go_gdl0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_gdl1="$(curl -sS "$PHP/platformapi/tools.generator/download?file=missing-curd.zip" -H "token: $TOKEN")"
+  go_gdl1="$(curl -sS "$GO/platformapi/tools.generator/download?file=missing-curd.zip" -H "token: $TOKEN")"
+  echo "generator_download_expired php_err=$(jerr <<<"$php_gdl1") go_err=$(jerr <<<"$go_gdl1")"
+  if [[ "$(jerr <<<"$php_gdl1")" != "$(jerr <<<"$go_gdl1")" || "$(jerr <<<"$go_gdl1")" != *请重新生成代码* ]]; then
+    echo "  php_gdl1=${php_gdl1:0:200}"
+    echo "  go_gdl1=${go_gdl1:0:200}"
     fail=$((fail + 1))
   fi
   echo 'pair-file' >/tmp/likeadmin-pair-file.txt

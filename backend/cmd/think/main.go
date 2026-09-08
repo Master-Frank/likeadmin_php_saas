@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/cron"
-	_ "likeadmin/backend/internal/router"
+	"likeadmin/backend/internal/router"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/upgrade"
 )
@@ -34,6 +35,20 @@ func main() {
 		os.Args = []string{os.Args[0], "list"}
 	} else if os.Args[1] == "-h" || os.Args[1] == "--help" {
 		os.Args[1] = "help"
+	}
+	if os.Args[1] == "run" {
+		listen := cron.ParseRunArgs(os.Args[2:])
+		if listen.Root != "" {
+			config.C.App.PublicDir = listen.Root
+		}
+		fmt.Printf("ThinkPHP Development server is started On <http://%s:%s/>\n", listen.Host, listen.Port)
+		fmt.Println("You can exit with `CTRL-C`")
+		fmt.Printf("Document root is: %s\n", config.C.App.PublicDir)
+		if err := router.New().Run(listen.Addr()); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 	if os.Args[1] == "upgrade-local" {
 		if len(os.Args) < 3 {

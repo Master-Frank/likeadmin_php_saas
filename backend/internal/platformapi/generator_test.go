@@ -178,6 +178,49 @@ func TestGeneratorDownloadRejectsCacheMiss(t *testing.T) {
 	}
 }
 
+func TestGeneratorDownloadMissingFileFollowsPHP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download", nil)
+	GeneratorDownload(c)
+	var wrap response.Body
+	if err := json.Unmarshal(w.Body.Bytes(), &wrap); err != nil {
+		t.Fatalf("json %s: %v", w.Body.String(), err)
+	}
+	if wrap.Msg != "下载失败" {
+		t.Fatalf("missing file param %+v", wrap)
+	}
+
+	gone := "curd-gone-990023.zip"
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download?file="+gone, nil)
+	GeneratorDownload(c2)
+	var wrap2 response.Body
+	if err := json.Unmarshal(w2.Body.Bytes(), &wrap2); err != nil {
+		t.Fatalf("json2 %s: %v", w2.Body.String(), err)
+	}
+	if wrap2.Msg != "请重新生成代码" {
+		t.Fatalf("cache-miss missing file %+v", wrap2)
+	}
+
+	cache.Set("curd_file_name"+gone, gone, time.Hour)
+	t.Cleanup(func() { cache.Del("curd_file_name" + gone) })
+	w3 := httptest.NewRecorder()
+	c3, _ := gin.CreateTestContext(w3)
+	c3.Request = httptest.NewRequest(http.MethodGet, "/platformapi/tools.generator/download?file="+gone, nil)
+	GeneratorDownload(c3)
+	var wrap3 response.Body
+	if err := json.Unmarshal(w3.Body.Bytes(), &wrap3); err != nil {
+		t.Fatalf("json3 %s: %v", w3.Body.String(), err)
+	}
+	if wrap3.Msg != "下载失败" {
+		t.Fatalf("cache-hit missing file %+v", wrap3)
+	}
+}
+
 func TestGeneratorDownloadURL(t *testing.T) {
 	got := generatorDownloadURL("http://pair1.likeadmin.test", "platformapi", "curd-20260101120000.zip")
 	want := "http://pair1.likeadmin.test/platformapi/tools.generator/download?file=curd-20260101120000.zip"

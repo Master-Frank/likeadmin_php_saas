@@ -51,6 +51,64 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "开始安装") {
 		t.Fatalf("expected form: %s", w.Body.String())
 	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/install/install.php", nil)
+	Wizard(c2)
+	if !strings.Contains(w2.Body.String(), "开始安装") {
+		t.Fatalf("php alias should serve the Go wizard: %s", w2.Body.String())
+	}
+}
+
+func TestNewEnvInstallEntrypointsSkipPHPWizard(t *testing.T) {
+	idx, err := os.ReadFile("/workspace/server/public/index.php")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(idx)
+	if strings.Contains(s, "location:/install/install.php") {
+		t.Fatal("index.php must not send a fresh install to the PHP wizard")
+	}
+	if !strings.Contains(s, "location:/install") {
+		t.Fatal("index.php should redirect an uninstalled app to /install")
+	}
+
+	for _, rel := range []string{
+		"platform/src/utils/request/index.ts",
+		"tenant/src/utils/request/index.ts",
+		"pc/utils/http/index.ts",
+	} {
+		b, err := os.ReadFile("/workspace/" + rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		txt := string(b)
+		if strings.Contains(txt, "/install/install.php") {
+			t.Fatalf("%s still jumps to PHP install.php", rel)
+		}
+		if !strings.Contains(txt, "replace('/install')") && !strings.Contains(txt, `replace("/install")`) {
+			t.Fatalf("%s should jump to /install: %s", rel, txt)
+		}
+	}
+
+	for _, conf := range []string{
+		"/workspace/backend/deploy/nginx.production.conf",
+		"/workspace/backend/deploy/nginx.prod.conf",
+		"/workspace/backend/deploy/nginx-strangler.conf",
+	} {
+		b, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		txt := string(b)
+		if !strings.Contains(txt, "location /install") {
+			t.Fatalf("%s missing location /install", conf)
+		}
+		if !strings.Contains(txt, "proxy_pass") {
+			t.Fatalf("%s should proxy /install to Go", conf)
+		}
+	}
 }
 
 func TestInstallHTTPFreshDatabase(t *testing.T) {

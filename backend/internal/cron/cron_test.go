@@ -33,6 +33,9 @@ func TestNormalizeCommand(t *testing.T) {
 	if normalizeCommand("route:list") != "route:list" {
 		t.Fatal(normalizeCommand("route:list"))
 	}
+	if normalizeCommand("verification_orders") != "verification_orders" {
+		t.Fatal(normalizeCommand("verification_orders"))
+	}
 }
 
 func TestRunCommandUnknown(t *testing.T) {
@@ -67,7 +70,7 @@ func TestCommandRegistry(t *testing.T) {
 	want := map[string]bool{
 		"cache": true, "clear": true, "session": true, "query_refund": true,
 		"cancel_unpaid_orders": true, "version": true, "optimize:schema": true,
-		"help": true, "list": true,
+		"help": true, "list": true, "verification_orders": true,
 	}
 	for _, n := range names {
 		delete(want, n)
