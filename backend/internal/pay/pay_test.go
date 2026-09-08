@@ -193,6 +193,31 @@ func TestDebugPayOverride(t *testing.T) {
 	}
 }
 
+func TestYuanToFenMatchesPHP(t *testing.T) {
+	// PHP: 19.9*100 intval=1989; intval(strval)=1990 (H5 mwebPay).
+	if got := yuanToFenIntval(19.9); got != 1989 {
+		t.Fatalf("intval 19.9 => %d", got)
+	}
+	if got := yuanToFenStrval(19.9); got != 1990 {
+		t.Fatalf("strval 19.9 => %d", got)
+	}
+	if got := yuanToFenIntval(1.15); got != 114 {
+		t.Fatalf("intval 1.15 => %d", got)
+	}
+	if got := yuanToFenStrval(1.15); got != 115 {
+		t.Fatalf("strval 1.15 => %d", got)
+	}
+	if got := yuanToFen(19.9, wechat.TerminalPC); got != 1989 {
+		t.Fatalf("native 19.9 => %d", got)
+	}
+	if got := yuanToFen(19.9, wechat.TerminalH5); got != 1990 {
+		t.Fatalf("h5 19.9 => %d", got)
+	}
+	if got := yuanToFenIntval(100); got != 10000 {
+		t.Fatalf("100 => %d", got)
+	}
+}
+
 func TestWechatPayPath(t *testing.T) {
 	cases := map[int]string{
 		wechat.TerminalMNP:     "/v3/pay/transactions/jsapi",

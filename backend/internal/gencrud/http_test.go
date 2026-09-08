@@ -186,6 +186,12 @@ func TestGencrudHTTPRuntimeCRUD(t *testing.T) {
 	if row["body"] != `<p><img src="http://pair1.likeadmin.test/uploads/ed.png"></p>` {
 		t.Fatalf("lists body %v", row["body"])
 	}
+	if _, isStr := row["create_time"].(string); isStr {
+		t.Fatalf("create_time must stay unix int for Vue timeFormat, got %T %v", row["create_time"], row["create_time"])
+	}
+	if util.ToInt64(row["create_time"]) <= 0 {
+		t.Fatalf("create_time %v", row["create_time"])
+	}
 
 	c, w = gencrudCtx(http.MethodGet, "detail", "/platformapi/go_gencrud_rt/detail?id="+strconv.FormatUint(uint64(id), 10), nil)
 	Handle(c)

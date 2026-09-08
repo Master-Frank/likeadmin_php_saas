@@ -3,6 +3,7 @@ package gencrud
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/ctxutil"
@@ -185,6 +186,62 @@ func TestWriteDataFileAndCheckbox(t *testing.T) {
 	}
 	if data["body"] != `<p><img src="uploads/c.png"></p>` {
 		t.Fatalf("body %v", data["body"])
+	}
+}
+
+func TestSelectColsRespectsIsLists(t *testing.T) {
+	sp := newSpec(model.GenerateTable{Name: "la_pair_gencrud"}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1, IsLists: 1},
+		{ColumnName: "name", IsLists: 1},
+		{ColumnName: "create_time", IsLists: 0, ViewType: "datetime"},
+		{ColumnName: "update_time", IsLists: 0, ViewType: "datetime"},
+		{ColumnName: "secret", IsLists: 0},
+	})
+	got := selectCols(sp)
+	joined := strings.Join(got, ",")
+	if joined != "id,name" {
+		t.Fatalf("selectCols=%v", got)
+	}
+
+	sp = newSpec(model.GenerateTable{
+		Name: "la_pair_gencrud", TemplateType: 1,
+		Tree: `{"tree_id":"id","tree_pid":"pid"}`,
+	}, []model.GenerateColumn{
+		{ColumnName: "id", IsPk: 1, IsLists: 1},
+		{ColumnName: "pid", IsLists: 0},
+		{ColumnName: "name", IsLists: 1},
+	})
+	got = selectCols(sp)
+	joined = strings.Join(got, ",")
+	if joined != "id,name,pid" {
+		t.Fatalf("tree selectCols=%v", got)
+	}
+}
+
+func TestFormatRowKeepsUnixDatetime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+
+	sp := newSpec(model.GenerateTable{Name: "la_go_gencrud_rt"}, []model.GenerateColumn{
+		{ColumnName: "create_time", ViewType: "datetime", IsLists: 1},
+		{ColumnName: "event_time", ViewType: "datetime", IsLists: 1},
+		{ColumnName: "name", ViewType: "input", IsLists: 1},
+	})
+	out := formatRow(c, sp, map[string]any{
+		"create_time": int64(1717200000),
+		"event_time":  []byte("1717203600"),
+		"name":        "n1",
+	})
+	if out["create_time"] != int64(1717200000) {
+		t.Fatalf("create_time %T %v", out["create_time"], out["create_time"])
+	}
+	if out["event_time"] != int64(1717203600) {
+		t.Fatalf("event_time %T %v", out["event_time"], out["event_time"])
+	}
+	if out["name"] != "n1" {
+		t.Fatalf("name %v", out["name"])
 	}
 }
 

@@ -49,7 +49,7 @@ func WechatPrepay(c *gin.Context, order model.RechargeOrder, paySN string, termi
 		return nil, fmt.Errorf("%s", wechatChannelMissing(terminal))
 	}
 	notifyURL := ctxutil.Domain(c) + notifyPath(terminal)
-	amount := int(order.OrderAmount*100 + 0.5)
+	amount := yuanToFen(order.OrderAmount, terminal)
 	body := map[string]any{
 		"appid":        appID,
 		"mchid":        cfg.MchID,
@@ -120,6 +120,31 @@ func debugPayOverride(envKey, fallback string) string {
 	return fallback
 }
 
+// yuanToFen mirrors PHP WeChatPayService fen conversion:
+// jsapi/native/app/refund use intval($yuan * 100); H5 mwebPay uses
+// intval(strval($yuan * 100)).
+func yuanToFen(yuan float64, terminal int) int {
+	if terminal == wechat.TerminalH5 {
+		return yuanToFenStrval(yuan)
+	}
+	return yuanToFenIntval(yuan)
+}
+
+// yuanToFenIntval mirrors PHP intval($yuan * 100).
+func yuanToFenIntval(yuan float64) int {
+	return int(yuan * 100)
+}
+
+// yuanToFenStrval mirrors PHP intval(strval($yuan * 100)).
+func yuanToFenStrval(yuan float64) int {
+	s := strconv.FormatFloat(yuan*100, 'g', 14, 64)
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return yuanToFenIntval(yuan)
+	}
+	return int(f)
+}
+
 // wechatPayPath mirrors PHP WeChatPayService::pay terminal switch.
 func wechatPayPath(terminal int) (string, error) {
 	switch terminal {
@@ -160,7 +185,7 @@ func WechatRefundByTenant(tenantID uint, transactionID, refundSN string, refundA
 		"transaction_id": transactionID,
 		"out_refund_no":  refundSN,
 		"amount": map[string]any{
-			"refund": int(refundAmount*100 + 0.5), "total": int(totalAmount*100 + 0.5), "currency": "CNY",
+			"refund": yuanToFenIntval(refundAmount), "total": yuanToFenIntval(totalAmount), "currency": "CNY",
 		},
 	})
 	result, err := wechatV3Post(cfg, key, "/v3/refund/domestic/refunds", body)

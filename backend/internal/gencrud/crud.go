@@ -440,9 +440,7 @@ func selectCols(sp *spec) []string {
 		add(sp.treeID)
 		add(sp.treePID)
 	}
-	for _, name := range []string{"create_time", "update_time"} {
-		add(name)
-	}
+	// PHP ListsGenerator::getFieldDataContent only emits is_lists (+ tree keys).
 	if len(out) == 0 {
 		return []string{"*"}
 	}
@@ -536,8 +534,12 @@ func formatRow(c *gin.Context, sp *spec, row map[string]any) map[string]any {
 			v = string(b)
 		}
 		if isTimeCol(sp, k) {
-			out[k] = util.FormatDateTime(util.ToInt64(v))
-			continue
+			if ts, ok := asUnixTime(v); ok {
+				// PHP generated lists/detail return raw unix ints; Vue timeFormat()
+				// only treats length-10/13 values as timestamps.
+				out[k] = ts
+				continue
+			}
 		}
 		if isImageCol(sp, k) {
 			out[k] = filesvc.GetImageAttr(c, util.ToString(v))
@@ -565,6 +567,32 @@ func isTimeCol(sp *spec, name string) bool {
 		}
 	}
 	return false
+}
+
+// asUnixTime keeps numeric datetime columns as unix seconds (PHP toArray()).
+func asUnixTime(v any) (int64, bool) {
+	if b, ok := v.([]byte); ok {
+		v = string(b)
+	}
+	switch n := v.(type) {
+	case nil:
+		return 0, false
+	case int, int8, int16, int32, int64, uint, uint32, uint64, float32, float64:
+		return util.ToInt64(n), true
+	case string:
+		s := strings.TrimSpace(n)
+		if s == "" {
+			return 0, false
+		}
+		for _, r := range s {
+			if r < '0' || r > '9' {
+				return 0, false
+			}
+		}
+		return util.ToInt64(s), true
+	default:
+		return 0, false
+	}
 }
 
 func paramName(field string) string {

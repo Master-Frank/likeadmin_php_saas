@@ -66,6 +66,9 @@ func TestFormatContent(t *testing.T) {
 	if got := formatContent("您好{nickname}", map[string]string{"nickname": "张三"}); got != "您好张三" {
 		t.Fatalf("brace %s", got)
 	}
+	if got := formatContent("", map[string]string{"code": "1234"}); got != "" {
+		t.Fatalf("empty template %q", got)
+	}
 }
 
 func TestTencentParams(t *testing.T) {

@@ -194,9 +194,8 @@ func formatContent(tpl string, vars map[string]string) string {
 		out = strings.ReplaceAll(out, "${"+k+"}", v)
 		out = strings.ReplaceAll(out, "{"+k+"}", v)
 	}
-	if out == "" {
-		return "验证码" + vars["code"]
-	}
+	// PHP SmsMessageService::contentFormat / NoticeLogic::contentFormat
+	// leave an empty template empty — do not invent a fallback body.
 	return out
 }
 
