@@ -861,6 +861,9 @@ func copyTenantDept(tx *gorm.DB, tenantID, adminID uint) error {
 	return tx.Create(&model.TenantAdminDept{AdminID: adminID, DeptID: dept.ID}).Error
 }
 
+// copyTenantArticles remaps each template category once. PHP ArticleLogic::initialization
+// nests cate create inside the article loop (duplicate cate rows per article); Go keeps
+// one cate per template id so tenant article/cid graphs stay consistent.
 func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 	var cates []model.ArticleCate
 	tx.Where("tenant_id = 0 AND delete_time IS NULL").Find(&cates)

@@ -69,7 +69,9 @@ func TestFormatContent(t *testing.T) {
 }
 
 func TestTencentParams(t *testing.T) {
-	got := tencentParams(map[string]any{"content": "code=${code}"}, "8888", "13800000000")
+	got := tencentParams(map[string]any{"content": "code=${code}"}, map[string]string{
+		"code": "8888", "mobile": "13800000000",
+	})
 	if len(got) != 1 || got[0] != "8888" {
 		t.Fatalf("%v", got)
 	}
@@ -78,6 +80,12 @@ func TestTencentParams(t *testing.T) {
 	})
 	if len(ordered) != 2 || ordered[0] != "张三" || ordered[1] != "8888" {
 		t.Fatalf("order %v", ordered)
+	}
+	notice := tencentParams(map[string]any{"content": "您好${nickname}，单号${order_sn}"}, map[string]string{
+		"nickname": "张三", "order_sn": "SN1", "code": "x", "mobile": "13800000000",
+	})
+	if len(notice) != 2 || notice[0] != "张三" || notice[1] != "SN1" {
+		t.Fatalf("full params %v", notice)
 	}
 }
 

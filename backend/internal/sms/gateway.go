@@ -52,7 +52,6 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, params map[strin
 	if params == nil {
 		params = map[string]string{}
 	}
-	code := params["code"]
 	tplID := util.ToString(notice["template_id"])
 	content := formatContent(util.ToString(notice["content"]), params)
 	if err := gatewayConfigError(rawEngine, cfg, tplID); err != nil {
@@ -70,7 +69,7 @@ func maybeGatewaySend(c *gin.Context, mobile string, scene int, params map[strin
 	case "ALI":
 		result, err = sendAliyun(cfg, mobile, tplID, aliTemplateParams(scene, params))
 	case "TENCENT":
-		result, err = sendTencent(cfg, mobile, tplID, tencentParams(notice, code, mobile))
+		result, err = sendTencent(cfg, mobile, tplID, tencentParams(notice, params))
 	default:
 		return gatewayFail(c, logID, content, "没有相应的短信驱动类")
 	}
@@ -196,10 +195,9 @@ func formatContent(tpl string, vars map[string]string) string {
 	return out
 }
 
-func tencentParams(notice map[string]any, code, mobile string) []string {
-	return tencentParamsFrom(util.ToString(notice["content"]), map[string]string{
-		"code": code, "mobile": mobile,
-	})
+func tencentParams(notice map[string]any, params map[string]string) []string {
+	// PHP SmsMessageService::setSmsParams uses the full $params['params'] map.
+	return tencentParamsFrom(util.ToString(notice["content"]), params)
 }
 
 // tencentParamsFrom matches PHP SmsMessageService::setSmsParams for TENCENT:

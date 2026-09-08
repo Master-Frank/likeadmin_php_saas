@@ -365,6 +365,7 @@ func markRechargePaid(order *model.RechargeOrder, transactionID string) error {
 		if err := uq.Updates(map[string]any{
 			"user_money":            gorm.Expr("user_money + ?", order.OrderAmount),
 			"total_recharge_amount": gorm.Expr("total_recharge_amount + ?", order.OrderAmount),
+			"update_time":           now,
 		}).Error; err != nil {
 			return err
 		}

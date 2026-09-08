@@ -50,7 +50,8 @@ func ReceiveUpload(c *gin.Context, scene, dir string) (name, rel, errMsg string)
 	if err != nil || fh == nil {
 		return "", "", "未找到上传文件的信息"
 	}
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fh.Filename), "."))
+	origExt := strings.TrimPrefix(filepath.Ext(fh.Filename), ".")
+	ext := strings.ToLower(origExt)
 	if msg := util.UploadExtCheck(scene, ext, config.C.Project.FileImage, config.C.Project.FileVideo, config.C.Project.FileFile); msg != "" {
 		return "", "", msg
 	}
@@ -73,7 +74,8 @@ func ReceiveUpload(c *gin.Context, scene, dir string) (name, rel, errMsg string)
 	if err = tmp.Close(); err != nil {
 		return "", "", err.Error()
 	}
-	saved := buildSaveName(tmpPath, ext)
+	// PHP Server::buildSaveName uses pathinfo() EXTENSION (original case).
+	saved := buildSaveName(tmpPath, origExt)
 	rel = filepath.ToSlash(filepath.Join(dir, time.Now().Format("20060102"), saved))
 	f, err := os.Open(tmpPath)
 	if err != nil {

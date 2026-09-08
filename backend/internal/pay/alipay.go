@@ -144,6 +144,14 @@ func resolveAliPublicKey(cfg AliPayCfg) *rsa.PublicKey {
 	return nil
 }
 
+// SignAliNotify RSA2-signs the Alipay notify content (same string as verify).
+func SignAliNotify(key *rsa.PrivateKey, params map[string]string) (string, error) {
+	if key == nil {
+		return "", fmt.Errorf("missing key")
+	}
+	return rsaSHA256Base64(key, aliSignContent(params))
+}
+
 func aliSignContent(params map[string]string) string {
 	keys := make([]string, 0, len(params))
 	for k, v := range params {
