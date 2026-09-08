@@ -1,8 +1,6 @@
 package tenantapi
 
 import (
-	"strings"
-
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -561,7 +559,7 @@ func RoleEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+	if !util.PHPRequired(httpx.Body(c), "id") {
 		response.Fail(c, "请选择角色")
 		return
 	}
@@ -662,11 +660,7 @@ func RoleAll(c *gin.Context) {
 }
 
 func authAdminIDPresent(p map[string]any) bool {
-	v, ok := p["id"]
-	if !ok || v == nil {
-		return false
-	}
-	return strings.TrimSpace(util.ToString(v)) != ""
+	return util.PHPRequired(p, "id")
 }
 
 func tenantAdminByID(c *gin.Context, id uint) (model.TenantAdmin, bool) {

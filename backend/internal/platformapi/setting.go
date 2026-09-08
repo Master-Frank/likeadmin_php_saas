@@ -584,11 +584,11 @@ func bool01(ok bool) int {
 }
 
 func StorageDetail(c *gin.Context) {
-	engine := httpx.QueryStr(c, "engine")
-	if engine == "" {
+	if !util.PHPRequired(httpx.Query(c), "engine") {
 		response.Fail(c, "engine不能为空")
 		return
 	}
+	engine := httpx.QueryStr(c, "engine")
 	def := cfgsvc.GetString(c, "storage", "default", "")
 	row := map[string]any{"status": 0}
 	switch engine {
@@ -618,11 +618,11 @@ func StorageSetup(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	engine := httpx.BodyStr(c, "engine")
-	if engine == "" {
+	if !util.PHPRequired(httpx.Body(c), "engine") {
 		response.Fail(c, "engine不能为空")
 		return
 	}
+	engine := httpx.BodyStr(c, "engine")
 	if !util.PHPRequired(httpx.Body(c), "status") {
 		response.Fail(c, "status不能为空")
 		return
@@ -660,11 +660,11 @@ func StorageChange(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	engine := httpx.BodyStr(c, "engine")
-	if engine == "" {
+	if !util.PHPRequired(httpx.Body(c), "engine") {
 		response.Fail(c, "engine不能为空")
 		return
 	}
+	engine := httpx.BodyStr(c, "engine")
 	def := cfgsvc.GetString(c, "storage", "default", "local")
 	if def == engine {
 		cfgsvc.Set(c, "storage", "default", "local")

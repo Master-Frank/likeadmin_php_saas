@@ -242,7 +242,7 @@ func RoleEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+	if !util.PHPRequired(httpx.Body(c), "id") {
 		response.Fail(c, "请选择角色")
 		return
 	}

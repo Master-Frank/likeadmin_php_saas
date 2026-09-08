@@ -1,8 +1,6 @@
 package platformapi
 
 import (
-	"strings"
-
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
@@ -326,15 +324,11 @@ func AdminEditSelf(c *gin.Context) {
 }
 
 func authAdminIDPresent(p map[string]any) bool {
-	v, ok := p["id"]
-	if !ok || v == nil {
-		return false
-	}
-	return strings.TrimSpace(util.ToString(v)) != ""
+	return util.PHPRequired(p, "id")
 }
 
 func adminAddDisable(p map[string]any) int {
-	if _, ok := p["disable"]; !ok {
+	if !util.PHPIsset(p, "disable") {
 		return 0
 	}
 	return util.ToInt(p["disable"])

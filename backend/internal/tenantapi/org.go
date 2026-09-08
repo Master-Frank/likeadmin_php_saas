@@ -91,7 +91,7 @@ func DeptEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+	if !util.PHPRequired(httpx.Body(c), "id") {
 		response.Fail(c, "参数缺失")
 		return
 	}
@@ -263,7 +263,7 @@ func JobsEdit(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if !httpx.BodyHas(c, "id") || httpx.BodyStr(c, "id") == "" {
+	if !util.PHPRequired(httpx.Body(c), "id") {
 		response.Fail(c, "参数缺失")
 		return
 	}

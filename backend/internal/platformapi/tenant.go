@@ -176,7 +176,7 @@ func TenantEdit(c *gin.Context) {
 		response.Fail(c, "租户不存在")
 		return
 	}
-	if httpx.BodyStr(c, "name") == "" {
+	if !util.PHPRequired(httpx.Body(c), "name") {
 		response.Fail(c, "请输入用户名")
 		return
 	}

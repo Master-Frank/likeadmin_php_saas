@@ -300,15 +300,16 @@ func UserAdjustMoney(c *gin.Context) {
 	action := httpx.BodyInt(c, "action")
 	num := httpx.BodyFloat(c, "num")
 	remark := httpx.BodyStr(c, "remark")
+	p := httpx.Body(c)
+	if !util.PHPRequired(p, "action") {
+		response.Fail(c, "请选择调整类型")
+		return
+	}
 	if action != biz.INC && action != biz.DEC {
-		if httpx.BodyStr(c, "action") == "" {
-			response.Fail(c, "请选择调整类型")
-			return
-		}
 		response.Fail(c, "调整类型错误")
 		return
 	}
-	if httpx.BodyStr(c, "num") == "" && num == 0 {
+	if !util.PHPRequired(p, "num") {
 		response.Fail(c, "请输入调整数量")
 		return
 	}

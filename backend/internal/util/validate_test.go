@@ -344,6 +344,12 @@ func TestDictTypeWriteCheck(t *testing.T) {
 	if msg := DictTypeWriteCheckTaken(map[string]any{"name": "n", "type": "taken"}, func(string) bool { return true }); msg != "字典类型已存在" {
 		t.Fatal(msg)
 	}
+	if DictTypeWriteCheck(map[string]any{"name": "   ", "type": "t", "status": 1}) != "" {
+		t.Fatal("ThinkPHP require accepts whitespace dict name")
+	}
+	if DictDataWriteCheck(map[string]any{"name": "n", "value": "   ", "status": 1}, false) != "" {
+		t.Fatal("ThinkPHP require accepts whitespace dict value")
+	}
 }
 
 func TestUploadExtCheck(t *testing.T) {

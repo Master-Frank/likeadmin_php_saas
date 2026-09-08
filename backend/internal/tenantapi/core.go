@@ -400,14 +400,17 @@ func UserEdit(c *gin.Context) {
 		response.Fail(c, "用户不存在！")
 		return
 	}
-	if field == "" {
+	p := httpx.Body(c)
+	if !util.PHPRequired(p, "field") {
 		response.Fail(c, "请选择操作")
 		return
 	}
-	if strings.TrimSpace(util.ToString(value)) == "" {
+	if !util.PHPRequired(p, "value") {
 		response.Fail(c, "请输入内容")
 		return
 	}
+	field = util.ToString(p["field"])
+	value = p["value"]
 	allow := map[string]bool{"account": true, "sex": true, "mobile": true, "real_name": true}
 	if !allow[field] {
 		response.Fail(c, "用户信息不允许更新")

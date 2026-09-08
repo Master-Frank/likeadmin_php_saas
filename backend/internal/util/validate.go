@@ -195,7 +195,7 @@ func UserPasswordCheck(p map[string]any) string {
 			return "密码须为字母数字组合"
 		}
 	}
-	if _, ok := p["password_confirm"]; !ok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+	if !phpRequired(p, "password_confirm") {
 		return "请确认密码"
 	}
 	if pwd != strings.TrimSpace(ToString(p["password_confirm"])) {
@@ -231,7 +231,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 	if rt != 1 && rt != 2 && rt != 3 {
 		return "回复类型状态值错误"
 	}
-	if strings.TrimSpace(ToString(p["name"])) == "" {
+	if !phpRequired(p, "name") {
 		return "请输入规则名称"
 	}
 	if !phpRequired(p, "content_type") {
@@ -240,7 +240,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 	if ToInt(p["content_type"]) != 1 {
 		return "内容类型状态值有误"
 	}
-	if strings.TrimSpace(ToString(p["content"])) == "" {
+	if !phpRequired(p, "content") {
 		return "请输入回复内容"
 	}
 	if !phpRequired(p, "status") {
@@ -251,7 +251,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 		return "启用状态值错误"
 	}
 	if rt == 2 {
-		if strings.TrimSpace(ToString(p["keyword"])) == "" {
+		if !phpRequired(p, "keyword") {
 			return "请输入关键词"
 		}
 		if !phpRequired(p, "matching_type") {
@@ -282,17 +282,16 @@ func DictTypeWriteCheck(p map[string]any) string {
 }
 
 func DictTypeWriteCheckTaken(p map[string]any, typeTaken func(string) bool) string {
-	name := strings.TrimSpace(ToString(p["name"]))
-	if name == "" {
+	if !phpRequired(p, "name") {
 		return "请填写字典名称"
 	}
-	if n := len([]rune(name)); n > 255 {
+	if n := len([]rune(ToString(p["name"]))); n > 255 {
 		return "字典名称长度须在1~255位字符"
 	}
-	if strings.TrimSpace(ToString(p["type"])) == "" {
+	if !phpRequired(p, "type") {
 		return "请填写字典类型"
 	}
-	if typeTaken != nil && typeTaken(strings.TrimSpace(ToString(p["type"]))) {
+	if typeTaken != nil && typeTaken(ToString(p["type"])) {
 		return "字典类型已存在"
 	}
 	if !phpRequired(p, "status") {
@@ -308,14 +307,13 @@ func DictTypeWriteCheckTaken(p map[string]any, typeTaken func(string) bool) stri
 }
 
 func DictDataWriteCheck(p map[string]any, needTypeID bool) string {
-	name := strings.TrimSpace(ToString(p["name"]))
-	if name == "" {
+	if !phpRequired(p, "name") {
 		return "请填写字典数据名称"
 	}
-	if n := len([]rune(name)); n > 255 {
+	if n := len([]rune(ToString(p["name"]))); n > 255 {
 		return "字典数据名称长度须在1-255位字符"
 	}
-	if strings.TrimSpace(ToString(p["value"])) == "" {
+	if !phpRequired(p, "value") {
 		return "请填写字典数据值"
 	}
 	if needTypeID {
@@ -624,11 +622,11 @@ func TenantAdminEditCheck(p map[string]any) string {
 	if !phpRequired(p, "name") {
 		return "请输入用户名"
 	}
-	if _, ok := p["password"]; ok && strings.TrimSpace(ToString(p["password"])) != "" {
+	if PHPIsset(p, "password") && strings.TrimSpace(ToString(p["password"])) != "" {
 		if n := len(ToString(p["password"])); n < 6 || n > 32 {
 			return "密码长度须在6-32位字符"
 		}
-		if _, cok := p["password_confirm"]; !cok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+		if !phpRequired(p, "password_confirm") {
 			return "确认密码不能为空"
 		}
 		if ToString(p["password"]) != ToString(p["password_confirm"]) {
@@ -667,7 +665,7 @@ func TenantAdminAddCheckTaken(p map[string]any, tenantExists func(uint) bool, ac
 	if n := len(ToString(p["password"])); n < 6 || n > 32 {
 		return "密码长度须在6-32位字符"
 	}
-	if _, ok := p["password_confirm"]; !ok || strings.TrimSpace(ToString(p["password_confirm"])) == "" {
+	if !phpRequired(p, "password_confirm") {
 		return "确认密码不能为空"
 	}
 	if ToString(p["password"]) != ToString(p["password_confirm"]) {
