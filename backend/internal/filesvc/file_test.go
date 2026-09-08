@@ -16,10 +16,11 @@ func TestSetImageIfMatchesPHPTruthy(t *testing.T) {
 	if SetImageIf(nil, "") != "" || SetImageIf(nil, "0") != "" {
 		t.Fatal("falsy image must store empty")
 	}
-	if SetImageIf(nil, "   ") != "   " {
+	c := imageTestContext()
+	if SetImageIf(c, "   ") != "   " {
 		t.Fatal("whitespace is truthy and must be kept")
 	}
-	if SetImageIf(nil, "uploads/a.png") != "uploads/a.png" {
+	if SetImageIf(c, "uploads/a.png") != "uploads/a.png" {
 		t.Fatal("relative path passthrough")
 	}
 }
@@ -28,9 +29,18 @@ func TestSetImageAttrMatchesBaseModel(t *testing.T) {
 	if SetImageAttr(nil, "") != "" || SetImageAttr(nil, "0") != "" || SetImageAttr(nil, "   ") != "" || SetImageAttr(nil, "  0  ") != "" {
 		t.Fatal("trim-falsy image must store empty")
 	}
-	if SetImageAttr(nil, "uploads/a.png") != "uploads/a.png" {
+	if SetImageAttr(imageTestContext(), "uploads/a.png") != "uploads/a.png" {
 		t.Fatal("relative path passthrough")
 	}
+}
+
+func imageTestContext() *gin.Context {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+	return c
 }
 
 func TestGetImageAttrEmpty(t *testing.T) {
