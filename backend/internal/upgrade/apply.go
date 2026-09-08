@@ -16,8 +16,8 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/tenantdb"
-	"likeadmin/backend/internal/util"
 
 	"gorm.io/gorm"
 )
@@ -296,56 +296,22 @@ func upgradeMenu(db *gorm.DB, dir string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return nil
 	}
-	for _, t := range listUpgradeTenants(db) {
+	return upgradeMenusFor(db, listUpgradeTenants(db))
+}
+
+// upgradeMenusFor is PHP UpgradeLogic::upgradeMenu's per-tenant loop.
+// Tests pass a disposable tenant so pairing tenants are not rewritten.
+func upgradeMenusFor(db *gorm.DB, tenants []model.Tenant) error {
+	for _, t := range tenants {
 		tdb := tenantdb.ForTenantOn(db, t.ID)
 		if err := tdb.Where("tenant_id = ?", t.ID).Delete(&model.TenantSystemMenu{}).Error; err != nil {
 			return applyError("更新菜单信息失败")
 		}
-		// PHP UpgradeLogic::upgradeMenu only deletes menus then initialization();
-		// it does not wipe tenant_system_role_menu.
-		if err := reinitTenantMenus(db, tdb, t.ID); err != nil {
+		if err := tenantmenu.Reinit(db, tdb, t.ID); err != nil {
 			return applyError("更新菜单信息失败")
 		}
 	}
 	cache.ClearAdminAuthCache(0)
-	return nil
-}
-
-// reinitTenantMenus copies tenant_id=0 templates from the shared DB onto dest
-// (shared or la_tenant_system_menu_{sn} when tactics=1).
-func reinitTenantMenus(shared, dest *gorm.DB, tenantID uint) error {
-	if dest == nil {
-		dest = shared
-	}
-	var tpls []model.TenantSystemMenu
-	shared.Where("tenant_id = 0").Order("pid, id").Find(&tpls)
-	// PHP TenantSystemMenuLogic::initialization only copies tenant_id=0 templates.
-	if len(tpls) == 0 {
-		return nil
-	}
-	idMap := map[uint]uint{}
-	for _, m := range tpls {
-		old := m.ID
-		row := m
-		row.ID = 0
-		row.TenantID = tenantID
-		now := util.NowUnix()
-		row.CreateTime = now
-		row.UpdateTime = &now
-		if err := dest.Create(&row).Error; err != nil {
-			return err
-		}
-		idMap[old] = row.ID
-	}
-	var created []model.TenantSystemMenu
-	dest.Where("tenant_id = ?", tenantID).Find(&created)
-	for _, item := range created {
-		if item.Pid != 0 {
-			if nid, ok := idMap[item.Pid]; ok {
-				dest.Model(&item).Updates(map[string]any{"pid": nid, "update_time": util.NowUnix()})
-			}
-		}
-	}
 	return nil
 }
 
