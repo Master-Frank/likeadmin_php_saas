@@ -220,7 +220,7 @@ func RoleAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	menuIDs := httpx.BodyUints(c, "menu_id")
+	menuIDs := httpx.BodyUintsUnlessEmpty(c, "menu_id")
 	if !platformMenuIDsOwned(menuIDs) {
 		response.Fail(c, "菜单不存在")
 		return
@@ -232,6 +232,9 @@ func RoleAdd(c *gin.Context) {
 		return
 	}
 	for _, id := range menuIDs {
+		if util.PHPEmpty(id) {
+			continue
+		}
 		bootstrap.DB.Create(&model.SystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
 	response.SuccessNotice(c, "添加成功")
@@ -262,7 +265,7 @@ func RoleEdit(c *gin.Context) {
 	bootstrap.DB.Model(&model.SystemRole{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
 		"name": httpx.BodyRaw(c, "name"), "desc": httpx.BodyRaw(c, "desc"), "sort": httpx.BodyInt(c, "sort"), "update_time": now,
 	})
-	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
+	if menuIDs := httpx.BodyUintsUnlessEmpty(c, "menu_id"); len(menuIDs) > 0 {
 		if !platformMenuIDsOwned(menuIDs) {
 			response.Fail(c, "菜单不存在")
 			return

@@ -37,6 +37,11 @@ func QueryStr(c *gin.Context, key string) string {
 	return strings.TrimSpace(util.ToString(Query(c)[key]))
 }
 
+// QueryRaw matches ThinkPHP request()->get() scalars: no TrimSpace.
+func QueryRaw(c *gin.Context, key string) string {
+	return util.ToString(Query(c)[key])
+}
+
 func QueryInt(c *gin.Context, key string) int {
 	return util.ToInt(Query(c)[key])
 }
@@ -182,6 +187,15 @@ func BodyUints(c *gin.Context, key string) []uint {
 		out[i] = uint(n)
 	}
 	return out
+}
+
+// BodyUintsUnlessEmpty mirrors PHP `!empty($params[key]) ? $params[key] : []`.
+// Scalar 0 / "0" / "" stay empty; a non-empty array is kept (including [0]).
+func BodyUintsUnlessEmpty(c *gin.Context, key string) []uint {
+	if util.PHPEmpty(BodyAny(c, key)) {
+		return nil
+	}
+	return BodyUints(c, key)
 }
 
 func List(c *gin.Context) []any {

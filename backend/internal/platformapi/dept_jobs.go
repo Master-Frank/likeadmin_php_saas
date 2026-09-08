@@ -14,11 +14,11 @@ import (
 
 func DeptLists(c *gin.Context) {
 	db := bootstrap.DB.Model(&model.Dept{}).Where("delete_time IS NULL")
-	if name := httpx.QueryStr(c, "name"); name != "" {
+	if name := httpx.QueryRaw(c, "name"); !util.PHPEmpty(name) {
 		db = db.Where("name LIKE ?", "%"+name+"%")
 	}
-	if status := httpx.QueryStr(c, "status"); status != "" {
-		db = db.Where("status = ?", util.ParseInt(status))
+	if util.PHPIsset(httpx.Query(c), "status") && httpx.QueryRaw(c, "status") != "" {
+		db = db.Where("status = ?", util.ParseInt(httpx.QueryRaw(c, "status")))
 	}
 	var rows []model.Dept
 	db.Order("sort desc, id desc").Find(&rows)

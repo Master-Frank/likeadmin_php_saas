@@ -541,7 +541,7 @@ func RoleAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	menuIDs := httpx.BodyUints(c, "menu_id")
+	menuIDs := httpx.BodyUintsUnlessEmpty(c, "menu_id")
 	if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
 		response.Fail(c, "菜单不存在")
 		return
@@ -550,6 +550,9 @@ func RoleAdd(c *gin.Context) {
 	r := model.TenantSystemRole{Name: httpx.BodyRaw(c, "name"), Desc: httpx.BodyRaw(c, "desc"), Sort: httpx.BodyInt(c, "sort"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)}
 	tdb(c).Create(&r)
 	for _, id := range menuIDs {
+		if util.PHPEmpty(id) {
+			continue
+		}
 		tdb(c).Create(&model.TenantSystemRoleMenu{RoleID: r.ID, MenuID: id})
 	}
 	response.SuccessNotice(c, "添加成功")
@@ -583,7 +586,7 @@ func RoleEdit(c *gin.Context) {
 		"name": httpx.BodyRaw(c, "name"), "desc": httpx.BodyRaw(c, "desc"), "sort": httpx.BodyInt(c, "sort"),
 		"update_time": util.NowUnix(),
 	})
-	if menuIDs := httpx.BodyUints(c, "menu_id"); len(menuIDs) > 0 {
+	if menuIDs := httpx.BodyUintsUnlessEmpty(c, "menu_id"); len(menuIDs) > 0 {
 		if !tenantIDsOwned(c, &model.TenantSystemMenu{}, menuIDs, "") {
 			response.Fail(c, "菜单不存在")
 			return

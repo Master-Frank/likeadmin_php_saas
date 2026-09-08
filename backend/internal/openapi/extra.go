@@ -389,7 +389,7 @@ func UserChangePassword(c *gin.Context) {
 	if u.Password != "" {
 		// PHP UserLogic::changePassword uses empty() on the raw old_password.
 		old := httpx.BodyRaw(c, "old_password")
-		if old == "" || old == "0" {
+		if util.PHPEmpty(old) {
 			response.Fail(c, "请填写旧密码")
 			return
 		}
@@ -719,4 +719,3 @@ func UploadImage(c *gin.Context) {
 		"uri": filesvc.GetFileURL(c, rel), "url": rel,
 	})
 }
-

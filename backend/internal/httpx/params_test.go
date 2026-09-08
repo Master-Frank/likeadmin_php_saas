@@ -41,6 +41,45 @@ func TestQueryIgnoresJSONBody(t *testing.T) {
 	}
 }
 
+func TestQueryRawKeepsSpaces(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/dept.dept/lists?name=%20%20&status=0", nil)
+	if QueryRaw(c, "name") != "  " || QueryStr(c, "name") != "" {
+		t.Fatalf("raw=%q trim=%q", QueryRaw(c, "name"), QueryStr(c, "name"))
+	}
+	if QueryRaw(c, "status") != "0" {
+		t.Fatalf("status=%q", QueryRaw(c, "status"))
+	}
+}
+
+func TestBodyUintsUnlessEmpty(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	req := func(body string) []uint {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/auth.role/add", bytes.NewBufferString(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		return BodyUintsUnlessEmpty(c, "menu_id")
+	}
+	if ids := req(`{"menu_id":"0"}`); len(ids) != 0 {
+		t.Fatalf("scalar 0 must be empty, got %v", ids)
+	}
+	if ids := req(`{"menu_id":0}`); len(ids) != 0 {
+		t.Fatalf("int 0 must be empty, got %v", ids)
+	}
+	if ids := req(`{"menu_id":[]}`); len(ids) != 0 {
+		t.Fatalf("[] must be empty, got %v", ids)
+	}
+	if ids := req(`{"menu_id":[0]}`); len(ids) != 1 || ids[0] != 0 {
+		t.Fatalf("[0] is not empty(), got %v", ids)
+	}
+	if ids := req(`{"menu_id":[1,2]}`); len(ids) != 2 || ids[0] != 1 || ids[1] != 2 {
+		t.Fatalf("ids=%v", ids)
+	}
+}
+
 func TestBodyRawKeepsSpaces(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
