@@ -987,17 +987,9 @@ func TenantNoticeLists(c *gin.Context) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		sms := util.DecodeJSON(r.SmsNotice)
-		smsStatus := "停用"
-		if m, ok := sms.(map[string]any); ok && util.ToInt(m["status"]) == 1 {
-			smsStatus = "启用"
-		}
-		typeDesc := "业务通知"
-		if r.Type == 2 {
-			typeDesc = "验证码"
-		}
 		out = append(out, map[string]any{
 			"id": r.ID, "scene_name": r.SceneName, "sms_notice": sms, "type": r.Type,
-			"sms_status_desc": smsStatus, "type_desc": typeDesc,
+			"sms_status_desc": util.SMSStatusDesc(r.SmsNotice), "type_desc": util.NoticeTypeDesc(r.Type),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)

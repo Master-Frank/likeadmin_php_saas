@@ -138,6 +138,34 @@ func ChannelDesc(channel int) string {
 	}
 }
 
+// NoticeTypeDesc mirrors NoticeEnum::getTypeDesc. Unknown types stay empty
+// (PHP `$data[$value]` with a missing key).
+func NoticeTypeDesc(t int) string {
+	switch t {
+	case 1:
+		return "业务通知"
+	case 2:
+		return "验证码"
+	default:
+		return ""
+	}
+}
+
+// SMSStatusDesc mirrors NoticeSetting::getSmsStatusDescAttr.
+func SMSStatusDesc(raw string) string {
+	if raw == "" {
+		return "停用"
+	}
+	var m map[string]any
+	if json.Unmarshal([]byte(raw), &m) != nil {
+		return "停用"
+	}
+	if ToInt(m["status"]) == 1 {
+		return "启用"
+	}
+	return "停用"
+}
+
 func MoneyString(v float64) string {
 	return strconv.FormatFloat(v, 'f', 2, 64)
 }

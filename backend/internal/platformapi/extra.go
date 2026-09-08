@@ -1,7 +1,6 @@
 package platformapi
 
 import (
-	"encoding/json"
 	"strings"
 
 	"likeadmin/backend/internal/biz"
@@ -372,7 +371,7 @@ func NoticeSettingLists(c *gin.Context) {
 		sms := util.DecodeJSON(r.SmsNotice)
 		out = append(out, map[string]any{
 			"id": r.ID, "scene_name": r.SceneName, "sms_notice": sms, "type": r.Type,
-			"sms_status_desc": smsStatusDesc(r.SmsNotice), "type_desc": noticeTypeDesc(r.Type),
+			"sms_status_desc": util.SMSStatusDesc(r.SmsNotice), "type_desc": util.NoticeTypeDesc(r.Type),
 		})
 	}
 	response.Lists(c, out, count, q.PageNo, q.PageSize, nil)
@@ -560,29 +559,4 @@ func UpgradeNotImpl(c *gin.Context) {
 
 func DownloadExport(c *gin.Context) {
 	export.Serve(c)
-}
-
-func smsStatusDesc(raw string) string {
-	if raw == "" {
-		return "停用"
-	}
-	var m map[string]any
-	if json.Unmarshal([]byte(raw), &m) != nil {
-		return "停用"
-	}
-	if util.ToInt(m["status"]) == 1 {
-		return "启用"
-	}
-	return "停用"
-}
-
-func noticeTypeDesc(t int) string {
-	switch t {
-	case 1:
-		return "业务通知"
-	case 2:
-		return "验证码"
-	default:
-		return ""
-	}
 }
