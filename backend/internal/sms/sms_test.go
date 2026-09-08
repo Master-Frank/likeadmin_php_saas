@@ -105,7 +105,77 @@ func TestVerifyStampsUpdateTime(t *testing.T) {
 	}
 }
 
+func TestSendRateLimitWritesFailLog(t *testing.T) {
+	if !initSMSDB(t) {
+		t.Skip("no database")
+	}
+	var setting model.NoticeSetting
+	if bootstrap.DB.Where("scene_id = ?", LoginCaptcha).First(&setting).Error != nil {
+		t.Skip("no platform login captcha scene")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	meta := ctxutil.Get(c)
+	meta.App = "platformapi"
+	meta.Source = ctxutil.SourcePlatform
+	mobile := "13800009993"
+	bootstrap.DB.Where("mobile = ?", mobile).Delete(&model.SmsLog{})
+	now := util.NowUnix()
+	prev := model.SmsLog{SceneID: LoginCaptcha, Mobile: mobile, Code: "1111", Content: "x", SendStatus: 1, SendTime: &now}
+	if err := bootstrap.DB.Create(&prev).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Where("mobile = ?", mobile).Delete(&model.SmsLog{}) })
+	_, _, err := Send(c, mobile, "YZMDL")
+	if err == nil || err.Error() != "同一手机号1分钟只能发送1条短信" {
+		t.Fatalf("rate limit: %v", err)
+	}
+	var n int64
+	bootstrap.DB.Model(&model.SmsLog{}).Where("mobile = ? AND send_status = 2", mobile).Count(&n)
+	if n < 1 {
+		t.Fatal("PHP SmsMessageService writes a failed sms_log before sendLimit")
+	}
+}
+
+func TestVerifyEmptySceneUsesLatest(t *testing.T) {
+	if !initSMSDB(t) {
+		t.Skip("no database")
+	}
+	mobile := fmt.Sprintf("139%08d", time.Now().UnixNano()%100000000)
+	older := util.NowUnix() - 30
+	newer := util.NowUnix()
+	oldRow := model.SmsLog{
+		SceneID: LoginCaptcha, Mobile: mobile, Code: "1111", Content: "old",
+		SendStatus: 1, SendTime: &older,
+	}
+	newRow := model.SmsLog{
+		SceneID: BindMobileCaptcha, Mobile: mobile, Code: "2222", Content: "new",
+		SendStatus: 1, SendTime: &newer,
+	}
+	if err := bootstrap.DB.Create(&oldRow).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := bootstrap.DB.Create(&newRow).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrap.DB.Where("mobile = ?", mobile).Delete(&model.SmsLog{}) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	meta := ctxutil.Get(c)
+	meta.App = "platformapi"
+	meta.Source = ctxutil.SourcePlatform
+	if Verify(c, mobile, "1111", "") {
+		t.Fatal("empty scene must use latest log, not older login code")
+	}
+	if !Verify(c, mobile, "2222", "") {
+		t.Fatal("empty scene should accept latest bind-mobile code")
+	}
+}
+
 func TestSendVerifyWithoutDB(t *testing.T) {
+	if bootstrap.DB != nil {
+		t.Skip("DB already initialized; cache-only send is for no-DB process")
+	}
 	mobile := fmt.Sprintf("137%08d", time.Now().UnixNano()%100000000)
 	_, code, err := Send(nil, mobile, "YZMDL")
 	if err != nil {

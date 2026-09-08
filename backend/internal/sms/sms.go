@@ -72,42 +72,14 @@ func Send(c *gin.Context, mobile, sceneTag string) (int, string, error) {
 	if mobile == "" {
 		return 0, "", fmt.Errorf("请输入手机号")
 	}
-	if bootstrap.DB != nil && tooFrequent(c, mobile) {
-		return 0, "", fmt.Errorf("同一手机号1分钟只能发送1条短信")
-	}
 	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
 	code := fmt.Sprintf("%04d", n.Int64()+1000)
-	now := util.NowUnix()
-	tid := uint(0)
-	if c != nil {
-		tid = ctxutil.Get(c).TenantID
-	}
-	content := "验证码" + code
-	if c != nil && bootstrap.DB != nil {
-		found, _, _, notice, _, _ := findNoticeSetting(c, scene)
-		if !found {
-			return 0, "", fmt.Errorf("找不到对应场景的配置")
-		}
-		if util.ToInt(notice["status"]) != 1 {
-			return 0, "", fmt.Errorf("发送通知失败")
-		}
-		if formatted := formatContent(util.ToString(notice["content"]), map[string]string{"code": code, "mobile": mobile}); formatted != "" {
-			content = formatted
-		}
-	}
-	var logID uint
+	// PHP SmsLogic::sendCode fires event('Notice') → NoticeByScene / SmsMessageService.
 	if bootstrap.DB != nil {
-		logID = createSMSLog(c, scene, mobile, code, content, now)
-		addNoticeRecord(c, scene, map[string]string{"code": code, "mobile": mobile}, tid)
+		err := NoticeByScene(c, scene, map[string]string{"code": code, "mobile": mobile})
+		return scene, code, err
 	}
 	cache.Set(cacheKey(scene, mobile), code, 5*time.Minute)
-	if err := maybeGatewaySend(c, mobile, scene, map[string]string{"code": code, "mobile": mobile}, logID); err != nil {
-		cache.Del(cacheKey(scene, mobile))
-		return 0, "", err
-	}
-	if logID > 0 {
-		updateSMSLog(c, logID, map[string]any{"send_status": 1}, "send_status = 0")
-	}
 	return scene, code, nil
 }
 
@@ -115,20 +87,19 @@ func Verify(c *gin.Context, mobile, code, sceneTag string) bool {
 	if mobile == "" || code == "" {
 		return false
 	}
-	scene := SceneByTag(sceneTag)
-	if scene == 0 {
-		for _, alt := range []int{LoginCaptcha, BindMobileCaptcha, ChangeMobileCaptcha, FindPasswordCaptcha} {
-			if verifyScene(c, mobile, code, alt) {
-				return true
-			}
-		}
-		return false
-	}
-	return verifyScene(c, mobile, code, scene)
+	return verifyScene(c, mobile, code, SceneByTag(sceneTag))
 }
 
 func verifyScene(c *gin.Context, mobile, code string, scene int) bool {
 	if bootstrap.DB == nil {
+		if scene == 0 {
+			for _, alt := range captchaScenes {
+				if verifyScene(c, mobile, code, alt) {
+					return true
+				}
+			}
+			return false
+		}
 		if got, ok := cache.Get(cacheKey(scene, mobile)); ok && got == code {
 			cache.Del(cacheKey(scene, mobile))
 			return true
@@ -136,22 +107,27 @@ func verifyScene(c *gin.Context, mobile, code string, scene int) bool {
 		return false
 	}
 	now := util.NowUnix()
+	// PHP SmsDriver::verify: one query, scene_id IN SMS_SCENE, optional scene_id=?.
 	q := scopeSmsTenant(c, smsLogModel(c)).
-		Where("mobile = ? AND scene_id = ? AND is_verify = 0 AND send_status = 1 AND send_time >= ?",
-			mobile, scene, now-5*60)
+		Where("mobile = ? AND is_verify = 0 AND send_status = 1 AND scene_id IN ? AND send_time >= ?",
+			mobile, captchaScenes, now-5*60)
+	if scene > 0 {
+		q = q.Where("scene_id = ?", scene)
+	}
 	var row struct {
 		ID       uint   `gorm:"column:id"`
 		CheckNum int    `gorm:"column:check_num"`
 		Code     string `gorm:"column:code"`
+		SceneID  int    `gorm:"column:scene_id"`
 	}
-	if q.Select("id, check_num, code").Order("send_time desc, id desc").First(&row).Error != nil {
+	if q.Select("id, check_num, code, scene_id").Order("send_time desc, id desc").First(&row).Error != nil {
 		// PHP SmsDriver::verify is DB-only; cache is write-side for send, not a verify fallback.
 		return false
 	}
 	fields := map[string]any{"check_num": row.CheckNum + 1}
 	if row.Code == code {
 		fields["is_verify"] = 1
-		cache.Del(cacheKey(scene, mobile))
+		cache.Del(cacheKey(row.SceneID, mobile))
 		updateSMSLog(c, row.ID, fields, "")
 		return true
 	}
