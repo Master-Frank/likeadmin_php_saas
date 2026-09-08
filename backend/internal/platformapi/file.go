@@ -184,14 +184,16 @@ func uploadSave(c *gin.Context, typ int, dir, scene string) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	cid := filesvc.UploadCID(c)
-	if msg := filesvc.UploadCateOK(bootstrap.DB, &model.FileCate{}, cid, 0); msg != "" {
-		response.Fail(c, msg)
-		return
-	}
+	// PHP UploadLogic reads the file first (未找到上传文件的信息) and only then
+	// validates cid. A JSON body with cid=99999999 and no file must match that.
 	name, rel, errMsg := filesvc.ReceiveUpload(c, scene, dir)
 	if errMsg != "" {
 		response.Fail(c, errMsg)
+		return
+	}
+	cid := filesvc.UploadCID(c)
+	if msg := filesvc.UploadCateOK(bootstrap.DB, &model.FileCate{}, cid, 0); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	now := util.NowUnix()

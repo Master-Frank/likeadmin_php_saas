@@ -46,6 +46,11 @@ func TestTenantUploadRejectsForeignCate(t *testing.T) {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	_ = mw.WriteField("cid", util.ToString(cate.ID))
+	part, err := mw.CreateFormFile("file", "a.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a})
 	_ = mw.Close()
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
