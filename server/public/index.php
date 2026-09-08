@@ -25,7 +25,7 @@ if ($url == '/' && $env['HTTP_HOST'] == $host) {
 
 $whe = !str_starts_with($url, '/platformapi/config/getConfig') && !str_starts_with($url, '/tenantapi/config/getConfig') && !str_starts_with($url, '/api/pc/config') && !str_starts_with($url, '/api/index/config');
 if ($whe && !file_exists(__DIR__ . '/../config/install.lock')) {
-    header("location:/install/install.php");
+    header("location:/install");
     exit;
 }
 

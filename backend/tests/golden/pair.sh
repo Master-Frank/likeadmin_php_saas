@@ -3874,6 +3874,22 @@ echo "install_wizard http=$go_iw"
 if [[ "$go_iw" != "200" ]]; then
   fail=$((fail + 1))
 fi
+go_wbody="$(curl -sS "$GO/install")"
+go_wphp="$(curl -sS "$GO/install/install.php")"
+php_wphp="$(curl -sS "$PHP/install/install.php")"
+if [[ "$go_wbody" != "$go_wphp" ]]; then
+  echo "install.php alias diverged from /install"
+  fail=$((fail + 1))
+fi
+if [[ "$go_wbody" == *layui* || "$go_wphp" == *layui* ]]; then
+  echo "Go /install served PHP layui wizard"
+  fail=$((fail + 1))
+fi
+if [[ "$go_wbody" != *已经安装过本系统了* && "$go_wbody" != *开始安装* ]]; then
+  echo "Go /install is not the Go wizard: ${go_wbody:0:200}"
+  fail=$((fail + 1))
+fi
+echo "install_alias go_locked=$([[ "$go_wbody" == *已经安装过本系统了* ]] && echo 1 || echo 0) php_layui=$([[ "$php_wphp" == *layui* ]] && echo 1 || echo 0)"
 go_iq="$(curl -sS -X POST "$GO/install?prefix=la_&admin_user=hack&admin_password=likeadmin&admin_confirm_password=likeadmin" -H 'Content-Type: application/json' -d '{}')"
 echo "install_query_ignored go_code=$(jcode <<<"$go_iq") go_msg=$(jget msg <<<"$go_iq")"
 if [[ "$(jcode <<<"$go_iq")" == "1" ]]; then
