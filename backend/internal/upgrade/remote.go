@@ -18,6 +18,15 @@ import (
 
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 
+// downloadClient matches PHP UpgradeLogic::downFile curl: no FOLLOWLOCATION.
+// A 302 HTML interstitial must not be saved as the upgrade zip.
+var downloadClient = &http.Client{
+	Timeout: 20 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 func serverRoot() string {
 	if pub := config.C.App.PublicDir; pub != "" {
 		return filepath.Dir(pub)

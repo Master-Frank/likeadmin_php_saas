@@ -22,6 +22,20 @@ func jsonResp(body string) *http.Response {
 	}
 }
 
+func TestAccessTokenCacheKeyHashesSecret(t *testing.T) {
+	k1 := accessTokenCacheKey("wxapp", "sec-a")
+	k2 := accessTokenCacheKey("wxapp", "sec-b")
+	if k1 == k2 {
+		t.Fatal("different secrets must produce different cache keys")
+	}
+	if !strings.HasPrefix(k1, "wechat_access_token_wxapp_") {
+		t.Fatalf("key prefix: %s", k1)
+	}
+	if strings.Contains(k1, "sec-a") {
+		t.Fatalf("raw secret leaked in key: %s", k1)
+	}
+}
+
 func TestOAuthByCodeKeepsAccessToken(t *testing.T) {
 	orig := httpClient
 	t.Cleanup(func() { httpClient = orig })
@@ -60,7 +74,7 @@ func TestPublishMenuErrorJSONEncodesBody(t *testing.T) {
 	orig := httpClient
 	t.Cleanup(func() { httpClient = orig })
 	appID := "appid-test-menu-err"
-	cache.Del("wechat_access_token_" + appID)
+	cache.Del(accessTokenCacheKey(appID, "sec"))
 	body := `{"errcode":40013,"errmsg":"invalid appid"}`
 	httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if strings.Contains(r.URL.Path, "cgi-bin/token") {

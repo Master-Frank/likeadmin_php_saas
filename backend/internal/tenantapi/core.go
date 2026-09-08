@@ -1172,10 +1172,5 @@ func OAReplyIndex(c *gin.Context) {
 	}
 	content := wechat.MatchReply(msg, mapped)
 	xmlBody := wechat.TextReplyXML(msg.FromUserName, msg.ToUserName, content)
-	if encType >= 2 && aesKey != "" && xmlBody != "success" {
-		if enc, err := wechat.EncryptedReplyXML(token, aesKey, appID, ts, nonce, xmlBody); err == nil {
-			xmlBody = enc
-		}
-	}
-	writeOA(xmlBody)
+	writeOA(wechat.EncryptReplyOrSuccess(encType, token, aesKey, appID, ts, nonce, xmlBody))
 }

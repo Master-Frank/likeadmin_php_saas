@@ -155,6 +155,22 @@ func TestVersionFromFilename(t *testing.T) {
 	}
 }
 
+func TestResolvePackageRejectsRedirect(t *testing.T) {
+	// PHP curl downFile does not FOLLOWLOCATION; a 302 HTML page must not be saved.
+	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html>login</html>"))
+	}))
+	t.Cleanup(html.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, html.URL+"/trap.zip", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := resolvePackage(srv.URL+"/pkg.zip", t.TempDir()); err == nil || !strings.Contains(err.Error(), "获取文件错误") {
+		t.Fatalf("redirect: %v", err)
+	}
+}
+
 func TestResolvePackageEmptyHTTPBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

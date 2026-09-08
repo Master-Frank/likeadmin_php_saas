@@ -131,8 +131,15 @@ func ScanCodeURL(appID, redirect, state string) string {
 	return "https://open.weixin.qq.com/connect/qrconnect?" + q.Encode() + "#wechat_redirect"
 }
 
+func accessTokenCacheKey(appID, secret string) string {
+	// EasyWeChat keys official_account.access_token.{appId}.{secret} so a
+	// rotated secret cannot reuse a cached token. Hash the secret so Redis
+	// KEYS does not echo the raw value.
+	return "wechat_access_token_" + appID + "_" + util.MD5(secret)
+}
+
 func AccessToken(appID, secret string) (string, error) {
-	key := "wechat_access_token_" + appID
+	key := accessTokenCacheKey(appID, secret)
 	if v, ok := cache.Get(key); ok && v != "" {
 		return v, nil
 	}

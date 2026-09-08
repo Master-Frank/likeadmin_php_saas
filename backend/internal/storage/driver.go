@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -241,7 +242,15 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 	w := multipart.NewWriter(&buf)
 	_ = w.WriteField("token", token)
 	_ = w.WriteField("key", key)
-	fw, err := w.CreateFormFile("file", filepath.Base(key))
+	// PHP Qiniu\Http\Client::multipartPost sets the file part Content-Type
+	// (default application/octet-stream), not a separate mimeType field.
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, escapeQuotes(filepath.Base(key))))
+	h.Set("Content-Type", contentType)
+	fw, err := w.CreatePart(h)
 	if err != nil {
 		return err
 	}
@@ -254,9 +263,6 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 		return err
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	if contentType != "" {
-		_ = contentType
-	}
 	return do(req)
 }
 
@@ -265,8 +271,8 @@ func fetchQiniu(cfg map[string]any, srcURL, key string) error {
 	if ak == "" || sk == "" || bucket == "" {
 		return fmt.Errorf("七牛云配置不完整")
 	}
-	resource := base64.URLEncoding.EncodeToString([]byte(srcURL))
-	to := base64.URLEncoding.EncodeToString([]byte(bucket + ":" + key))
+	resource := qiniuSafeB64(srcURL)
+	to := qiniuSafeB64(bucket + ":" + key)
 	path := "/fetch/" + resource + "/to/" + to
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(path + "\n"))
@@ -289,11 +295,12 @@ func putAliyun(cfg map[string]any, key string, body []byte, contentType string) 
 	}
 	scheme, host := aliyunHost(cfg)
 	date := time.Now().UTC().Format(http.TimeFormat)
-	canon := "PUT\n\n" + contentType + "\n" + date + "\n/" + bucket + "/" + key
+	obj := aliyunObject(key)
+	canon := "PUT\n\n" + contentType + "\n" + date + "\n/" + bucket + "/" + obj
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(canon))
 	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+key, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+obj, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -312,7 +319,7 @@ func putQcloud(cfg map[string]any, key string, body []byte, contentType string) 
 		contentType = "application/octet-stream"
 	}
 	scheme, host := qcloudHost(cfg, region, bucket)
-	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+"/"+key, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPut, scheme+"://"+host+qcloudURI(key), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -327,7 +334,7 @@ func deleteQiniu(cfg map[string]any, key string) error {
 	if ak == "" || sk == "" || bucket == "" {
 		return fmt.Errorf("七牛云存储配置不完整")
 	}
-	entry := base64.URLEncoding.EncodeToString([]byte(bucket + ":" + key))
+	entry := qiniuSafeB64(bucket + ":" + key)
 	path := "/delete/" + entry
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(path + "\n"))
@@ -347,11 +354,12 @@ func deleteAliyun(cfg map[string]any, key string) error {
 	}
 	scheme, host := aliyunHost(cfg)
 	date := time.Now().UTC().Format(http.TimeFormat)
-	canon := "DELETE\n\n\n" + date + "\n/" + bucket + "/" + key
+	obj := aliyunObject(key)
+	canon := "DELETE\n\n\n" + date + "\n/" + bucket + "/" + obj
 	mac := hmac.New(sha1.New, []byte(sk))
 	mac.Write([]byte(canon))
 	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+key, nil)
+	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+obj, nil)
 	if err != nil {
 		return err
 	}
@@ -366,7 +374,7 @@ func deleteQcloud(cfg map[string]any, key string) error {
 		return fmt.Errorf("腾讯云COS配置不完整")
 	}
 	scheme, host := qcloudHost(cfg, region, bucket)
-	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+"/"+key, nil)
+	req, err := http.NewRequest(http.MethodDelete, scheme+"://"+host+qcloudURI(key), nil)
 	if err != nil {
 		return err
 	}
@@ -395,6 +403,52 @@ func qcloudURI(key string) string {
 		parts[i] = url.PathEscape(p)
 	}
 	return "/" + strings.Join(parts, "/")
+}
+
+// aliyunObject matches PHP OssClient::generateSignableResource:
+// rawurlencode then restore %2F→/ and %25→%.
+func aliyunObject(key string) string {
+	encoded := phpRawURLEncode(key)
+	encoded = strings.ReplaceAll(encoded, "%2F", "/")
+	encoded = strings.ReplaceAll(encoded, "%25", "%")
+	return encoded
+}
+
+func phpRawURLEncode(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) * 3)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if aliyunUnreserved(c) {
+			b.WriteByte(c)
+			continue
+		}
+		b.WriteByte('%')
+		b.WriteByte(hexUpper(c >> 4))
+		b.WriteByte(hexUpper(c & 0xf))
+	}
+	return b.String()
+}
+
+func aliyunUnreserved(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.'
+}
+
+func hexUpper(n byte) byte {
+	if n < 10 {
+		return '0' + n
+	}
+	return 'A' + (n - 10)
+}
+
+// qiniuSafeB64 matches PHP Qiniu\base64_urlSafeEncode: standard base64
+// with +/→-_ and padding kept. Go URLEncoding is the same alphabet.
+func qiniuSafeB64(s string) string {
+	return base64.URLEncoding.EncodeToString([]byte(s))
+}
+
+func escapeQuotes(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
 }
 
 func aliyunHost(cfg map[string]any) (scheme, host string) {

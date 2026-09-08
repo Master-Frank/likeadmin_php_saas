@@ -13,12 +13,16 @@ import (
 )
 
 func TestPutAndDeleteQiniuFixture(t *testing.T) {
-	var gotKey, gotAuth, gotToken string
+	var gotKey, gotAuth, gotToken, gotFileCT string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/" {
 			_ = r.ParseMultipartForm(1 << 20)
 			gotKey = r.FormValue("key")
 			gotToken = r.FormValue("token")
+			if f, hdr, err := r.FormFile("file"); err == nil {
+				_ = f.Close()
+				gotFileCT = hdr.Header.Get("Content-Type")
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -40,6 +44,9 @@ func TestPutAndDeleteQiniuFixture(t *testing.T) {
 	}
 	if gotKey != "uploads/a.txt" {
 		t.Fatalf("key=%s", gotKey)
+	}
+	if gotFileCT != "text/plain" {
+		t.Fatalf("file Content-Type=%s", gotFileCT)
 	}
 	parts := strings.Split(gotToken, ":")
 	if len(parts) < 3 {

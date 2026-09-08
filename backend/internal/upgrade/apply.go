@@ -154,7 +154,7 @@ func applyExtracted(tempDir, projectDest, backendDest string, db *gorm.DB) error
 }
 
 func downFile(remote, saveDir string) (string, error) {
-	resp, err := httpClient.Get(remote)
+	resp, err := downloadClient.Get(remote)
 	if err != nil {
 		return "", err
 	}

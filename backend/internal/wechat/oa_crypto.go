@@ -115,6 +115,19 @@ func EncryptOA(encodingAESKey, appID, xmlBody string) (string, error) {
 	return base64.StdEncoding.EncodeToString(out), nil
 }
 
+// EncryptReplyOrSuccess wraps a plaintext OA reply when encryption_type>=2.
+// Encrypt failure must not leak plaintext — WeChat safe mode rejects it.
+func EncryptReplyOrSuccess(encType int, token, aesKey, appID, timestamp, nonce, xmlBody string) string {
+	if encType < 2 || aesKey == "" || xmlBody == "success" {
+		return xmlBody
+	}
+	enc, err := EncryptedReplyXML(token, aesKey, appID, timestamp, nonce, xmlBody)
+	if err != nil {
+		return "success"
+	}
+	return enc
+}
+
 func EncryptedReplyXML(token, aesKey, appID, timestamp, nonce, xmlBody string) (string, error) {
 	enc, err := EncryptOA(aesKey, appID, xmlBody)
 	if err != nil {

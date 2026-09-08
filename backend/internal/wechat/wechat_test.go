@@ -170,6 +170,19 @@ func TestParsePayNotify(t *testing.T) {
 	}
 }
 
+func TestEncryptReplyOrSuccessFailClosed(t *testing.T) {
+	plain := TextReplyXML("user", "oa", "hi")
+	if got := EncryptReplyOrSuccess(1, "tok", "badkey", "wx", "1", "n", plain); got != plain {
+		t.Fatal("plain mode must keep plaintext")
+	}
+	if got := EncryptReplyOrSuccess(3, "tok", "badkey", "wx", "1", "n", plain); got != "success" {
+		t.Fatalf("safe mode encrypt fail must not leak plaintext: %s", got)
+	}
+	if got := EncryptReplyOrSuccess(3, "tok", "k", "wx", "1", "n", "success"); got != "success" {
+		t.Fatalf("success body stays success: %s", got)
+	}
+}
+
 func TestEncryptedReplyXMLUsesNowTimestamp(t *testing.T) {
 	rawKey := make([]byte, 32)
 	for i := range rawKey {
