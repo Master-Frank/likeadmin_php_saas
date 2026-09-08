@@ -2,6 +2,7 @@ package biz
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -113,5 +114,26 @@ func TestApplyNoticeSetErrors(t *testing.T) {
 	}
 	if _, err := ApplyNoticeSet(true, 1, []any{map[string]any{"type": "nope"}}); err == nil {
 		t.Fatal("expected type error")
+	}
+}
+
+func TestCheckNoticeItemRejectsNullFields(t *testing.T) {
+	err := CheckNoticeItem(map[string]any{"type": "system", "title": nil, "content": "c", "status": 1})
+	if err == nil || err.Error() != "系统通知必填参数：title、content、status" {
+		t.Fatal(err)
+	}
+	err = CheckNoticeItem(map[string]any{"type": "sms", "template_id": "T", "content": "c", "status": nil})
+	if err == nil || err.Error() != "短信通知必填参数：template_id、content、status" {
+		t.Fatal(err)
+	}
+	err = CheckNoticeItem(map[string]any{
+		"type": "oa", "template_id": "T", "template_sn": "S", "name": "n",
+		"first": "f", "remark": "r", "tpl": nil, "status": 1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "微信模板消息必填参数") {
+		t.Fatal(err)
+	}
+	if err := CheckNoticeItem(map[string]any{"type": "system", "title": "", "content": "c", "status": 0}); err != nil {
+		t.Fatal(err)
 	}
 }

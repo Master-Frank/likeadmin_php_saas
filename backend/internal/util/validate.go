@@ -224,7 +224,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 			return msg
 		}
 	}
-	if _, ok := p["reply_type"]; !ok {
+	if !phpRequired(p, "reply_type") {
 		return "请输入回复类型"
 	}
 	rt := ToInt(p["reply_type"])
@@ -234,7 +234,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 	if strings.TrimSpace(ToString(p["name"])) == "" {
 		return "请输入规则名称"
 	}
-	if _, ok := p["content_type"]; !ok {
+	if !phpRequired(p, "content_type") {
 		return "请选择内容类型"
 	}
 	if ToInt(p["content_type"]) != 1 {
@@ -243,7 +243,7 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 	if strings.TrimSpace(ToString(p["content"])) == "" {
 		return "请输入回复内容"
 	}
-	if _, ok := p["status"]; !ok {
+	if !phpRequired(p, "status") {
 		return "请选择启用状态"
 	}
 	st := ToInt(p["status"])
@@ -254,20 +254,20 @@ func OAReplyWriteCheck(p map[string]any, needID bool) string {
 		if strings.TrimSpace(ToString(p["keyword"])) == "" {
 			return "请输入关键词"
 		}
-		if _, ok := p["matching_type"]; !ok {
+		if !phpRequired(p, "matching_type") {
 			return "请选择匹配类型"
 		}
 		mt := ToInt(p["matching_type"])
 		if mt != 1 && mt != 2 {
 			return "匹配类型状态值错误"
 		}
-		if _, ok := p["sort"]; !ok {
+		if !phpRequired(p, "sort") {
 			return "请输入排序值"
 		}
 		if ToInt(p["sort"]) < 0 {
 			return "排序值须大于或等于0"
 		}
-		if _, ok := p["reply_num"]; !ok {
+		if !phpRequired(p, "reply_num") {
 			return "请选择回复数量"
 		}
 		if ToInt(p["reply_num"]) != 1 {
@@ -340,6 +340,10 @@ func phpLooseEmpty(v any) bool {
 	}
 	s := strings.TrimSpace(ToString(v))
 	return s == "" || s == "0"
+}
+
+func PHPRequired(p map[string]any, key string) bool {
+	return phpRequired(p, key)
 }
 
 func phpRequired(p map[string]any, key string) bool {
@@ -1360,6 +1364,24 @@ func OAReplySortCheck(p map[string]any) string {
 func PayQueryCheck(p map[string]any) string {
 	if !phpRequired(p, "from") {
 		return "参数缺失"
+	}
+	if !phpRequired(p, "order_id") {
+		return "订单参数缺失"
+	}
+	return ""
+}
+
+// PayPayCheck mirrors PHP PayValidate scene (from + pay_way + order_id).
+func PayPayCheck(p map[string]any) string {
+	if !phpRequired(p, "from") {
+		return "参数缺失"
+	}
+	if !phpRequired(p, "pay_way") {
+		return "支付方式参数缺失"
+	}
+	n := ToInt(p["pay_way"])
+	if n != 1 && n != 2 && n != 3 {
+		return "支付方式参数错误"
 	}
 	if !phpRequired(p, "order_id") {
 		return "订单参数缺失"

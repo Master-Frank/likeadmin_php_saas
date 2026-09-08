@@ -53,7 +53,8 @@ func CheckPayConfig(in PayConfigInput) string {
 	if !in.Exists {
 		return "支付方式不存在"
 	}
-	if in.PayWay != PayBalance && !in.ConfigPresent {
+	// PHP isset($config) is false for a missing or JSON-null config.
+	if in.PayWay != PayBalance && (!in.ConfigPresent || in.Config == nil) {
 		return "支付配置不能为空"
 	}
 	cfg := asMap(in.Config)

@@ -185,6 +185,17 @@ func TestOAReplyWriteCheck(t *testing.T) {
 	if OAReplyWriteCheck(p, true) != "" {
 		t.Fatal(OAReplyWriteCheck(p, true))
 	}
+	if OAReplyWriteCheck(map[string]any{"reply_type": nil, "name": "r", "content_type": 1, "content": "hi", "status": 0}, false) != "请输入回复类型" {
+		t.Fatal(OAReplyWriteCheck(map[string]any{"reply_type": nil, "name": "r", "content_type": 1, "content": "hi", "status": 0}, false))
+	}
+	nullSort := map[string]any{"reply_type": 2, "name": "r", "content_type": 1, "content": "hi", "status": 0, "keyword": "k", "matching_type": 1, "sort": nil, "reply_num": 1}
+	if OAReplyWriteCheck(nullSort, false) != "请输入排序值" {
+		t.Fatal(OAReplyWriteCheck(nullSort, false))
+	}
+	nullStatus := map[string]any{"reply_type": 1, "name": "r", "content_type": 1, "content": "hi", "status": nil}
+	if OAReplyWriteCheck(nullStatus, false) != "请选择启用状态" {
+		t.Fatal(OAReplyWriteCheck(nullStatus, false))
+	}
 }
 
 func TestUserPasswordCheck(t *testing.T) {
@@ -380,6 +391,21 @@ func TestPayQueryCheck(t *testing.T) {
 	}
 	if PayQueryCheck(map[string]any{"from": "recharge"}) != "订单参数缺失" {
 		t.Fatal("order")
+	}
+}
+
+func TestPayPayCheck(t *testing.T) {
+	if PayPayCheck(map[string]any{"from": "recharge", "order_id": 1}) != "支付方式参数缺失" {
+		t.Fatal(PayPayCheck(map[string]any{"from": "recharge", "order_id": 1}))
+	}
+	if PayPayCheck(map[string]any{"from": "recharge", "pay_way": nil, "order_id": 1}) != "支付方式参数缺失" {
+		t.Fatal(PayPayCheck(map[string]any{"from": "recharge", "pay_way": nil, "order_id": 1}))
+	}
+	if PayPayCheck(map[string]any{"from": "recharge", "pay_way": 9, "order_id": 1}) != "支付方式参数错误" {
+		t.Fatal(PayPayCheck(map[string]any{"from": "recharge", "pay_way": 9, "order_id": 1}))
+	}
+	if PayPayCheck(map[string]any{"from": "recharge", "pay_way": 1, "order_id": 1}) != "" {
+		t.Fatal(PayPayCheck(map[string]any{"from": "recharge", "pay_way": 1, "order_id": 1}))
 	}
 }
 

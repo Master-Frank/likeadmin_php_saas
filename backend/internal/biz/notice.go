@@ -273,9 +273,10 @@ func supportHas(support string, code int) bool {
 	return false
 }
 
+// mapHas mirrors PHP isset(): missing and JSON null both fail.
 func mapHas(m map[string]any, key string) bool {
-	_, ok := m[key]
-	return ok
+	v, ok := m[key]
+	return ok && v != nil
 }
 
 func cloneMap(m map[string]any) map[string]any {

@@ -613,7 +613,7 @@ func StorageSetup(c *gin.Context) {
 		response.Fail(c, "engine不能为空")
 		return
 	}
-	if _, ok := httpx.Body(c)["status"]; !ok {
+	if !util.PHPRequired(httpx.Body(c), "status") {
 		response.Fail(c, "status不能为空")
 		return
 	}

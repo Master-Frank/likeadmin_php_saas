@@ -80,6 +80,16 @@ func TestCheckPayConfigMessages(t *testing.T) {
 	}
 }
 
+func TestCheckPayConfigNullConfig(t *testing.T) {
+	in := PayConfigInput{
+		ID: 2, IDPresent: true, Name: "微信支付", Icon: "/i.png", Sort: 2, SortPresent: true,
+		PayWay: PayWechat, Exists: true, ConfigPresent: true, Config: nil,
+	}
+	if msg := CheckPayConfig(in); msg != "支付配置不能为空" {
+		t.Fatal(msg)
+	}
+}
+
 func TestCheckPayConfigAlipayCertificate(t *testing.T) {
 	in := PayConfigInput{
 		ID: 3, IDPresent: true, Name: "支付宝", Icon: "/i.png", Sort: 3, SortPresent: true,

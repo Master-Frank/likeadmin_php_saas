@@ -235,23 +235,11 @@ func PayPrepay(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	if _, ok := p["from"]; !ok || strings.TrimSpace(util.ToString(p["from"])) == "" {
-		response.Fail(c, "参数缺失")
-		return
-	}
-	if _, ok := p["pay_way"]; !ok {
-		response.Fail(c, "支付方式参数缺失")
+	if msg := util.PayPayCheck(p); msg != "" {
+		response.Fail(c, msg)
 		return
 	}
 	payWay := httpx.BodyInt(c, "pay_way")
-	if payWay != 1 && payWay != 2 && payWay != 3 {
-		response.Fail(c, "支付方式参数错误")
-		return
-	}
-	if _, ok := p["order_id"]; !ok || strings.TrimSpace(util.ToString(p["order_id"])) == "" {
-		response.Fail(c, "订单参数缺失")
-		return
-	}
 	from := httpx.BodyStr(c, "from")
 	orderID := httpx.BodyUint(c, "order_id")
 	if from != "recharge" {
