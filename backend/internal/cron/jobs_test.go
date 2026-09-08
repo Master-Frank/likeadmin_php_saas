@@ -44,6 +44,10 @@ func TestEnsureNativeJobsInsertsOnce(t *testing.T) {
 	if n < 1 {
 		t.Fatalf("cancel_unpaid_orders rows=%d", n)
 	}
+	bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", "verification_orders").Count(&n)
+	if n < 1 {
+		t.Fatalf("verification_orders rows=%d", n)
+	}
 }
 
 func TestCancelUnpaidSoftDeletesStaleOrders(t *testing.T) {

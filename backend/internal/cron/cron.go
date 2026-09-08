@@ -718,8 +718,8 @@ func tableHasColumn(db *gorm.DB, table, col string) bool {
 }
 
 // EnsureNativeJobs inserts the Go-only system jobs a PHP install never shipped,
-// so cmd/crontab still queries refunds and cancels stale unpaid orders after
-// php-fpm is stopped.
+// so cmd/crontab still queries refunds, cancels stale unpaid orders, and runs
+// verification_orders after php-fpm is stopped.
 func EnsureNativeJobs() {
 	if bootstrap.DB == nil {
 		return
@@ -729,6 +729,7 @@ func EnsureNativeJobs() {
 	for _, job := range []model.Crontab{
 		{Name: "查询退款状态", Command: "query_refund", Remark: "查询微信/支付宝退款结果"},
 		{Name: "取消超时未支付订单", Command: "cancel_unpaid_orders", Remark: "按交易设置取消超时未支付充值单"},
+		{Name: "自动核销订单", Command: "verification_orders", Remark: "按交易设置核销超时未核销订单"},
 	} {
 		var n int64
 		bootstrap.DB.Model(&model.Crontab{}).Where("command = ? AND system = 1 AND delete_time IS NULL", job.Command).Count(&n)

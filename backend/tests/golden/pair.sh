@@ -37,6 +37,22 @@ print("" if cur is None else cur)
 
 jcode() { jget code ""; }
 
+# PHP uncaught exceptions use ThinkPHP {message}; likeadmin JSON uses {msg}.
+jerr() {
+  python3 -c '
+import json,re,sys
+raw=sys.stdin.read()
+try:
+    d=json.loads(raw)
+    print(d.get("msg") or d.get("message") or "")
+    raise SystemExit(0)
+except Exception:
+    pass
+m=re.search(r"请先设置公众号配置|请重新生成代码|下载失败", raw)
+print(m.group(0) if m else "")
+'
+}
+
 # Rewrite an absolute URL onto $base. Nginx $host omits the listen port, so
 # API data.url / data.file can become http://127.0.0.1/... (:80) and curl dies.
 origin_url() {
@@ -2923,6 +2939,16 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
       fail=$((fail + 1))
     fi
   fi
+  php_oa_post="$(curl -sS -X POST "$PHP/tenantapi/channel.official_account_reply/index" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d '<xml></xml>')"
+  go_oa_post="$(curl -sS -X POST "$GO/tenantapi/channel.official_account_reply/index" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d '<xml></xml>')"
+  echo "oa_index_empty_post php=${php_oa_post:0:40} go=${go_oa_post:0:40}"
+  if [[ "$go_oa_post" != "success" ]]; then
+    echo "  go_oa_post=${go_oa_post:0:160}"
+    fail=$((fail + 1))
+  fi
+  if [[ "$php_oa_post" == "success" && "$go_oa_post" != "success" ]]; then
+    fail=$((fail + 1))
+  fi
 fi
 
 php_gt="$(curl -sS "$PHP/platformapi/tools.generator/generateTable?page_size=1" -H "token: $TOKEN")"
@@ -3550,6 +3576,25 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
       echo "  php_n2=${php_n2:0:160} go_n2=${go_n2:0:160}"
       fail=$((fail + 1))
     fi
+    mysqlq "INSERT INTO la_recharge_order (sn,user_id,pay_way,pay_status,order_amount,order_terminal,refund_status,tenant_id,create_time) VALUES ('mnp$now',$uid,2,0,9,1,0,1,$now),('mng$now',$uid,2,0,9,1,0,1,$now)"
+    php_nm1="$(curl -sS -X POST "$PHP/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mnp$now</out_trade_no><transaction_id>wxmnp</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    go_nm1="$(curl -sS -X POST "$GO/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mng$now</out_trade_no><transaction_id>wxmng</transaction_id><attach></attach><result_code>SUCCESS</result_code></xml>")"
+    php_nmps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mnp$now'")"
+    go_nmps1="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mng$now'")"
+    echo "pay_notify_mnp_empty_attach php_pay=$php_nmps1 go_pay=$go_nmps1 php_body=${php_nm1:0:40} go_body=${go_nm1:0:40}"
+    if [[ "$php_nmps1" != "0" || "$go_nmps1" != "0" ]]; then
+      fail=$((fail + 1))
+    fi
+    php_nm2="$(curl -sS -X POST "$PHP/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mnp$now</out_trade_no><transaction_id>wxmnp</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    go_nm2="$(curl -sS -X POST "$GO/api/pay/notifyMnp" -H "Host: $TENANT_HOST" -H 'Content-Type: application/xml' -d "<xml><out_trade_no>mng$now</out_trade_no><transaction_id>wxmng</transaction_id><attach>recharge</attach><result_code>SUCCESS</result_code></xml>")"
+    php_nmps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mnp$now'")"
+    go_nmps2="$(mysqlq "SELECT pay_status FROM la_recharge_order WHERE sn='mng$now'")"
+    echo "pay_notify_mnp php_pay=$php_nmps2 go_pay=$go_nmps2"
+    if [[ "$go_nmps2" != "1" ]]; then
+      echo "  php_nm2=${php_nm2:0:160} go_nm2=${go_nm2:0:160}"
+      fail=$((fail + 1))
+    fi
+    mysqlq "DELETE FROM la_recharge_order WHERE sn IN ('mnp$now','mng$now')"
   fi
 fi
 
@@ -3877,11 +3922,11 @@ if [[ -n "$TOKEN" ]] && command -v mysql >/dev/null; then
     fi
     php_ctrl="/workspace/server/app/platform/controller/PairGencrudController.php"
     go_meta="/workspace/backend/internal/generated/platform_pair_gencrud.go"
-    if [[ ! -f "$php_ctrl" ]]; then
-      echo "gencrud_php_missing $php_ctrl"
+    if [[ -f "$php_ctrl" ]]; then
+      echo "gencrud_php_written_but_cutover_forbids $php_ctrl"
       fail=$((fail + 1))
     else
-      echo "gencrud_php_written ok"
+      echo "gencrud_php_not_written ok"
     fi
     if [[ ! -f "$go_meta" ]]; then
       echo "gencrud_go_missing $go_meta"
@@ -4240,6 +4285,37 @@ if [[ -n "$TENANT_HOST" ]] && command -v mysql >/dev/null; then
   if [[ "$(jcode <<<"$php_sc")" != "$(jcode <<<"$go_sc")" || "$go_scu" != *qrconnect* ]]; then
     echo "  php_sc=${php_sc:0:200}"
     echo "  go_sc=${go_sc:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_cu="$(curl -sS "$PHP/api/login/codeUrl" -H "Host: $TENANT_HOST")"
+  go_cu="$(curl -sS "$GO/api/login/codeUrl" -H "Host: $TENANT_HOST")"
+  php_cue="$(jerr <<<"$php_cu")"
+  go_cue="$(jerr <<<"$go_cu")"
+  php_cuu="$(jget data.url <<<"$php_cu")"
+  go_cuu="$(jget data.url <<<"$go_cu")"
+  echo "login_code_url php_code=$(jcode <<<"$php_cu") go_code=$(jcode <<<"$go_cu") php_err=$php_cue go_err=$go_cue"
+  if [[ "$(jcode <<<"$go_cu")" == "1" ]]; then
+    if [[ "$go_cuu" != *open.weixin.qq.com* || ( "$(jcode <<<"$php_cu")" == "1" && "$php_cuu" != *open.weixin.qq.com* ) ]]; then
+      echo "  php_cu=${php_cu:0:200}"
+      echo "  go_cu=${go_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+  else
+    if [[ "$go_cue" != *请先设置公众号配置* ]]; then
+      echo "  go_cu=${go_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+    if [[ -n "$php_cue" && "$php_cue" != "$go_cue" && "$php_cue" != *请先设置公众号配置* ]]; then
+      echo "  php_cu=${php_cu:0:200}"
+      fail=$((fail + 1))
+    fi
+  fi
+  php_cu2="$(curl -sS "$PHP/api/login/codeUrl?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  go_cu2="$(curl -sS "$GO/api/login/codeUrl?url=http://example.com/pc" -H "Host: $TENANT_HOST")"
+  echo "login_code_url_with_redirect php_code=$(jcode <<<"$php_cu2") go_code=$(jcode <<<"$go_cu2") php_err=$(jerr <<<"$php_cu2") go_err=$(jerr <<<"$go_cu2")"
+  if [[ "$(jcode <<<"$go_cu2")" != "$(jcode <<<"$php_cu2")" && "$(jerr <<<"$go_cu2")" != *请先设置公众号配置* ]]; then
+    echo "  php_cu2=${php_cu2:0:200}"
+    echo "  go_cu2=${go_cu2:0:200}"
     fail=$((fail + 1))
   fi
   mysqlq "INSERT INTO la_article (tenant_id,cid,title,abstract,image,author,content,is_show,sort,create_time) VALUES (1,0,'paircid0$ts','pair','','','',1,0,$now)"
@@ -5375,6 +5451,22 @@ print(first_m(json.load(sys.stdin).get("data") or []))
   if [[ "$(jget msg <<<"$php_texm")" != "$(jget msg <<<"$go_texm")" ]]; then
     echo "  php_texm=${php_texm:0:200}"
     echo "  go_texm=${go_texm:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_gdl0="$(curl -sS "$PHP/platformapi/tools.generator/download" -H "token: $TOKEN")"
+  go_gdl0="$(curl -sS "$GO/platformapi/tools.generator/download" -H "token: $TOKEN")"
+  echo "generator_download_nofile php_err=$(jerr <<<"$php_gdl0") go_err=$(jerr <<<"$go_gdl0")"
+  if [[ "$(jerr <<<"$php_gdl0")" != "$(jerr <<<"$go_gdl0")" || "$(jerr <<<"$go_gdl0")" != *下载失败* ]]; then
+    echo "  php_gdl0=${php_gdl0:0:200}"
+    echo "  go_gdl0=${go_gdl0:0:200}"
+    fail=$((fail + 1))
+  fi
+  php_gdl1="$(curl -sS "$PHP/platformapi/tools.generator/download?file=missing-curd.zip" -H "token: $TOKEN")"
+  go_gdl1="$(curl -sS "$GO/platformapi/tools.generator/download?file=missing-curd.zip" -H "token: $TOKEN")"
+  echo "generator_download_expired php_err=$(jerr <<<"$php_gdl1") go_err=$(jerr <<<"$go_gdl1")"
+  if [[ "$(jerr <<<"$php_gdl1")" != "$(jerr <<<"$go_gdl1")" || "$(jerr <<<"$go_gdl1")" != *请重新生成代码* ]]; then
+    echo "  php_gdl1=${php_gdl1:0:200}"
+    echo "  go_gdl1=${go_gdl1:0:200}"
     fail=$((fail + 1))
   fi
   echo 'pair-file' >/tmp/likeadmin-pair-file.txt

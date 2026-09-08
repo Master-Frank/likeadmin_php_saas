@@ -109,6 +109,33 @@ func TestPHPModuleInventoryMapped(t *testing.T) {
 	}
 }
 
+func TestPairScriptsMentionPHPActions(t *testing.T) {
+	root := phpAppRoot(t)
+	repo := filepath.Dir(filepath.Dir(root))
+	var raw strings.Builder
+	for _, name := range []string{"pair.sh", "pair-gap.sh", "pair-generator-zip.sh"} {
+		b, err := os.ReadFile(filepath.Join(repo, "backend", "tests", "golden", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw.Write(b)
+		raw.WriteByte('\n')
+	}
+	blob := compactKey(raw.String())
+	var missing []string
+	for _, app := range []string{"platformapi", "tenantapi", "api"} {
+		for _, act := range scanPHPControllers(t, filepath.Join(root, app, "controller")) {
+			needle := compactKey("/" + app + "/" + act.ctrl + "/" + act.action)
+			if !strings.Contains(blob, needle) {
+				missing = append(missing, app+"/"+act.ctrl+"/"+act.action)
+			}
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("pair scripts omit PHP actions:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
 type phpAction struct {
 	ctrl, action, file string
 	notNeed            bool

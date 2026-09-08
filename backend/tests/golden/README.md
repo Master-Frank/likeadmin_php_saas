@@ -15,7 +15,7 @@ PHP 源文件与 Go 路由的 1:1 清单由 `backend/internal/router/php_module_
 | 平台租户生命周期 | `TenantLogic` `TenantAdminLogic` `TenantCreatService` | `platformapi/tenant.go` `tenantdb` | 对拍已过（分表走 shard；删除/停用比 PHP 多清理） |
 | 平台设置 | storage/dict/notice/pay/web/user/system | `platformapi/setting.go` `extra.go` | 对拍已过 |
 | 代码生成 / 升级 | `GeneratorLogic` `UpgradeLogic` | `generator/`（内嵌 stub）`gencrud/` `upgrade/` | 生成写入 Vue + 菜单 + gencrud 运行时，不再写 PHP 后端文件 |
-| 定时/安装 | `Crontab` `QueryRefund` `public/install` | `cron/` `cmd/crontab` `install/` | `query_refund`/`cancel_unpaid_orders`/`verification_orders` 已注册；独立 worker 含 `route:list` |
+| 定时/安装 | `Crontab` `QueryRefund` `public/install` | `cron/` `cmd/crontab` `install/` | 三件系统任务已 `EnsureNativeJobs` 入库；独立 worker 含 `route:list` |
 | 租户内核 | login/config/workbench/RBAC/dept | `tenantapi/core.go` `auth.go` `org.go` | 对拍已过 |
 | 租户业务 | 文章/用户/装修/渠道/财务/充值/文件/通知 | `tenantapi/core.go` `extra.go` `channel.go` `file.go` `pay.go` | 对拍已过 |
 | 用户端 `/api` | `api/logic/*` + lists | `openapi/` | 对拍已过 |
@@ -25,6 +25,20 @@ PHP 源文件与 Go 路由的 1:1 清单由 `backend/internal/router/php_module_
 | 全量切流 | nginx / strangler | `cmd/strangler` `deploy/nginx.local.conf` | 直连/切流/Nginx 对拍 failed=0；PHP 回落默认关 |
 
 允许差异：新签发 `token`、键顺序、工作台随机演示曲线。不允许：`code`/`show`/`msg` 语义、列表字段、空 `data` 形态、时间格式。
+
+## 对拍覆盖
+
+`pair.sh` + `pair-gap.sh` + `pair-generator-zip.sh` 必须点名全部 **307** 个 PHP 公开动作（由 `TestPairScriptsMentionPHPActions` 守门）。无真实微信/支付宝/短信凭证时只对拍失败与校验语义；成功下单、真实退款、公众号菜单发布需凭证。
+
+刻意不对拍 / 不迁：
+
+- `LoginLogic::silentLogin`（无路由）
+- AliPay `transfer` / `transferQuery`（无控制器调用）
+- `api/pay/notifyApp`（PHP 无此动作；Go 为微信 App 回调 URL 多注册，与 `notifyMnp`/`notifyOa` 同处理器）
+- 本仓库无核销订单业务表时 `verification_orders` 为空跑
+- 安装向导在库已 lock 时不重装（对拍 `/install/env` 与已安装拒绝）
+
+生成器 `generate_type=1` 只写 Vue/菜单/`backend/internal/generated`，**不再写** `server/app` PHP 控制器。
 
 ## 跑对拍
 
