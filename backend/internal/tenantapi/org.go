@@ -76,8 +76,8 @@ func DeptAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Create(&model.TenantDept{
-		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
-		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
+		Name: httpx.BodyRaw(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
+		Leader: httpx.BodyRaw(c, "leader"), Mobile: httpx.BodyRaw(c, "mobile"), Status: httpx.BodyInt(c, "status"),
 		TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
@@ -121,8 +121,8 @@ func DeptEdit(c *gin.Context) {
 		}
 	}
 	scopeTID(tdb(c).Model(&model.TenantDept{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
-		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
+		"name": httpx.BodyRaw(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
+		"leader": httpx.BodyRaw(c, "leader"), "mobile": httpx.BodyRaw(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -249,8 +249,8 @@ func JobsAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Create(&model.TenantJobs{
-		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
-		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
+		Name: httpx.BodyRaw(c, "name"), Code: httpx.BodyRaw(c, "code"), Sort: httpx.BodyInt(c, "sort"),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyRaw(c, "remark"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	})
 	response.SuccessNotice(c, "添加成功")
 }
@@ -282,8 +282,8 @@ func JobsEdit(c *gin.Context) {
 		return
 	}
 	scopeTID(tdb(c).Model(&model.TenantJobs{}).Where("id = ? AND delete_time IS NULL", id), c).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
-		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"),
+		"name": httpx.BodyRaw(c, "name"), "code": httpx.BodyRaw(c, "code"), "sort": httpx.BodyInt(c, "sort"),
+		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyRaw(c, "remark"),
 		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")

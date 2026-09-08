@@ -448,9 +448,9 @@ func UserBindMobile(c *gin.Context) {
 	}
 	u := currentUser(c)
 	// PHP UserValidate::sceneBindMobile is only code.require; mobile format is not checked.
-	mobile := httpx.BodyStr(c, "mobile")
-	code := httpx.BodyStr(c, "code")
-	typ := httpx.BodyStr(c, "type")
+	mobile := httpx.BodyRaw(c, "mobile")
+	code := httpx.BodyRaw(c, "code")
+	typ := httpx.BodyRaw(c, "type")
 	scene := "BGSJHM"
 	if typ == "bind" {
 		scene = "BDSJHM"

@@ -207,8 +207,8 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, "不支持的登录方式")
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	if account == "" {
+	account := httpx.BodyRaw(c, "account")
+	if !util.PHPRequired(httpx.Body(c), "account") {
 		response.Fail(c, "请输入账号")
 		return
 	}
@@ -230,7 +230,7 @@ func LoginAccount(c *gin.Context) {
 	var u model.User
 	if scene == 2 {
 		// PHP checkCode verifies SMS before looking up the user and never checks is_disable.
-		if !verifySms(c, account, httpx.BodyStr(c, "code"), "YZMDL") {
+		if !verifySms(c, account, httpx.BodyRaw(c, "code"), "YZMDL") {
 			response.Fail(c, "验证码错误")
 			return
 		}
@@ -252,7 +252,7 @@ func LoginAccount(c *gin.Context) {
 			response.Fail(c, "用户不存在")
 			return
 		}
-		if u.Password != util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification) {
+		if u.Password != util.CreatePassword(httpx.BodyRaw(c, "password"), config.C.Project.UniqueIdentification) {
 			cache.RecordUserLoginFail(ip)
 			response.Fail(c, "密码错误")
 			return

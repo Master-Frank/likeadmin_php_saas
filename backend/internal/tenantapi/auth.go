@@ -89,8 +89,8 @@ func AdminAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	account := httpx.BodyStr(c, "account")
-	name := httpx.BodyStr(c, "name")
+	account := httpx.BodyRaw(c, "account")
+	name := httpx.BodyRaw(c, "name")
 	if msg := util.AuthAdminAddCheckTaken(p, func(s string) bool {
 		return tenantAdminAccountTaken(c, s, 0)
 	}, func(s string) bool {
@@ -110,7 +110,7 @@ func AdminAdd(c *gin.Context) {
 	now := util.NowUnix()
 	admin := model.TenantAdmin{
 		TenantID: tenantDB(c), Name: name, Account: account,
-		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
+		Password: util.CreatePassword(httpx.BodyRaw(c, "password"), config.C.Project.UniqueIdentification),
 		Disable:  disable, MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
@@ -150,8 +150,8 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, "管理员不存在")
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	name := httpx.BodyStr(c, "name")
+	account := httpx.BodyRaw(c, "account")
+	name := httpx.BodyRaw(c, "name")
 	if msg := util.AuthAdminEditCheckTaken(p, admin.Root == 1, func(s string) bool {
 		return tenantAdminAccountTaken(c, s, id)
 	}, func(s string) bool {
@@ -172,7 +172,7 @@ func AdminEdit(c *gin.Context) {
 		"avatar":           avatar,
 		"update_time":      util.NowUnix(),
 	}
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+	if pwd := httpx.BodyRaw(c, "password"); pwd != "" && pwd != "0" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
@@ -225,10 +225,11 @@ func AdminEditSelf(c *gin.Context) {
 		return
 	}
 	data := map[string]any{
-		"name": httpx.BodyStr(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")), "update_time": util.NowUnix(),
+		"name": httpx.BodyRaw(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")), "update_time": util.NowUnix(),
 	}
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
-		old := httpx.BodyStr(c, "password_old")
+	if util.PHPRequired(p, "password") {
+		old := httpx.BodyRaw(c, "password_old")
+		pwd := httpx.BodyRaw(c, "password")
 		if admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
 			response.Fail(c, "当前密码错误")
 			return
@@ -236,7 +237,7 @@ func AdminEditSelf(c *gin.Context) {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	tdb(c).Model(&admin).Updates(data)
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+	if util.PHPRequired(p, "password") {
 		expireTenantAuthTokens(c, id)
 	}
 	cache.ClearAdminAuthCache(id)

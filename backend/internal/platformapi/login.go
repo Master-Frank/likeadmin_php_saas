@@ -25,14 +25,14 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	password := httpx.BodyStr(c, "password")
+	account := httpx.BodyRaw(c, "account")
+	password := httpx.BodyRaw(c, "password")
 	terminal := httpx.BodyInt(c, "terminal")
-	if account == "" {
+	if !util.PHPRequired(httpx.Body(c), "account") {
 		response.Fail(c, "请输入账号")
 		return
 	}
-	if password == "" {
+	if !util.PHPRequired(httpx.Body(c), "password") {
 		response.Fail(c, "请输入密码")
 		return
 	}

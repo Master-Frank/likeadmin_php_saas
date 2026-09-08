@@ -65,8 +65,8 @@ func DeptAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	d := model.Dept{
-		Name: httpx.BodyStr(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
-		Leader: httpx.BodyStr(c, "leader"), Mobile: httpx.BodyStr(c, "mobile"), Status: httpx.BodyInt(c, "status"),
+		Name: httpx.BodyRaw(c, "name"), Pid: httpx.BodyUint(c, "pid"), Sort: httpx.BodyInt(c, "sort"),
+		Leader: httpx.BodyRaw(c, "leader"), Mobile: httpx.BodyRaw(c, "mobile"), Status: httpx.BodyInt(c, "status"),
 		CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := bootstrap.DB.Create(&d).Error; err != nil {
@@ -112,8 +112,8 @@ func DeptEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Dept{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
-		"leader": httpx.BodyStr(c, "leader"), "mobile": httpx.BodyStr(c, "mobile"), "status": httpx.BodyInt(c, "status"),
+		"name": httpx.BodyRaw(c, "name"), "pid": pid, "sort": httpx.BodyInt(c, "sort"),
+		"leader": httpx.BodyRaw(c, "leader"), "mobile": httpx.BodyRaw(c, "mobile"), "status": httpx.BodyInt(c, "status"),
 		"update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
@@ -254,8 +254,8 @@ func JobsAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	j := model.Jobs{
-		Name: httpx.BodyStr(c, "name"), Code: httpx.BodyStr(c, "code"), Sort: httpx.BodyInt(c, "sort"),
-		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyStr(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
+		Name: httpx.BodyRaw(c, "name"), Code: httpx.BodyRaw(c, "code"), Sort: httpx.BodyInt(c, "sort"),
+		Status: httpx.BodyInt(c, "status"), Remark: httpx.BodyRaw(c, "remark"), CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
 	if err := bootstrap.DB.Create(&j).Error; err != nil {
 		response.Fail(c, err.Error())
@@ -289,8 +289,8 @@ func JobsEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	bootstrap.DB.Model(&model.Jobs{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "code": httpx.BodyStr(c, "code"), "sort": httpx.BodyInt(c, "sort"),
-		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyStr(c, "remark"), "update_time": now,
+		"name": httpx.BodyRaw(c, "name"), "code": httpx.BodyRaw(c, "code"), "sort": httpx.BodyInt(c, "sort"),
+		"status": httpx.BodyInt(c, "status"), "remark": httpx.BodyRaw(c, "remark"), "update_time": now,
 	})
 	response.SuccessNotice(c, "编辑成功")
 }

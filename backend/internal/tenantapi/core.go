@@ -39,14 +39,14 @@ func LoginAccount(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	password := httpx.BodyStr(c, "password")
+	account := httpx.BodyRaw(c, "account")
+	password := httpx.BodyRaw(c, "password")
 	terminal := httpx.BodyInt(c, "terminal")
-	if account == "" {
+	if !util.PHPRequired(httpx.Body(c), "account") {
 		response.Fail(c, "请输入账号")
 		return
 	}
-	if password == "" {
+	if !util.PHPRequired(httpx.Body(c), "password") {
 		response.Fail(c, "请输入密码")
 		return
 	}
@@ -499,7 +499,7 @@ func ArticleAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	a := model.Article{
-		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyStr(c, "title"), Desc: httpx.BodyStr(c, "desc"),
+		Cid: httpx.BodyUint(c, "cid"), Title: httpx.BodyRaw(c, "title"), Desc: httpx.BodyRaw(c, "desc"),
 		Abstract: httpx.BodyStr(c, "abstract"), Image: filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
 		Author: httpx.BodyStr(c, "author"), Content: filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
 		IsShow: httpx.BodyInt(c, "is_show"), Sort: httpx.BodyInt(c, "sort"),
@@ -550,7 +550,7 @@ func ArticleEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.Article{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
-		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyStr(c, "title"), "desc": httpx.BodyStr(c, "desc"),
+		"cid": httpx.BodyUint(c, "cid"), "title": httpx.BodyRaw(c, "title"), "desc": httpx.BodyRaw(c, "desc"),
 		"abstract": httpx.BodyStr(c, "abstract"), "image": filesvc.SetFileURL(c, httpx.BodyStr(c, "image")),
 		"author": httpx.BodyStr(c, "author"), "content": filesvc.ClearContentDomains(c, httpx.BodyStr(c, "content")),
 		"is_show": httpx.BodyInt(c, "is_show"), "sort": httpx.BodyInt(c, "sort"),
@@ -661,7 +661,7 @@ func ArticleCateAdd(c *gin.Context) {
 		return
 	}
 	now := util.NowUnix()
-	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyStr(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)})
+	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyRaw(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)})
 	response.SuccessNotice(c, "添加成功")
 }
 
@@ -677,7 +677,7 @@ func ArticleCateEdit(c *gin.Context) {
 		return
 	}
 	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
+		"name": httpx.BodyRaw(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
 		"update_time": util.NowUnix(),
 	})
 	response.SuccessNotice(c, "编辑成功")

@@ -119,8 +119,8 @@ func TenantAdd(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
-	name := httpx.BodyStr(c, "name")
-	if name == "" {
+	name := httpx.BodyRaw(c, "name")
+	if !util.PHPRequired(httpx.Body(c), "name") {
 		response.Fail(c, "请输入用户名")
 		return
 	}
@@ -193,7 +193,7 @@ func TenantEdit(c *gin.Context) {
 	now := util.NowUnix()
 	disable := httpx.BodyInt(c, "disable")
 	bootstrap.DB.Model(&model.Tenant{}).Where("id = ? AND delete_time IS NULL", id).Updates(map[string]any{
-		"name": httpx.BodyStr(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
+		"name": httpx.BodyRaw(c, "name"), "avatar": filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		"disable": disable, "tel": httpx.BodyStr(c, "tel"),
 		"domain_alias":        alias,
 		"domain_alias_enable": httpx.BodyInt(c, "domain_alias_enable"),
@@ -444,15 +444,15 @@ func TenantAdminAdd(c *gin.Context) {
 	}
 	tid := httpx.BodyUint(c, "tenant_id")
 	adb := tenantAdminDB(tenant)
-	account := httpx.BodyStr(c, "account")
+	account := httpx.BodyRaw(c, "account")
 	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
 		avatar = config.C.Project.DefaultImage["admin_avatar"]
 	}
 	now := util.NowUnix()
 	admin := model.TenantAdmin{
-		TenantID: tid, Account: account, Name: httpx.BodyStr(c, "name"),
-		Password: util.CreatePassword(httpx.BodyStr(c, "password"), config.C.Project.UniqueIdentification),
+		TenantID: tid, Account: account, Name: httpx.BodyRaw(c, "name"),
+		Password: util.CreatePassword(httpx.BodyRaw(c, "password"), config.C.Project.UniqueIdentification),
 		Disable:  httpx.BodyInt(c, "disable"), MultipointLogin: httpx.BodyInt(c, "multipoint_login"),
 		Avatar: avatar, CreateTime: now, UpdateTime: util.UnixPtr(now),
 	}
@@ -512,7 +512,7 @@ func TenantAdminEdit(c *gin.Context) {
 		response.Fail(c, "超级管理员不允许被禁用")
 		return
 	}
-	if account := httpx.BodyStr(c, "account"); account != "" {
+	if account := httpx.BodyRaw(c, "account"); account != "" && account != "0" {
 		var taken model.TenantAdmin
 		tq := adb.Where("account = ? AND delete_time IS NULL AND id <> ?", account, id)
 		if tenant.ID > 0 {
@@ -525,8 +525,8 @@ func TenantAdminEdit(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	data := map[string]any{
-		"name":             httpx.BodyStr(c, "name"),
-		"account":          httpx.BodyStr(c, "account"),
+		"name":             httpx.BodyRaw(c, "name"),
+		"account":          httpx.BodyRaw(c, "account"),
 		"disable":          httpx.BodyInt(c, "disable"),
 		"multipoint_login": httpx.BodyInt(c, "multipoint_login"),
 		"update_time":      now,
@@ -537,7 +537,7 @@ func TenantAdminEdit(c *gin.Context) {
 	} else {
 		data["avatar"] = ""
 	}
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+	if pwd := httpx.BodyRaw(c, "password"); pwd != "" && pwd != "0" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
@@ -792,12 +792,13 @@ func TenantUserDetail(c *gin.Context) {
 }
 
 func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
-	pwd := httpx.BodyStr(c, "password")
-	if pwd == "" {
+	// PHP TenantAdminLogic::initialization uses ?: on raw params.
+	pwd := httpx.BodyRaw(c, "password")
+	if pwd == "" || pwd == "0" {
 		pwd = config.C.Project.DefaultPassword
 	}
-	account := httpx.BodyStr(c, "account")
-	if account == "" {
+	account := httpx.BodyRaw(c, "account")
+	if account == "" || account == "0" {
 		account = tenant.SN
 	}
 	now := util.NowUnix()
@@ -832,13 +833,14 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		return err
 	}
 	sdb := tenantdb.UseSN(tenant.SN)
-	pwd := httpx.BodyStr(c, "password")
-	if pwd == "" {
-		pwd = config.C.Project.DefaultPassword
+	// PHP TenantCreatService::initAccount uses isset() on raw params.
+	pwd := config.C.Project.DefaultPassword
+	if httpx.BodyHas(c, "password") {
+		pwd = httpx.BodyRaw(c, "password")
 	}
-	account := httpx.BodyStr(c, "account")
-	if account == "" {
-		account = "admin"
+	account := "admin"
+	if httpx.BodyHas(c, "account") {
+		account = httpx.BodyRaw(c, "account")
 	}
 	now := util.NowUnix()
 	admin := newTenantSuperAdmin(1, tenant.ID, account, util.CreatePassword(pwd, config.C.Project.UniqueIdentification), now)

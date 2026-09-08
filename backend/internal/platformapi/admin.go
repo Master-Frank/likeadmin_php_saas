@@ -93,8 +93,8 @@ func AdminAdd(c *gin.Context) {
 		return
 	}
 	p := httpx.Body(c)
-	account := httpx.BodyStr(c, "account")
-	name := httpx.BodyStr(c, "name")
+	account := httpx.BodyRaw(c, "account")
+	name := httpx.BodyRaw(c, "name")
 	if msg := util.AuthAdminAddCheckTaken(p, func(s string) bool {
 		var exist model.Admin
 		return bootstrap.DB.Where("account = ? AND delete_time IS NULL", s).First(&exist).Error == nil
@@ -105,7 +105,7 @@ func AdminAdd(c *gin.Context) {
 		response.Fail(c, msg)
 		return
 	}
-	password := httpx.BodyStr(c, "password")
+	password := httpx.BodyRaw(c, "password")
 	now := util.NowUnix()
 	avatar := filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar"))
 	if avatar == "" {
@@ -153,8 +153,8 @@ func AdminEdit(c *gin.Context) {
 		response.Fail(c, "管理员不存在")
 		return
 	}
-	account := httpx.BodyStr(c, "account")
-	name := httpx.BodyStr(c, "name")
+	account := httpx.BodyRaw(c, "account")
+	name := httpx.BodyRaw(c, "name")
 	if msg := util.AuthAdminEditCheckTaken(p, admin.Root == 1, func(s string) bool {
 		var exist model.Admin
 		return bootstrap.DB.Where("account = ? AND delete_time IS NULL AND id <> ?", s, id).First(&exist).Error == nil
@@ -178,7 +178,7 @@ func AdminEdit(c *gin.Context) {
 		"avatar":           avatar,
 		"update_time":      now,
 	}
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
+	if pwd := httpx.BodyRaw(c, "password"); pwd != "" && pwd != "0" {
 		data["password"] = util.CreatePassword(pwd, config.C.Project.UniqueIdentification)
 	}
 	var oldRoles []uint
@@ -307,12 +307,13 @@ func AdminEditSelf(c *gin.Context) {
 		return
 	}
 	data := map[string]any{
-		"name":        httpx.BodyStr(c, "name"),
+		"name":        httpx.BodyRaw(c, "name"),
 		"avatar":      filesvc.SetFileURL(c, httpx.BodyStr(c, "avatar")),
 		"update_time": util.NowUnix(),
 	}
-	if pwd := httpx.BodyStr(c, "password"); pwd != "" {
-		old := httpx.BodyStr(c, "password_old")
+	if util.PHPRequired(p, "password") {
+		old := httpx.BodyRaw(c, "password_old")
+		pwd := httpx.BodyRaw(c, "password")
 		if admin.Password != util.CreatePassword(old, config.C.Project.UniqueIdentification) {
 			response.Fail(c, "当前密码错误")
 			return
