@@ -94,8 +94,8 @@ func TestCodeURLEmptyRedirect(t *testing.T) {
 }
 
 func TestJSSDKConfig(t *testing.T) {
-	cfg := jsSDKConfig("wxapp", 1, "n", "sig")
-	if cfg["appId"] != "wxapp" || cfg["debug"] != false {
+	cfg := jsSDKConfig("wxapp", 1, "n", "sig", "https://pair1.likeadmin.test/page")
+	if cfg["appId"] != "wxapp" || cfg["debug"] != false || cfg["url"] != "https://pair1.likeadmin.test/page" {
 		t.Fatalf("%v", cfg)
 	}
 	list, _ := cfg["jsApiList"].([]string)

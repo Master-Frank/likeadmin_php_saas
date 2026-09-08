@@ -182,8 +182,10 @@ var DefaultJSApiList = []string{
 	"scanQRCode",
 }
 
-func jsSDKConfig(appID string, ts int64, nonce, signature string) map[string]any {
+func jsSDKConfig(appID string, ts int64, nonce, signature, pageURL string) map[string]any {
+	// PHP EasyWeChat JsApiTicket::configSignature includes url.
 	return map[string]any{
+		"url":         pageURL,
 		"appId":       appID,
 		"timestamp":   ts,
 		"nonceStr":    nonce,
@@ -207,7 +209,7 @@ func JsConfig(appID, secret, rawURL string) (map[string]any, error) {
 	}
 	signSrc := fmt.Sprintf("jsapi_ticket=%s&noncestr=%s&timestamp=%d&url=%s", ticket, nonce, ts, u)
 	sum := sha1.Sum([]byte(signSrc))
-	return jsSDKConfig(appID, ts, nonce, hex.EncodeToString(sum[:])), nil
+	return jsSDKConfig(appID, ts, nonce, hex.EncodeToString(sum[:]), u), nil
 }
 
 func jsapiTicket(appID, secret string) (string, error) {

@@ -12,6 +12,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestIsRemoteHTTP(t *testing.T) {
+	if !isRemoteHTTP("https://wx.qlogo.cn/a") || !isRemoteHTTP("http://x") {
+		t.Fatal("http(s) should be remote")
+	}
+	if isRemoteHTTP("/uploads/a.jpg") || isRemoteHTTP("uploads/a.jpg") {
+		t.Fatal("relative path is not remote")
+	}
+}
+
 func TestFetchLocal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/jpeg")

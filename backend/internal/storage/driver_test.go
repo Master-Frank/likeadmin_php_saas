@@ -61,6 +61,34 @@ func TestPutAndDeleteQiniuFixture(t *testing.T) {
 	}
 }
 
+func TestFetchQiniuUsesIOAPI(t *testing.T) {
+	var gotPath, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"key":"uploads/a.jpg"}`))
+	}))
+	t.Cleanup(srv.Close)
+	oldIO := qiniuIOURL
+	qiniuIOURL = srv.URL
+	t.Cleanup(func() { qiniuIOURL = oldIO })
+
+	src := "https://third.example/avatar.jpg"
+	cfg := map[string]any{"access_key": "ak", "secret_key": "sk", "bucket": "bucket"}
+	if err := fetchQiniu(cfg, src, "uploads/user/avatar/t.jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	wantRes := base64.URLEncoding.EncodeToString([]byte(src))
+	wantTo := base64.URLEncoding.EncodeToString([]byte("bucket:uploads/user/avatar/t.jpeg"))
+	want := "/fetch/" + wantRes + "/to/" + wantTo
+	if gotPath != want {
+		t.Fatalf("path=%s want=%s", gotPath, want)
+	}
+	if !strings.HasPrefix(gotAuth, "QBox ak:") {
+		t.Fatalf("auth=%s", gotAuth)
+	}
+}
+
 func TestPutAndDeleteAliyunFixture(t *testing.T) {
 	var method, path, auth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

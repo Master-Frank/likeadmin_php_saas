@@ -431,8 +431,9 @@ func RechargeLists(c *gin.Context) {
 	db := scopeTenant(tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid), c)
 	var count int64
 	db.Count(&count)
+	// PHP api RechargeLists::lists has no limit() — return every paid row.
 	var rows []model.RechargeOrder
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	db.Order("id desc").Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, map[string]any{

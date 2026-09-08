@@ -35,6 +35,7 @@ func unknownEngineErr(engine string) error {
 var (
 	qiniuUploadURL = "https://upload.qiniup.com/"
 	qiniuRSURL     = "https://rs.qiniu.com"
+	qiniuIOURL     = "https://iovip.qiniuapi.com"
 )
 
 func Delete(c *gin.Context, uri string) error {
@@ -69,10 +70,27 @@ func Delete(c *gin.Context, uri string) error {
 	}
 }
 
+func isRemoteHTTP(srcURL string) bool {
+	return strings.Contains(srcURL, "http://") || strings.Contains(srcURL, "https://")
+}
+
 func Fetch(c *gin.Context, srcURL, rel string) (SaveResult, error) {
 	srcURL = strings.TrimSpace(srcURL)
 	if srcURL == "" {
 		return SaveResult{}, fmt.Errorf("empty url")
+	}
+	engine := cfgsvc.GetString(c, "storage", "default", "local")
+	if engine == "" {
+		engine = "local"
+	}
+	// PHP Qiniu::fetch uses BucketManager::fetch for remote http(s) URLs.
+	if engine == "qiniu" && isRemoteHTTP(srcURL) {
+		cfg := asMap(cfgsvc.Get(c, "storage", engine, map[string]any{}))
+		key := strings.TrimLeft(rel, "/")
+		if err := fetchQiniu(cfg, srcURL, key); err != nil {
+			return SaveResult{}, err
+		}
+		return SaveResult{URI: rel, Engine: "qiniu"}, nil
 	}
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(srcURL)
@@ -239,6 +257,25 @@ func putQiniu(cfg map[string]any, key string, body []byte, contentType string) e
 	if contentType != "" {
 		_ = contentType
 	}
+	return do(req)
+}
+
+func fetchQiniu(cfg map[string]any, srcURL, key string) error {
+	ak, sk, bucket := str(cfg, "access_key"), str(cfg, "secret_key"), str(cfg, "bucket")
+	if ak == "" || sk == "" || bucket == "" {
+		return fmt.Errorf("七牛云配置不完整")
+	}
+	resource := base64.URLEncoding.EncodeToString([]byte(srcURL))
+	to := base64.URLEncoding.EncodeToString([]byte(bucket + ":" + key))
+	path := "/fetch/" + resource + "/to/" + to
+	mac := hmac.New(sha1.New, []byte(sk))
+	mac.Write([]byte(path + "\n"))
+	auth := ak + ":" + base64.URLEncoding.EncodeToString(mac.Sum(nil))
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(qiniuIOURL, "/")+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "QBox "+auth)
 	return do(req)
 }
 
