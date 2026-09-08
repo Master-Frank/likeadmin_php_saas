@@ -1,10 +1,16 @@
 package middleware
 
 import (
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/cache"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestFormatURIPerms(t *testing.T) {
@@ -19,6 +25,68 @@ func TestFormatURIPerms(t *testing.T) {
 	}
 	if !containsURI([]string{"user.user/adjustmoney"}, "user.user/adjustMoney") {
 		t.Fatal("camel action should match")
+	}
+}
+
+func TestDemoGuardMatchesPHPAblePost(t *testing.T) {
+	if demoGuardBlocks("POST", "platformapi", "login", "logout") {
+		t.Fatal("platform logout must stay allowed")
+	}
+	if demoGuardBlocks("POST", "tenantapi", "Login", "Logout") {
+		t.Fatal("tenant logout must stay allowed (case-insensitive URI)")
+	}
+	if demoGuardBlocks("POST", "platformapi", "login", "account") {
+		t.Fatal("login/account must stay allowed")
+	}
+	if !demoGuardBlocks("POST", "platformapi", "auth.admin", "add") {
+		t.Fatal("platform writes must be blocked")
+	}
+	if !demoGuardBlocks("POST", "tenantapi", "user.user", "adjustmoney") {
+		t.Fatal("tenant writes must be blocked")
+	}
+	if demoGuardBlocks("POST", "api", "login", "register") {
+		t.Fatal("user-app POSTs are not gated by PHP CheckDemoMiddleware")
+	}
+	if demoGuardBlocks("POST", "api", "login", "mnplogin") {
+		t.Fatal("user-app wechat login must not be gated")
+	}
+	if demoGuardBlocks("PUT", "platformapi", "auth.admin", "edit") {
+		t.Fatal("PHP only inspects POST")
+	}
+	if demoGuardBlocks("GET", "platformapi", "auth.admin", "lists") {
+		t.Fatal("GET must pass")
+	}
+}
+
+func TestDemoGuardHTTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.DemoEnv
+	config.C.Project.DemoEnv = true
+	t.Cleanup(func() { config.C.Project.DemoEnv = old })
+
+	hit := func(method, app, ctrl, action string) (aborted bool, body string) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(method, "/", nil)
+		ctxutil.Set(c, &ctxutil.RequestMeta{App: app, Controller: ctrl, Action: action})
+		DemoGuard()(c)
+		return c.IsAborted(), w.Body.String()
+	}
+
+	if aborted, body := hit("POST", "platformapi", "login", "logout"); aborted || strings.Contains(body, "演示环境") {
+		t.Fatalf("logout blocked: aborted=%v body=%s", aborted, body)
+	}
+	aborted, body := hit("POST", "platformapi", "auth.admin", "add")
+	if !aborted || !strings.Contains(body, "演示环境不支持修改数据，请下载源码本地部署体验") {
+		t.Fatalf("admin add should block: aborted=%v body=%s", aborted, body)
+	}
+	if aborted, _ := hit("POST", "api", "login", "register"); aborted {
+		t.Fatal("api register should pass")
+	}
+
+	config.C.Project.DemoEnv = false
+	if aborted, _ := hit("POST", "platformapi", "auth.admin", "add"); aborted {
+		t.Fatal("demo off should pass writes")
 	}
 }
 

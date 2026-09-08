@@ -92,17 +92,27 @@ func DemoGuard() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if c.Request.Method == "GET" {
-			c.Next()
-			return
-		}
 		meta := ctxutil.Get(c)
-		if meta.NotNeedLogin && (meta.Action == "account" || meta.Action == "logout") {
+		// PHP CheckDemoMiddleware is only on platformapi/tenantapi and only
+		// inspects POST. ablePost is login/account + login/logout (logout is
+		// not in $notNeedLogin).
+		if !demoGuardBlocks(c.Request.Method, meta.App, meta.Controller, meta.Action) {
 			c.Next()
 			return
 		}
 		response.AbortFail(c, "演示环境不支持修改数据，请下载源码本地部署体验", response.CodeFail, 1)
 	}
+}
+
+func demoGuardBlocks(method, app, controller, action string) bool {
+	if !strings.EqualFold(method, "POST") {
+		return false
+	}
+	if app != "platformapi" && app != "tenantapi" {
+		return false
+	}
+	uri := strings.ToLower(strings.Trim(controller+"/"+action, "/"))
+	return uri != "login/account" && uri != "login/logout"
 }
 
 func handlePlatformLogin(c *gin.Context, meta *ctxutil.RequestMeta, token string, need bool) {
