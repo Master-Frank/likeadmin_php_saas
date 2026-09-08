@@ -1,0 +1,17 @@
+[Unit]
+Description=likeadmin-SaaS Go crontab worker
+After=network.target mysql.service redis.service likeadmin-api.service
+Wants=mysql.service redis.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/likeadmin/backend
+Environment=LIKEADMIN_CONFIG=/opt/likeadmin/backend/configs/config.yaml
+ExecStart=/opt/likeadmin/backend/bin/crontab
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

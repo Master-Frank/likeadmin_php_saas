@@ -1,0 +1,222 @@
+package storage
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPutAndDeleteQiniuFixture(t *testing.T) {
+	var gotKey, gotAuth, gotToken, gotFileCT string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/" {
+			_ = r.ParseMultipartForm(1 << 20)
+			gotKey = r.FormValue("key")
+			gotToken = r.FormValue("token")
+			if f, hdr, err := r.FormFile("file"); err == nil {
+				_ = f.Close()
+				gotFileCT = hdr.Header.Get("Content-Type")
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/delete/") {
+			gotAuth = r.Header.Get("Authorization")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	oldUp, oldRS := qiniuUploadURL, qiniuRSURL
+	qiniuUploadURL, qiniuRSURL = srv.URL+"/", srv.URL
+	t.Cleanup(func() { qiniuUploadURL, qiniuRSURL = oldUp, oldRS })
+
+	cfg := map[string]any{"access_key": "ak", "secret_key": "sk", "bucket": "bucket"}
+	if err := putQiniu(cfg, "uploads/a.txt", []byte("hi"), "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	if gotKey != "uploads/a.txt" {
+		t.Fatalf("key=%s", gotKey)
+	}
+	if gotFileCT != "text/plain" {
+		t.Fatalf("file Content-Type=%s", gotFileCT)
+	}
+	parts := strings.Split(gotToken, ":")
+	if len(parts) < 3 {
+		t.Fatalf("token=%s", gotToken)
+	}
+	policyJSON, err := base64.URLEncoding.DecodeString(parts[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policy map[string]any
+	if json.Unmarshal(policyJSON, &policy) != nil || policy["scope"] != "bucket" {
+		t.Fatalf("qiniu scope should be bucket only: %s", policyJSON)
+	}
+	if err := deleteQiniu(cfg, "uploads/a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(gotAuth, "QBox ak:") {
+		t.Fatalf("auth=%s", gotAuth)
+	}
+}
+
+func TestFetchQiniuUsesIOAPI(t *testing.T) {
+	var gotPath, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"key":"uploads/a.jpg"}`))
+	}))
+	t.Cleanup(srv.Close)
+	oldIO := qiniuIOURL
+	qiniuIOURL = srv.URL
+	t.Cleanup(func() { qiniuIOURL = oldIO })
+
+	src := "https://third.example/avatar.jpg"
+	cfg := map[string]any{"access_key": "ak", "secret_key": "sk", "bucket": "bucket"}
+	if err := fetchQiniu(cfg, src, "uploads/user/avatar/t.jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	wantRes := base64.URLEncoding.EncodeToString([]byte(src))
+	wantTo := base64.URLEncoding.EncodeToString([]byte("bucket:uploads/user/avatar/t.jpeg"))
+	want := "/fetch/" + wantRes + "/to/" + wantTo
+	if gotPath != want {
+		t.Fatalf("path=%s want=%s", gotPath, want)
+	}
+	if !strings.HasPrefix(gotAuth, "QBox ak:") {
+		t.Fatalf("auth=%s", gotAuth)
+	}
+}
+
+func TestPutAndDeleteAliyunFixture(t *testing.T) {
+	var method, path, auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path, auth = r.Method, r.URL.Path, r.Header.Get("Authorization")
+		body, _ := io.ReadAll(r.Body)
+		if r.Method == http.MethodPut && string(body) != "payload" {
+			http.Error(w, "bad body", 400)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := map[string]any{
+		"access_key": "ak", "secret_key": "sk", "bucket": "bucket", "domain": srv.URL,
+	}
+	if err := putAliyun(cfg, "uploads/b.txt", []byte("payload"), "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPut || path != "/uploads/b.txt" || !strings.HasPrefix(auth, "OSS ak:") {
+		t.Fatalf("put %s %s %s", method, path, auth)
+	}
+	if err := deleteAliyun(cfg, "uploads/b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodDelete || path != "/uploads/b.txt" {
+		t.Fatalf("delete %s %s", method, path)
+	}
+}
+
+func TestPutQcloudUsesObjectKey(t *testing.T) {
+	var path, auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		auth = r.Header.Get("Authorization")
+		if !strings.Contains(auth, "q-sign-algorithm=sha1") {
+			http.Error(w, "no sign", 403)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := map[string]any{
+		"access_key": "ak", "secret_key": "sk", "bucket": "bucket", "domain": srv.URL,
+	}
+	if err := putQcloud(cfg, "uploads/c.txt", []byte("x"), "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/uploads/c.txt" {
+		t.Fatalf("path=%s", path)
+	}
+	assertQcloudUnixSign(t, auth)
+}
+
+func TestQcloudAuthUnixSignTime(t *testing.T) {
+	now := time.Unix(1770000000, 0)
+	auth := qcloudAuth(http.MethodPut, "uploads/c.txt", "bucket.cos.ap-guangzhou.myqcloud.com", "ak", "sk", now)
+	assertQcloudUnixSign(t, auth)
+	if !strings.Contains(auth, "q-sign-time=1770000000;1770001800") {
+		t.Fatalf("sign-time %s", auth)
+	}
+	if !strings.Contains(auth, "q-key-time=1770000000;1770001800") {
+		t.Fatalf("key-time %s", auth)
+	}
+	again := qcloudAuth(http.MethodPut, "uploads/c.txt", "bucket.cos.ap-guangzhou.myqcloud.com", "ak", "sk", now)
+	if auth != again {
+		t.Fatal("auth should be deterministic")
+	}
+}
+
+func assertQcloudUnixSign(t *testing.T, auth string) {
+	t.Helper()
+	re := regexp.MustCompile(`q-sign-time=(\d+);(\d+)`)
+	m := re.FindStringSubmatch(auth)
+	if m == nil {
+		t.Fatalf("missing unix q-sign-time: %s", auth)
+	}
+	if m[1] >= m[2] {
+		t.Fatalf("sign window %s;%s", m[1], m[2])
+	}
+	if strings.Contains(auth, "GMT") || strings.Contains(auth, "UTC") {
+		t.Fatalf("q-sign-time must not be HTTP Date: %s", auth)
+	}
+}
+
+func TestStorageHostHTTP(t *testing.T) {
+	scheme, host := storageHost("http://127.0.0.1:9000/oss", "fallback")
+	if scheme != "http" || host != "127.0.0.1:9000/oss" {
+		t.Fatalf("%s %s", scheme, host)
+	}
+	scheme, host = storageHost("", "bucket.example")
+	if scheme != "https" || host != "bucket.example" {
+		t.Fatalf("fallback %s %s", scheme, host)
+	}
+}
+
+func TestAliyunHostUsesRegion(t *testing.T) {
+	scheme, host := aliyunHost(map[string]any{"bucket": "bkt", "region": "cn-beijing"})
+	if scheme != "https" || host != "bkt.oss-cn-beijing.aliyuncs.com" {
+		t.Fatalf("%s %s", scheme, host)
+	}
+	scheme, host = aliyunHost(map[string]any{"bucket": "bkt", "domain": "http://oss.local/path"})
+	if scheme != "http" || host != "oss.local/path" {
+		t.Fatalf("domain %s %s", scheme, host)
+	}
+}
+
+func TestUnknownEngineMessage(t *testing.T) {
+	err := unknownEngineErr("ftp")
+	if err == nil || err.Error() != "未找到存储引擎类: ftp" {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestDeleteCloudMissingConfig(t *testing.T) {
+	if err := deleteQiniu(map[string]any{}, "k"); err == nil {
+		t.Fatal("qiniu")
+	}
+	if err := deleteAliyun(map[string]any{}, "k"); err == nil {
+		t.Fatal("aliyun")
+	}
+	if err := deleteQcloud(map[string]any{}, "k"); err == nil {
+		t.Fatal("qcloud")
+	}
+}

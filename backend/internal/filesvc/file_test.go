@@ -1,0 +1,320 @@
+package filesvc
+
+import (
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"likeadmin/backend/internal/cache"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+
+	"github.com/gin-gonic/gin"
+)
+
+func TestSetImageIfMatchesPHPTruthy(t *testing.T) {
+	if SetImageIf(nil, "") != "" || SetImageIf(nil, "0") != "" {
+		t.Fatal("falsy image must store empty")
+	}
+	c := imageTestContext()
+	if SetImageIf(c, "   ") != "   " {
+		t.Fatal("whitespace is truthy and must be kept")
+	}
+	if SetImageIf(c, "uploads/a.png") != "uploads/a.png" {
+		t.Fatal("relative path passthrough")
+	}
+}
+
+func TestSetImageAttrMatchesBaseModel(t *testing.T) {
+	if SetImageAttr(nil, "") != "" || SetImageAttr(nil, "0") != "" || SetImageAttr(nil, "   ") != "" || SetImageAttr(nil, "  0  ") != "" {
+		t.Fatal("trim-falsy image must store empty")
+	}
+	if SetImageAttr(imageTestContext(), "uploads/a.png") != "uploads/a.png" {
+		t.Fatal("relative path passthrough")
+	}
+}
+
+func imageTestContext() *gin.Context {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+	return c
+}
+
+func TestLoginUserAvatarURLFallsBack(t *testing.T) {
+	c := imageTestContext()
+	if got := LoginUserAvatarURL(c, "0", "resource/image/common/default_avatar.png"); !strings.Contains(got, "default_avatar.png") {
+		t.Fatalf("login fallback: %s", got)
+	}
+	if got := LoginUserAvatarURL(c, "uploads/u.png", "x"); !strings.Contains(got, "uploads/u.png") {
+		t.Fatalf("login stored: %s", got)
+	}
+}
+
+func TestAdminAvatarURLMatchesPHPEmpty(t *testing.T) {
+	c := imageTestContext()
+	if got := AdminAvatarURL(c, "", "resource/image/admin/avatar.png"); !strings.Contains(got, "resource/image/admin/avatar.png") {
+		t.Fatalf("empty uses fallback: %s", got)
+	}
+	if got := AdminAvatarURL(c, "0", "resource/image/admin/avatar.png"); !strings.Contains(got, "resource/image/admin/avatar.png") {
+		t.Fatalf("PHP empty('0') uses fallback: %s", got)
+	}
+	if got := AdminAvatarURL(c, "/uploads/a.png/", "x"); got != "http://pair1.likeadmin.test/uploads/a.png" && !strings.Contains(got, "uploads/a.png") {
+		t.Fatalf("trim slashes: %s", got)
+	}
+}
+
+func TestGetImageAttrEmpty(t *testing.T) {
+	if GetImageAttr(nil, "") != "" || GetImageAttr(nil, "   ") != "" || GetImageAttr(nil, "0") != "" {
+		t.Fatal("empty image must stay empty")
+	}
+	if Format("http://host", "") != "http://host/" {
+		t.Fatal("Format empty still prefixes domain")
+	}
+}
+
+func TestEmptyFileURLMatchesPayConfigGetter(t *testing.T) {
+	if EmptyFileURL(nil, "") != "" || EmptyFileURL(nil, "0") != "" {
+		t.Fatal("PHP empty() icon stays empty")
+	}
+	c := imageTestContext()
+	if EmptyFileURL(c, "   ") == "" {
+		t.Fatal("PHP empty('   ') is false; whitespace icon is kept")
+	}
+	if got := EmptyFileURL(c, "uploads/pay.png"); !strings.Contains(got, "uploads/pay.png") {
+		t.Fatalf("icon: %s", got)
+	}
+}
+
+func TestFileURLUnlessEmptyKeepsPHPEmpty(t *testing.T) {
+	if FileURLUnlessEmpty(nil, "") != "" || FileURLUnlessEmpty(nil, "0") != "0" {
+		t.Fatal("empty() must keep the stored value")
+	}
+	c := imageTestContext()
+	if got := FileURLUnlessEmpty(c, "uploads/qr.png"); !strings.Contains(got, "uploads/qr.png") {
+		t.Fatalf("qr: %s", got)
+	}
+}
+
+func TestFormatEmptyDomain(t *testing.T) {
+	// PHP FileService::format: trim($domain) . '/' . trim($uri)
+	if got := Format("", "uploads/a.png"); got != "/uploads/a.png" {
+		t.Fatalf("empty domain uri=%q", got)
+	}
+	if got := Format("", "/uploads/a.png"); got != "/uploads/a.png" {
+		t.Fatalf("leading slash=%q", got)
+	}
+	if got := Format("", ""); got != "/" {
+		t.Fatalf("both empty=%q", got)
+	}
+}
+
+func TestUploadCateOKZero(t *testing.T) {
+	if UploadCateOK(nil, nil, 0, 1) != "" {
+		t.Fatal("cid 0 should skip lookup")
+	}
+	if UploadCateOK(nil, nil, 9, 1) != "文件分类不存在" {
+		t.Fatal("missing db should reject cid")
+	}
+}
+
+func TestApplyFileCIDMissingCid(t *testing.T) {
+	if ApplyFileCID(nil, nil, map[string]any{}, 7) != nil {
+		t.Fatal("missing cid should leave db unchanged")
+	}
+	if ApplyFileCID(nil, nil, map[string]any{"cid": ""}, 7) != nil {
+		t.Fatal("empty cid should leave db unchanged")
+	}
+}
+
+func TestFileIDsExistEmpty(t *testing.T) {
+	if FileIDsExist(nil, nil) || FileIDsExist(nil, []uint{}) {
+		t.Fatal("empty ids")
+	}
+	if FileIDsExist(nil, []uint{0, 1}) {
+		t.Fatal("zero id")
+	}
+}
+
+func TestRewriteContentDomains(t *testing.T) {
+	in := `<p><img src="uploads/images/a.png"><video src="uploads/video/b.mp4"></video><img src="https://cdn.example/c.png"></p>`
+	got := rewriteContent("http://pair1.likeadmin.test/", in)
+	want := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video><img src="https://cdn.example/c.png"></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	if rewriteContent("", in) != in {
+		t.Fatal("empty domain should keep content")
+	}
+}
+
+func TestClearContentDomainsCurrentPrefixOnly(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	in := `<p><img src="https://cdn.example/uploads/a.png" class="x"><img src="https://old.example/uploads/b.png"><img src="uploads/keep.png"></p>`
+	got := ClearContentDomains(nil, in)
+	want := `<p><img src="uploads/a.png" class="x"><img src="https://old.example/uploads/b.png"><img src="uploads/keep.png"></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestClearContentDomains(t *testing.T) {
+	in := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video><img src="uploads/keep.png"></p>`
+	got := mapMediaSrc(in, func(src string) string {
+		return strings.ReplaceAll(src, "http://pair1.likeadmin.test/", "")
+	})
+	want := `<p><img src="uploads/images/a.png"><video src="uploads/video/b.mp4"></video><img src="uploads/keep.png"></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestClearContentDomainsSingleQuote(t *testing.T) {
+	in := `<p><img src='http://pair1.likeadmin.test/uploads/images/a.png'><video src='http://pair1.likeadmin.test/uploads/video/b.mp4'></video></p>`
+	got := imgSrcSQRe.ReplaceAllStringFunc(in, func(m string) string {
+		return rewriteMediaSrc(imgSrcSQRe, m, func(src string) string {
+			return strings.ReplaceAll(src, "http://pair1.likeadmin.test/", "")
+		})
+	})
+	want := `<p><img src='uploads/images/a.png'><video src='http://pair1.likeadmin.test/uploads/video/b.mp4'></video></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestClearContentDomainsImgOnly(t *testing.T) {
+	in := `<p><img src="http://pair1.likeadmin.test/uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video></p>`
+	got := imgSrcRe.ReplaceAllStringFunc(in, func(m string) string {
+		return rewriteMediaSrc(imgSrcRe, m, func(src string) string {
+			return strings.ReplaceAll(src, "http://pair1.likeadmin.test/", "")
+		})
+	})
+	want := `<p><img src="uploads/images/a.png"><video src="http://pair1.likeadmin.test/uploads/video/b.mp4"></video></p>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestStorageCache(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	if storageDefault(nil) != "qiniu" {
+		t.Fatalf("default=%s", storageDefault(nil))
+	}
+	eng := storageEngine(nil, "qiniu")
+	if eng == nil || eng["domain"] != "https://cdn.example/" {
+		t.Fatalf("engine=%v", eng)
+	}
+	if got := GetFileURL(nil, "uploads/a.png"); got != "https://cdn.example/uploads/a.png" {
+		t.Fatalf("url=%s", got)
+	}
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("set url=%s", got)
+	}
+}
+
+func TestSetFileURLDomainVariants(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+	})
+	cache.Set("STORAGE_DEFAULT", "qiniu", 0)
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example"}, 0)
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("no trailing slash: %s", got)
+	}
+	cache.Set("STORAGE_ENGINE", map[string]any{"domain": "https://cdn.example/"}, 0)
+	if got := SetFileURL(nil, "https://cdn.example/uploads/a.png"); got != "uploads/a.png" {
+		t.Fatalf("trailing slash: %s", got)
+	}
+	if got := SetFileURL(nil, "uploads/rel.png"); got != "uploads/rel.png" {
+		t.Fatalf("already relative: %s", got)
+	}
+	if SetFileURL(nil, "") != "" {
+		t.Fatal("empty")
+	}
+}
+
+func TestStorageCacheTenantIsolation(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	cache.Del("STORAGE_DEFAULT_1")
+	cache.Del("STORAGE_ENGINE_1")
+	cache.Del("STORAGE_DEFAULT_2")
+	cache.Del("STORAGE_ENGINE_2")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+		cache.Del("STORAGE_DEFAULT_1")
+		cache.Del("STORAGE_ENGINE_1")
+		cache.Del("STORAGE_DEFAULT_2")
+		cache.Del("STORAGE_ENGINE_2")
+	})
+	w1 := httptest.NewRecorder()
+	c1, _ := gin.CreateTestContext(w1)
+	ctxutil.Get(c1).TenantID = 1
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	ctxutil.Get(c2).TenantID = 2
+	cache.Set(storageCacheKey(c1, "STORAGE_DEFAULT"), "qiniu", 0)
+	cache.Set(storageCacheKey(c1, "STORAGE_ENGINE"), map[string]any{"domain": "https://cdn-a.example/"}, 0)
+	if storageDefault(c2) == "qiniu" {
+		t.Fatal("tenant 2 must not inherit tenant 1 storage default")
+	}
+	if storageEngine(c2, "qiniu") != nil {
+		t.Fatal("tenant 2 must not inherit tenant 1 engine cache")
+	}
+	if got := GetFileURL(c1, "uploads/a.png"); got != "https://cdn-a.example/uploads/a.png" {
+		t.Fatalf("tenant1 url=%s", got)
+	}
+	ClearStorageCache(c1)
+	if _, ok := cache.Get("STORAGE_DEFAULT_1"); ok {
+		t.Fatal("tenant cache should clear")
+	}
+}
+
+func TestFetchWechatAvatarEmptyHeadimg(t *testing.T) {
+	old := config.C.Project.DefaultImage
+	t.Cleanup(func() { config.C.Project.DefaultImage = old })
+	config.C.Project.DefaultImage = map[string]string{"user_avatar": "resource/image/common/default_avatar.png"}
+	got, err := FetchWechatAvatar(nil, "openid", "")
+	if err != nil || got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("got %q err=%v", got, err)
+	}
+	got, err = FetchWechatAvatar(nil, "openid", "   ")
+	if err != nil || got != "resource/image/common/default_avatar.png" {
+		t.Fatalf("blank %q err=%v", got, err)
+	}
+}
+
+func TestPublicPath(t *testing.T) {
+	old := config.C.App.PublicDir
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	config.C.App.PublicDir = "/var/www/public"
+	if got := PublicPath("uploads/a.png"); got != "/var/www/public/uploads/a.png" {
+		t.Fatalf("%s", got)
+	}
+	if got := PublicPath("/uploads/a.png"); got != "/var/www/public/uploads/a.png" {
+		t.Fatalf("%s", got)
+	}
+	if got := PublicPath(""); got != "/var/www/public/" {
+		t.Fatalf("%s", got)
+	}
+}

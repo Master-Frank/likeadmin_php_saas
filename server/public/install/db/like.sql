@@ -362,6 +362,16 @@ CREATE TABLE `la_dev_crontab`
   DEFAULT CHARSET = utf8mb4 COMMENT ='计划任务表';
 
 -- ----------------------------
+-- Records of la_dev_crontab
+-- ----------------------------
+BEGIN;
+INSERT INTO `la_dev_crontab` (`name`,`type`,`system`,`remark`,`command`,`params`,`status`,`expression`,`error`,`last_time`,`time`,`max_time`,`create_time`)
+VALUES ('查询退款状态', 1, 1, '查询微信/支付宝退款结果', 'query_refund', '', 1, '* * * * *', '', 0, '0', '0', 1710000000);
+INSERT INTO `la_dev_crontab` (`name`,`type`,`system`,`remark`,`command`,`params`,`status`,`expression`,`error`,`last_time`,`time`,`max_time`,`create_time`)
+VALUES ('取消超时未支付订单', 1, 1, '按交易设置取消超时未支付充值单', 'cancel_unpaid_orders', '', 1, '* * * * *', '', 0, '0', '0', 1710000000);
+COMMIT;
+
+-- ----------------------------
 -- Table structure for la_dict_data
 -- ----------------------------
 DROP TABLE IF EXISTS `la_dict_data`;

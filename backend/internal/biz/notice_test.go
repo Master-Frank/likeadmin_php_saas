@@ -1,0 +1,139 @@
+package biz
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func TestNoticeTypeDesc(t *testing.T) {
+	if NoticeTypeDesc(1) != "业务通知" || NoticeTypeDesc(2) != "验证码" {
+		t.Fatal(NoticeTypeDesc(1), NoticeTypeDesc(2))
+	}
+}
+
+func TestFormatNoticeDetail(t *testing.T) {
+	if arr, ok := FormatNoticeDetail(0, 2, 101, "", "", "", "", "", "", "").([]any); !ok || len(arr) != 0 {
+		t.Fatal("missing id should be empty list")
+	}
+	raw := `{"type":"sms","template_id":"T1","content":"hi","status":1}`
+	out := FormatNoticeDetail(3, 2, 101, "登录验证码", "用户登录", "", raw, "", "", "2,4").(map[string]any)
+	if out["type"] != "验证码" {
+		t.Fatalf("type=%v", out["type"])
+	}
+	if out["default"] != "" {
+		t.Fatal("default")
+	}
+	sms := out["sms_notice"].(map[string]any)
+	if sms["template_id"] != "T1" || sms["is_show"] != true {
+		t.Fatalf("sms=%v", sms)
+	}
+	tips, _ := sms["tips"].([]string)
+	if len(tips) < 2 {
+		t.Fatalf("tips=%v", tips)
+	}
+	sys := out["system_notice"].(map[string]any)
+	if sys["is_show"] != false || sys["title"] != "" {
+		t.Fatalf("system=%v", sys)
+	}
+	oa := out["oa_notice"].(map[string]any)
+	oaTips, _ := oa["tips"].([]string)
+	if len(oaTips) == 0 || oaTips[len(oaTips)-1] != "配置路径：小程序后台 > 功能 > 订阅消息" {
+		t.Fatalf("oa tips should follow PHP MNP assignment: %v", oaTips)
+	}
+}
+
+func TestApplyNoticeSetTemplateObject(t *testing.T) {
+	tpl := map[string]any{
+		"sms_notice": map[string]any{
+			"template_id": "A", "content": "c", "status": 1,
+		},
+		"system_notice": map[string]any{
+			"title": "t", "content": "c", "status": 0,
+		},
+	}
+	updates, err := ApplyNoticeSet(true, 1, tpl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := updates["sms_notice"]; !ok {
+		t.Fatal(updates)
+	}
+	var sms map[string]any
+	if err := json.Unmarshal([]byte(updates["sms_notice"].(string)), &sms); err != nil {
+		t.Fatal(err)
+	}
+	if sms["type"] != "sms" {
+		t.Fatalf("inferred type=%v", sms["type"])
+	}
+}
+
+func TestApplyNoticeSetTemplateList(t *testing.T) {
+	tpl := []any{
+		map[string]any{"type": "sms", "template_id": "A", "content": "c", "status": 0},
+	}
+	updates, err := ApplyNoticeSet(true, 2, tpl)
+	if err != nil || updates["sms_notice"] == nil {
+		t.Fatal(err, updates)
+	}
+}
+
+func TestDecodeNoticeObjectNormalizes(t *testing.T) {
+	num := decodeNoticeObject(`{"status":1,"tpl":null,"content":"hi"}`)
+	if num == nil {
+		t.Fatal("nil")
+	}
+	if st, ok := num["status"].(int); !ok || st != 1 {
+		t.Fatalf("numeric status should be int, got %T %v", num["status"], num["status"])
+	}
+	tpl, ok := num["tpl"].([]any)
+	if !ok || tpl == nil {
+		t.Fatalf("null tpl should become empty list, got %T %v", num["tpl"], num["tpl"])
+	}
+	quoted := decodeNoticeObject(`{"status":"1","content":"hi"}`)
+	if s, ok := quoted["status"].(string); !ok || s != "1" {
+		t.Fatalf("quoted status must stay string like PHP json_decode, got %T %v", quoted["status"], quoted["status"])
+	}
+	if _, ok := quoted["tpl"]; ok {
+		t.Fatal("missing tpl must stay missing")
+	}
+	if decodeNoticeObject("") != nil || decodeNoticeObject("{}") != nil {
+		t.Fatal("empty")
+	}
+}
+
+func TestApplyNoticeSetErrors(t *testing.T) {
+	if _, err := ApplyNoticeSet(false, 1, []any{}); err == nil || err.Error() != "通知配置不存在" {
+		t.Fatal(err)
+	}
+	if _, err := ApplyNoticeSet(true, 1, nil); err == nil || err.Error() != "模板配置不存在或格式错误" {
+		t.Fatal(err)
+	}
+	if _, err := ApplyNoticeSet(true, 1, []any{map[string]any{"type": "sms"}}); err == nil {
+		t.Fatal("expected sms required fields")
+	}
+	if _, err := ApplyNoticeSet(true, 1, []any{map[string]any{"type": "nope"}}); err == nil {
+		t.Fatal("expected type error")
+	}
+}
+
+func TestCheckNoticeItemRejectsNullFields(t *testing.T) {
+	err := CheckNoticeItem(map[string]any{"type": "system", "title": nil, "content": "c", "status": 1})
+	if err == nil || err.Error() != "系统通知必填参数：title、content、status" {
+		t.Fatal(err)
+	}
+	err = CheckNoticeItem(map[string]any{"type": "sms", "template_id": "T", "content": "c", "status": nil})
+	if err == nil || err.Error() != "短信通知必填参数：template_id、content、status" {
+		t.Fatal(err)
+	}
+	err = CheckNoticeItem(map[string]any{
+		"type": "oa", "template_id": "T", "template_sn": "S", "name": "n",
+		"first": "f", "remark": "r", "tpl": nil, "status": 1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "微信模板消息必填参数") {
+		t.Fatal(err)
+	}
+	if err := CheckNoticeItem(map[string]any{"type": "system", "title": "", "content": "c", "status": 0}); err != nil {
+		t.Fatal(err)
+	}
+}
