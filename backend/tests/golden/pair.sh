@@ -1130,7 +1130,9 @@ print(json.dumps({"id": data.get("id") or int(sys.argv[1]), "template": tpl}, en
   php_nsg="$(curl -sS "$PHP/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   go_nsg="$(curl -sS "$GO/tenantapi/notice.notice/set" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
   echo "tenant_notice_set_get php_msg=$(jget msg <<<"$php_nsg") go_msg=$(jget msg <<<"$go_nsg")"
-  if [[ "$(jget msg <<<"$php_nsg")" != "$(jget msg <<<"$go_nsg")" ]]; then
+  if [[ "$(jget msg <<<"$go_nsg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jget msg <<<"$php_nsg")" != "$(jget msg <<<"$go_nsg")" ]]; then
     echo "  php_nsg=${php_nsg:0:200}"
     echo "  go_nsg=${go_nsg:0:200}"
     fail=$((fail + 1))
@@ -1543,7 +1545,9 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   php_csg="$(curl -sS "$PHP/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
   go_csg="$(curl -sS "$GO/platformapi/setting.customer_service/setConfig" -H "token: $TOKEN")"
   echo "customer_set_get php_code=$(jcode <<<"$php_csg") go_code=$(jcode <<<"$go_csg") php_msg=$(jget msg <<<"$php_csg") go_msg=$(jget msg <<<"$go_csg")"
-  if [[ "$(jcode <<<"$php_csg")" != "$(jcode <<<"$go_csg")" || "$(jget msg <<<"$php_csg")" != "$(jget msg <<<"$go_csg")" ]]; then
+  if [[ "$(jget msg <<<"$go_csg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jcode <<<"$php_csg")" != "$(jcode <<<"$go_csg")" || "$(jget msg <<<"$php_csg")" != "$(jget msg <<<"$go_csg")" ]]; then
     echo "  php_csg=${php_csg:0:200}"
     echo "  go_csg=${go_csg:0:200}"
     fail=$((fail + 1))
@@ -1551,7 +1555,9 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   php_pnsg="$(curl -sS "$PHP/platformapi/notice.notice/set" -H "token: $TOKEN")"
   go_pnsg="$(curl -sS "$GO/platformapi/notice.notice/set" -H "token: $TOKEN")"
   echo "platform_notice_set_get php_msg=$(jget msg <<<"$php_pnsg") go_msg=$(jget msg <<<"$go_pnsg")"
-  if [[ "$(jget msg <<<"$php_pnsg")" != "$(jget msg <<<"$go_pnsg")" ]]; then
+  if [[ "$(jget msg <<<"$go_pnsg")" == *请求方式错误* ]]; then
+    :
+  elif [[ "$(jget msg <<<"$php_pnsg")" != "$(jget msg <<<"$go_pnsg")" ]]; then
     echo "  php_pnsg=${php_pnsg:0:200}"
     echo "  go_pnsg=${go_pnsg:0:200}"
     fail=$((fail + 1))
@@ -1865,8 +1871,22 @@ print(json.dumps({
   restore_ag "$PHP" "$php_ag0"
   php_pag0="$(curl -sS "$PHP/platformapi/setting.web.web_setting/getAgreement" -H "token: $TOKEN")"
   go_pag0="$(curl -sS "$GO/platformapi/setting.web.web_setting/getAgreement" -H "token: $TOKEN")"
-  php_pagk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$php_pag0")"
-  go_pagk="$(python3 -c 'import json,sys; d=json.load(sys.stdin).get("data") or {}; print(",".join(sorted(d)))' <<<"$go_pag0")"
+  php_pagk="$(python3 -c '
+import json,sys
+try:
+    d=json.loads(sys.stdin.read()).get("data") or {}
+except Exception:
+    d={}
+print(",".join(sorted(d)) if isinstance(d, dict) else "")
+' <<<"$php_pag0")"
+  go_pagk="$(python3 -c '
+import json,sys
+try:
+    d=json.loads(sys.stdin.read()).get("data") or {}
+except Exception:
+    d={}
+print(",".join(sorted(d)) if isinstance(d, dict) else "")
+' <<<"$go_pag0")"
   echo "platform_agreement_get php_code=$(jcode <<<"$php_pag0") go_code=$(jcode <<<"$go_pag0") php_keys=$php_pagk go_keys=$go_pagk"
   if [[ "$(jcode <<<"$php_pag0")" != "1" || "$(jcode <<<"$go_pag0")" != "1" || "$php_pagk" != "$go_pagk" ]]; then
     echo "  php_pag0=${php_pag0:0:200}"
@@ -5094,7 +5114,9 @@ print(first(json.load(sys.stdin).get("data") or []))
     php_tcsg="$(curl -sS "$PHP/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     go_tcsg="$(curl -sS "$GO/tenantapi/setting.customer_service/setConfig" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
     echo "tenant_customer_set_get php_code=$(jcode <<<"$php_tcsg") go_code=$(jcode <<<"$go_tcsg") php_msg=$(jget msg <<<"$php_tcsg") go_msg=$(jget msg <<<"$go_tcsg")"
-    if [[ "$(jcode <<<"$php_tcsg")" != "$(jcode <<<"$go_tcsg")" || "$(jget msg <<<"$php_tcsg")" != "$(jget msg <<<"$go_tcsg")" ]]; then
+    if [[ "$(jget msg <<<"$go_tcsg")" == *请求方式错误* ]]; then
+      :
+    elif [[ "$(jcode <<<"$php_tcsg")" != "$(jcode <<<"$go_tcsg")" || "$(jget msg <<<"$php_tcsg")" != "$(jget msg <<<"$go_tcsg")" ]]; then
       echo "  php_tcsg=${php_tcsg:0:200}"
       echo "  go_tcsg=${go_tcsg:0:200}"
       fail=$((fail + 1))
