@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"likeadmin/backend/internal/config"
@@ -28,10 +29,29 @@ func Init(cfgPath string) error {
 		time.Local = loc
 	}
 	if err := initDB(); err != nil {
-		return err
+		if Installed() {
+			return err
+		}
+		log.Printf("database unavailable before install: %v", err)
+		DB = nil
 	}
 	initRedis()
 	return nil
+}
+
+// Installed is true when PHP/Go install.lock exists.
+func Installed() bool {
+	lock := config.C.App.InstallLock
+	if lock == "" {
+		return false
+	}
+	_, err := os.Stat(lock)
+	return err == nil
+}
+
+// ReconnectDB opens the DB after a successful /install (config.C already updated).
+func ReconnectDB() error {
+	return initDB()
 }
 
 func initDB() error {

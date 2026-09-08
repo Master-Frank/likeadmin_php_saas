@@ -504,13 +504,6 @@ func UpgradeLists(c *gin.Context) {
 	response.Lists(c, upgrade.FormatLists(rawLists, q.PageNo, ""), count, q.PageNo, q.PageSize, nil)
 }
 
-func upgradeAuthMsg(result map[string]any) string {
-	if msg := util.ToString(result["msg"]); msg != "" {
-		return msg
-	}
-	return "请先联系客服获取授权"
-}
-
 func UpgradeDo(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
@@ -528,23 +521,10 @@ func UpgradeDo(c *gin.Context) {
 		response.Fail(c, "更新失败:"+err.Error())
 		return
 	}
-	host := ctxutil.Host(c)
-	result := upgrade.Verify(host, p["id"], "package_link")
-	if !upgrade.HasPermission(result) {
-		msg := upgradeAuthMsg(result)
-		upgrade.AddLog(host, p["id"], 1, false, msg)
-		response.Fail(c, "更新失败:"+msg)
-		return
-	}
-	if err := upgrade.ApplyPackage(util.ToString(result["link"]), ""); err != nil {
-		upgrade.AddLog(host, p["id"], 1, false, err.Error())
+	if err := upgrade.ApplyAuthorized(ctxutil.Host(c), p["id"]); err != nil {
 		response.Fail(c, "更新失败:"+err.Error())
 		return
 	}
-	if ver := upgrade.VersionByID(p["id"]); ver != nil {
-		_ = upgrade.WriteLocalVersion(util.ToString(ver["version_no"]))
-	}
-	upgrade.AddLog(host, p["id"], 1, true, "")
 	response.SuccessNotice(c, "更新成功")
 }
 
@@ -565,7 +545,7 @@ func UpgradeDownloadPkg(c *gin.Context) {
 	host := ctxutil.Host(c)
 	result := upgrade.Verify(host, p["id"], upgrade.PkgLinkName(updateType))
 	if !upgrade.HasPermission(result) {
-		msg := upgradeAuthMsg(result)
+		msg := upgrade.AuthFailMsg(result)
 		upgrade.AddLog(host, p["id"], updateType, false, msg)
 		response.Fail(c, msg)
 		return

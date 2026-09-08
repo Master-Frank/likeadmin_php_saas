@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/response"
@@ -100,6 +101,9 @@ func Run(c *gin.Context) {
 	// Empty go_config_path still updates in-memory config + default config.yaml.
 	if httpx.BodyStr(c, "go_config_path") == "" {
 		_ = WriteGoConfig("", host, dbName, user, pass, port, prefix, ctxutilHost(c), res.Salt)
+	}
+	if bootstrap.DB == nil {
+		_ = bootstrap.ReconnectDB()
 	}
 	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "env": res.Env})
 }

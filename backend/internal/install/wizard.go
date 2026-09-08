@@ -2,6 +2,9 @@ package install
 
 import (
 	"net/http"
+	"os"
+
+	"likeadmin/backend/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
@@ -66,5 +69,12 @@ document.getElementById('f').onsubmit=async ev=>{
 </html>`
 
 func Wizard(c *gin.Context) {
+	// PHP install.php die()s this exact string when install.lock exists.
+	if lock := config.C.App.InstallLock; lock != "" {
+		if _, err := os.Stat(lock); err == nil {
+			c.String(http.StatusOK, installedMsg)
+			return
+		}
+	}
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(wizardHTML))
 }
