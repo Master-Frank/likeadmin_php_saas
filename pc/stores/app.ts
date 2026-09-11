@@ -10,7 +10,20 @@ export const useAppStore = defineStore({
         config: {}
     }),
     getters: {
-        getImageUrl: (state) => (url: string) => (url ? `${state.config.domain}${url}` : ''),
+        getImageUrl: (state) => (url: string) => {
+            if (!url) {
+                return ''
+            }
+            if (/^https?:\/\//i.test(url)) {
+                return url
+            }
+            const domain = String(state.config.domain || '').replace(/\/+$/, '')
+            const path = String(url).replace(/^\/+/, '')
+            if (!domain) {
+                return '/' + path
+            }
+            return `${domain}/${path}`
+        },
         getWebsiteConfig: (state) => state.config.website || {},
         getLoginConfig: (state) => state.config.login || {},
         getCopyrightConfig: (state) => state.config.copyright || [],

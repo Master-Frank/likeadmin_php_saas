@@ -11,6 +11,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/cron"
+	"likeadmin/backend/internal/httpserver"
 	"likeadmin/backend/internal/router"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/upgrade"
@@ -44,7 +45,7 @@ func main() {
 		fmt.Printf("ThinkPHP Development server is started On <http://%s:%s/>\n", listen.Host, listen.Port)
 		fmt.Println("You can exit with `CTRL-C`")
 		fmt.Printf("Document root is: %s\n", config.C.App.PublicDir)
-		if err := router.New().Run(listen.Addr()); err != nil {
+		if err := httpserver.Run(listen.Addr(), router.New()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

@@ -29,7 +29,7 @@ func Run(addr string, h http.Handler) error {
 	startMetrics()
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           withExportWriteTimeout(h),
+		Handler:           withExportWriteTimeout(MergeSlashes(h)),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      exportWriteTimeout,
