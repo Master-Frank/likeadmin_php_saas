@@ -19,6 +19,8 @@ go run ./cmd/api
 
 平台端入口校验 `project.http_host`：与浏览器地址栏主机不一致时会返回「平台端入口域名错误」。用 `http://127.0.0.1:8080/platform/` 访问时，该项应写成 `127.0.0.1:8080`；不限域名则置空。
 
+H5 入口是 `/mobile/`（uniapp `h5.router.base`）。装修/小程序链接里的 `/pages/...`、`/packages/...` 会 302 到 `/mobile` 前缀，例如 `/pages/news/news` → `/mobile/pages/news/news`。
+
 生产构建及初次安装：
 
 ```bash

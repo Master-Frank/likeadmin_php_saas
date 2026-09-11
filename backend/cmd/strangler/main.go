@@ -135,6 +135,16 @@ func servePublic(w http.ResponseWriter, r *http.Request, public string) bool {
 	if !strings.HasPrefix(reqPath, "/") {
 		reqPath = "/" + reqPath
 	}
+	for _, prefix := range []string{"/pages", "/packages"} {
+		if reqPath == prefix || strings.HasPrefix(reqPath, prefix+"/") {
+			target := "/mobile" + reqPath
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusFound)
+			return true
+		}
+	}
 	rel := strings.TrimPrefix(reqPath, "/")
 	full := filepath.Join(public, filepath.FromSlash(rel))
 	root, err := filepath.Abs(public)

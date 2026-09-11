@@ -75,6 +75,11 @@ func New() *gin.Engine {
 	r.GET("/mobile/*any", spa("mobile"))
 	r.GET("/pc", spa("pc"))
 	r.GET("/pc/*any", spa("pc"))
+	// Uniapp H5 base is /mobile/; decoration and mini-program links use /pages and /packages.
+	r.GET("/pages", redirectUniappH5)
+	r.GET("/pages/*any", redirectUniappH5)
+	r.GET("/packages", redirectUniappH5)
+	r.GET("/packages/*any", redirectUniappH5)
 
 	if config.C.App.PublicDir != "" {
 		r.Static("/resource", filepath.Join(config.C.App.PublicDir, "resource"))
@@ -100,6 +105,20 @@ func serveSPA(dir string) gin.HandlerFunc {
 		}
 		c.File(filepath.Join(root, "index.html"))
 	}
+}
+
+// redirectUniappH5 sends mini-program style paths to the H5 SPA under /mobile.
+func redirectUniappH5(c *gin.Context) {
+	path := c.Request.URL.Path
+	if path == "" || strings.Contains(path, "..") {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	target := "/mobile" + path
+	if q := c.Request.URL.RawQuery; q != "" {
+		target += "?" + q
+	}
+	c.Redirect(http.StatusFound, target)
 }
 
 func underDir(root, fp string) bool {

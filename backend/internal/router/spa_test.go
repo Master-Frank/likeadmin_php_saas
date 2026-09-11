@@ -91,3 +91,32 @@ func TestServeSPARejectsDotDot(t *testing.T) {
 		t.Fatalf("escaped public_dir: %q", w.Body.String())
 	}
 }
+
+func TestRedirectUniappH5(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hit := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+		redirectUniappH5(c)
+		return w
+	}
+
+	news := hit("/pages/news/news")
+	if news.Code != http.StatusFound {
+		t.Fatalf("status %d", news.Code)
+	}
+	if loc := news.Header().Get("Location"); loc != "/mobile/pages/news/news" {
+		t.Fatalf("location %q", loc)
+	}
+
+	q := hit("/pages/news_detail/news_detail?id=3")
+	if loc := q.Header().Get("Location"); loc != "/mobile/pages/news_detail/news_detail?id=3" {
+		t.Fatalf("query location %q", loc)
+	}
+
+	pkg := hit("/packages/pages/user_wallet/user_wallet")
+	if loc := pkg.Header().Get("Location"); loc != "/mobile/packages/pages/user_wallet/user_wallet" {
+		t.Fatalf("package location %q", loc)
+	}
+}
