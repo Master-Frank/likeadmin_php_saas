@@ -342,12 +342,15 @@ func TestSaveExportOutsidePublicUploads(t *testing.T) {
 		t.Fatal("file meta missing")
 	}
 	t.Cleanup(func() { cache.Del("export_file_" + key) })
-	if strings.Contains(info.Src, "uploads") {
-		t.Fatalf("must not write under public uploads: %s", info.Src)
+	if strings.Contains(info.Name, "uploads") || strings.Contains(exportRoot(), "uploads") {
+		t.Fatalf("must not write under public uploads: %s", exportRoot())
 	}
 	want := filepath.Join(dir, "runtime", "export")
-	if !strings.HasPrefix(info.Src, want) {
-		t.Fatalf("export root %s want prefix %s", info.Src, want)
+	if !strings.HasPrefix(exportRoot(), want) {
+		t.Fatalf("export root %s want prefix %s", exportRoot(), want)
+	}
+	if info.Rel != info.Name || info.Name == "" {
+		t.Fatalf("relative name %+v", info)
 	}
 }
 

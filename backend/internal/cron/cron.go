@@ -261,9 +261,16 @@ func flushCache() string {
 
 func runEnsureIndexes([]string) string {
 	if bootstrap.DB == nil {
+		fmt.Println("database unavailable")
+		dbindex.WriteStatus(dbindex.Plan(nil), fmt.Errorf("database unavailable"))
 		return "database unavailable"
 	}
+	before := dbindex.Plan(bootstrap.DB)
+	fmt.Print(dbindex.FormatPlan(before))
 	dbindex.EnsurePerfIndexes(bootstrap.DB)
+	after := dbindex.Plan(bootstrap.DB)
+	dbindex.WriteStatus(after, nil)
+	fmt.Print(dbindex.FormatPlan(after))
 	return ""
 }
 

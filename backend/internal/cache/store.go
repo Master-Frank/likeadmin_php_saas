@@ -10,6 +10,9 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/metrics"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func ctx() context.Context {
@@ -71,7 +74,10 @@ func isSecurityKey(key string) bool {
 		key == "auth_cache_ver",
 		strings.HasPrefix(key, "rl:"),
 		strings.HasPrefix(key, "export_task_"),
-		strings.HasPrefix(key, "export_file_"):
+		strings.HasPrefix(key, "export_file_"),
+		strings.HasPrefix(key, "export_job_"),
+		strings.HasPrefix(key, "export_lease_"),
+		key == "export_jobs":
 		return true
 	default:
 		return false
@@ -88,12 +94,19 @@ func useMemFallback(key string) bool {
 	return true
 }
 
+func noteRedisErr(err error) {
+	if err != nil && err != redis.Nil {
+		metrics.AddRedisError()
+	}
+}
+
 func Get(key string) (string, bool) {
 	if bootstrap.RDB != nil {
 		v, err := bootstrap.RDB.Get(ctx(), bootstrap.RedisKey(key)).Result()
 		if err == nil {
 			return v, true
 		}
+		noteRedisErr(err)
 		if !useMemFallback(key) {
 			return "", false
 		}
@@ -127,6 +140,8 @@ func Set(key string, val any, ttl time.Duration) {
 	if bootstrap.RDB != nil {
 		if err := bootstrap.RDB.Set(ctx(), bootstrap.RedisKey(key), p, ttl).Err(); err == nil {
 			return
+		} else {
+			noteRedisErr(err)
 		}
 		if !useMemFallback(key) {
 			return
@@ -135,6 +150,93 @@ func Set(key string, val any, ttl time.Duration) {
 		return
 	}
 	memSet(key, p, ttl)
+}
+
+func SetNX(key, val string, ttl time.Duration) bool {
+	if bootstrap.RDB != nil {
+		ok, err := bootstrap.RDB.SetNX(ctx(), bootstrap.RedisKey(key), val, ttl).Result()
+		if err == nil {
+			return ok
+		}
+		noteRedisErr(err)
+		if !useMemFallback(key) {
+			return false
+		}
+	} else if !useMemFallback(key) {
+		return false
+	}
+	if _, ok := memGet(key); ok {
+		return false
+	}
+	memSet(key, val, ttl)
+	return true
+}
+
+func ListPush(key, val string) bool {
+	if bootstrap.RDB != nil {
+		if err := bootstrap.RDB.LPush(ctx(), bootstrap.RedisKey(key), val).Err(); err == nil {
+			return true
+		} else {
+			noteRedisErr(err)
+		}
+		return false
+	}
+	return false
+}
+
+func ListPop(key string, wait time.Duration) (string, bool) {
+	if bootstrap.RDB == nil {
+		return "", false
+	}
+	res, err := bootstrap.RDB.BRPop(ctx(), wait, bootstrap.RedisKey(key)).Result()
+	if err != nil || len(res) < 2 {
+		noteRedisErr(err)
+		return "", false
+	}
+	return res[1], true
+}
+
+// KeysPrefix returns logical (unprefixed) keys that start with prefix.
+func KeysPrefix(prefix string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(k string) {
+		if k == "" {
+			return
+		}
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	if bootstrap.RDB != nil {
+		match := bootstrap.RedisKey(prefix) + "*"
+		rp := bootstrap.RedisKey("")
+		var cursor uint64
+		for {
+			keys, next, err := bootstrap.RDB.Scan(ctx(), cursor, match, 100).Result()
+			if err != nil {
+				noteRedisErr(err)
+				break
+			}
+			for _, k := range keys {
+				add(strings.TrimPrefix(k, rp))
+			}
+			cursor = next
+			if cursor == 0 {
+				break
+			}
+		}
+	}
+	mem.Range(func(k, _ any) bool {
+		s, ok := k.(string)
+		if ok && strings.HasPrefix(s, prefix) {
+			add(s)
+		}
+		return true
+	})
+	return out
 }
 
 func Del(key string) {
@@ -237,6 +339,7 @@ func Incr(key string) int64 {
 		if err == nil {
 			return n
 		}
+		noteRedisErr(err)
 		if !useMemFallback(key) {
 			return -1
 		}
@@ -267,6 +370,7 @@ func IncrExpire(key string, ttl time.Duration) int64 {
 		if err == nil {
 			return n
 		}
+		noteRedisErr(err)
 		if !useMemFallback(key) {
 			return -1
 		}

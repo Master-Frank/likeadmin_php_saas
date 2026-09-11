@@ -73,7 +73,11 @@ func Middleware() gin.HandlerFunc {
 		if c.Request != nil {
 			c.Request = c.Request.WithContext(WithStats(c.Request.Context(), st))
 		}
+		HTTPInFlightAdd(1)
+		start := time.Now()
 		c.Next()
+		HTTPInFlightAdd(-1)
+		ObserveHTTP(time.Since(start))
 		AddHTTP()
 	}
 }
@@ -119,4 +123,5 @@ func after(db *gorm.DB) {
 	}
 	st.Add(1, elapsed)
 	AddSQL()
+	ObserveSQL(elapsed)
 }

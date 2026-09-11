@@ -44,8 +44,19 @@ func Init(cfgPath string) error {
 	if err := initRedis(); err != nil {
 		return err
 	}
-	if Installed() && os.Getenv("LIKEADMIN_ENSURE_INDEXES") == "1" {
-		dbindex.EnsurePerfIndexes(DB)
+	if Installed() && DB != nil {
+		if os.Getenv("LIKEADMIN_ENSURE_INDEXES") == "1" {
+			dbindex.EnsurePerfIndexes(DB)
+			dbindex.WriteStatus(dbindex.Plan(DB), nil)
+		} else {
+			missing := dbindex.Missing(DB)
+			if len(missing) > 0 {
+				log.Printf("missing performance indexes (%d); run `bin/think ensure-indexes`\n%s", len(missing), dbindex.FormatPlan(missing))
+				if os.Getenv("LIKEADMIN_REQUIRE_INDEXES") == "1" {
+					return fmt.Errorf("required indexes missing; run bin/think ensure-indexes")
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -130,6 +141,14 @@ func replicaHealthy() bool {
 	}
 	replicaHealth.mu.Unlock()
 	live := pingDB(ReadDB)
+	lag, lagOK := replicaLag(ReadDB)
+	if live && lagOK && lag > replicaMaxLag() {
+		live = false
+	}
+	if lagOK {
+		metrics.SetReplicaLag(lag)
+	}
+	metrics.SetReplicaUp(live && ReadDB != nil && ReadDB != DB)
 	replicaHealth.mu.Lock()
 	replicaHealth.checked = time.Now()
 	replicaHealth.live = live
@@ -215,8 +234,12 @@ func initDB() error {
 		return err
 	}
 	metrics.Register(db)
+	if sqlDB, err := db.DB(); err == nil {
+		metrics.SetSQLDB(sqlDB)
+	}
 	DB = db
 	bindReadDB(db)
+	startReplicaRetry()
 	return nil
 }
 

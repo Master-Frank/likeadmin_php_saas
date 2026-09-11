@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/metrics"
+	"likeadmin/backend/internal/middleware"
 )
 
 const (
@@ -24,7 +26,10 @@ const (
 	shutdownWait       = 15 * time.Second
 )
 
-var maxBodyBytes int64 = 50 << 20
+var (
+	maxBodyBytes  int64 = 50 << 20
+	jsonBodyBytes int64 = 1 << 20
+)
 
 // Run starts an http.Server with timeouts and SIGTERM graceful shutdown.
 func Run(addr string, h http.Handler) error {
@@ -56,13 +61,20 @@ func Run(addr string, h http.Handler) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
 	defer cancel()
-	return srv.Shutdown(ctx)
+	err := srv.Shutdown(ctx)
+	export.StopWorkers()
+	middleware.DrainOplog()
+	return err
 }
 
 func withLimits(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r != nil && r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+			limit := jsonBodyBytes
+			if isUploadRequest(r) {
+				limit = maxBodyBytes
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		if r != nil && isExportRequest(r) {
 			rc := http.NewResponseController(w)
@@ -70,6 +82,13 @@ func withLimits(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+func isUploadRequest(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(r.URL.Path), "/upload/")
 }
 
 func isExportRequest(r *http.Request) bool {

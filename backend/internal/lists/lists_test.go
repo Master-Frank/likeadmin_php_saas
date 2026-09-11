@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/export"
 
 	"github.com/gin-gonic/gin"
 )
@@ -68,6 +71,59 @@ func TestParsePageType(t *testing.T) {
 	q = parse("?page_type=0&page_no=3&page_size=10")
 	if q.PageType != 0 || q.PageNo != 1 || q.PageSize != 25000 || q.Offset != 0 {
 		t.Fatalf("unpaged %+v", q)
+	}
+}
+
+func TestParsePageSizeHardCap(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldSize, oldMax := config.C.Project.Lists.PageSize, config.C.Project.Lists.PageSizeMax
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	t.Cleanup(func() {
+		config.C.Project.Lists.PageSize = oldSize
+		config.C.Project.Lists.PageSizeMax = oldMax
+	})
+	parse := func(raw, app string) Query {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		ctxutil.Set(c, &ctxutil.RequestMeta{App: app})
+		return Parse(c)
+	}
+	q := parse("?page_type=1&page_size=25000", "platformapi")
+	if q.PageSize != 500 {
+		t.Fatalf("paged lists must cap at 500, got %d", q.PageSize)
+	}
+	q = parse("?page_type=0&page_size=10", "platformapi")
+	if q.PageSize != 25000 {
+		t.Fatalf("admin unpaged still uses page_size_max, got %d", q.PageSize)
+	}
+	q = parse("?page_type=0", "api")
+	if q.PageSize != 500 {
+		t.Fatalf("public api unpaged must cap at 500, got %d", q.PageSize)
+	}
+}
+
+func TestParseGETEnqueueSkipsList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("LIKEADMIN_EXPORT_ASYNC", "1")
+	var ran int
+	export.SetHandlerLookup(func(app, controller, action string) gin.HandlerFunc {
+		return func(c *gin.Context) { ran++ }
+	})
+	t.Cleanup(func() { export.SetHandlerLookup(nil) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/setting.system.log/lists?export=2&page_size=10", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{App: "platformapi", Controller: "setting.system.log", Action: "lists", AdminID: 3})
+	if _, ok := ParseGET(c); ok {
+		t.Fatal("async export must stop ParseGET before the list query")
+	}
+	if ran != 0 {
+		t.Fatal("list handler must not run on enqueue")
+	}
+	if !strings.Contains(w.Body.String(), `"status":"pending"`) || !strings.Contains(w.Body.String(), "task_id") {
+		t.Fatalf("enqueue payload %s", w.Body.String())
 	}
 }
 

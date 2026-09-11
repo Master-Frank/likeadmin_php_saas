@@ -9,9 +9,12 @@ import (
 )
 
 func TestWithLimitsRejectsOversizedBody(t *testing.T) {
-	old := maxBodyBytes
+	oldJSON, oldUp := jsonBodyBytes, maxBodyBytes
+	jsonBodyBytes = 8
 	maxBodyBytes = 8
-	t.Cleanup(func() { maxBodyBytes = old })
+	t.Cleanup(func() {
+		jsonBodyBytes, maxBodyBytes = oldJSON, oldUp
+	})
 	h := withLimits(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.ReadAll(r.Body)
 		if err == nil {

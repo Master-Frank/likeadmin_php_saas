@@ -1,9 +1,13 @@
 package dbindex
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"likeadmin/backend/internal/config"
@@ -11,6 +15,16 @@ import (
 
 	"gorm.io/gorm"
 )
+
+type Item struct {
+	Table      string `json:"table"`
+	Name       string `json:"name"`
+	Cols       string `json:"cols"`
+	Present    bool   `json:"present"`
+	Action     string `json:"action"`
+	LockImpact string `json:"lock_impact"`
+	Error      string `json:"error,omitempty"`
+}
 
 type spec struct {
 	table  string
@@ -67,6 +81,105 @@ func EnsurePerfIndexes(db *gorm.DB) {
 			}
 		}
 	}
+}
+
+func lockNote() string {
+	return "MySQL 8 secondary INDEX is typically INPLACE with a brief metadata lock; run against large tables in a maintenance window."
+}
+
+// Plan reports each candidate index without modifying schema.
+func Plan(db *gorm.DB) []Item {
+	out := make([]Item, 0, 16)
+	for _, s := range specs() {
+		tables := []string{s.table}
+		if db != nil && s.shards {
+			tables = append(tables, shardTables(db, s.table)...)
+		}
+		seen := map[string]bool{}
+		for _, table := range tables {
+			if table == "" || seen[table] {
+				continue
+			}
+			seen[table] = true
+			it := Item{Table: table, Name: s.name, Cols: s.cols, LockImpact: lockNote(), Action: "create"}
+			if db == nil {
+				it.Action = "skipped"
+				it.Error = "database unavailable"
+				out = append(out, it)
+				continue
+			}
+			if !tableExists(db, table) {
+				it.Action = "skipped"
+				it.Error = "table missing"
+				out = append(out, it)
+				continue
+			}
+			if hasIndex(db, table, s.name) {
+				it.Present = true
+				it.Action = "exists"
+			}
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// Missing returns indexes that should exist but do not.
+func Missing(db *gorm.DB) []Item {
+	if db == nil {
+		return nil
+	}
+	var out []Item
+	for _, it := range Plan(db) {
+		if !it.Present && it.Action == "create" {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+func FormatPlan(items []Item) string {
+	if len(items) == 0 {
+		return "no index plan"
+	}
+	var b strings.Builder
+	for _, it := range items {
+		status := it.Action
+		if it.Present {
+			status = "present"
+		}
+		fmt.Fprintf(&b, "%s.%s (%s) %s", it.Table, it.Name, it.Cols, status)
+		if it.Error != "" {
+			fmt.Fprintf(&b, " [%s]", it.Error)
+		}
+		b.WriteByte('\n')
+		fmt.Fprintf(&b, "  lock: %s\n", it.LockImpact)
+	}
+	return b.String()
+}
+
+func StatusPath() string {
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(filepath.Dir(config.C.App.PublicDir), "runtime", "index-status.json")
+	}
+	return filepath.Join("runtime", "index-status.json")
+}
+
+func WriteStatus(items []Item, runErr error) {
+	path := StatusPath()
+	_ = os.MkdirAll(filepath.Dir(path), 0o775)
+	payload := map[string]any{
+		"time":  time.Now().Unix(),
+		"items": items,
+	}
+	if runErr != nil {
+		payload["error"] = runErr.Error()
+	}
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, b, 0o644)
 }
 
 func ensureOperationLogTenantID(db *gorm.DB) {

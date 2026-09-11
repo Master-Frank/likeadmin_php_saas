@@ -100,9 +100,33 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		return true
 	}
 	domain := ctxutil.Domain(c)
+	if v, ok := c.Get("likeadmin.export_domain"); ok {
+		if s, _ := v.(string); s != "" {
+			domain = s
+		}
+	}
 	app := ctxutil.Get(c).App
 	owner := exportOwner(c)
 	startExportJanitor()
+	if id, _ := c.Get("likeadmin.export_task_id"); id != nil {
+		taskID, _ := id.(string)
+		key, err := saveOwnedXLSX(fileName, rows, spec.Fields, owner)
+		if err != nil {
+			saveTask(Task{ID: taskID, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID})
+			metrics.AddExport(statusFailed)
+			if !c.GetBool("likeadmin.export_worker") {
+				response.Fail(c, err.Error())
+			}
+			return true
+		}
+		t := Task{ID: taskID, Status: statusReady, URL: downloadURL(app, domain, key, owner), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID}
+		saveTask(t)
+		metrics.AddExport(statusReady)
+		if !c.GetBool("likeadmin.export_worker") {
+			response.Data(c, taskPayload(t))
+		}
+		return true
+	}
 	if !config.ExportAsyncEnabled() {
 		key, err := saveOwnedXLSX(fileName, rows, spec.Fields, owner)
 		if err != nil {
@@ -170,8 +194,12 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool, owner Task
 		_ = f.Close()
 	}
 	key := randomHex(16)
+	if st, err := os.Stat(path); err == nil && st.Size() > maxFileBytes {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("导出文件超过大小限制")
+	}
 	cache.Set("export_file_"+key, fileInfo{
-		Src: dir + string(os.PathSeparator), Name: fname, Download: download,
+		Name: fname, Download: download, Rel: fname,
 		AdminID: owner.AdminID, TenantID: owner.TenantID,
 	}, 30*time.Minute)
 	return key, nil
@@ -197,7 +225,11 @@ func Serve(c *gin.Context) {
 	if attach == "" {
 		attach = info.Name
 	}
-	path := filepath.Join(info.Src, info.Name)
+	dir := info.Src
+	if dir == "" {
+		dir = exportRoot()
+	}
+	path := filepath.Join(dir, info.Name)
 	abs, err := filepath.Abs(path)
 	if err != nil || !allowedExportPath(abs) {
 		response.Fail(c, "下载文件不存在")
@@ -359,6 +391,9 @@ func min(a, b int) int {
 }
 
 func exportRoot() string {
+	if d := strings.TrimSpace(os.Getenv("LIKEADMIN_EXPORT_DIR")); d != "" {
+		return d
+	}
 	if config.C.App.PublicDir != "" {
 		return filepath.Join(filepath.Dir(config.C.App.PublicDir), "runtime", "export")
 	}

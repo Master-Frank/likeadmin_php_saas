@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -82,5 +83,17 @@ func TestSkipOplogCapture(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/auth.admin/add", nil)
 	if skipOplogCapture(c, &ctxutil.RequestMeta{Controller: "auth.admin", Action: "add"}) {
 		t.Fatal("POST writes still capture")
+	}
+}
+
+func TestOplogMustPersistWrites(t *testing.T) {
+	if !oplogMustPersist(model.OperationLog{Type: "POST", URL: "/platformapi/auth.admin/add"}) {
+		t.Fatal("POST must persist")
+	}
+	if oplogMustPersist(model.OperationLog{Type: "GET", URL: "/platformapi/auth.admin/lists"}) {
+		t.Fatal("GET lists may drop")
+	}
+	if !oplogMustPersist(model.OperationLog{Type: "GET", URL: "/platformapi/login/account"}) {
+		t.Fatal("login URL must persist")
 	}
 }

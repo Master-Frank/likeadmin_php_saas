@@ -44,10 +44,27 @@ func New() *gin.Engine {
 	}
 
 	notNeed := notNeedLogin()
+	plat := platformRoutes()
+	ten := tenantRoutes()
+	api := apiRoutes()
+	export.SetHandlerLookup(func(app, controller, action string) gin.HandlerFunc {
+		key := strings.ToLower(controller + "/" + action)
+		switch app {
+		case "platformapi":
+			return lookup(plat, key)
+		case "tenantapi":
+			return lookup(ten, key)
+		case "api":
+			return lookup(api, key)
+		default:
+			return nil
+		}
+	})
+	export.Start()
 
-	r.Any("/platformapi/*path", dispatch("platformapi", platformRoutes(), notNeed["platformapi"]))
-	r.Any("/tenantapi/*path", dispatch("tenantapi", tenantRoutes(), notNeed["tenantapi"]))
-	r.Any("/api/*path", dispatch("api", apiRoutes(), notNeed["api"]))
+	r.Any("/platformapi/*path", dispatch("platformapi", plat, notNeed["platformapi"]))
+	r.Any("/tenantapi/*path", dispatch("tenantapi", ten, notNeed["tenantapi"]))
+	r.Any("/api/*path", dispatch("api", api, notNeed["api"]))
 
 	r.GET("/crontab", cron.HTTP)
 	r.GET("/install", install.Wizard)
@@ -102,10 +119,16 @@ func serveSPA(dir string) gin.HandlerFunc {
 		if rel != "" && !strings.Contains(rel, "..") {
 			fp := filepath.Join(root, filepath.FromSlash(rel))
 			if st, err := os.Stat(fp); err == nil && !st.IsDir() && underDir(root, fp) {
+				if hashedSPAAsset(rel) {
+					c.Header("Cache-Control", "public, max-age=31536000, immutable")
+				} else if strings.HasSuffix(strings.ToLower(rel), ".html") {
+					c.Header("Cache-Control", "no-cache")
+				}
 				c.File(fp)
 				return
 			}
 		}
+		c.Header("Cache-Control", "no-cache")
 		c.File(filepath.Join(root, "index.html"))
 	}
 }
@@ -128,6 +151,23 @@ func underDir(root, fp string) bool {
 	}
 	sep := string(os.PathSeparator)
 	return absFP == absRoot || strings.HasPrefix(absFP, absRoot+sep)
+}
+
+func hashedSPAAsset(rel string) bool {
+	n := strings.ToLower(strings.ReplaceAll(rel, "\\", "/"))
+	if strings.Contains(n, "/assets/") || strings.HasPrefix(n, "assets/") {
+		return true
+	}
+	for _, ext := range []string{".js", ".css", ".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"} {
+		if !strings.HasSuffix(n, ext) {
+			continue
+		}
+		base := strings.TrimSuffix(filepath.Base(n), ext)
+		if i := strings.LastIndex(base, "-"); i >= 0 && len(base)-i-1 >= 8 {
+			return true
+		}
+	}
+	return false
 }
 
 func dispatch(app string, routes map[string]Handler, notNeed map[string][]string) gin.HandlerFunc {

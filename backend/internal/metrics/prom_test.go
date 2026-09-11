@@ -17,7 +17,17 @@ func TestWritePrometheus(t *testing.T) {
 	if w.Code != http.StatusOK && w.Code != 0 {
 		t.Fatalf("code %d", w.Code)
 	}
-	for _, want := range []string{"likeadmin_http_requests_total", "likeadmin_sql_queries_total", "likeadmin_export_tasks_total", "status=\"ready\""} {
+	for _, want := range []string{
+		"likeadmin_http_requests_total",
+		"likeadmin_sql_queries_total",
+		"likeadmin_export_tasks_total",
+		"status=\"ready\"",
+		"likeadmin_http_in_flight",
+		"likeadmin_http_request_duration_seconds",
+		"likeadmin_export_in_flight",
+		"likeadmin_oplog_dropped_total",
+		"likeadmin_go_goroutines",
+	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %s in %s", want, body)
 		}

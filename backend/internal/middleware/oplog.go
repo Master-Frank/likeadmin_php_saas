@@ -8,10 +8,12 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/util"
@@ -55,37 +57,70 @@ func oplogAsync() bool {
 	return v == "1" || strings.EqualFold(v, "true")
 }
 
+func writeOplog(item model.OperationLog) {
+	if bootstrap.DB == nil {
+		return
+	}
+	db := bootstrap.DB
+	var err error
+	if !schemacache.HasColumn(db, item.TableName(), "tenant_id") {
+		err = db.Omit("tenant_id").Create(&item).Error
+	} else {
+		err = db.Create(&item).Error
+	}
+	if err == nil {
+		metrics.AddOplogWritten()
+	}
+}
+
 func enqueueOplog(row model.OperationLog) {
 	if bootstrap.DB == nil {
 		return
 	}
-	write := func(item model.OperationLog) {
-		if bootstrap.DB == nil {
-			return
-		}
-		db := bootstrap.DB
-		if !schemacache.HasColumn(db, item.TableName(), "tenant_id") {
-			_ = db.Omit("tenant_id").Create(&item).Error
-			return
-		}
-		_ = db.Create(&item).Error
-	}
 	if !oplogAsync() {
-		write(row)
+		writeOplog(row)
 		return
 	}
 	oplogOnce.Do(func() {
 		oplogCh = make(chan model.OperationLog, 256)
 		go func() {
 			for item := range oplogCh {
-				write(item)
+				writeOplog(item)
 			}
 		}()
 	})
 	select {
 	case oplogCh <- row:
+		metrics.AddOplogQueued()
 	default:
-		// drop low-value logs when the queue is full
+		if oplogMustPersist(row) {
+			writeOplog(row)
+			return
+		}
+		metrics.AddOplogDropped()
+	}
+}
+
+func oplogMustPersist(row model.OperationLog) bool {
+	if row.Type != "GET" {
+		return true
+	}
+	ctrl := strings.ToLower(row.Action)
+	return strings.Contains(ctrl, "登录") || strings.Contains(strings.ToLower(row.URL), "/login/")
+}
+
+// DrainOplog waits for the async queue to empty so SIGTERM does not drop writes.
+func DrainOplog() {
+	if !oplogAsync() || oplogCh == nil {
+		return
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(oplogCh) == 0 {
+			time.Sleep(20 * time.Millisecond)
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

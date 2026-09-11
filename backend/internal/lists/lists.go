@@ -9,6 +9,8 @@ import (
 	"unicode"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
@@ -112,6 +114,19 @@ func Parse(c *gin.Context) Query {
 	} else if q.Export == 2 && q.PageSize > maxRows {
 		q.PageSize = maxRows
 	}
+	if q.Export == 0 {
+		hard := 500
+		if q.PageType == 1 && q.PageSize > hard {
+			q.PageSize = hard
+		}
+		if q.PageType != 1 && ctxutil.Get(c).App == "api" && q.PageSize > hard {
+			q.PageSize = hard
+		}
+		q.Offset = (q.PageNo - 1) * q.PageSize
+		if q.Offset < 0 {
+			q.Offset = 0
+		}
+	}
 	return q
 }
 
@@ -127,6 +142,9 @@ func ParseGET(c *gin.Context) (Query, bool) {
 	}
 	if msg := ValidateQuery(httpx.Query(c)); msg != "" {
 		response.Fail(c, msg)
+		return Query{}, false
+	}
+	if export.EnqueueFromRequest(c) {
 		return Query{}, false
 	}
 	return Parse(c), true

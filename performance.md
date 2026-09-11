@@ -9,9 +9,9 @@
 - PHP → Go HTTP 迁移已完成，307/307 个公开动作由 Go 提供；后续性能工作不再讨论重写后端。
 - P0/P1 的大部分保护、首批索引、热路径缓存、查询降本和部署配置已经落地。
 - 本轮已关闭先前的上线阻断点中的权限 fail-open、tenant 导出轮询、操作日志隔离/脱敏/缓冲、可信代理、Redis 安全状态 fail-closed，以及启动期串行建索引。
-- 真正的异步导出 worker（游标读取、共享/对象存储、请求内不再物化 10000 行）和可复现容量基线仍未完成。
-- `go test ./...`、`go vet ./...` 是功能与回归证据，不是吞吐、延迟或容量证明。
-- 精确 `count`、`page_size_max=25000` 和 PHP 兼容响应契约仍保留。
+- 导出在 `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时改为 HTTP 只入队、worker 重放列表；worker 内仍最多物化 `export_max_rows`（默认 10000）行，没有改成逐列表游标 SQL。
+- `go test ./...`、`go vet ./...` 是功能与回归证据，不是吞吐、延迟或容量证明。k6 脚本已提供，仓库里仍然没有实测 QPS。
+- 精确 `count` 和 PHP 兼容响应契约仍保留。普通 `page_type=1` 列表硬限制 500 行；后台 `page_type=0` 仍可用 `page_size_max`（默认 25000）。
 
 ## 2. 当前状态
 
@@ -52,7 +52,7 @@
   - operation_log：`(create_time)`、`(tenant_id,create_time,id)`。
 - HTTP 启动默认不再串行 `CREATE INDEX`。安装成功后会执行一次；存量库使用 `bin/think ensure-indexes` 或 `LIKEADMIN_ENSURE_INDEXES=1`。
 - `LIKEADMIN_REQUIRE_DDL=0` 时跳过建索引、加列和 DDL 权限探测。
-- 可配置一个只读副本；探活在后台刷新健康状态，不再在请求 goroutine 里持锁等待 Ping。不可用时读请求回落主库。
+- 可配置一个只读副本；探活在后台刷新健康状态，不再在请求 goroutine 里持锁等待 Ping。不可用或复制 lag 超过 `LIKEADMIN_REPLICA_MAX_LAG`（默认 30s）时读请求回落主库。绑定失败会在后台重试。
 - 操作日志列表、部分工作台统计和 tenant 读会使用只读入口；支付、鉴权、配置和写后读仍走主库。
 - 安装向导已更正：主从只把日志/统计等可延迟读打到从库，导出仍走原列表查询路径。
 
@@ -83,15 +83,15 @@
 ### 2.4 查询与请求关键路径降本
 
 - `api/recharge/lists` 已分页，不再无界读取。
-- 平台租户列表对共享 `user` 表使用一次 `GROUP BY` 计数；`tactics=1` 分表租户仍逐租户计数。
+- 平台租户列表对共享 `user` 表使用一次 `GROUP BY` 计数；`tactics=1` 分表租户仍逐租户计数，结果缓存 30 秒。
 - 平台端和租户端 `PayWayGet` 先收集 `pay_config_id`，一次 `IN (?)` 查询配置。
 - 文章浏览量使用数据库原子自增。
 - GET/HEAD 和 `download/*` 不安装 response capture writer；非 GET 使用 64 KiB 上限的边写边截断 buffer。
 - 操作日志表有 `tenant_id`；租户日志按 tenant ID 过滤。列尚未升级时租户查询失败关闭（空列表），不会回退到 admin ID + URL 近似隔离。
 - 参数脱敏递归处理 map/list，覆盖 password/secret/private_key/mch_key/access_key_secret 等 credential-shaped key。
-- `LIKEADMIN_OPLOG_ASYNC=1` 时操作日志进入 256 长度的进程内有界队列；队列满时丢弃。
+- `LIKEADMIN_OPLOG_ASYNC=1` 时操作日志进入 256 长度的进程内有界队列；GET 队列满可丢弃，POST/登录等审计事件改为同步写入。进程退出前 `DrainOplog`。
 - 普通列表仍返回精确 `count`；没有改成 `has_more` 或估算值。
-- `page_type=0` 仍可读取 `page_size_max`，默认上限仍为 25000。
+- 普通 `page_type=1` 列表 `page_size` 硬限制 500；C 端 `app=api` 的 `page_type=0` 同样限制 500。平台/租户后台 `page_type=0` 仍使用 `page_size_max`（菜单/字典/素材）。`ValidateQuery` 的 25000 报错文案未改。
 
 ### 2.5 导出当前实现
 
@@ -102,11 +102,13 @@
 - task ID 和 file key 使用加密随机数；任务状态保存 Redis 30 分钟。
 - 下载 URL 按 app 返回 `/platformapi` 或 `/tenantapi`，带 HMAC 签名和过期时间；tenant Vue 轮询 `/tenantapi/download/export`，非成功 `code` 立即失败。
 - 任务轮询绑定创建管理员和租户；文件下载校验签名，或校验已登录 owner。
-- 文件写入 `public_dir` 同级的 `runtime/export`，不再暴露在匿名 `/uploads` 静态目录。
+- 文件写入 `public_dir` 同级的 `runtime/export`，或 `LIKEADMIN_EXPORT_DIR`；元数据保存相对文件名，不再保存实例绝对路径。
 - 打开并确认文件可读后才删除一次性 file key；下载成功后删除磁盘文件；janitor 按任务 TTL 清理过期文件。
-- 单进程最多同时执行 2 个 XLSX 写盘任务，并有 panic 恢复。
-- 当前“异步”边界仍只覆盖 XLSX 组装和写盘：列表 SQL、关联组装以及最多 10000 行结果仍在原 HTTP 请求内完成。
-- 文件仍写本机目录；Redis 中保存的是该实例的绝对路径。没有共享盘或对象存储时，另一实例无法下载。
+- `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时，HTTP 只保存导出条件并返回 `task_id`；后台 worker 带租户/管理员上下文重放原列表 handler。
+- worker 使用 Redis 队列 `export_jobs` + `SETNX` 租约；无 Redis 的单实例走进程内队列。租约丢失的 pending 任务会再入队，最多 3 次，超时失败。每租户互斥，单进程 2 个 worker，单任务 2 分钟，文件 50MiB。
+- XLSX sheet 流式写入 zip，不再先拼整张表字符串。
+- 关闭异步时仍走原路径：列表查询在 HTTP goroutine 内完成。
+- worker 内仍 `Find` 最多 10000 行到内存；没有为每个列表改成主键游标分批 SQL。导出文件默认不上传到公开 OSS（避免进入 CDN `/uploads`）；多实例需挂载同一 `LIKEADMIN_EXPORT_DIR`。
 
 ### 2.6 多实例、静态资源与 CDN
 
@@ -116,148 +118,79 @@
 - nginx upstream 可增加多个 Go 实例；crontab 已有 MySQL advisory lock。
 - 本地上传仍要求运维提供共享盘，或在后台配置 OSS。
 - `app.cdn_domain` 可配置文件 CDN 域名。
-- nginx 已启用 gzip；`resource/uploads` 可设置长期缓存；带扩展名的 SPA asset 跳过租户解析。
+- nginx 已启用 gzip；`/uploads` 与 `/resource` 长期缓存；`/(platform|admin|mobile|pc)/assets/` 使用 `immutable`；SPA HTML `no-cache`。Go `serveSPA` 同步设置这些头。
+- JSON API `client_max_body_size 1m`；`/upload/` 与本地上传目录保持 50m / 120s。Go 层同样：JSON 1MiB，上传路径 50MiB。
 - `/pages`、`/packages` 店铺链接和 PC 图片双斜杠兼容已修复。
 
 ### 2.7 当前可观测性与验证
 
 - GORM callback 可以把使用 request context 的 SQL 数量和耗时挂到请求。
-- `LIKEADMIN_METRICS=1` 时，`127.0.0.1:9090/metrics` 当前只输出：
-  - HTTP 请求总数；
-  - SQL 查询总数；
-  - export pending/ready/failed 累计数；
+- `LIKEADMIN_METRICS=1` 时，`127.0.0.1:9090/metrics` 输出：
+  - HTTP 总数、在飞、延迟直方图；
+  - SQL 总数、延迟直方图、`sql.DB.Stats()`；
+  - export pending/ready/failed 与在飞；
+  - oplog queued/dropped/written；
+  - Redis 错误计数；
+  - replica up/lag；
+  - Go heap / goroutine / GC pause；
   - instance 标签。
-- `backend/tests/performance/` 目前只有 query stats 挂载和导出上限配置测试，不是 benchmark 或负载测试。
-- 尚无 HTTP 延迟直方图、DB pool wait、Redis hit/miss/fallback、导出在飞数量、Go runtime 指标或固定数据集压测结果。
+- `backend/tests/performance/` 含 query stats 测试和 k6 场景脚本（boot/文章/后台列表/用户中心/写路径/导出）。脚本可重复跑，仓库不包含任何实测 QPS。
+- Redis hit/miss 分项和请求级 replica query-error 自动切主仍未拆开。
 - 因此当前不能给出可信的单机 QPS、p95/p99、容量上限或“提升倍数”。
 
 ## 3. 待办
 
-### P0-2 完成真正的异步导出和多实例文件闭环
+### P0-2 异步导出
 
-已完成：tenant 轮询 URL、签名下载、打开后再消费 file key、下载后删文件、按年龄 janitor。
+已完成：tenant 轮询、签名下载、打开后再消费 file key、janitor、HTTP 入队、worker 重放列表、相对路径/`LIKEADMIN_EXPORT_DIR`、租约与崩溃再入队、流式 XLSX、每租户互斥和文件大小上限。
 
-仍待实施：
+仍待（需要按列表改 SQL，本轮不做）：
 
-1. HTTP 只保存导出条件、稳定排序字段、tenant/admin 身份和导出字段，立即返回 task ID。
-2. 独立 worker 从 Redis/数据库领取任务，重新建立租户上下文。
-3. 使用稳定主键游标分批读取；禁止把整个导出结果放进 HTTP 请求或单个 Go slice。
-4. CSV/XLSX 流式写出，限制每租户并发、总行数、文件大小、执行时长和保留时间。
-5. 多实例使用 OSS/S3 或明确挂载的共享目录；任务元数据记录对象 key，不保存实例绝对路径。
-6. worker crash 后任务应超时失败或可重试；进程退出前停止领任务并处理租约。
+- 每个导出列表改成稳定主键游标分批读取，避免 worker 内最多 10000 行的单个 slice。
+- 私有导出对象存储（与公开 `/uploads` CDN 隔离）以及跨实例不共享磁盘时的下载。
+- 用压测证明创建任务延迟不随行数线性增长。
 
-验收：
+### P0-5 可复现性能基线
 
-- 创建任务接口的延迟不随导出行数线性增长；
-- worker 处理大导出时普通 API 的 p99 和内存保持在预算内；
-- 任意实例都能轮询和下载同一任务；
-- 其他管理员、其他租户和匿名请求无法读取任务或文件。
-- 下载和未下载文件都在保留期后清理。
+已完成：k6 场景脚本、数据集档位说明、HTTP/SQL 直方图、DB stats、Go runtime、export in-flight、oplog 与 replica 指标。
 
-### P0-5 建立可复现性能基线
+仍待：在固定数据集和机器上实际跑出冷/热缓存、Redis 故障、replica 故障基线。容量报告只允许引用那些实测数字。
 
-现状只有功能测试和累计计数器，无法证明容量。
+### P0-7 生产索引迁移
 
-实施：
+已完成：启动默认只校验；`LIKEADMIN_REQUIRE_INDEXES=1` 在缺失时拒绝启动；`bin/think ensure-indexes` 打印计划/锁影响并写 `runtime/index-status.json`。
 
-1. 在 `backend/tests/performance/` 增加可执行的 k6/vegeta 场景：
-   - `GET /api/index/config` 冷/热缓存；
-   - 文章列表首页、分类和 keyword；
-   - 已登录平台/租户管理员列表；
-   - 用户中心；
-   - 登录、短信 stub、支付沙箱；
-   - 大列表与导出单独压测。
-2. 固定小、中、大三档数据集，记录热点租户比例和核心表基数。
-3. 指标至少补充：
-   - HTTP RPS、错误率、在飞请求、p50/p95/p99；
-   - SQL/请求、SQL 时延、`sql.DB.Stats()`；
-   - Redis hit/miss/error/fallback、命令时延；
-   - Go heap、alloc、GC pause、goroutine；
-   - export queue/in-flight/duration/file size。
-4. 确保所有请求 DB session（包括 `bootstrap.Read()` 路径）绑定 request context，否则 query counter 会漏记。
+仍待：按 MySQL 版本自动选择 online DDL 算法；用生产数据 `EXPLAIN ANALYZE` 验证首批索引。
 
-验收：
+### P1-1 列表上限与深分页
 
-- 相同 commit、配置、数据集和机器可重复得到结果；
-- 冷缓存、热缓存、Redis 故障和 replica 故障分别有基线；
-- 容量报告只引用实测数据，不再使用 PHP 经验倍数。
+已完成：普通 `page_type=1` 和 C 端 `page_type=0` 硬限制 500；后台 `page_type=0` 保持 `page_size_max` 以免菜单/字典/素材被截断。
 
-### P0-7 生产索引迁移的可观测升级步骤
+仍待：大表 keyset/cursor；精确 `COUNT(*)` 契约变更需新版本接口。
 
-启动路径已不再默认同步建索引。仍待：
+### P1-2 操作日志
 
-1. 将 DDL 放入显式、幂等、可观测的升级步骤；按 MySQL 版本配置 online DDL 策略。
-2. 发布前展示待执行表、索引、预计锁影响和执行结果。
-3. 应用启动只校验必要 schema version，不修改大表。
-4. 为失败、超时和部分完成提供可重试状态，不以普通日志代替迁移结果。
+已完成：POST/登录不可静默丢弃；GET 可丢；queued/dropped/written 指标；停机 drain。
 
-### P1-1 收紧普通列表上限与深分页
+仍待：批量 INSERT、失败持久化重试。
 
-现状：
+### P1-3 查询、缓存与只读副本
 
-- 导出已限制为 20 页/10000 行；
-- 普通 `page_type=0` 仍直接使用 `page_size_max=25000`；
-- 多数列表仍执行精确 `COUNT(*)`，深分页仍用 OFFSET。
+已完成：PayWay `IN (?)`、boot bump、replica 探活不持锁、`tactics=1` 用户数 30s 缓存、replica lag/`SHOW REPLICA STATUS`、绑定失败后台重试、replica 指标。
 
-实施：
+仍待：replica query error 立即切主；生产数据 `EXPLAIN ANALYZE`。
 
-1. 区分普通列表上限和兼容/内部全量读取上限，普通 API 使用更小硬限制。
-2. 逐个确认四套前端是否仍发送 `page_type=0`，不能直接全局改语义。
-3. 大表列表增加稳定 keyset/cursor；深页避免大 OFFSET。
-4. 精确 count 暂不改变；先用慢查询和压测确定高成本列表，再讨论首屏 count、异步统计或新版本契约。
+### P1-4 静态、上传与 CDN
 
-验收：
+已完成：hashed SPA `immutable`、HTML `no-cache`、上传独立 location/体积/超时。
 
-- 任意普通公网/后台列表都不能单请求物化 25000 行；
-- 调整不破坏当前精确 `count` 契约和 golden pair 门禁。
+仍待：多实例本地上传迁 OSS 或验证共享盘；CDN 缓存 key 含 tenant/host/终端（运维配置）。
 
-### P1-2 操作日志可靠性与退出处理
+### P1-5 运行期正确性
 
-现状：
+已完成：原子限流、`/readyz` `PingContext`、DSN timeout、JSON 1MiB / 上传 50MiB、replica lag 与绑定重试。
 
-- 可选异步队列只有 256 项；
-- 队列满静默丢弃；
-- 单条 INSERT，没有批量写；
-- 进程退出不 drain；
-- 没有 dropped/queued/duration 指标。
-
-实施：
-
-1. 明确安全审计事件与低价值 GET 日志的不同可靠性等级。
-2. 写操作/登录/权限变更等审计事件不能静默丢弃。
-3. 增加批量写、队列指标、失败重试/持久化策略和优雅停机 drain。
-
-验收：
-
-- 队列拥塞和 DB 故障有指标与告警；
-- 安全审计日志满足明确的保留与可靠性要求；
-- 日志高峰不明显抬高普通 API p99。
-
-### P1-3 查询、缓存与只读副本细化
-
-已完成：PayWay `IN (?)`、boot 只 bump 版本、host 规范化并纳入 scheme、replica 探活不持锁、向导文案。
-
-仍待：
-
-1. 平台租户列表为 `tactics=1` 分表租户逐个 COUNT；应提供批量汇总来源、缓存统计或明确限制分表租户列表统计成本。
-2. replica 不能只检查 TCP Ping：启动失败后应重试绑定；检查 schema version、复制状态和可接受 lag；可安全回退的读在 query error 时切回主库；暴露 replica health/lag 指标。
-3. 用生产数据 `EXPLAIN ANALYZE` 验证当前首批索引。
-
-### P1-4 静态、上传与 CDN 完成态
-
-1. 多实例上线前将本地上传迁到 OSS，或验证所有实例共享同一挂载及权限。
-2. 带内容 hash 的 SPA 文件设置 `immutable`；HTML 保持短缓存或 no-cache。
-3. 上传使用独立 location、体积和超时预算，不扩大普通 API 预算。
-4. CDN 只缓存公开、无用户态内容；缓存 key 必须包含 tenant、host、终端和相关 query。
-
-### P1-5 运行期正确性与故障边界
-
-已完成：原子限流、`/readyz` `PingContext`、DSN timeout、boot scheme、分类主动失效、HasColumn TTL、413。
-
-仍待：
-
-1. replica 绑定重试、复制 lag 和 query error 回退主库。
-2. 普通 JSON 接口使用远小于上传的 route-specific body limit。
+仍待：读请求在 replica query error 时立即回主库。
 
 ### P2 后续容量演进
 
@@ -270,15 +203,15 @@
 ## 4. 实施顺序
 
 1. ~~修复权限 DB 错误 fail-open。~~
-2. 修复 tenant task 轮询（已完成）后，把导出改为独立 worker + 游标读取 + 共享/对象存储。
-3. ~~给操作日志增加 tenant ID、递归脱敏，并移除 GET/下载/大响应全量缓冲。~~
-4. ~~将 Go 监听限制在可信代理边界内。~~
-5. ~~多实例安全状态在 Redis 运行期故障时失败关闭。~~
-6. ~~把生产索引 DDL 移出应用启动。~~ 补齐可观测迁移状态。
-7. 建立固定数据集、负载脚本和完整指标。
-8. 用基线收紧普通列表并治理高成本 COUNT/深分页。
-9. 完善日志可靠性、依赖超时和 replica 健康。
-10. 根据指标处理缓存扫描、静态/CDN 和更深层数据库演进。
+2. ~~tenant 轮询 + 独立 worker 入队；~~ 游标分批 SQL 与私有对象存储仍待。
+3. ~~操作日志 tenant ID、递归脱敏、GET 不缓冲。~~
+4. ~~Go 监听限制在可信代理边界内。~~
+5. ~~多实例安全状态 Redis 故障失败关闭。~~
+6. ~~生产索引 DDL 移出启动并补齐计划/状态文件。~~
+7. ~~指标与 k6 脚本。~~ 固定数据集实测仍待。
+8. ~~收紧普通列表 500。~~ COUNT/深分页仍待数据。
+9. ~~日志可靠性与 replica lag。~~ query error 切主仍待。
+10. 根据实测指标处理缓存扫描和更深层数据库演进。
 
 ## 5. 容量报告模板
 
