@@ -16,6 +16,7 @@ var commandDescs = map[string]string{
 	"cancel_unpaid_orders": "Cancel unpaid recharge orders",
 	"clear":                "Clear runtime file",
 	"crontab":              "Run scheduled tasks once",
+	"ensure-indexes":       "Create missing performance indexes",
 	"help":                 "Displays help for a command",
 	"list":                 "Lists commands",
 	"make:command":         "Create a new command class",

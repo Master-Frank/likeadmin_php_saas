@@ -141,10 +141,13 @@ const pollExportTask = async (taskId: string) => {
             headers.token = String(token)
         }
         const res = await fetch(
-            `/platformapi/download/export?task=${encodeURIComponent(taskId)}`,
+            `/tenantapi/download/export?task=${encodeURIComponent(taskId)}`,
             { headers }
         )
         const body = await res.json()
+        if (body?.code !== 1) {
+            throw new Error(body?.msg || '导出失败')
+        }
         const data = body?.data || {}
         if (data.status === 'ready' && data.url) {
             return data.url as string

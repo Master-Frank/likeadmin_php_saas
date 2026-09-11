@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -179,6 +180,24 @@ func TestAuthURIListCache(t *testing.T) {
 	}
 }
 
+func TestLoadPlatformMenuURIsFailClosed(t *testing.T) {
+	if _, err := loadPlatformMenuURIs(); err == nil {
+		t.Fatal("nil DB must be an error so unregistered-route fail-open cannot run")
+	}
+	liveMenus = liveMenuCatalog{}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	_, err := liveMenuURIs(c, &ctxutil.RequestMeta{App: "platformapi"})
+	if err == nil {
+		t.Fatal("live lookup must fail when DB is unavailable")
+	}
+	if liveMenus.platformL {
+		t.Fatal("failed live lookup must not be cached")
+	}
+}
+
 func TestDynamicCRUDRequiresExplicitPermission(t *testing.T) {
 	all := []string{"generated.demo/lists"}
 	if adminURIAllowed(true, all, nil, "generated.demo/lists", nil) {
@@ -190,10 +209,18 @@ func TestDynamicCRUDRequiresExplicitPermission(t *testing.T) {
 	if !adminURIAllowed(false, all, nil, "unregistered/path", nil) {
 		t.Fatal("static PHP compatibility routes keep existing behavior")
 	}
-	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() bool { return true }) {
+	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() (bool, error) { return true, nil }) {
 		t.Fatal("URI present in live menus but missing from cached all must not fail-open")
 	}
-	if !adminURIAllowed(false, all, []string{"tools.generator/lists"}, "tools.generator/lists", func() bool { return true }) {
+	if !adminURIAllowed(false, all, []string{"tools.generator/lists"}, "tools.generator/lists", func() (bool, error) { return true, nil }) {
 		t.Fatal("live-registered URI should pass when the admin has the perm")
+	}
+	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() (bool, error) {
+		return false, errors.New("db down")
+	}) {
+		t.Fatal("live menu lookup errors must deny instead of treating the URI as unregistered")
+	}
+	if !adminURIAllowed(false, all, nil, "unregistered/path", func() (bool, error) { return false, nil }) {
+		t.Fatal("a successful live miss still keeps PHP unregistered-route compatibility")
 	}
 }

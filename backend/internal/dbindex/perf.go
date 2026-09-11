@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/schemacache"
 
 	"gorm.io/gorm"
 )
@@ -28,11 +29,13 @@ func specs() []spec {
 		{table: p + "article", name: "idx_tenant_show_delete", cols: "`tenant_id`,`is_show`,`delete_time`", shards: true},
 		{table: p + "user", name: "idx_tenant_delete_time", cols: "`tenant_id`,`delete_time`", shards: true},
 		{table: p + "operation_log", name: "idx_create_time", cols: "`create_time`"},
+		{table: p + "operation_log", name: "idx_tenant_create_id", cols: "`tenant_id`,`create_time`,`id`"},
 	}
 }
 
-// EnsurePerfIndexes creates the P0/P1 lookup indexes if missing. Safe to run
-// on every boot; it inspects information_schema and skips existing names.
+// EnsurePerfIndexes creates the P0/P1 lookup indexes if missing. Call from
+// install or `think ensure-indexes`; HTTP startup does not run this unless
+// LIKEADMIN_ENSURE_INDEXES=1.
 func EnsurePerfIndexes(db *gorm.DB) {
 	if db == nil {
 		return
@@ -40,6 +43,7 @@ func EnsurePerfIndexes(db *gorm.DB) {
 	if os.Getenv("LIKEADMIN_REQUIRE_DDL") == "0" {
 		return
 	}
+	ensureOperationLogTenantID(db)
 	for _, s := range specs() {
 		tables := []string{s.table}
 		if s.shards {
@@ -63,6 +67,19 @@ func EnsurePerfIndexes(db *gorm.DB) {
 			}
 		}
 	}
+}
+
+func ensureOperationLogTenantID(db *gorm.DB) {
+	table := config.Prefix() + "operation_log"
+	if !tableExists(db, table) || hasColumn(db, table, "tenant_id") {
+		return
+	}
+	sql := "ALTER TABLE `" + table + "` ADD COLUMN `tenant_id` int NOT NULL DEFAULT 0 COMMENT '租户ID'"
+	if err := db.Exec(sql).Error; err != nil {
+		log.Printf("operation_log tenant_id: %v", err)
+		return
+	}
+	schemacache.Invalidate()
 }
 
 func shardTables(db *gorm.DB, base string) []string {
@@ -122,6 +139,14 @@ func tableExists(db *gorm.DB, table string) bool {
 func hasIndex(db *gorm.DB, table, name string) bool {
 	var n int64
 	if db.Raw("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?", table, name).Scan(&n).Error != nil {
+		return false
+	}
+	return n > 0
+}
+
+func hasColumn(db *gorm.DB, table, col string) bool {
+	var n int64
+	if db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", table, col).Scan(&n).Error != nil {
 		return false
 	}
 	return n > 0

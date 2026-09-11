@@ -2,6 +2,7 @@ package ctxutil
 
 import (
 	"net"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -55,34 +56,97 @@ func ClientIP(c *gin.Context) string {
 	if c == nil || c.Request == nil {
 		return ""
 	}
-	// nginx overwrites X-Real-IP; ignore client-supplied X-Forwarded-For.
-	if ip := strings.TrimSpace(c.GetHeader("X-Real-IP")); ip != "" {
-		if net.ParseIP(ip) != nil {
-			return ip
+	rip := remoteIP(c)
+	if fromTrustedProxy(rip) {
+		if ip := strings.TrimSpace(c.GetHeader("X-Real-IP")); ip != "" {
+			if net.ParseIP(ip) != nil {
+				return ip
+			}
 		}
 	}
-	if ip, _, err := net.SplitHostPort(c.Request.RemoteAddr); err == nil {
-		return ip
+	if rip != "" {
+		return rip
 	}
 	return c.RemoteIP()
 }
 
+func remoteIP(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	host := c.Request.RemoteAddr
+	if ip, _, err := net.SplitHostPort(host); err == nil {
+		return ip
+	}
+	return host
+}
+
+func fromTrustedProxy(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, n := range trustedProxyNets() {
+		if n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+func trustedProxyNets() []*net.IPNet {
+	raw := strings.TrimSpace(os.Getenv("LIKEADMIN_TRUSTED_PROXIES"))
+	if raw == "" {
+		raw = "127.0.0.0/8,::1/128"
+	}
+	out := make([]*net.IPNet, 0, 4)
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if ip := net.ParseIP(p); ip != nil {
+			if ip.To4() != nil {
+				p += "/32"
+			} else {
+				p += "/128"
+			}
+		}
+		_, n, err := net.ParseCIDR(p)
+		if err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func Scheme(c *gin.Context) string {
+	if c != nil && c.Request != nil && c.Request.TLS != nil {
+		return "https"
+	}
+	if c != nil && fromTrustedProxy(remoteIP(c)) && strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		return "https"
+	}
+	return "http"
+}
+
 func Domain(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	host := c.Request.Host
-	if fwd := c.GetHeader("X-Forwarded-Host"); fwd != "" {
-		host = fwd
-	}
-	return scheme + "://" + host
+	return Scheme(c) + "://" + Host(c)
 }
 
 func Host(c *gin.Context) string {
-	host := c.Request.Host
-	if fwd := c.GetHeader("X-Forwarded-Host"); fwd != "" {
-		host = fwd
+	host := ""
+	if c != nil && c.Request != nil {
+		host = c.Request.Host
+		if fromTrustedProxy(remoteIP(c)) {
+			if fwd := strings.TrimSpace(c.GetHeader("X-Forwarded-Host")); fwd != "" {
+				host = fwd
+			}
+		}
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if len(host) > 253 {
+		host = host[:253]
 	}
 	return host
 }

@@ -145,6 +145,9 @@ const pollExportTask = async (taskId: string) => {
             { headers }
         )
         const body = await res.json()
+        if (body?.code !== 1) {
+            throw new Error(body?.msg || '导出失败')
+        }
         const data = body?.data || {}
         if (data.status === 'ready' && data.url) {
             return data.url as string

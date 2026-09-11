@@ -17,6 +17,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
 	"likeadmin/backend/internal/model"
 	paycfg "likeadmin/backend/internal/pay"
 	"likeadmin/backend/internal/schemacache"
@@ -132,6 +133,7 @@ func registerBuiltins() {
 	Register("verification_orders", func([]string) string { return verificationOrders() })
 	Register("version", runVersion)
 	Register("optimize:schema", runOptimizeSchema)
+	Register("ensure-indexes", runEnsureIndexes)
 	Register("help", runHelp)
 	Register("list", runList)
 	Register("vendor:publish", runVendorPublish)
@@ -239,6 +241,8 @@ func normalizeCommand(raw string) string {
 		return "version"
 	case strings.Contains(cmd, "optimize:schema") || strings.Contains(cmd, "optimizeschema"):
 		return "optimize:schema"
+	case cmd == "ensure-indexes" || strings.Contains(cmd, "ensureindexes") || strings.Contains(cmd, "ensure-indexes"):
+		return "ensure-indexes"
 	case strings.Contains(cmd, "optimize:route") || strings.Contains(cmd, "optimizeroute"):
 		return "optimize:route"
 	case strings.Contains(cmd, "route:list") || strings.Contains(cmd, "routelist"):
@@ -252,6 +256,14 @@ func normalizeCommand(raw string) string {
 
 func flushCache() string {
 	cache.Flush()
+	return ""
+}
+
+func runEnsureIndexes([]string) string {
+	if bootstrap.DB == nil {
+		return "database unavailable"
+	}
+	dbindex.EnsurePerfIndexes(bootstrap.DB)
 	return ""
 }
 

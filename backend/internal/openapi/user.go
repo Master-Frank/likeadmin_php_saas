@@ -79,7 +79,7 @@ func userCollectsArticle(c *gin.Context, uid, articleID uint) bool {
 func IndexConfig(c *gin.Context) {
 	tid := ctxutil.Get(c).TenantID
 	ver := cfgsvc.BootVersion(tid)
-	bootKey := "boot:" + util.ToString(tid) + ":" + ver + ":" + ctxutil.Host(c)
+	bootKey := "boot:" + util.ToString(tid) + ":" + ver + ":" + ctxutil.Scheme(c) + ":" + ctxutil.Host(c)
 	var cached map[string]any
 	if cache.GetJSON(bootKey, &cached) && cached != nil {
 		cached["webPage"] = bootWebPage(c, cached)

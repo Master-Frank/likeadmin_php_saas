@@ -1,10 +1,12 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
@@ -476,7 +478,13 @@ func readyz(c *gin.Context) {
 		c.String(http.StatusServiceUnavailable, "db")
 		return
 	}
-	if err := sqlDB.Ping(); err != nil {
+	parent := context.Background()
+	if c.Request != nil {
+		parent = c.Request.Context()
+	}
+	ctx, cancel := context.WithTimeout(parent, time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
 		c.String(http.StatusServiceUnavailable, "db")
 		return
 	}

@@ -2,15 +2,20 @@ package export
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"likeadmin/backend/internal/cache"
@@ -29,6 +34,8 @@ type fileInfo struct {
 	Name     string `json:"name"`
 	Download string `json:"download"`
 	Rel      string `json:"rel"`
+	AdminID  uint   `json:"admin_id,omitempty"`
+	TenantID uint   `json:"tenant_id,omitempty"`
 }
 
 func Maybe(c *gin.Context, fileName string, rows any) bool {
@@ -93,36 +100,42 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		return true
 	}
 	domain := ctxutil.Domain(c)
+	app := ctxutil.Get(c).App
+	owner := exportOwner(c)
+	startExportJanitor()
 	if !config.ExportAsyncEnabled() {
-		key, err := SaveXLSX(fileName, rows, spec.Fields)
+		key, err := saveOwnedXLSX(fileName, rows, spec.Fields, owner)
 		if err != nil {
 			response.Fail(c, err.Error())
 			return true
 		}
-		task := newReadyTask(domain, key, exportOwner(c))
+		task := newReadyTask(app, domain, key, owner)
 		response.Data(c, taskPayload(task))
 		return true
 	}
 	id := newTaskID()
-	owner := exportOwner(c)
 	saveTask(Task{ID: id, Status: statusPending, AdminID: owner.AdminID, TenantID: owner.TenantID})
 	metrics.AddExport("pending")
 	fields := spec.Fields
 	name := fileName
-	go runExportTask(id, domain, name, rows, fields, owner)
+	go runExportTask(id, app, domain, name, rows, fields, owner)
 	response.Data(c, gin.H{"task_id": id, "status": statusPending})
 	return true
 }
 
 func SaveCSV(fileName string, rows any, fields []Field) (string, error) {
-	return saveExport(fileName, rows, fields, false)
+	return saveExport(fileName, rows, fields, false, TaskOwner{})
 }
 
 func SaveXLSX(fileName string, rows any, fields []Field) (string, error) {
-	return saveExport(fileName, rows, fields, true)
+	return saveExport(fileName, rows, fields, true, TaskOwner{})
 }
 
-func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, error) {
+func saveOwnedXLSX(fileName string, rows any, fields []Field, owner TaskOwner) (string, error) {
+	return saveExport(fileName, rows, fields, true, owner)
+}
+
+func saveExport(fileName string, rows any, fields []Field, xlsx bool, owner TaskOwner) (string, error) {
 	base := strings.TrimSuffix(strings.TrimSuffix(fileName, ".csv"), ".xlsx")
 	if base == "" {
 		base = "export"
@@ -159,11 +172,13 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 	key := randomHex(16)
 	cache.Set("export_file_"+key, fileInfo{
 		Src: dir + string(os.PathSeparator), Name: fname, Download: download,
+		AdminID: owner.AdminID, TenantID: owner.TenantID,
 	}, 30*time.Minute)
 	return key, nil
 }
 
 func Serve(c *gin.Context) {
+	startExportJanitor()
 	if taskID := httpx.QueryRaw(c, "task"); taskID != "" {
 		serveTask(c, taskID)
 		return
@@ -174,7 +189,10 @@ func Serve(c *gin.Context) {
 		response.Fail(c, "下载文件不存在")
 		return
 	}
-	cache.Del("export_file_" + key)
+	if !fileDownloadAllowed(c, key, info) {
+		response.Fail(c, "下载文件不存在")
+		return
+	}
 	attach := info.Download
 	if attach == "" {
 		attach = info.Name
@@ -185,7 +203,22 @@ func Serve(c *gin.Context) {
 		response.Fail(c, "下载文件不存在")
 		return
 	}
-	c.FileAttachment(abs, attach)
+	f, err := os.Open(abs)
+	if err != nil {
+		response.Fail(c, "下载文件不存在")
+		return
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		response.Fail(c, "下载文件不存在")
+		return
+	}
+	cache.Del("export_file_" + key)
+	c.Header("Content-Disposition", `attachment; filename="`+attach+`"`)
+	http.ServeContent(c.Writer, c.Request, attach, stat.ModTime(), f)
+	_ = f.Close()
+	_ = os.Remove(abs)
 }
 
 func toRecords(rows any, fields []Field) [][]string {
@@ -357,6 +390,82 @@ func randomHex(n int) string {
 func exportOwner(c *gin.Context) TaskOwner {
 	meta := ctxutil.Get(c)
 	return TaskOwner{AdminID: meta.AdminID, TenantID: meta.TenantID}
+}
+
+func fileDownloadAllowed(c *gin.Context, key string, info fileInfo) bool {
+	if validExportSignature(c, key, info) {
+		return true
+	}
+	return fileOwnerOK(c, info)
+}
+
+func fileOwnerOK(c *gin.Context, info fileInfo) bool {
+	if info.AdminID == 0 && info.TenantID == 0 {
+		return false
+	}
+	return taskOwnerOK(c, Task{AdminID: info.AdminID, TenantID: info.TenantID})
+}
+
+func validExportSignature(c *gin.Context, key string, info fileInfo) bool {
+	exp, err := strconv.ParseInt(httpx.QueryRaw(c, "exp"), 10, 64)
+	if err != nil || exp <= 0 || time.Now().Unix() > exp {
+		return false
+	}
+	sig := httpx.QueryRaw(c, "sig")
+	if sig == "" {
+		return false
+	}
+	want := signExportFile(key, TaskOwner{AdminID: info.AdminID, TenantID: info.TenantID}, exp)
+	return hmac.Equal([]byte(want), []byte(sig))
+}
+
+func signExportFile(fileKey string, owner TaskOwner, exp int64) string {
+	secret := strings.TrimSpace(config.C.Project.UniqueIdentification)
+	if secret == "" {
+		secret = "likeadmin"
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	fmt.Fprintf(mac, "%s|%d|%d|%d", fileKey, owner.AdminID, owner.TenantID, exp)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+var janitorOnce sync.Once
+
+func startExportJanitor() {
+	janitorOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			cleanOldExports(taskTTL)
+			for range ticker.C {
+				cleanOldExports(taskTTL)
+			}
+		}()
+	})
+}
+
+func cleanOldExports(maxAge time.Duration) {
+	if maxAge <= 0 {
+		maxAge = taskTTL
+	}
+	dir := exportRoot()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxAge)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
 }
 
 func exportPageType(c *gin.Context) int {

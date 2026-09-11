@@ -56,9 +56,10 @@ func Allow(c *gin.Context, kind string) bool {
 		ip = "unknown"
 	}
 	key := "rl:" + kind + ":" + ip
-	n := cache.Incr(key)
-	if n == 1 {
-		cache.Expire(key, time.Minute)
+	n := cache.IncrExpire(key, time.Minute)
+	if n < 0 {
+		response.Fail(c, "服务繁忙，请稍后再试")
+		return false
 	}
 	if n > int64(limit) {
 		response.Fail(c, "请求过于频繁，请稍后再试")

@@ -13,18 +13,35 @@ import (
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
 
+const oplogCaptureCap = 65535
+
 type bodyWriter struct {
 	gin.ResponseWriter
-	buf bytes.Buffer
+	buf       bytes.Buffer
+	cap       int
+	truncated bool
 }
 
 func (w *bodyWriter) Write(b []byte) (int, error) {
-	w.buf.Write(b)
+	if w.cap > 0 {
+		remain := w.cap - w.buf.Len()
+		if remain > 0 {
+			if len(b) > remain {
+				w.buf.Write(b[:remain])
+				w.truncated = true
+			} else {
+				w.buf.Write(b)
+			}
+		} else {
+			w.truncated = true
+		}
+	}
 	return w.ResponseWriter.Write(b)
 }
 
@@ -42,17 +59,26 @@ func enqueueOplog(row model.OperationLog) {
 	if bootstrap.DB == nil {
 		return
 	}
+	write := func(item model.OperationLog) {
+		if bootstrap.DB == nil {
+			return
+		}
+		db := bootstrap.DB
+		if !schemacache.HasColumn(db, item.TableName(), "tenant_id") {
+			_ = db.Omit("tenant_id").Create(&item).Error
+			return
+		}
+		_ = db.Create(&item).Error
+	}
 	if !oplogAsync() {
-		_ = bootstrap.DB.Create(&row).Error
+		write(row)
 		return
 	}
 	oplogOnce.Do(func() {
 		oplogCh = make(chan model.OperationLog, 256)
 		go func() {
 			for item := range oplogCh {
-				if bootstrap.DB != nil {
-					_ = bootstrap.DB.Create(&item).Error
-				}
+				write(item)
 			}
 		}()
 	})
@@ -61,6 +87,16 @@ func enqueueOplog(row model.OperationLog) {
 	default:
 		// drop low-value logs when the queue is full
 	}
+}
+
+func skipOplogCapture(c *gin.Context, meta *ctxutil.RequestMeta) bool {
+	if requestLogType(c) == "GET" {
+		return true
+	}
+	if meta != nil && strings.EqualFold(meta.Controller, "download") {
+		return true
+	}
+	return false
 }
 
 func OperationLog() gin.HandlerFunc {
@@ -78,32 +114,24 @@ func OperationLog() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		bw := &bodyWriter{ResponseWriter: c.Writer}
-		c.Writer = bw
+		var bw *bodyWriter
+		if !skipOplogCapture(c, meta) {
+			bw = &bodyWriter{ResponseWriter: c.Writer, cap: oplogCaptureCap}
+			c.Writer = bw
+		}
 		c.Next()
 		if bootstrap.DB == nil {
 			return
 		}
 		params := httpx.Params(c)
-		safe := make(map[string]any, len(params))
-		for k, v := range params {
-			safe[k] = v
-		}
-		for _, key := range []string{"password", "password_old", "old_password", "app_secret", "secret_key"} {
-			if _, ok := safe[key]; ok {
-				safe[key] = "******"
-			}
-		}
-		raw, _ := json.Marshal(safe)
+		raw, _ := json.Marshal(redactParams(params))
 		action := ActionNotes(meta.Controller, meta.Action)
 		if util.ToInt(params["export"]) == 2 {
 			action += "-数据导出"
 		}
-		result := bw.buf.String()
-		if requestLogType(c) == "GET" {
-			result = ""
-		} else if len(result) > 65535 {
-			result = result[:65535]
+		result := ""
+		if bw != nil {
+			result = bw.buf.String()
 		}
 		adminID := meta.AdminID
 		name, account := "", ""
@@ -115,7 +143,7 @@ func OperationLog() gin.HandlerFunc {
 			AdminID: adminID, AdminName: name, Account: account,
 			Action: action, Type: requestLogType(c), URL: requestAbsoluteURL(c),
 			Params: string(raw), Result: result, IP: ctxutil.ClientIP(c),
-			CreateTime: util.NowUnix(),
+			TenantID: meta.TenantID, CreateTime: util.NowUnix(),
 		}
 		enqueueOplog(row)
 	}
@@ -167,4 +195,51 @@ func ReadBody(c *gin.Context) []byte {
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(raw))
 	c.Set("likeadmin.raw", raw)
 	return raw
+}
+
+func redactParams(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			if credentialKey(k) {
+				out[k] = "******"
+				continue
+			}
+			out[k] = redactParams(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, item := range t {
+			out[i] = redactParams(item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]any, len(t))
+		for i, item := range t {
+			out[i] = redactParams(item)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func credentialKey(key string) bool {
+	n := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(key), "-", "_"))
+	switch n {
+	case "password", "password_old", "old_password", "password_confirm", "new_password",
+		"app_secret", "secret_key", "secret", "private_key", "mch_key", "mch_secret",
+		"access_key_secret", "access_key", "accesskeysecret", "api_key", "apikey",
+		"aes_key", "encoding_aes_key", "token", "refresh_token", "app_key",
+		"cert", "certificate", "cert_key", "key_pem", "client_secret":
+		return true
+	}
+	for _, part := range []string{"password", "secret", "private_key", "access_key_secret", "aes_key"} {
+		if strings.Contains(n, part) {
+			return true
+		}
+	}
+	return false
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/bootstrap"
+	"likeadmin/backend/internal/config"
 )
 
 func ctx() context.Context {
@@ -62,12 +63,42 @@ func payload(val any) string {
 	return string(b)
 }
 
+func isSecurityKey(key string) bool {
+	switch {
+	case strings.HasPrefix(key, "token_"),
+		strings.HasPrefix(key, "admin_auth_"),
+		strings.HasPrefix(key, "tenant_auth_"),
+		key == "auth_cache_ver",
+		strings.HasPrefix(key, "rl:"),
+		strings.HasPrefix(key, "export_task_"),
+		strings.HasPrefix(key, "export_file_"):
+		return true
+	default:
+		return false
+	}
+}
+
+func useMemFallback(key string) bool {
+	if !isSecurityKey(key) {
+		return true
+	}
+	if bootstrap.RDB != nil || config.RequireRedisConfigured() {
+		return false
+	}
+	return true
+}
+
 func Get(key string) (string, bool) {
 	if bootstrap.RDB != nil {
 		v, err := bootstrap.RDB.Get(ctx(), bootstrap.RedisKey(key)).Result()
 		if err == nil {
 			return v, true
 		}
+		if !useMemFallback(key) {
+			return "", false
+		}
+	} else if !useMemFallback(key) {
+		return "", false
 	}
 	return memGet(key)
 }
@@ -97,6 +128,11 @@ func Set(key string, val any, ttl time.Duration) {
 		if err := bootstrap.RDB.Set(ctx(), bootstrap.RedisKey(key), p, ttl).Err(); err == nil {
 			return
 		}
+		if !useMemFallback(key) {
+			return
+		}
+	} else if !useMemFallback(key) {
+		return
 	}
 	memSet(key, p, ttl)
 }
@@ -201,10 +237,46 @@ func Incr(key string) int64 {
 		if err == nil {
 			return n
 		}
+		if !useMemFallback(key) {
+			return -1
+		}
+	} else if !useMemFallback(key) {
+		return -1
 	}
 	raw, _ := memGet(key)
 	n := utilParseInt64(raw) + 1
 	memSet(key, jsonNumber(n), 0)
+	return n
+}
+
+const incrExpireLua = `
+local n = redis.call('INCR', KEYS[1])
+if n == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return n
+`
+
+func IncrExpire(key string, ttl time.Duration) int64 {
+	sec := int64(ttl / time.Second)
+	if sec <= 0 {
+		sec = 60
+	}
+	if bootstrap.RDB != nil {
+		n, err := bootstrap.RDB.Eval(ctx(), incrExpireLua, []string{bootstrap.RedisKey(key)}, sec).Int64()
+		if err == nil {
+			return n
+		}
+		if !useMemFallback(key) {
+			return -1
+		}
+	} else if !useMemFallback(key) {
+		return -1
+	}
+	n := Incr(key)
+	if n == 1 {
+		Expire(key, ttl)
+	}
 	return n
 }
 

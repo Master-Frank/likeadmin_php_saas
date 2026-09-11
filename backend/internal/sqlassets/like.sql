@@ -737,9 +737,11 @@ CREATE TABLE `la_operation_log`
     `params`      text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci         NULL COMMENT '请求数据',
     `result`      text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci         NULL COMMENT '请求结果',
     `ip`          varchar(39) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci  NOT NULL DEFAULT '' COMMENT 'ip地址',
+    `tenant_id`   int(11)                                                       NOT NULL DEFAULT 0 COMMENT '租户ID',
     `create_time` int(10)                                                       NULL     DEFAULT NULL COMMENT '创建时间',
     PRIMARY KEY (`id`) USING BTREE,
-    INDEX `idx_create_time` (`create_time`) USING BTREE
+    INDEX `idx_create_time` (`create_time`) USING BTREE,
+    INDEX `idx_tenant_create_id` (`tenant_id`,`create_time`,`id`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4

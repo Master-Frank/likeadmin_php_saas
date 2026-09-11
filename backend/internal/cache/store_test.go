@@ -30,3 +30,19 @@ func TestDelPrefix(t *testing.T) {
 	}
 	Del("other_key")
 }
+
+func TestSecurityKeysSkipMemWhenRedisRequired(t *testing.T) {
+	t.Setenv("LIKEADMIN_REQUIRE_REDIS", "1")
+	Set("rl:login:1.1.1.1", "9", 0)
+	if _, ok := Get("rl:login:1.1.1.1"); ok {
+		t.Fatal("rate-limit keys must not use process memory when Redis is required")
+	}
+	if n := Incr("rl:login:1.1.1.1"); n >= 0 {
+		t.Fatalf("incr must fail closed, got %d", n)
+	}
+	Set("boot:public", "ok", 0)
+	if _, ok := Get("boot:public"); !ok {
+		t.Fatal("public cache may still use local memory")
+	}
+	Del("boot:public")
+}

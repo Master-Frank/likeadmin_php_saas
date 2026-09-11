@@ -15,7 +15,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
-	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -235,19 +235,11 @@ func LogLists(c *gin.Context) {
 	}
 	db := bootstrap.Read().Model(&model.OperationLog{})
 	if ctxutil.Get(c).App == "tenantapi" {
-		db = db.Where("url LIKE ?", "%/tenantapi/%")
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			adb := tenantdb.Use(c)
-			if adb == nil {
-				adb = bootstrap.DB
-			}
-			var ids []uint
-			adb.Model(&model.TenantAdmin{}).Where("tenant_id = ? AND delete_time IS NULL", tid).Pluck("id", &ids)
-			if len(ids) == 0 {
-				db = db.Where("1 = 0")
-			} else {
-				db = db.Where("admin_id IN ?", ids)
-			}
+		tid := ctxutil.Get(c).TenantID
+		if tid == 0 || !schemacache.HasColumn(bootstrap.DB, model.OperationLog{}.TableName(), "tenant_id") {
+			db = db.Where("1 = 0")
+		} else {
+			db = db.Where("tenant_id = ?", tid)
 		}
 	}
 	if lists.PHPTruthy(q, "admin_name") {

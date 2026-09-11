@@ -50,7 +50,7 @@ fieldset{border:1px solid #eee;padding:12px;margin:16px 0}
 <label><input type="radio" name="db_mode" value="single" checked/> 单数据库</label>
 <label><input type="radio" name="db_mode" value="replica"/> 主从库</label>
 </div>
-<p class="hint">单数据库把读写都打到下面的主库。主从库只把可延迟的读（日志、导出、统计）打到从库；安装、建表、管理员种子只写主库。</p>
+<p class="hint">单数据库把读写都打到下面的主库。主从库只把可延迟的读（日志、统计）打到从库；导出仍走原列表查询所在库。安装、建表、管理员种子只写主库。</p>
 <label>数据库主机</label><input name="host" value="127.0.0.1"/>
 <label>端口</label><input name="port" value="3306"/>
 <label>用户名</label><input name="user" value="root"/>

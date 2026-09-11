@@ -1,6 +1,7 @@
 package export
 
 import (
+	"fmt"
 	"time"
 
 	"likeadmin/backend/internal/cache"
@@ -55,14 +56,24 @@ func loadTask(id string) (Task, bool) {
 	return t, true
 }
 
-func downloadURL(domain, fileKey string) string {
-	return domain + "/platformapi/download/export?file=" + fileKey
+func downloadApp(app string) string {
+	if app == "tenantapi" {
+		return "tenantapi"
+	}
+	return "platformapi"
 }
 
-func newReadyTask(domain, fileKey string, owner TaskOwner) Task {
+func downloadURL(app, domain, fileKey string, owner TaskOwner) string {
+	exp := time.Now().Add(taskTTL).Unix()
+	sig := signExportFile(fileKey, owner, exp)
+	return fmt.Sprintf("%s/%s/download/export?file=%s&exp=%d&sig=%s",
+		domain, downloadApp(app), fileKey, exp, sig)
+}
+
+func newReadyTask(app, domain, fileKey string, owner TaskOwner) Task {
 	t := Task{
 		ID: newTaskID(), Status: statusReady,
-		URL: downloadURL(domain, fileKey), File: fileKey,
+		URL: downloadURL(app, domain, fileKey, owner), File: fileKey,
 		AdminID: owner.AdminID, TenantID: owner.TenantID,
 	}
 	saveTask(t)
@@ -83,7 +94,7 @@ func taskPayload(t Task) gin.H {
 
 var exportSem = make(chan struct{}, maxExportJobs)
 
-func runExportTask(id, domain, fileName string, rows any, fields []Field, owner TaskOwner) {
+func runExportTask(id, app, domain, fileName string, rows any, fields []Field, owner TaskOwner) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			saveTask(Task{ID: id, Status: statusFailed, Msg: "导出失败", AdminID: owner.AdminID, TenantID: owner.TenantID})
@@ -98,13 +109,13 @@ func runExportTask(id, domain, fileName string, rows any, fields []Field, owner 
 		metrics.AddExport(statusFailed)
 		return
 	}
-	key, err := SaveXLSX(fileName, rows, fields)
+	key, err := saveOwnedXLSX(fileName, rows, fields, owner)
 	if err != nil {
 		saveTask(Task{ID: id, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID})
 		metrics.AddExport(statusFailed)
 		return
 	}
-	saveTask(Task{ID: id, Status: statusReady, URL: downloadURL(domain, key), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID})
+	saveTask(Task{ID: id, Status: statusReady, URL: downloadURL(app, domain, key, owner), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID})
 	metrics.AddExport(statusReady)
 }
 

@@ -52,20 +52,16 @@ func TestSetInvalidatesRedisAndBoot(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
 	ctxutil.Set(c, &ctxutil.RequestMeta{TenantID: 3, Source: ctxutil.SourceTenant})
 	cache.Set("cfg:tenant:3:website:shop_name", `"old"`, 0)
-	cache.Set("boot:3:0", `{}`, 0)
 	t.Cleanup(func() {
 		cache.Del("cfg:tenant:3:website:shop_name")
-		cache.DelPrefix("boot:3:")
 		cache.Del("bootver:3")
 	})
+	oldVer := BootVersion(3)
 	invalidateCfg(c, false, 3, "website", "shop_name")
 	if _, ok := cache.Get("cfg:tenant:3:website:shop_name"); ok {
 		t.Fatal("cfg key should drop")
 	}
-	if _, ok := cache.Get("boot:3:0"); ok {
-		t.Fatal("boot bundle should drop")
-	}
-	if BootVersion(3) == "0" {
+	if BootVersion(3) == "0" || BootVersion(3) == oldVer {
 		t.Fatal("boot version should bump")
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
@@ -120,6 +121,7 @@ func Run(c *gin.Context) {
 		response.Fail(c, "安装成功但数据库重连失败："+err.Error())
 		return
 	}
+	dbindex.EnsurePerfIndexes(bootstrap.DB)
 	if err := bootstrap.ReconnectRedis(); err != nil {
 		response.Fail(c, "安装成功但缓存重连失败："+err.Error())
 		return

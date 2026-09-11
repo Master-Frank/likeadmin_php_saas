@@ -44,7 +44,7 @@ func Init(cfgPath string) error {
 	if err := initRedis(); err != nil {
 		return err
 	}
-	if Installed() {
+	if Installed() && os.Getenv("LIKEADMIN_ENSURE_INDEXES") == "1" {
 		dbindex.EnsurePerfIndexes(DB)
 	}
 	return nil
@@ -123,13 +123,18 @@ var replicaHealth struct {
 
 func replicaHealthy() bool {
 	replicaHealth.mu.Lock()
-	defer replicaHealth.mu.Unlock()
 	if time.Since(replicaHealth.checked) < 5*time.Second {
-		return replicaHealth.live
+		live := replicaHealth.live
+		replicaHealth.mu.Unlock()
+		return live
 	}
+	replicaHealth.mu.Unlock()
+	live := pingDB(ReadDB)
+	replicaHealth.mu.Lock()
 	replicaHealth.checked = time.Now()
-	replicaHealth.live = pingDB(ReadDB)
-	return replicaHealth.live
+	replicaHealth.live = live
+	replicaHealth.mu.Unlock()
+	return live
 }
 
 func pingDB(db *gorm.DB) bool {
@@ -272,7 +277,7 @@ func openGorm(c config.DatabaseConfig) (*gorm.DB, error) {
 	if c.Hostport == 0 {
 		c.Hostport = 3306
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local&timeout=5s&readTimeout=10s&writeTimeout=10s",
 		c.Username, c.Password, c.Hostname, c.Hostport, c.Database, c.Charset)
 	level := logger.Warn
 	if config.C.App.Debug {

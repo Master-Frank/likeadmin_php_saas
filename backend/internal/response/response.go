@@ -139,6 +139,16 @@ func Lists(c *gin.Context, lists any, count int64, pageNo, pageSize int, extend 
 // ExportHook is set by router to handle export=1/2 without import cycles.
 var ExportHook func(c *gin.Context, rows any, count int64) bool
 
+func AbortTooLarge(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Abort()
+	c.JSON(http.StatusRequestEntityTooLarge, Body{
+		Code: CodeFail, Show: 1, Msg: "请求体过大", Data: emptyArray(),
+	})
+}
+
 func AbortFail(c *gin.Context, msg string, code, show int) {
 	FailCode(c, msg, code, show)
 	c.Abort()

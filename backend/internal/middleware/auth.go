@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,7 +70,7 @@ func Auth() gin.HandlerFunc {
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
 		all, mine := adminURIs(c, meta)
-		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI, func() bool {
+		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI, func() (bool, error) {
 			return menuPermExists(c, meta, accessURI)
 		}) {
 			response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
@@ -79,13 +80,17 @@ func Auth() gin.HandlerFunc {
 	}
 }
 
-func adminURIAllowed(dynamic bool, all, mine []string, accessURI string, live func() bool) bool {
+func adminURIAllowed(dynamic bool, all, mine []string, accessURI string, live func() (bool, error)) bool {
 	if dynamic {
 		return containsURI(mine, accessURI)
 	}
 	registered := containsURI(all, accessURI)
 	if !registered && live != nil {
-		registered = live()
+		exists, err := live()
+		if err != nil {
+			return false
+		}
+		registered = exists
 	}
 	if !registered {
 		return true
@@ -416,14 +421,18 @@ var liveMenus liveMenuCatalog
 
 const liveMenuTTL = 15 * time.Second
 
-func menuPermExists(c *gin.Context, meta *ctxutil.RequestMeta, accessURI string) bool {
+func menuPermExists(c *gin.Context, meta *ctxutil.RequestMeta, accessURI string) (bool, error) {
 	if meta == nil || accessURI == "" {
-		return false
+		return false, nil
 	}
-	return containsURI(liveMenuURIs(c, meta), accessURI)
+	uris, err := liveMenuURIs(c, meta)
+	if err != nil {
+		return false, err
+	}
+	return containsURI(uris, accessURI), nil
 }
 
-func liveMenuURIs(c *gin.Context, meta *ctxutil.RequestMeta) []string {
+func liveMenuURIs(c *gin.Context, meta *ctxutil.RequestMeta) ([]string, error) {
 	ver := cache.AuthCacheVer()
 	now := time.Now()
 	liveMenus.mu.Lock()
@@ -437,46 +446,57 @@ func liveMenuURIs(c *gin.Context, meta *ctxutil.RequestMeta) []string {
 	}
 	if meta.App == "platformapi" {
 		if !liveMenus.platformL {
-			liveMenus.platform = loadPlatformMenuURIs()
+			uris, err := loadPlatformMenuURIs()
+			if err != nil {
+				return nil, err
+			}
+			liveMenus.platform = uris
 			liveMenus.platformL = true
 		}
-		return liveMenus.platform
+		return liveMenus.platform, nil
 	}
 	tid := meta.TenantID
 	if tid == 0 {
-		return nil
+		return nil, nil
 	}
 	if liveMenus.tenant == nil {
 		liveMenus.tenant = map[uint][]string{}
 	}
 	if uris, ok := liveMenus.tenant[tid]; ok {
-		return uris
+		return uris, nil
 	}
-	uris := loadTenantMenuURIs(c, tid)
+	uris, err := loadTenantMenuURIs(c, tid)
+	if err != nil {
+		return nil, err
+	}
 	liveMenus.tenant[tid] = uris
-	return uris
+	return uris, nil
 }
 
-func loadPlatformMenuURIs() []string {
+func loadPlatformMenuURIs() ([]string, error) {
 	if bootstrap.DB == nil {
-		return nil
+		return nil, fmt.Errorf("database unavailable")
 	}
 	var menus []model.SystemMenu
-	bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus)
-	return collectPerms(menus)
+	if err := bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return collectPerms(menus), nil
 }
 
-func loadTenantMenuURIs(c *gin.Context, tid uint) []string {
+func loadTenantMenuURIs(c *gin.Context, tid uint) ([]string, error) {
 	db := tenantdb.Use(c)
 	if db == nil {
 		db = bootstrap.DB
 	}
 	if db == nil || tid == 0 {
-		return nil
+		return nil, fmt.Errorf("database unavailable")
 	}
 	var menus []model.TenantSystemMenu
-	db.Where("is_disable = 0 AND perms <> '' AND tenant_id = ?", tid).Find(&menus)
-	return collectTenantPerms(menus)
+	if err := db.Where("is_disable = 0 AND perms <> '' AND tenant_id = ?", tid).Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return collectTenantPerms(menus), nil
 }
 
 func toUintSlice(v any) []uint {

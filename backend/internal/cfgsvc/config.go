@@ -212,7 +212,6 @@ func invalidateCfg(c *gin.Context, usePlatform bool, tid uint, typ, name string)
 
 func BumpBoot(tid uint) {
 	cache.Incr(bootVerKey(tid))
-	cache.DelPrefix("boot:" + strconv.FormatUint(uint64(tid), 10) + ":")
 }
 
 func BootVersion(tid uint) string {

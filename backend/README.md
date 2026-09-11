@@ -15,7 +15,9 @@ export LIKEADMIN_CONFIG=$(pwd)/configs/config.yaml
 go run ./cmd/api
 ```
 
-默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。
+默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。生产 systemd 单元默认 `127.0.0.1:8080`，只信任来自本机/`LIKEADMIN_TRUSTED_PROXIES` 的 `X-Real-IP`。
+
+生产索引请用 `bin/think ensure-indexes`（或 `LIKEADMIN_ENSURE_INDEXES=1`）显式创建，HTTP 启动默认不再串行 `CREATE INDEX`。
 
 平台端入口校验 `project.http_host`：与浏览器地址栏主机不一致时会返回「平台端入口域名错误」。用 `http://127.0.0.1:8080/platform/` 访问时，该项应写成 `127.0.0.1:8080`；不限域名则置空。
 

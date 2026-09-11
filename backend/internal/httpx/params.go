@@ -3,9 +3,12 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
+	"net/http"
 	"strings"
 
+	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -88,9 +91,14 @@ func Body(c *gin.Context) map[string]any {
 	}
 	out := map[string]any{}
 	if c != nil && c.Request != nil && c.Request.Body != nil {
-		raw, _ := io.ReadAll(c.Request.Body)
+		raw, err := io.ReadAll(c.Request.Body)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(raw))
 		c.Set("likeadmin.raw", raw)
+		if isMaxBytesErr(err) {
+			c.Set("likeadmin.body", out)
+			response.AbortTooLarge(c)
+			return out
+		}
 		if len(raw) > 0 {
 			var body map[string]any
 			if json.Unmarshal(raw, &body) == nil {
@@ -265,4 +273,15 @@ func ParamTenantID(c *gin.Context) (id uint, present bool) {
 		return uint(util.ToInt(v)), true
 	}
 	return 0, false
+}
+
+func isMaxBytesErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var mb *http.MaxBytesError
+	if errors.As(err, &mb) {
+		return true
+	}
+	return strings.Contains(err.Error(), "http: request body too large")
 }

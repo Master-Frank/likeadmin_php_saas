@@ -100,9 +100,25 @@ func PayWayGet(c *gin.Context) {
 	for i := 1; i <= maxScene; i++ {
 		grouped[i] = []map[string]any{}
 	}
+	ids := make([]uint, 0, len(rows))
+	seen := map[uint]bool{}
 	for _, r := range rows {
-		var cfg model.PayConfig
-		bootstrap.DB.First(&cfg, r.PayConfigID)
+		if r.PayConfigID == 0 || seen[r.PayConfigID] {
+			continue
+		}
+		seen[r.PayConfigID] = true
+		ids = append(ids, r.PayConfigID)
+	}
+	cfgByID := map[uint]model.PayConfig{}
+	if len(ids) > 0 {
+		var cfgs []model.PayConfig
+		bootstrap.DB.Where("id IN ?", ids).Find(&cfgs)
+		for _, cfg := range cfgs {
+			cfgByID[cfg.ID] = cfg
+		}
+	}
+	for _, r := range rows {
+		cfg := cfgByID[r.PayConfigID]
 		grouped[r.Scene] = append(grouped[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,

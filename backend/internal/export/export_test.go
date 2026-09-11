@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
@@ -152,13 +154,13 @@ func TestMaybeIgnoresBodyExport(t *testing.T) {
 	}
 }
 
-func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
+func TestMaybeExportURLUsesAppPrefix(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/user.user/lists?export=2&page_start=1&page_end=1", nil)
 	c.Request.Host = "pair1.likeadmin.test"
-	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "user.user", Action: "lists", App: "tenantapi"})
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "user.user", Action: "lists", App: "tenantapi", AdminID: 7, TenantID: 3})
 	if !Maybe(c, "用户列表", []map[string]any{{"id": 1, "account": "a"}}) {
 		t.Fatal("export=2")
 	}
@@ -170,14 +172,17 @@ func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	url, _ := env.Data["url"].(string)
-	if env.Code != 1 || !strings.Contains(url, "/platformapi/download/export?file=") {
-		t.Fatalf("tenant export url must stay platformapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
+	if env.Code != 1 || !strings.Contains(url, "/tenantapi/download/export?file=") {
+		t.Fatalf("tenant export url must use tenantapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
+	}
+	if !strings.Contains(url, "sig=") || !strings.Contains(url, "exp=") {
+		t.Fatalf("download url must be signed: %s", url)
 	}
 	if env.Data["status"] != "ready" || env.Data["task_id"] == "" {
 		t.Fatalf("sync export must return ready task: %s", w.Body.String())
 	}
-	if strings.Contains(url, "/tenantapi/") {
-		t.Fatalf("tenant prefix leaked: %s", url)
+	if strings.Contains(url, "/platformapi/") {
+		t.Fatalf("platform prefix leaked: %s", url)
 	}
 }
 
@@ -390,4 +395,114 @@ func TestMaybeExportPreviewPageEnd(t *testing.T) {
 	if env.Data["page_end"] != float64(20) {
 		t.Fatalf("page_end %v", env.Data["page_end"])
 	}
+}
+
+func TestServeKeepsKeyWhenFileMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	key := randomHex(8)
+	owner := TaskOwner{AdminID: 2, TenantID: 4}
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: "gone.xlsx", AdminID: owner.AdminID, TenantID: owner.TenantID}, time.Hour)
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	exp := time.Now().Add(time.Minute).Unix()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/download/export?file="+key+"&exp="+itoa64(exp)+"&sig="+signExportFile(key, owner, exp), nil)
+	Serve(c)
+	if !strings.Contains(w.Body.String(), "下载文件不存在") {
+		t.Fatalf("body %s", w.Body.String())
+	}
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) {
+		t.Fatal("missing file must not consume the download key")
+	}
+}
+
+func TestServeRejectsUnsignedDownload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	name := "ok.xlsx"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("xlsx"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	key := randomHex(8)
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: name, AdminID: 9, TenantID: 3}, time.Hour)
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?file="+key, nil)
+	Serve(c)
+	if !strings.Contains(w.Body.String(), "下载文件不存在") {
+		t.Fatalf("body %s", w.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+		t.Fatal("unsigned request must not delete the file")
+	}
+}
+
+func TestServeDeletesFileAfterDownload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	name := "ok.xlsx"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("xlsx-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	key := randomHex(8)
+	owner := TaskOwner{AdminID: 1}
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: name, Download: "demo.xlsx", AdminID: owner.AdminID}, time.Hour)
+	exp := time.Now().Add(time.Minute).Unix()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?file="+key+"&exp="+itoa64(exp)+"&sig="+signExportFile(key, owner, exp), nil)
+	Serve(c)
+	if w.Body.String() != "xlsx-bytes" {
+		t.Fatalf("body %q", w.Body.String())
+	}
+	if _, ok := cache.Get("export_file_" + key); ok {
+		t.Fatal("consumed key should be gone")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("downloaded file should be removed")
+	}
+}
+
+func TestCleanOldExports(t *testing.T) {
+	dir := withExportRoot(t)
+	keep := filepath.Join(dir, "keep.xlsx")
+	drop := filepath.Join(dir, "old.xlsx")
+	if err := os.WriteFile(keep, []byte("k"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(drop, []byte("d"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(drop, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	cleanOldExports(30 * time.Minute)
+	if _, err := os.Stat(drop); !os.IsNotExist(err) {
+		t.Fatal("stale export should be removed")
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatal("fresh export should stay")
+	}
+}
+
+func withExportRoot(t *testing.T) string {
+	t.Helper()
+	old := config.C.App.PublicDir
+	root := t.TempDir()
+	config.C.App.PublicDir = filepath.Join(root, "public")
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	dir := exportRoot()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func itoa64(n int64) string {
+	return strconv.FormatInt(n, 10)
 }

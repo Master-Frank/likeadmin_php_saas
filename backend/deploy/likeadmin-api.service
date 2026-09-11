@@ -10,7 +10,7 @@ Group=www-data
 RuntimeDirectory=likeadmin
 WorkingDirectory=/opt/likeadmin/backend
 Environment=LIKEADMIN_CONFIG=/opt/likeadmin/backend/configs/config.yaml
-Environment=LIKEADMIN_LISTEN=:8080
+Environment=LIKEADMIN_LISTEN=127.0.0.1:8080
 Environment=LIKEADMIN_DEBUG=false
 Environment=LIKEADMIN_REQUIRE_DDL=1
 Environment=LIKEADMIN_REQUIRE_REDIS=1
