@@ -56,6 +56,8 @@
 
 `tenantdb.ForTenant` / `ForTenantOn` 还会按 tenant ID 再查 `sn,tactics`。请求主路径的 `tenantdb.Use(c)` 已使用 request meta，不会重复查；非 HTTP、支付和定时任务调用 `ForTenant*` 时仍可能重复回源。
 
+核心 ORM 路径已没有 PHP 的逐查询表结构探测；生成式 CRUD 的关联格式化和部分 cron 兼容检查仍会访问 `information_schema`。它们不是每个普通请求的固定成本，可在指标证实频繁后按表名缓存探测结果。
+
 ### 3.2 配置和文件域名造成请求级 SQL 放大
 
 `backend/internal/cfgsvc/config.go` 的 `Get` 没有缓存，每次读取一行：
@@ -65,9 +67,9 @@
 
 两张表当前都缺少对应复合索引。
 
-`backend/internal/openapi/user.go` 的 `IndexConfig` 会直接或间接调用多次 `cfgsvc.Get*`。`filesvc.GetFileURL` 又会读取默认存储引擎和引擎配置。一次 C 端启动请求因此可能产生十几条配置 SQL，再加租户和装修查询。
+`backend/internal/openapi/user.go` 的 `IndexConfig` 会直接或间接调用多次 `cfgsvc.Get*`。冷缓存时，`filesvc.GetFileURL` 还会读取默认存储引擎和引擎配置。一次 C 端启动请求因此可能产生十几条配置 SQL，再加租户和装修查询。
 
-这是当前最值得先优化的读路径，比直接上从库或分库更优先。
+storage 默认引擎和引擎配置已有 Redis/本机 fallback 缓存，因此这部分 SQL 主要发生在冷缓存；普通网站配置、登录配置、装修样式仍是逐项 SQL。整体仍是当前最值得先优化的读路径，比直接上从库或分库更优先。
 
 ### 3.3 权限“缓存”仍每次查询数据库
 
@@ -85,7 +87,9 @@
 
 - 多数列表执行 `COUNT(*)` 后再 `SELECT ... LIMIT`。
 - `project.lists.page_size_max` 当前为 **25000**；`page_type=0` 会直接采用该上限。
+- `export=2` 会把 `(page_end-page_start+1) × page_size` 作为查询行数，`page_end` 没有最大值；按默认窗口 200 页和 25000 的上限，理论请求可达到 **500 万行**。
 - `api/recharge/lists` 为兼容 PHP，当前不使用 `LIMIT`。
+- 平台租户列表逐租户执行 `tenantUserCount`，支付方式逐项读取支付配置，退款列表还有额外统计查询，都是应通过 query-count 测试锁定的放大路径。
 - `export=2` 在请求内同步组装全部记录并生成 XLSX。
 
 这些问题不一定降低普通接口 p50，但会显著恶化内存、GC、数据库连接占用和 p99。
@@ -122,6 +126,8 @@
 - 全局并发上限或关键接口限流。
 
 生产 Nginx 配置也没有明确 proxy timeout、响应压缩、静态缓存头或限速策略。
+
+Nginx 对请求体设置了 50 MiB 上限，但直接访问 Go `:8080` 时没有等价硬限制；生产必须避免绕过 Nginx，应用层仍应按路由限制请求体。
 
 外部微信、支付、短信和存储客户端已有 8–30 秒不等的 timeout，这是正确基础，但仍应按调用类型统一预算并传递 request context。
 
@@ -166,7 +172,8 @@
 2. GORM callback/plugin 统计每请求查询数和耗时；
 3. `sql.DB.Stats()`；
 4. Redis hit/miss/fallback 指标；
-5. 只监听管理网或独立管理端口的 pprof。
+5. `/healthz` 只表示进程存活，`/readyz` 检查必要的 DB/Redis 依赖；
+6. 只监听管理网或独立管理端口的 pprof。
 
 不要把 pprof、metrics 或 debug 路由直接暴露在公网 API 域名。
 
@@ -177,7 +184,8 @@
 3. 登录、短信、上传、支付创建、生成器和安装接口按 IP/租户/用户限流。多实例限流状态放 Redis，不放本机 map。
 4. 给 Redis 操作设置短 timeout，并记录 fallback；生产可配置 Redis 必须可用。
 5. 将普通列表上限与导出上限拆开。普通 API 不应允许 25000 行响应。
-6. 修复 `RechargeLists` 等无 `LIMIT` 路径；如前端依赖全量语义，应先改成分页契约再切换。
+6. 给 `page_end` 和导出总行数设置独立硬上限，不能只校验起止页顺序。
+7. 修复 `RechargeLists` 等无 `LIMIT` 路径；如前端依赖全量语义，应先改成分页契约再切换。
 
 验收条件：
 
@@ -325,8 +333,10 @@ Redis 同样配置 pool、dial/read/write timeout 和最大重试，并监控池
 
 - 合并同一接口内重复的配置和 storage 查询；
 - 检查 join 列表的 COUNT 是否重复 join 大表；
+- 消除平台租户列表的逐租户用户计数、支付方式逐项配置读取等 N+1；
 - 深分页改 keyset/cursor；
 - 文章浏览数避免每次详情同步 read-modify-write，可异步聚合；
+- cron 的全租户扫描、逐租户配置读取和 `information_schema` 探测应分批并复用缓存，避免每分钟形成周期性尖峰；
 - 通过 query-count 测试给核心接口设预算，防止后续新增 N+1。
 
 ### P1-5 Nginx、静态资源和响应体
