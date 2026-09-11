@@ -16,6 +16,7 @@ import (
 	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/openapi"
+	"likeadmin/backend/internal/pcshop"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantapi"
@@ -75,11 +76,11 @@ func New() *gin.Engine {
 	r.GET("/mobile/*any", spa("mobile"))
 	r.GET("/pc", spa("pc"))
 	r.GET("/pc/*any", spa("pc"))
-	// Uniapp H5 base is /mobile/; decoration and mini-program links use /pages and /packages.
-	r.GET("/pages", redirectUniappH5)
-	r.GET("/pages/*any", redirectUniappH5)
-	r.GET("/packages", redirectUniappH5)
-	r.GET("/packages/*any", redirectUniappH5)
+	// PC decorate banners use uniapp shop paths like /pages/news/news (new tab).
+	r.GET("/pages", redirectShopToPC)
+	r.GET("/pages/*any", redirectShopToPC)
+	r.GET("/packages", redirectShopToPC)
+	r.GET("/packages/*any", redirectShopToPC)
 
 	if config.C.App.PublicDir != "" {
 		r.Static("/resource", filepath.Join(config.C.App.PublicDir, "resource"))
@@ -107,16 +108,12 @@ func serveSPA(dir string) gin.HandlerFunc {
 	}
 }
 
-// redirectUniappH5 sends mini-program style paths to the H5 SPA under /mobile.
-func redirectUniappH5(c *gin.Context) {
-	path := c.Request.URL.Path
-	if path == "" || strings.Contains(path, "..") {
+// redirectShopToPC sends decorate/shop links to the PC Nuxt site, not H5 /mobile.
+func redirectShopToPC(c *gin.Context) {
+	target := pcshop.Target(c.Request.URL.Path, c.Request.URL.Query())
+	if target == "" {
 		c.Status(http.StatusNotFound)
 		return
-	}
-	target := "/mobile" + path
-	if q := c.Request.URL.RawQuery; q != "" {
-		target += "?" + q
 	}
 	c.Redirect(http.StatusFound, target)
 }

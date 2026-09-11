@@ -10,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"likeadmin/backend/internal/pcshop"
 )
 
 const maxUpload = 50 << 20
@@ -137,9 +139,9 @@ func servePublic(w http.ResponseWriter, r *http.Request, public string) bool {
 	}
 	for _, prefix := range []string{"/pages", "/packages"} {
 		if reqPath == prefix || strings.HasPrefix(reqPath, prefix+"/") {
-			target := "/mobile" + reqPath
-			if r.URL.RawQuery != "" {
-				target += "?" + r.URL.RawQuery
+			target := pcshop.Target(reqPath, r.URL.Query())
+			if target == "" {
+				return false
 			}
 			http.Redirect(w, r, target, http.StatusFound)
 			return true

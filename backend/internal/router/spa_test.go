@@ -92,13 +92,13 @@ func TestServeSPARejectsDotDot(t *testing.T) {
 	}
 }
 
-func TestRedirectUniappH5(t *testing.T) {
+func TestRedirectShopToPC(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	hit := func(path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, path, nil)
-		redirectUniappH5(c)
+		redirectShopToPC(c)
 		return w
 	}
 
@@ -106,17 +106,17 @@ func TestRedirectUniappH5(t *testing.T) {
 	if news.Code != http.StatusFound {
 		t.Fatalf("status %d", news.Code)
 	}
-	if loc := news.Header().Get("Location"); loc != "/mobile/pages/news/news" {
+	if loc := news.Header().Get("Location"); loc != "/pc/information" {
 		t.Fatalf("location %q", loc)
 	}
 
 	q := hit("/pages/news_detail/news_detail?id=3")
-	if loc := q.Header().Get("Location"); loc != "/mobile/pages/news_detail/news_detail?id=3" {
+	if loc := q.Header().Get("Location"); loc != "/pc/information/detail/3" {
 		t.Fatalf("query location %q", loc)
 	}
 
 	pkg := hit("/packages/pages/user_wallet/user_wallet")
-	if loc := pkg.Header().Get("Location"); loc != "/mobile/packages/pages/user_wallet/user_wallet" {
+	if loc := pkg.Header().Get("Location"); loc != "/pc/" {
 		t.Fatalf("package location %q", loc)
 	}
 }
