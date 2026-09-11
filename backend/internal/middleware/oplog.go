@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
@@ -24,6 +26,41 @@ type bodyWriter struct {
 func (w *bodyWriter) Write(b []byte) (int, error) {
 	w.buf.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+var (
+	oplogOnce sync.Once
+	oplogCh   chan model.OperationLog
+)
+
+func oplogAsync() bool {
+	v := os.Getenv("LIKEADMIN_OPLOG_ASYNC")
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
+func enqueueOplog(row model.OperationLog) {
+	if bootstrap.DB == nil {
+		return
+	}
+	if !oplogAsync() {
+		_ = bootstrap.DB.Create(&row).Error
+		return
+	}
+	oplogOnce.Do(func() {
+		oplogCh = make(chan model.OperationLog, 256)
+		go func() {
+			for item := range oplogCh {
+				if bootstrap.DB != nil {
+					_ = bootstrap.DB.Create(&item).Error
+				}
+			}
+		}()
+	})
+	select {
+	case oplogCh <- row:
+	default:
+		// drop low-value logs when the queue is full
+	}
 }
 
 func OperationLog() gin.HandlerFunc {
@@ -63,8 +100,9 @@ func OperationLog() gin.HandlerFunc {
 			action += "-数据导出"
 		}
 		result := bw.buf.String()
-		// MySQL TEXT ~64KiB; PHP stores the full response body.
-		if len(result) > 65535 {
+		if requestLogType(c) == "GET" {
+			result = ""
+		} else if len(result) > 65535 {
 			result = result[:65535]
 		}
 		adminID := meta.AdminID
@@ -79,7 +117,7 @@ func OperationLog() gin.HandlerFunc {
 			Params: string(raw), Result: result, IP: ctxutil.ClientIP(c),
 			CreateTime: util.NowUnix(),
 		}
-		_ = bootstrap.DB.Create(&row).Error
+		enqueueOplog(row)
 	}
 }
 

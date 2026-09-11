@@ -25,6 +25,7 @@ type fileInfo struct {
 	Src      string `json:"src"`
 	Name     string `json:"name"`
 	Download string `json:"download"`
+	Rel      string `json:"rel"`
 }
 
 func Maybe(c *gin.Context, fileName string, rows any) bool {
@@ -84,6 +85,10 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		response.Fail(c, msg)
 		return true
 	}
+	if msg := exportWindowLimitError(c); msg != "" {
+		response.Fail(c, msg)
+		return true
+	}
 	key, err := SaveXLSX(fileName, rows, spec.Fields)
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -114,11 +119,16 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 		ext = ".xlsx"
 	}
 	download := base + "-" + time.Now().Format("2006-01-02-150405") + ext
+	relDir := filepath.Join("uploads", "export")
 	dir := filepath.Join(os.TempDir(), "likeadmin-export")
+	if config.C.App.PublicDir != "" {
+		dir = filepath.Join(config.C.App.PublicDir, relDir)
+	}
 	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(download)))
+	fname := fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(download))
+	path := filepath.Join(dir, fname)
 	records := toRecords(rows, fields)
 	if xlsx {
 		records = applyExcelLongNumbers(records)
@@ -137,9 +147,13 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 		w.Flush()
 		_ = f.Close()
 	}
+	rel := filepath.ToSlash(filepath.Join(relDir, fname))
+	if config.C.App.PublicDir == "" {
+		rel = path
+	}
 	key := util.MD5(path + fmt.Sprintf("%d", time.Now().UnixNano()))
 	cache.Set("export_file_"+key, fileInfo{
-		Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path), Download: download,
+		Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path), Download: download, Rel: rel,
 	}, 30*time.Minute)
 	return key, nil
 }
@@ -156,12 +170,30 @@ func Serve(c *gin.Context) {
 	if attach == "" {
 		attach = info.Name
 	}
-	c.FileAttachment(filepath.Join(info.Src, info.Name), attach)
+	path := filepath.Join(info.Src, info.Name)
+	if info.Rel != "" && config.C.App.PublicDir != "" && !filepath.IsAbs(info.Rel) {
+		path = filepath.Join(config.C.App.PublicDir, filepath.FromSlash(info.Rel))
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		response.Fail(c, "下载文件不存在")
+		return
+	}
+	root, _ := filepath.Abs(config.C.App.PublicDir)
+	tmp := filepath.Join(os.TempDir(), "likeadmin-export")
+	if root != "" && !strings.HasPrefix(abs, root+string(os.PathSeparator)) && !strings.HasPrefix(abs, tmp+string(os.PathSeparator)) {
+		response.Fail(c, "下载文件不存在")
+		return
+	}
+	c.FileAttachment(abs, attach)
 }
 
 func toRecords(rows any, fields []Field) [][]string {
 	if rows == nil {
 		return [][]string{}
+	}
+	if maps := sliceOfMaps(rows); maps != nil {
+		return mapsToRecords(maps, fields)
 	}
 	b, err := json.Marshal(rows)
 	if err != nil {
@@ -169,40 +201,7 @@ func toRecords(rows any, fields []Field) [][]string {
 	}
 	var arr []map[string]any
 	if json.Unmarshal(b, &arr) == nil && len(arr) > 0 {
-		if len(fields) > 0 {
-			headers := make([]string, len(fields))
-			for i, f := range fields {
-				headers[i] = f.Title
-			}
-			out := [][]string{headers}
-			for _, m := range arr {
-				rec := make([]string, len(fields))
-				for i, f := range fields {
-					rec[i] = formatCell(f.Key, m[f.Key])
-				}
-				out = append(out, rec)
-			}
-			return out
-		}
-		keys := make([]string, 0)
-		seen := map[string]bool{}
-		for _, m := range arr {
-			for k := range m {
-				if !seen[k] {
-					seen[k] = true
-					keys = append(keys, k)
-				}
-			}
-		}
-		out := [][]string{keys}
-		for _, m := range arr {
-			rec := make([]string, len(keys))
-			for i, k := range keys {
-				rec[i] = util.ToString(m[k])
-			}
-			out = append(out, rec)
-		}
-		return out
+		return mapsToRecords(arr, fields)
 	}
 	var raw []any
 	if json.Unmarshal(b, &raw) == nil {
@@ -215,6 +214,93 @@ func toRecords(rows any, fields []Field) [][]string {
 	var buf bytes.Buffer
 	buf.Write(b)
 	return [][]string{{buf.String()}}
+}
+
+func sliceOfMaps(rows any) []map[string]any {
+	v := reflect.ValueOf(rows)
+	if !v.IsValid() {
+		return nil
+	}
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return nil
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Slice {
+		return nil
+	}
+	out := make([]map[string]any, 0, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		item := v.Index(i)
+		if item.Kind() == reflect.Interface || item.Kind() == reflect.Pointer {
+			if item.IsNil() {
+				continue
+			}
+			item = item.Elem()
+		}
+		switch item.Kind() {
+		case reflect.Map:
+			m := map[string]any{}
+			for _, k := range item.MapKeys() {
+				m[util.ToString(k.Interface())] = item.MapIndex(k).Interface()
+			}
+			out = append(out, m)
+		default:
+			return nil
+		}
+	}
+	return out
+}
+
+func mapsToRecords(arr []map[string]any, fields []Field) [][]string {
+	if len(fields) > 0 {
+		headers := make([]string, len(fields))
+		for i, f := range fields {
+			headers[i] = f.Title
+		}
+		out := [][]string{headers}
+		for _, m := range arr {
+			rec := make([]string, len(fields))
+			for i, f := range fields {
+				rec[i] = formatCell(f.Key, m[f.Key])
+			}
+			out = append(out, rec)
+		}
+		return out
+	}
+	keys := make([]string, 0)
+	seen := map[string]bool{}
+	for _, m := range arr {
+		for k := range m {
+			if !seen[k] {
+				seen[k] = true
+				keys = append(keys, k)
+			}
+		}
+	}
+	out := [][]string{keys}
+	for _, m := range arr {
+		rec := make([]string, len(keys))
+		for i, k := range keys {
+			rec[i] = util.ToString(m[k])
+		}
+		out = append(out, rec)
+	}
+	return out
+}
+
+func exportWindowLimitError(c *gin.Context) string {
+	if exportPageType(c) != 1 {
+		return ""
+	}
+	pages := exportPageEnd(c) - exportPageStart(c) + 1
+	size := exportPageSize(c)
+	maxRows := config.C.Project.Lists.ExportRows()
+	if pages > 0 && size > 0 && pages*size > maxRows {
+		return fmt.Sprintf("导出范围超过限制，最多%d条", maxRows)
+	}
+	return ""
 }
 
 func rowCount(rows any) int {

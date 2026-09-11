@@ -182,6 +182,7 @@ func DecorateTabbarSave(c *gin.Context) {
 			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		})
 	}
+	invalidatePublic(c, "decorate", "tabbar")
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -222,6 +223,7 @@ func HotSearchSet(c *gin.Context) {
 			tdb(c).Create(&row)
 		}
 	}
+	invalidatePublic(c, "hot")
 	response.SuccessNotice(c, "设置成功")
 }
 

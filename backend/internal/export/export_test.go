@@ -112,6 +112,29 @@ func TestExportRangeError(t *testing.T) {
 	}
 }
 
+func TestExportWindowLimitError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.Lists
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	config.C.Project.Lists.ExportMaxRows = 10000
+	config.C.Project.Lists.ExportMaxPages = 20
+	t.Cleanup(func() { config.C.Project.Lists = old })
+
+	ctx := func(raw string) *gin.Context {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		return c
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=200&page_size=25000")); msg == "" {
+		t.Fatal("200*25000 must be rejected")
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=4&page_size=10")); msg != "" {
+		t.Fatalf("small window %q", msg)
+	}
+}
+
 func TestMaybeIgnoresBodyExport(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

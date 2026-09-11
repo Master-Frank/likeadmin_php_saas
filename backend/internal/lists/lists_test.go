@@ -119,9 +119,14 @@ func TestParseExportWindow(t *testing.T) {
 		t.Fatalf("window offset=%d size=%d", q.Offset, q.PageSize)
 	}
 
+	q = parse("?export=2&page_start=1&page_end=200&page_size=25000")
+	if q.PageSize != 10000 {
+		t.Fatalf("export window must cap rows, got size=%d", q.PageSize)
+	}
+
 	q = parse("?export=2&page_type=0&page_start=2&page_end=4&page_size=10")
-	if q.Offset != 0 || q.PageSize != 25000 {
-		t.Fatalf("unpaged export %+v", q)
+	if q.Offset != 0 || q.PageSize != 10000 {
+		t.Fatalf("unpaged export should cap to export_max_rows %+v", q)
 	}
 
 	q = parse("?export=2&page_start=&page_end=")

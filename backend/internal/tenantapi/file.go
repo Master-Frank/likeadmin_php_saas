@@ -5,6 +5,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
@@ -208,6 +209,9 @@ func UploadFile(c *gin.Context)  { tenantUpload(c, 30, "uploads/file", "file") }
 
 func tenantUpload(c *gin.Context, typ int, dir, scene string) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindUpload) {
 		return
 	}
 	if !guardTenantWrite(c) {

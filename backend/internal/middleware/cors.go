@@ -6,12 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
-	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantdb"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +32,9 @@ func CORS() gin.HandlerFunc {
 
 func InstallAndTenant() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/install") || strings.HasPrefix(c.Request.URL.Path, "/crontab") {
+		if strings.HasPrefix(c.Request.URL.Path, "/install") ||
+			strings.HasPrefix(c.Request.URL.Path, "/crontab") ||
+			c.Request.URL.Path == "/healthz" || c.Request.URL.Path == "/readyz" {
 			c.Next()
 			return
 		}
@@ -87,9 +88,7 @@ func InstallAndTenant() gin.HandlerFunc {
 }
 
 func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string, isPage bool) bool {
-	var tenant model.Tenant
-	err := bootstrap.DB.Where("domain_alias = ? AND delete_time IS NULL", host).First(&tenant).Error
-	if err == nil {
+	if tenant, ok := tenantdb.ByHost(host); ok {
 		if tenant.Disable == 0 && tenant.DomainAliasEnable == 0 {
 			meta.TenantID = tenant.ID
 			meta.TenantSN = tenant.SN
@@ -100,8 +99,8 @@ func resolveTenant(c *gin.Context, meta *ctxutil.RequestMeta, host string, isPag
 	}
 	sn := ctxutil.SubDomain(host)
 	meta.TenantSN = sn
-	err = bootstrap.DB.Where("sn = ? AND delete_time IS NULL", sn).First(&tenant).Error
-	if err != nil {
+	tenant, ok := tenantdb.BySN(sn)
+	if !ok {
 		return tenantMissing(c, isPage)
 	}
 	if tenant.Disable != 0 {
@@ -157,11 +156,11 @@ func stripScheme(host string) string {
 }
 
 func bindPlatformTenant(meta *ctxutil.RequestMeta, id uint) {
-	if meta == nil || id == 0 || bootstrap.DB == nil {
+	if meta == nil || id == 0 {
 		return
 	}
-	var tenant model.Tenant
-	if bootstrap.DB.Where("id = ? AND delete_time IS NULL", id).First(&tenant).Error != nil {
+	tenant, ok := tenantdb.ByID(id)
+	if !ok {
 		return
 	}
 	meta.TenantSN = tenant.SN

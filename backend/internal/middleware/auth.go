@@ -270,7 +270,7 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		if util.ToInt(meta.AdminInfo["root"]) == 1 {
 			return all, all
 		}
-		urlKey := "admin_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+		urlKey := "admin_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10) + ":" + cache.AuthCacheVer()
 		if cached := loadURIList(urlKey); cached != nil {
 			return all, cached
 		}
@@ -303,7 +303,7 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		q.Find(&menus)
 		return collectTenantPerms(menus)
 	})
-	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10) + ":" + cache.AuthCacheVer()
 	if cached := loadURIList(urlKey); cached != nil {
 		return all, cached
 	}
@@ -324,25 +324,13 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 }
 
 func cachedURIList(key string, load func() []string) []string {
-	live := load()
-	md5Key := key + "_md5"
-	fp := permsFingerprint(live)
-	cachedFp, _ := cache.Get(md5Key)
-	if cachedFp != fp {
-		cache.Del(key)
-		if strings.HasPrefix(key, "admin_auth_all") {
-			cache.DelPrefix("admin_auth_url_")
-		} else if strings.HasPrefix(key, "tenant_auth_all") {
-			cache.DelPrefix("tenant_auth_url_")
-		}
-		cache.Set(md5Key, fp, time.Hour)
-		storeURIList(key, live)
-		return live
-	}
-	if cached := loadURIList(key); cached != nil {
+	vk := key + ":" + cache.AuthCacheVer()
+	if cached := loadURIList(vk); cached != nil {
 		return cached
 	}
-	storeURIList(key, live)
+	live := load()
+	cache.Set(vk+"_md5", permsFingerprint(live), time.Hour)
+	storeURIList(vk, live)
 	return live
 }
 

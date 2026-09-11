@@ -6,6 +6,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
@@ -182,6 +183,9 @@ func UploadFile(c *gin.Context)  { uploadSave(c, 30, "uploads/file", "file") }
 
 func uploadSave(c *gin.Context, typ int, dir, scene string) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindUpload) {
 		return
 	}
 	// PHP UploadLogic reads the file first (未找到上传文件的信息) and only then

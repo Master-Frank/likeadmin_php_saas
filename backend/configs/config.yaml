@@ -13,6 +13,10 @@ database:
   password: root
   charset: utf8mb4
   prefix: la_
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime_sec: 300
+  conn_max_idle_time_sec: 60
 
 redis:
   host: 127.0.0.1
@@ -20,6 +24,9 @@ redis:
   password: ""
   db: 0
   prefix: "la:"
+  dial_timeout_ms: 200
+  read_timeout_ms: 200
+  write_timeout_ms: 200
 
 project:
   unique_identification: likeadmin
@@ -40,6 +47,8 @@ project:
   lists:
     page_size_max: 25000
     page_size: 25
+    export_max_rows: 10000
+    export_max_pages: 20
   website:
     name: likeadmin
     url: www.likeadmin.cn/

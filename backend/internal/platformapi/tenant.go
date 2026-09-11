@@ -21,6 +21,7 @@ import (
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/util"
+	"likeadmin/backend/internal/workbench"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -57,8 +58,9 @@ func TenantLists(c *gin.Context) {
 		httpPrefix = "https://"
 	}
 	out := make([]map[string]any, 0, len(rows))
+	counts := tenantUserCounts(rows)
 	for _, t := range rows {
-		users := tenantUserCount(t)
+		users := counts[t.ID]
 		def := httpPrefix + t.SN + "." + root + "/admin/"
 		domain := def
 		if t.DomainAliasEnable == 0 {
@@ -160,6 +162,8 @@ func TenantAdd(c *gin.Context) {
 		response.Fail(c, "新增失败："+err.Error())
 		return
 	}
+	tenantdb.InvalidateTenant(tenant)
+	workbench.OnTenantCreated()
 	response.Result(c, 1, 1, "新增成功", []any{})
 }
 
@@ -199,6 +203,7 @@ func TenantEdit(c *gin.Context) {
 	if disable == 1 {
 		expireTenantAdmins(cur)
 	}
+	tenantdb.InvalidateTenant(cur, model.Tenant{ID: id, SN: cur.SN, DomainAlias: alias})
 	response.Result(c, 1, 1, "操作成功", []any{})
 }
 
@@ -223,6 +228,7 @@ func TenantDelete(c *gin.Context) {
 		dropShardedTenantTables(cur.SN)
 	}
 	cleanTenantScopedRows(cur.ID)
+	tenantdb.InvalidateTenant(cur)
 	response.Result(c, 1, 1, "删除成功", []any{})
 }
 
@@ -1128,6 +1134,36 @@ func randomSN() string {
 			return sn
 		}
 	}
+}
+
+func tenantUserCounts(tenants []model.Tenant) map[uint]int64 {
+	out := make(map[uint]int64, len(tenants))
+	if len(tenants) == 0 {
+		return out
+	}
+	shared := make([]uint, 0, len(tenants))
+	for _, t := range tenants {
+		if t.Tactics == 1 && t.SN != "" {
+			out[t.ID] = tenantUserCount(t)
+			continue
+		}
+		shared = append(shared, t.ID)
+	}
+	if len(shared) == 0 {
+		return out
+	}
+	type row struct {
+		TenantID uint  `gorm:"column:tenant_id"`
+		N        int64 `gorm:"column:n"`
+	}
+	var rows []row
+	bootstrap.DB.Model(&model.User{}).Select("tenant_id, COUNT(*) AS n").
+		Where("tenant_id IN ? AND delete_time IS NULL", shared).
+		Group("tenant_id").Scan(&rows)
+	for _, r := range rows {
+		out[r.TenantID] = r.N
+	}
+	return out
 }
 
 func tenantUserCount(t model.Tenant) int64 {

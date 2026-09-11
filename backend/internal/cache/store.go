@@ -11,7 +11,9 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 )
 
-func ctx() context.Context { return context.Background() }
+func ctx() context.Context {
+	return context.Background()
+}
 
 type memItem struct {
 	val string
@@ -167,14 +169,30 @@ func DelPrefix(prefix string) {
 	})
 }
 
+func AuthCacheVer() string {
+	raw, ok := Get("auth_cache_ver")
+	if !ok || raw == "" {
+		return "0"
+	}
+	return strings.TrimSpace(raw)
+}
+
+func BumpAuthCache() {
+	n := Incr("auth_cache_ver")
+	if n <= 0 {
+		Set("auth_cache_ver", "1", 0)
+	}
+}
+
 func ClearAdminAuthCache(adminID uint) {
 	if adminID > 0 {
 		id := strconv.FormatUint(uint64(adminID), 10)
+		ver := AuthCacheVer()
 		Del("admin_auth_url_" + id)
+		Del("admin_auth_url_" + id + ":" + ver)
 		Del("tenant_auth_url_" + id)
 	}
-	DelPrefix("admin_auth_")
-	DelPrefix("tenant_auth_")
+	BumpAuthCache()
 }
 
 func Incr(key string) int64 {

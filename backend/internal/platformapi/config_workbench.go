@@ -66,8 +66,16 @@ func WorkbenchIndex(c *gin.Context) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	var todayNew, totalNew int64
-	bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL AND create_time >= ?", todayStart).Count(&todayNew)
-	bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL").Count(&totalNew)
+	todayNew = workbench.CachedCount(workbench.TenantTodayKey(now), func() int64 {
+		var n int64
+		bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL AND create_time >= ?", todayStart).Count(&n)
+		return n
+	})
+	totalNew = workbench.CachedCount(workbench.TenantTotalKey(), func() int64 {
+		var n int64
+		bootstrap.DB.Model(&model.Tenant{}).Where("delete_time IS NULL").Count(&n)
+		return n
+	})
 	vDates, vNums := workbench.Series(now, 15, 0, 100)
 	sDates, sNums := workbench.Series(now, 7, 30, 200)
 	response.Data(c, gin.H{

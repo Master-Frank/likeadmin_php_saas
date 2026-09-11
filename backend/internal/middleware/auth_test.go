@@ -131,18 +131,32 @@ func TestPermsFingerprint(t *testing.T) {
 	}
 }
 
-func TestCachedURIListInvalidates(t *testing.T) {
+func TestCachedURIListCacheFirst(t *testing.T) {
 	cache.DelPrefix("admin_auth_")
-	t.Cleanup(func() { cache.DelPrefix("admin_auth_") })
-	storeURIList("admin_auth_all", []string{"old/path"})
-	cache.Set("admin_auth_all_md5", "stale", 0)
-	storeURIList("admin_auth_url_9", []string{"old/url"})
+	cache.Del("auth_cache_ver")
+	t.Cleanup(func() {
+		cache.DelPrefix("admin_auth_")
+		cache.Del("auth_cache_ver")
+	})
 	got := cachedURIList("admin_auth_all", func() []string { return []string{"auth.admin/lists"} })
 	if len(got) != 1 || got[0] != "auth.admin/lists" {
 		t.Fatalf("live perms=%v", got)
 	}
-	if loadURIList("admin_auth_url_9") != nil {
-		t.Fatal("stale admin url cache should drop when perms fingerprint changes")
+	got = cachedURIList("admin_auth_all", func() []string {
+		t.Fatal("load should not run on cache hit")
+		return nil
+	})
+	if len(got) != 1 || got[0] != "auth.admin/lists" {
+		t.Fatalf("cached perms=%v", got)
+	}
+	loads := 0
+	cache.BumpAuthCache()
+	got = cachedURIList("admin_auth_all", func() []string {
+		loads++
+		return []string{"auth.admin/add"}
+	})
+	if loads != 1 || len(got) != 1 || got[0] != "auth.admin/add" {
+		t.Fatalf("miss rebuild loads=%d got=%v", loads, got)
 	}
 }
 

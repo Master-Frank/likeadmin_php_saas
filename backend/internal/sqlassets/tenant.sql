@@ -90,7 +90,8 @@ CREATE TABLE `la_tenant_config_{tenantSn}`  (
                                      `value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '值',
                                      `create_time` int(10) NULL DEFAULT NULL COMMENT '创建时间',
                                      `update_time` int(10) NULL DEFAULT NULL COMMENT '更新时间',
-                                     PRIMARY KEY (`id`) USING BTREE
+                                     PRIMARY KEY (`id`) USING BTREE,
+                                     INDEX `idx_tenant_type_name`(`tenant_id`, `type`, `name`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '配置表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -316,7 +317,8 @@ CREATE TABLE `la_user_{tenantSn}`  (
                             `delete_time` int(10) UNSIGNED NULL DEFAULT NULL COMMENT '删除时间',
                             PRIMARY KEY (`id`) USING BTREE,
                             UNIQUE INDEX `sn`(`sn`) USING BTREE COMMENT '编号唯一',
-                            UNIQUE INDEX `account`(`account`) USING BTREE COMMENT '账号唯一'
+                            UNIQUE INDEX `account`(`account`) USING BTREE COMMENT '账号唯一',
+                            INDEX `idx_tenant_delete_time`(`tenant_id`, `delete_time`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -398,7 +400,8 @@ CREATE TABLE `la_article_{tenantSn}`  (
                                `create_time` int(11) NULL DEFAULT NULL COMMENT '创建时间',
                                `update_time` int(11) NULL DEFAULT NULL COMMENT '更新时间',
                                `delete_time` int(11) NULL DEFAULT NULL COMMENT '删除时间',
-                               PRIMARY KEY (`id`) USING BTREE
+                               PRIMARY KEY (`id`) USING BTREE,
+                               INDEX `idx_tenant_show_delete`(`tenant_id`, `is_show`, `delete_time`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 14 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '文章表' ROW_FORMAT = DYNAMIC;
 
 

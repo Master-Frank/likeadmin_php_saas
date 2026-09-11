@@ -7,6 +7,7 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/httpserver"
 	"likeadmin/backend/internal/router"
 )
 
@@ -21,13 +22,15 @@ func main() {
 	if err := bootstrap.RequireDDLPrivileges(); err != nil {
 		log.Fatalf("database privileges: %v (grant CREATE,DROP or set LIKEADMIN_REQUIRE_DDL=0 to disable sharding/upgrades)", err)
 	}
+	if err := bootstrap.RequireRedis(); err != nil {
+		log.Fatalf("redis: %v (start Redis or set LIKEADMIN_REQUIRE_REDIS=0)", err)
+	}
 	r := router.New()
 	addr := config.C.App.Listen
 	if addr == "" {
 		addr = ":8080"
 	}
-	log.Printf("likeadmin-go listening on %s", addr)
-	if err := r.Run(addr); err != nil {
+	if err := httpserver.Run(addr, r); err != nil {
 		log.Fatal(err)
 	}
 }

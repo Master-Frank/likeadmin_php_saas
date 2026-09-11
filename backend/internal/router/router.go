@@ -13,6 +13,7 @@ import (
 	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/gencrud"
 	"likeadmin/backend/internal/install"
+	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/openapi"
 	"likeadmin/backend/internal/platformapi"
@@ -31,7 +32,9 @@ func New() *gin.Engine {
 	}
 	tenantdb.Register(bootstrap.DB)
 	r := gin.New()
-	r.Use(gin.Recovery(), middleware.CORS(), middleware.InstallAndTenant())
+	r.Use(gin.Recovery(), metrics.Middleware(), middleware.CORS(), middleware.InstallAndTenant())
+	r.GET("/healthz", healthz)
+	r.GET("/readyz", readyz)
 	response.ExportHook = func(c *gin.Context, rows any, count int64) bool {
 		c.Set("likeadmin.export_count", count)
 		return export.Maybe(c, "export", rows)
@@ -416,4 +419,31 @@ func apiRoutes() map[string]Handler {
 		"pay/payway":      openapi.PayWay, "pay/prepay": openapi.PayPrepay, "pay/paystatus": openapi.PayStatus,
 		"pay/notifymnp": openapi.PayNotifyOK, "pay/notifyoa": openapi.PayNotifyOK, "pay/notifyapp": openapi.PayNotifyOK, "pay/alinotify": openapi.AliNotify,
 	}
+}
+
+func healthz(c *gin.Context) {
+	c.String(http.StatusOK, "ok")
+}
+
+func readyz(c *gin.Context) {
+	if bootstrap.DB == nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	sqlDB, err := bootstrap.DB.DB()
+	if err != nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	if err := sqlDB.Ping(); err != nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	if os.Getenv("LIKEADMIN_REQUIRE_REDIS") == "1" {
+		if bootstrap.RDB == nil {
+			c.String(http.StatusServiceUnavailable, "redis")
+			return
+		}
+	}
+	c.String(http.StatusOK, "ok")
 }

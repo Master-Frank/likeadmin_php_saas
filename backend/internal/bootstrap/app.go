@@ -6,10 +6,14 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
+	"likeadmin/backend/internal/metrics"
 
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -36,7 +40,12 @@ func Init(cfgPath string) error {
 		log.Printf("database unavailable before install: %v", err)
 		DB = nil
 	}
-	initRedis()
+	if err := initRedis(); err != nil {
+		return err
+	}
+	if Installed() {
+		dbindex.EnsurePerfIndexes(DB)
+	}
 	return nil
 }
 
@@ -82,6 +91,45 @@ func RequireDDLPrivileges() error {
 	return CheckDDLPrivileges()
 }
 
+func requireRedis() bool {
+	v := strings.TrimSpace(os.Getenv("LIKEADMIN_REQUIRE_REDIS"))
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
+// RequireRedis fails closed in production when LIKEADMIN_REQUIRE_REDIS=1.
+func RequireRedis() error {
+	if !requireRedis() || !Installed() {
+		return nil
+	}
+	if RDB == nil {
+		return fmt.Errorf("redis required but unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	defer cancel()
+	if err := RDB.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis required: %w", err)
+	}
+	return nil
+}
+
+func redisTimeout(ms int) time.Duration {
+	if ms <= 0 {
+		return 200 * time.Millisecond
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+// RequestDB returns bootstrap.DB bound to the request context so SQL metrics attach.
+func RequestDB(c *gin.Context) *gorm.DB {
+	if DB == nil {
+		return nil
+	}
+	if c != nil && c.Request != nil {
+		return DB.WithContext(c.Request.Context())
+	}
+	return DB
+}
+
 func initDB() error {
 	c := config.C.Database
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local",
@@ -104,22 +152,36 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(50)
+	sqlDB.SetMaxOpenConns(config.C.Database.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(config.C.Database.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(config.C.Database.ConnMaxLifetime) * time.Second)
+	sqlDB.SetConnMaxIdleTime(time.Duration(config.C.Database.ConnMaxIdleTime) * time.Second)
+	metrics.Register(db)
 	DB = db
 	return nil
 }
 
-func initRedis() {
+func initRedis() error {
 	c := config.C.Redis
 	RDB = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", c.Host, c.Port),
-		Password: c.Password,
-		DB:       c.DB,
+		Addr:         fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Password:     c.Password,
+		DB:           c.DB,
+		DialTimeout:  redisTimeout(c.DialTimeoutMs),
+		ReadTimeout:  redisTimeout(c.ReadTimeoutMs),
+		WriteTimeout: redisTimeout(c.WriteTimeoutMs),
 	})
-	if err := RDB.Ping(context.Background()).Err(); err != nil {
-		log.Printf("redis unavailable (%v), fallback to memory-less cache via DB only", err)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(c.DialTimeoutMs))
+	defer cancel()
+	if err := RDB.Ping(ctx).Err(); err != nil {
+		if requireRedis() && Installed() {
+			return fmt.Errorf("redis required: %w", err)
+		}
+		log.Printf("redis unavailable (%v), fallback to in-memory cache", err)
+		_ = RDB.Close()
+		RDB = nil
 	}
+	return nil
 }
 
 func RedisKey(k string) string {

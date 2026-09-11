@@ -6,7 +6,6 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
-	"likeadmin/backend/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -51,14 +50,18 @@ func Use(c *gin.Context) *gorm.DB {
 	if bootstrap.DB == nil {
 		return nil
 	}
+	db := bootstrap.DB
+	if c != nil && c.Request != nil {
+		db = db.WithContext(c.Request.Context())
+	}
 	if c == nil {
-		return bootstrap.DB
+		return db
 	}
 	meta := ctxutil.Get(c)
 	if meta.Tactics != 1 || meta.TenantSN == "" {
-		return bootstrap.DB
+		return db
 	}
-	return UseSN(meta.TenantSN)
+	return WithSN(db, meta.TenantSN)
 }
 
 // ForTenant returns the shard DB when la_tenant.tactics=1, otherwise the shared DB.
@@ -69,8 +72,8 @@ func ForTenant(tenantID uint) *gorm.DB {
 	if tenantID == 0 {
 		return bootstrap.DB
 	}
-	var t model.Tenant
-	if err := bootstrap.DB.Select("id", "sn", "tactics").Where("id = ?", tenantID).First(&t).Error; err != nil {
+	t, ok := ByID(tenantID)
+	if !ok {
 		return bootstrap.DB
 	}
 	if t.Tactics == 1 && t.SN != "" {
@@ -109,8 +112,8 @@ func ForTenantOn(db *gorm.DB, tenantID uint) *gorm.DB {
 	if bootstrap.DB == nil {
 		return db
 	}
-	var t model.Tenant
-	if err := bootstrap.DB.Select("id", "sn", "tactics").Where("id = ?", tenantID).First(&t).Error; err != nil {
+	t, ok := ByID(tenantID)
+	if !ok {
 		return db
 	}
 	if t.Tactics == 1 && t.SN != "" {

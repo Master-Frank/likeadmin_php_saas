@@ -4,6 +4,18 @@
 > 适用对象：本仓库当前 `backend/` Go 后端，而不是历史 ThinkPHP 运行时。
 > 本文是基于代码和 SQL dump 的静态审查，不是压测报告。所有容量数字必须由真实数据量、真实流量模型和生产同规格环境的压测得出。
 
+## 本轮落地（P0+P1，2026-09-11）
+
+已在 Go 后端落地，且保持 golden pair / 307 守门契约（精确 `count`、`export=1/2` Vue 协议、`page_size_max=25000`）：
+
+- **保护与可观测性**：显式 `http.Server` 超时与 SIGTERM 优雅停机；Redis 短 timeout、生产 `LIKEADMIN_REQUIRE_REDIS=1`；登录/短信/上传 Redis 限流；连接池可配置；`/healthz` `/readyz`；请求级 GORM SQL 计数；pprof 仅 `LIKEADMIN_PPROF=1` 绑定 localhost；导出窗口 `export_max_rows/pages`；`api/recharge/lists` 补 `LIMIT`。
+- **索引与缓存**：启动幂等 `EnsurePerfIndexes`；`la_tenant`/`la_config`/`la_tenant_config`/`la_article`/`la_user`/`la_operation_log` 候选索引写入 SQL 与 Ensure；租户 host/sn/id Redis+singleflight 与写路径失效；`cfgsvc` request-local + Redis + `GetMany`，敏感配置不进 Redis；C 端 `boot:{tid}:{ver}`；权限 cache-first + 版本号失效，不再每次 SCAN 全菜单。
+- **重任务 / N+1 / 静态**：导出发到 `public_dir/uploads/export`，Redis 存相对路径；XLSX/CSV 不再整表 `json.Marshal`；GET 操作日志不存完整 response，异步 INSERT 需 `LIKEADMIN_OPLOG_ASYNC=1`（测试默认同步）；租户列表一次 `GROUP BY` 计数；支付方式 `IN (?)`；文章浏览 `click_actual = click_actual + 1`；工作台总数短 TTL + 注册 INCR；装修/分类/热搜短 TTL 整包；Nginx gzip、`/resource/` `/uploads/` 长期 cache、proxy timeout。
+
+**仍属 P2（本轮不做）**：多实例产品化扩容、只读从库、分库/NewSQL、CDN 产品化、导出 task-id 轮询（需改前端）、列表 `has_more`/`999+` 弱化 COUNT。
+
+---
+
 ## 1. Review 结论
 
 旧方案的方向大体正确，但基线已经变化：
@@ -27,20 +39,20 @@
 | 旧项 | 当前状态 | Review 后处理 |
 |---|---|---|
 | A1 Go 兼容重写 | **已完成** | 从优化路线删除；只保留 307 路由和 golden pair 回归门禁 |
-| A2 多实例 Go | 技术上可运行，但尚未完全无状态 | 保留为 P2；先处理本地导出文件、缓存失效和 Redis 可用性 |
-| B1 租户元数据缓存 | **未实现** | 提升为 P0；`InstallAndTenant` 每个租户请求仍查 `la_tenant` |
-| B2 配置缓存 | **未实现** | 提升为 P0；`cfgsvc.Get` 每次调用执行一条 SQL |
-| B3 菜单/字典/装修缓存 | 部分实现 | 权限缓存仍每次先查全量菜单计算指纹；字典、装修未缓存 |
-| B4 C 端 boot 整包缓存 | **未实现** | P0；`api/index/config` 是最明确的 SQL 放大入口 |
-| B5 本机缓存 + singleflight | 有进程内 fallback，无 singleflight | 作为 Redis 后的短 TTL L1；不能代替多实例共享缓存 |
-| B7 token 保持 Redis | **已实现** | 保留约束；生产 Redis 不应静默降级为长期 DB 回源 |
+| A2 多实例 Go | 技术上可运行，导出已改共享目录 | 完整多实例扩容仍为 P2 |
+| B1 租户元数据缓存 | **本轮已落地** | Redis+singleflight，写路径失效 |
+| B2 配置缓存 | **本轮已落地** | request-local + Redis + GetMany；密钥不进 Redis |
+| B3 菜单/字典/装修缓存 | **权限/装修本轮已落地** | 权限 cache-first；装修/tabbar/分类/热搜短 TTL；字典仍按需 |
+| B4 C 端 boot 整包缓存 | **本轮已落地** | `boot:{tid}:{ver}`，配置保存 bump |
+| B5 本机缓存 + singleflight | **本轮已落地** | 租户/配置 miss 合并；进程内仍只作 Redis 降级 |
+| B7 token 保持 Redis | **已实现** | 生产 `LIKEADMIN_REQUIRE_REDIS=1` |
 | C1 禁止每 SQL 查表结构 | **已完成** | `tenantdb.shardable` + GORM callback 已替代动态表结构查询 |
-| C2 复合索引 | **明显不足** | P0；先按真实 SQL 和 `EXPLAIN ANALYZE` 补索引 |
-| C3 弱化 COUNT | 未实现 | P1；多数列表仍 `COUNT` + 分页查询 |
-| D3 导出异步 | 未实现 | P0；当前生成 XLSX 在 HTTP 请求内同步完成 |
-| D4 工作台汇总 | 未实现 | P1；当前工作台仍实时 `COUNT` |
-| E1 Go 连接池 | 部分完成 | 参数化并补 `ConnMaxLifetime` / `ConnMaxIdleTime` |
-| E2 超时与限流 | 仅外部客户端有部分超时 | P0；HTTP server、关键入口限流和 Redis 降级策略仍缺失 |
+| C2 复合索引 | **本轮已落地首批** | EnsurePerfIndexes + SQL dump；生产慢查询再补 |
+| C3 弱化 COUNT | 未改契约 | 仍返回精确 count；列表 has_more 留 P2 |
+| D3 导出异步 | **部分落地** | 共享目录 + 行数 cap；完整 task-id 轮询留 P2 |
+| D4 工作台汇总 | **本轮已落地** | 总数 Redis TTL + INCR，演示曲线不变 |
+| E1 Go 连接池 | **本轮已落地** | yaml + `LIKEADMIN_DB_MAX_OPEN/IDLE` |
+| E2 超时与限流 | **本轮已落地** | HTTP timeout、登录/短信/上传限流、生产 Redis 必达 |
 | E3/E4 OSS/CDN | 产品能力部分具备 | 根据静态流量占比实施，不先假设收益 |
 
 ## 3. 当前代码中的明确热点

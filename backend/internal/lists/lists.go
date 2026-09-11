@@ -86,13 +86,28 @@ func Parse(c *gin.Context) Query {
 	if v, ok := query["page_end"]; ok {
 		q.PageEnd = util.ToInt(v)
 	}
+	maxRows := config.C.Project.Lists.ExportRows()
+	maxPages := config.C.Project.Lists.ExportPages()
 	if q.Export == 2 && q.PageType == 1 {
 		perPage := q.PageSize
+		pages := q.PageEnd - q.PageStart + 1
+		if pages < 0 {
+			pages = 0
+		}
+		if pages > maxPages {
+			pages = maxPages
+		}
+		rows := pages * perPage
+		if rows > maxRows {
+			rows = maxRows
+		}
 		q.Offset = (q.PageStart - 1) * perPage
-		q.PageSize = (q.PageEnd - q.PageStart + 1) * perPage
+		q.PageSize = rows
 		if q.Offset < 0 {
 			q.Offset = 0
 		}
+	} else if q.Export == 2 && q.PageSize > maxRows {
+		q.PageSize = maxRows
 	}
 	return q
 }

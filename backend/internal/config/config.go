@@ -26,21 +26,28 @@ type AppConfig struct {
 }
 
 type DatabaseConfig struct {
-	Hostname string `mapstructure:"hostname"`
-	Hostport int    `mapstructure:"hostport"`
-	Database string `mapstructure:"database"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	Charset  string `mapstructure:"charset"`
-	Prefix   string `mapstructure:"prefix"`
+	Hostname        string `mapstructure:"hostname"`
+	Hostport        int    `mapstructure:"hostport"`
+	Database        string `mapstructure:"database"`
+	Username        string `mapstructure:"username"`
+	Password        string `mapstructure:"password"`
+	Charset         string `mapstructure:"charset"`
+	Prefix          string `mapstructure:"prefix"`
+	MaxOpenConns    int    `mapstructure:"max_open_conns"`
+	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime_sec"`
+	ConnMaxIdleTime int    `mapstructure:"conn_max_idle_time_sec"`
 }
 
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
-	Prefix   string `mapstructure:"prefix"`
+	Host           string `mapstructure:"host"`
+	Port           int    `mapstructure:"port"`
+	Password       string `mapstructure:"password"`
+	DB             int    `mapstructure:"db"`
+	Prefix         string `mapstructure:"prefix"`
+	DialTimeoutMs  int    `mapstructure:"dial_timeout_ms"`
+	ReadTimeoutMs  int    `mapstructure:"read_timeout_ms"`
+	WriteTimeoutMs int    `mapstructure:"write_timeout_ms"`
 }
 
 type TokenConfig struct {
@@ -49,8 +56,24 @@ type TokenConfig struct {
 }
 
 type ListsConfig struct {
-	PageSizeMax int `mapstructure:"page_size_max"`
-	PageSize    int `mapstructure:"page_size"`
+	PageSizeMax    int `mapstructure:"page_size_max"`
+	PageSize       int `mapstructure:"page_size"`
+	ExportMaxRows  int `mapstructure:"export_max_rows"`
+	ExportMaxPages int `mapstructure:"export_max_pages"`
+}
+
+func (l ListsConfig) ExportRows() int {
+	if l.ExportMaxRows > 0 {
+		return l.ExportMaxRows
+	}
+	return 10000
+}
+
+func (l ListsConfig) ExportPages() int {
+	if l.ExportMaxPages > 0 {
+		return l.ExportMaxPages
+	}
+	return 20
 }
 
 type ProjectConfig struct {
@@ -111,7 +134,47 @@ func Load(path string) error {
 		}
 		C.App.Debug = debug
 	}
+	applyIntEnv("LIKEADMIN_DB_MAX_OPEN", &C.Database.MaxOpenConns)
+	applyIntEnv("LIKEADMIN_DB_MAX_IDLE", &C.Database.MaxIdleConns)
+	if C.Database.MaxOpenConns <= 0 {
+		C.Database.MaxOpenConns = 50
+	}
+	if C.Database.MaxIdleConns <= 0 {
+		C.Database.MaxIdleConns = 10
+	}
+	if C.Database.ConnMaxLifetime <= 0 {
+		C.Database.ConnMaxLifetime = 300
+	}
+	if C.Database.ConnMaxIdleTime <= 0 {
+		C.Database.ConnMaxIdleTime = 60
+	}
+	if C.Redis.DialTimeoutMs <= 0 {
+		C.Redis.DialTimeoutMs = 200
+	}
+	if C.Redis.ReadTimeoutMs <= 0 {
+		C.Redis.ReadTimeoutMs = 200
+	}
+	if C.Redis.WriteTimeoutMs <= 0 {
+		C.Redis.WriteTimeoutMs = 200
+	}
+	if C.Project.Lists.ExportMaxRows <= 0 {
+		C.Project.Lists.ExportMaxRows = 10000
+	}
+	if C.Project.Lists.ExportMaxPages <= 0 {
+		C.Project.Lists.ExportMaxPages = 20
+	}
 	return nil
+}
+
+func applyIntEnv(name string, dest *int) {
+	env := strings.TrimSpace(os.Getenv(name))
+	if env == "" {
+		return
+	}
+	n, err := strconv.Atoi(env)
+	if err == nil && n > 0 {
+		*dest = n
+	}
 }
 
 func Prefix() string {
