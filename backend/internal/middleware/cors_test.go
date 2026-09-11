@@ -78,6 +78,9 @@ func TestIsStaticPath(t *testing.T) {
 	if !isStaticPath("/resource/image/a.png") || !isStaticPath("/uploads/x") || !isStaticPath("/static/a.js") {
 		t.Fatal("static prefixes")
 	}
+	if !isStaticPath("/admin/assets/index-abc.js") || !isStaticPath("/platform/assets/app.css") {
+		t.Fatal("hashed SPA assets")
+	}
 	if isStaticPath("/platform/") || isStaticPath("/admin") || isStaticPath("/platformapi/x") {
 		t.Fatal("non-static")
 	}

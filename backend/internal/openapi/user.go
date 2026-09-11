@@ -79,7 +79,7 @@ func userCollectsArticle(c *gin.Context, uid, articleID uint) bool {
 func IndexConfig(c *gin.Context) {
 	tid := ctxutil.Get(c).TenantID
 	ver := cfgsvc.BootVersion(tid)
-	bootKey := "boot:" + util.ToString(tid) + ":" + ver
+	bootKey := "boot:" + util.ToString(tid) + ":" + ver + ":" + ctxutil.Host(c)
 	var cached map[string]any
 	if cache.GetJSON(bootKey, &cached) && cached != nil {
 		cached["webPage"] = bootWebPage(c, cached)
@@ -169,6 +169,9 @@ func IndexDecorate(c *gin.Context) {
 
 func LoginRegister(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindLogin) {
 		return
 	}
 	if !httpx.BodyPresent(c, "channel") {

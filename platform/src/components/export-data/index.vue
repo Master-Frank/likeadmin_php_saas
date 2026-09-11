@@ -65,6 +65,7 @@ import type { FormInstance, FormItemRule } from 'element-plus'
 
 import Popup from '@/components/popup/index.vue'
 import feedback from '@/utils/feedback'
+import { getToken } from '@/utils/auth'
 
 const formRef = shallowRef<FormInstance>()
 const props = defineProps({
@@ -85,7 +86,7 @@ const popupRef = shallowRef<InstanceType<typeof Popup>>()
 const formData = reactive({
     page_type: 0,
     page_start: 1,
-    page_end: 200,
+    page_end: 20,
     file_name: ''
 })
 
@@ -134,8 +135,14 @@ const getData = async () => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const pollExportTask = async (taskId: string) => {
     for (let i = 0; i < 120; i++) {
+        const token = getToken()
+        const headers: Record<string, string> = {}
+        if (token) {
+            headers.token = String(token)
+        }
         const res = await fetch(
-            `/platformapi/download/export?task=${encodeURIComponent(taskId)}`
+            `/platformapi/download/export?task=${encodeURIComponent(taskId)}`,
+            { headers }
         )
         const body = await res.json()
         const data = body?.data || {}

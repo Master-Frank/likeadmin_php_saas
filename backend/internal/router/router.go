@@ -481,7 +481,7 @@ func readyz(c *gin.Context) {
 		return
 	}
 	if config.RequireRedisConfigured() {
-		if bootstrap.RDB == nil {
+		if err := bootstrap.PingRedis(); err != nil {
 			c.String(http.StatusServiceUnavailable, "redis")
 			return
 		}

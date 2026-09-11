@@ -78,7 +78,10 @@ func Parse(c *gin.Context) Query {
 	}
 	// PHP ListsExcelTrait defaults; applied only for export=2 + page_type=1.
 	q.PageStart = 1
-	q.PageEnd = 200
+	q.PageEnd = config.C.Project.Lists.ExportPages()
+	if q.PageEnd <= 0 {
+		q.PageEnd = 20
+	}
 	// PHP get('page_start', default): missing keeps default; present "" / "0" become 0.
 	if v, ok := query["page_start"]; ok {
 		q.PageStart = util.ToInt(v)
@@ -217,6 +220,51 @@ func ValidateQuery(query map[string]any) string {
 		if s != "1" && s != "2" {
 			return "export必须在 1,2 范围内"
 		}
+		if s == "2" {
+			if msg := exportWindowQueryError(query); msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+func exportWindowQueryError(query map[string]any) string {
+	pageType := "1"
+	if pt, ok := queryNonEmpty(query, "page_type"); ok {
+		pageType = pt
+	}
+	if pageType != "1" {
+		return ""
+	}
+	start := 1
+	end := config.C.Project.Lists.ExportPages()
+	if end <= 0 {
+		end = 20
+	}
+	if ps, ok := queryNonEmpty(query, "page_start"); ok {
+		start, _ = strconv.Atoi(ps)
+	}
+	if pe, ok := queryNonEmpty(query, "page_end"); ok {
+		end, _ = strconv.Atoi(pe)
+	}
+	pages := end - start + 1
+	size := config.C.Project.Lists.PageSize
+	if size <= 0 {
+		size = 25
+	}
+	if psz, ok := queryNonEmpty(query, "page_size"); ok {
+		if n, err := strconv.Atoi(psz); err == nil && n > 0 {
+			size = n
+		}
+	}
+	maxPages := config.C.Project.Lists.ExportPages()
+	if pages > maxPages {
+		return fmt.Sprintf("导出范围超过限制，最多%d页", maxPages)
+	}
+	maxRows := config.C.Project.Lists.ExportRows()
+	if pages > 0 && size > 0 && pages*size > maxRows {
+		return fmt.Sprintf("导出范围超过限制，最多%d条", maxRows)
 	}
 	return ""
 }

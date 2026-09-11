@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
@@ -68,7 +69,9 @@ func Auth() gin.HandlerFunc {
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
 		all, mine := adminURIs(c, meta)
-		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI) {
+		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI, func() bool {
+			return menuPermExists(c, meta, accessURI)
+		}) {
 			response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
 			return
 		}
@@ -76,11 +79,18 @@ func Auth() gin.HandlerFunc {
 	}
 }
 
-func adminURIAllowed(dynamic bool, all, mine []string, accessURI string) bool {
+func adminURIAllowed(dynamic bool, all, mine []string, accessURI string, live func() bool) bool {
 	if dynamic {
 		return containsURI(mine, accessURI)
 	}
-	return !containsURI(all, accessURI) || containsURI(mine, accessURI)
+	registered := containsURI(all, accessURI)
+	if !registered && live != nil {
+		registered = live()
+	}
+	if !registered {
+		return true
+	}
+	return containsURI(mine, accessURI)
 }
 
 // loginIPChanged matches PHP `$adminInfo['login_ip'] != request()->ip()`:
@@ -389,6 +399,84 @@ func containsURI(list []string, uri string) bool {
 		}
 	}
 	return false
+}
+
+// liveMenuCatalog re-reads enabled menu perms so a stale Redis "all" list
+// cannot fail-open newly inserted generator menus.
+type liveMenuCatalog struct {
+	mu        sync.Mutex
+	ver       string
+	at        time.Time
+	platform  []string
+	tenant    map[uint][]string
+	platformL bool
+}
+
+var liveMenus liveMenuCatalog
+
+const liveMenuTTL = 15 * time.Second
+
+func menuPermExists(c *gin.Context, meta *ctxutil.RequestMeta, accessURI string) bool {
+	if meta == nil || accessURI == "" {
+		return false
+	}
+	return containsURI(liveMenuURIs(c, meta), accessURI)
+}
+
+func liveMenuURIs(c *gin.Context, meta *ctxutil.RequestMeta) []string {
+	ver := cache.AuthCacheVer()
+	now := time.Now()
+	liveMenus.mu.Lock()
+	defer liveMenus.mu.Unlock()
+	if liveMenus.ver != ver || now.Sub(liveMenus.at) > liveMenuTTL {
+		liveMenus.ver = ver
+		liveMenus.at = now
+		liveMenus.platform = nil
+		liveMenus.tenant = nil
+		liveMenus.platformL = false
+	}
+	if meta.App == "platformapi" {
+		if !liveMenus.platformL {
+			liveMenus.platform = loadPlatformMenuURIs()
+			liveMenus.platformL = true
+		}
+		return liveMenus.platform
+	}
+	tid := meta.TenantID
+	if tid == 0 {
+		return nil
+	}
+	if liveMenus.tenant == nil {
+		liveMenus.tenant = map[uint][]string{}
+	}
+	if uris, ok := liveMenus.tenant[tid]; ok {
+		return uris
+	}
+	uris := loadTenantMenuURIs(c, tid)
+	liveMenus.tenant[tid] = uris
+	return uris
+}
+
+func loadPlatformMenuURIs() []string {
+	if bootstrap.DB == nil {
+		return nil
+	}
+	var menus []model.SystemMenu
+	bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus)
+	return collectPerms(menus)
+}
+
+func loadTenantMenuURIs(c *gin.Context, tid uint) []string {
+	db := tenantdb.Use(c)
+	if db == nil {
+		db = bootstrap.DB
+	}
+	if db == nil || tid == 0 {
+		return nil
+	}
+	var menus []model.TenantSystemMenu
+	db.Where("is_disable = 0 AND perms <> '' AND tenant_id = ?", tid).Find(&menus)
+	return collectTenantPerms(menus)
 }
 
 func toUintSlice(v any) []uint {

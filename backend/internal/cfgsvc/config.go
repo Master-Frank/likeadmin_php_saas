@@ -2,6 +2,7 @@ package cfgsvc
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -25,11 +26,15 @@ const (
 	missTTL  = 15 * time.Second
 )
 
-var cfgSF singleflight.Group
+var (
+	cfgSF    singleflight.Group
+	errCfgDB = errors.New("config db unavailable")
+)
 
 type localEntry struct {
-	miss bool
-	val  any
+	miss      bool
+	skipCache bool
+	val       any
 }
 
 func db(c *gin.Context) *gorm.DB {
@@ -66,6 +71,9 @@ func Get(c *gin.Context, typ, name string, defaultValue any) any {
 		}
 	}
 	e := loadCfg(c, usePlatform, tid, typ, name)
+	if e.skipCache {
+		return applyDefault(localEntry{miss: true}, defaultValue, typ, name)
+	}
 	localSet(c, typ, name, e)
 	if !sensitiveCfg(typ, name) {
 		storeRedis(usePlatform, tid, typ, name, e)
@@ -106,7 +114,13 @@ func GetMany(c *gin.Context, typ string, names []string) map[string]any {
 		still = append(still, name)
 	}
 	if len(still) > 0 {
-		loaded := loadMany(c, usePlatform, tid, typ, still)
+		loaded, err := loadMany(c, usePlatform, tid, typ, still)
+		if err != nil {
+			for _, name := range still {
+				out[name] = applyDefault(localEntry{miss: true}, nil, typ, name)
+			}
+			return out
+		}
 		for _, name := range still {
 			e, ok := loaded[name]
 			if !ok {
@@ -194,9 +208,6 @@ func invalidateCfg(c *gin.Context, usePlatform bool, tid uint, typ, name string)
 	}
 	cache.Del(redisKey(usePlatform, tid, typ, name))
 	BumpBoot(tid)
-	if isBootType(typ) {
-		cache.DelPrefix("boot:")
-	}
 }
 
 func BumpBoot(tid uint) {
@@ -216,14 +227,6 @@ func bootVerKey(tid uint) string {
 	return "bootver:" + strconv.FormatUint(uint64(tid), 10)
 }
 
-func isBootType(typ string) bool {
-	switch typ {
-	case "website", "login", "web_page", "copyright", "tabbar", "decorate", "hot_search", "storage":
-		return true
-	}
-	return false
-}
-
 func usePlatformCfg(c *gin.Context, typ string) bool {
 	meta := ctxutil.Get(c)
 	return meta.Source == ctxutil.SourcePlatform || typ == "storage"
@@ -233,7 +236,11 @@ func sensitiveCfg(typ, name string) bool {
 	n := strings.ToLower(name)
 	if strings.Contains(n, "secret") || strings.Contains(n, "private") ||
 		strings.Contains(n, "cert") || strings.Contains(n, "password") ||
-		strings.Contains(n, "access_key") || strings.Contains(n, "mch_key") {
+		strings.Contains(n, "access_key") || strings.Contains(n, "mch_key") ||
+		strings.Contains(n, "encoding_aes") {
+		return true
+	}
+	if (typ == "oa_setting" || typ == "mnp_setting" || typ == "open_platform") && n == "token" {
 		return true
 	}
 	if typ == "storage" && n != "default" && n != "local" {
@@ -320,13 +327,13 @@ func loadCfg(c *gin.Context, usePlatform bool, tid uint, typ, name string) local
 	sfKey := redisKey(usePlatform, tid, typ, name)
 	v, _, _ := cfgSF.Do(sfKey, func() (any, error) {
 		if db(c) == nil && bootstrap.DB == nil {
-			return localEntry{miss: true}, nil
+			return localEntry{miss: true, skipCache: true}, nil
 		}
 		var value string
 		var err error
 		if usePlatform {
 			if platformDB(c) == nil {
-				return localEntry{miss: true}, nil
+				return localEntry{miss: true, skipCache: true}, nil
 			}
 			err = platformDB(c).Where("type = ? AND name = ?", typ, name).Model(&model.ConfigRow{}).Select("value").Scan(&value).Error
 		} else {
@@ -334,45 +341,52 @@ func loadCfg(c *gin.Context, usePlatform bool, tid uint, typ, name string) local
 			q = q.Where("tenant_id = ?", tid)
 			err = q.Model(&model.TenantConfig{}).Select("value").Scan(&value).Error
 		}
-		if err != nil || value == "" {
+		if err != nil {
+			return localEntry{miss: true, skipCache: true}, nil
+		}
+		if value == "" {
 			return localEntry{miss: true}, nil
 		}
 		return localEntry{val: decodeValue(value)}, nil
 	})
 	if v == nil {
-		return localEntry{miss: true}
+		return localEntry{miss: true, skipCache: true}
 	}
 	return v.(localEntry)
 }
 
-func loadMany(c *gin.Context, usePlatform bool, tid uint, typ string, names []string) map[string]localEntry {
+func loadMany(c *gin.Context, usePlatform bool, tid uint, typ string, names []string) (map[string]localEntry, error) {
 	out := make(map[string]localEntry, len(names))
 	for _, n := range names {
 		out[n] = localEntry{miss: true}
 	}
 	if len(names) == 0 {
-		return out
+		return out, nil
 	}
 	if db(c) == nil && bootstrap.DB == nil {
-		return out
+		return out, errCfgDB
 	}
 	type row struct {
 		Name  string
 		Value string
 	}
 	var rows []row
+	var err error
 	if usePlatform {
 		if platformDB(c) == nil {
-			return out
+			return out, errCfgDB
 		}
-		_ = platformDB(c).Model(&model.ConfigRow{}).Select("name, value").
+		err = platformDB(c).Model(&model.ConfigRow{}).Select("name, value").
 			Where("type = ? AND name IN ?", typ, names).Scan(&rows).Error
 	} else {
 		if db(c) == nil {
-			return out
+			return out, errCfgDB
 		}
-		_ = db(c).Model(&model.TenantConfig{}).Select("name, value").
+		err = db(c).Model(&model.TenantConfig{}).Select("name, value").
 			Where("type = ? AND name IN ? AND tenant_id = ?", typ, names, tid).Scan(&rows).Error
+	}
+	if err != nil {
+		return out, err
 	}
 	for _, r := range rows {
 		if r.Value == "" {
@@ -380,7 +394,7 @@ func loadMany(c *gin.Context, usePlatform bool, tid uint, typ string, names []st
 		}
 		out[r.Name] = localEntry{val: decodeValue(r.Value)}
 	}
-	return out
+	return out, nil
 }
 
 func decodeValue(value string) any {

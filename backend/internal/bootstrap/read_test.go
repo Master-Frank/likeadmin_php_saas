@@ -12,6 +12,7 @@ func TestReadFallsBackToMaster(t *testing.T) {
 	oldDB, oldRead := DB, ReadDB
 	t.Cleanup(func() {
 		DB, ReadDB = oldDB, oldRead
+		resetReplicaHealth()
 	})
 	master := &gorm.DB{}
 	DB, ReadDB = master, nil
@@ -20,8 +21,8 @@ func TestReadFallsBackToMaster(t *testing.T) {
 	}
 	rep := &gorm.DB{}
 	ReadDB = rep
-	if Read() != rep {
-		t.Fatal("configured replica must be used for reads")
+	if Read() != master {
+		t.Fatal("unopened replica must fall back to master")
 	}
 }
 

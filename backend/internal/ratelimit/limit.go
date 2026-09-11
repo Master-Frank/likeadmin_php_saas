@@ -14,9 +14,12 @@ import (
 )
 
 const (
-	KindLogin  = "login"
-	KindSMS    = "sms"
-	KindUpload = "upload"
+	KindLogin    = "login"
+	KindSMS      = "sms"
+	KindUpload   = "upload"
+	KindPay      = "pay"
+	KindInstall  = "install"
+	KindGenerate = "generate"
 )
 
 func limitFor(kind string) int {
@@ -27,6 +30,12 @@ func limitFor(kind string) int {
 		return 20
 	case KindUpload:
 		return 60
+	case KindPay:
+		return 30
+	case KindInstall:
+		return 10
+	case KindGenerate:
+		return 10
 	default:
 		return 120
 	}

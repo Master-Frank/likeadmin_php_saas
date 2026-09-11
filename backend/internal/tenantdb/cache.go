@@ -2,6 +2,7 @@ package tenantdb
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 	"time"
 
@@ -106,9 +107,11 @@ func lookup(key string, load func() (cachedTenant, error)) (model.Tenant, bool) 
 		}
 		ct, err := load()
 		if err != nil {
-			ct = cachedTenant{Found: false}
-			cache.Set(key, missSentinel, negativeTTL)
-			return ct, nil
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				cache.Set(key, missSentinel, negativeTTL)
+				return cachedTenant{Found: false}, nil
+			}
+			return cachedTenant{Found: false}, err
 		}
 		storeTenant(ct)
 		return ct, nil

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	"likeadmin/backend/internal/config"
@@ -64,6 +65,11 @@ func ReconnectDB() error {
 	return initDB()
 }
 
+// ReconnectRedis opens Redis after /install writes a new topology.
+func ReconnectRedis() error {
+	return initRedis()
+}
+
 var ddlIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 // CheckDDLPrivileges verifies the application account can provision sharded
@@ -95,12 +101,64 @@ func requireRedis() bool {
 	return config.RequireRedisConfigured()
 }
 
-// Read returns the replica session when configured, otherwise the master.
+// Read returns the replica session when configured and healthy, otherwise the master.
 func Read() *gorm.DB {
-	if ReadDB != nil {
+	if ReadDB == nil || ReadDB == DB {
+		if ReadDB != nil {
+			return ReadDB
+		}
+		return DB
+	}
+	if replicaHealthy() {
 		return ReadDB
 	}
 	return DB
+}
+
+var replicaHealth struct {
+	mu      sync.Mutex
+	checked time.Time
+	live    bool
+}
+
+func replicaHealthy() bool {
+	replicaHealth.mu.Lock()
+	defer replicaHealth.mu.Unlock()
+	if time.Since(replicaHealth.checked) < 5*time.Second {
+		return replicaHealth.live
+	}
+	replicaHealth.checked = time.Now()
+	replicaHealth.live = pingDB(ReadDB)
+	return replicaHealth.live
+}
+
+func pingDB(db *gorm.DB) bool {
+	if db == nil || db.Config == nil {
+		return false
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	defer cancel()
+	return sqlDB.PingContext(ctx) == nil
+}
+
+func resetReplicaHealth() {
+	replicaHealth.mu.Lock()
+	replicaHealth.checked = time.Time{}
+	replicaHealth.live = true
+	replicaHealth.mu.Unlock()
+}
+
+func PingRedis() error {
+	if RDB == nil {
+		return fmt.Errorf("redis unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	defer cancel()
+	return RDB.Ping(ctx).Err()
 }
 
 // RequireRedis fails closed in production when LIKEADMIN_REQUIRE_REDIS=1.

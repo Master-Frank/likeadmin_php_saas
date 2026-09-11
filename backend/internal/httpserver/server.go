@@ -17,11 +17,14 @@ import (
 const (
 	readHeaderTimeout  = 10 * time.Second
 	readTimeout        = 30 * time.Second
+	writeTimeout       = 30 * time.Second
 	exportWriteTimeout = 120 * time.Second
 	idleTimeout        = 60 * time.Second
 	maxHeaderBytes     = 1 << 20
 	shutdownWait       = 15 * time.Second
 )
+
+var maxBodyBytes int64 = 50 << 20
 
 // Run starts an http.Server with timeouts and SIGTERM graceful shutdown.
 func Run(addr string, h http.Handler) error {
@@ -29,10 +32,10 @@ func Run(addr string, h http.Handler) error {
 	startMetrics()
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           withExportWriteTimeout(MergeSlashes(h)),
+		Handler:           withLimits(MergeSlashes(h)),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
-		WriteTimeout:      exportWriteTimeout,
+		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 		MaxHeaderBytes:    maxHeaderBytes,
 	}
@@ -56,8 +59,11 @@ func Run(addr string, h http.Handler) error {
 	return srv.Shutdown(ctx)
 }
 
-func withExportWriteTimeout(h http.Handler) http.Handler {
+func withLimits(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r != nil && r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		}
 		if r != nil && isExportRequest(r) {
 			rc := http.NewResponseController(w)
 			_ = rc.SetWriteDeadline(time.Now().Add(exportWriteTimeout))

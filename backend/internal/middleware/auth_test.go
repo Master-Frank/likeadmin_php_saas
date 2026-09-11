@@ -181,13 +181,19 @@ func TestAuthURIListCache(t *testing.T) {
 
 func TestDynamicCRUDRequiresExplicitPermission(t *testing.T) {
 	all := []string{"generated.demo/lists"}
-	if adminURIAllowed(true, all, nil, "generated.demo/lists") {
+	if adminURIAllowed(true, all, nil, "generated.demo/lists", nil) {
 		t.Fatal("dynamic CRUD must not inherit the PHP missing-menu fail-open")
 	}
-	if !adminURIAllowed(true, all, []string{"generated.demo/lists"}, "generated.demo/lists") {
+	if !adminURIAllowed(true, all, []string{"generated.demo/lists"}, "generated.demo/lists", nil) {
 		t.Fatal("explicit dynamic CRUD permission should pass")
 	}
-	if !adminURIAllowed(false, all, nil, "unregistered/path") {
+	if !adminURIAllowed(false, all, nil, "unregistered/path", nil) {
 		t.Fatal("static PHP compatibility routes keep existing behavior")
+	}
+	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() bool { return true }) {
+		t.Fatal("URI present in live menus but missing from cached all must not fail-open")
+	}
+	if !adminURIAllowed(false, all, []string{"tools.generator/lists"}, "tools.generator/lists", func() bool { return true }) {
+		t.Fatal("live-registered URI should pass when the admin has the perm")
 	}
 }

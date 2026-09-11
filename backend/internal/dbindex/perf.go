@@ -2,6 +2,7 @@ package dbindex
 
 import (
 	"log"
+	"os"
 	"strings"
 	"unicode"
 
@@ -34,6 +35,9 @@ func specs() []spec {
 // on every boot; it inspects information_schema and skips existing names.
 func EnsurePerfIndexes(db *gorm.DB) {
 	if db == nil {
+		return
+	}
+	if os.Getenv("LIKEADMIN_REQUIRE_DDL") == "0" {
 		return
 	}
 	for _, s := range specs() {

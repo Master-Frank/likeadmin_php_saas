@@ -11,6 +11,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantdb"
 
@@ -32,6 +33,9 @@ func Status(c *gin.Context) {
 }
 
 func Run(c *gin.Context) {
+	if !ratelimit.Allow(c, ratelimit.KindInstall) {
+		return
+	}
 	lock := config.C.App.InstallLock
 	if lock != "" {
 		if _, err := os.Stat(lock); err == nil {
@@ -114,6 +118,10 @@ func Run(c *gin.Context) {
 	}
 	if err := bootstrap.ReconnectDB(); err != nil {
 		response.Fail(c, "安装成功但数据库重连失败："+err.Error())
+		return
+	}
+	if err := bootstrap.ReconnectRedis(); err != nil {
+		response.Fail(c, "安装成功但缓存重连失败："+err.Error())
 		return
 	}
 	if err := bootstrap.CheckDDLPrivileges(); err != nil {

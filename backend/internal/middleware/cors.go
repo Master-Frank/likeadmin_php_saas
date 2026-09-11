@@ -150,6 +150,17 @@ func isStaticPath(path string) bool {
 	switch firstSegment(path) {
 	case "resource", "uploads", "static":
 		return true
+	case "admin", "platform", "mobile", "pc":
+		return isHashedAsset(path)
+	}
+	return false
+}
+
+func isHashedAsset(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".js", ".css", ".map", ".woff", ".woff2", ".ttf", ".eot", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp":
+		return true
 	}
 	return false
 }

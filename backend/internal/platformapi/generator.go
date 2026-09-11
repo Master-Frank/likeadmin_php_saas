@@ -16,6 +16,7 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
@@ -330,6 +331,9 @@ func GeneratorGenerate(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !ratelimit.Allow(c, ratelimit.KindGenerate) {
+		return
+	}
 	ids := httpx.BodyUints(c, "id")
 	if len(ids) == 0 {
 		ids = httpx.BodyUints(c, "ids")
@@ -383,6 +387,7 @@ func GeneratorGenerate(c *gin.Context) {
 							return
 						}
 					}
+					cache.ClearAdminAuthCache(0)
 				}
 			}
 		}

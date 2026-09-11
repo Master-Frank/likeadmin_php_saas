@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -69,11 +70,30 @@ func TestSetInvalidatesRedisAndBoot(t *testing.T) {
 	}
 }
 
+func TestGetDoesNotCacheUnavailableDB(t *testing.T) {
+	if bootstrap.DB != nil {
+		t.Skip("live DB would load real config rows")
+	}
+	key := redisKey(false, 0, "website", "shop_name")
+	cache.Del(key)
+	t.Cleanup(func() { cache.Del(key) })
+	_ = Get(nil, "website", "shop_name", "fallback")
+	if _, ok := cache.Get(key); ok {
+		t.Fatal("sql/db errors must not be cached as misses")
+	}
+}
+
 func TestSensitiveCfgStaysLocal(t *testing.T) {
 	if !sensitiveCfg("storage", "qiniu") || sensitiveCfg("storage", "default") {
 		t.Fatal("storage secrets")
 	}
 	if !sensitiveCfg("sms", "aliyun") || sensitiveCfg("website", "shop_name") {
 		t.Fatal("sms/website")
+	}
+	if !sensitiveCfg("oa_setting", "token") || !sensitiveCfg("oa_setting", "encoding_aes_key") {
+		t.Fatal("oa token/aes")
+	}
+	if !sensitiveCfg("mnp_setting", "token") || sensitiveCfg("oa_setting", "app_id") {
+		t.Fatal("mnp token vs app_id")
 	}
 }

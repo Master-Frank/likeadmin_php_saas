@@ -1,9 +1,18 @@
 package dbindex
 
-import "testing"
+import (
+	"testing"
+
+	"gorm.io/gorm"
+)
 
 func TestEnsurePerfIndexesNilDB(t *testing.T) {
 	EnsurePerfIndexes(nil)
+}
+
+func TestEnsurePerfIndexesSkipsWhenDDLDisabled(t *testing.T) {
+	t.Setenv("LIKEADMIN_REQUIRE_DDL", "0")
+	EnsurePerfIndexes(&gorm.DB{})
 }
 
 func TestIsShardCopy(t *testing.T) {

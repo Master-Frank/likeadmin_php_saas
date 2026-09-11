@@ -256,6 +256,9 @@ func PayPrepay(c *gin.Context) {
 	if !response.RequirePOST(c) {
 		return
 	}
+	if !ratelimit.Allow(c, ratelimit.KindPay) {
+		return
+	}
 	p := httpx.Body(c)
 	if msg := util.PayPayCheck(p); msg != "" {
 		response.Fail(c, msg)

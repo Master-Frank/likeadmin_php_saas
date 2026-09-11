@@ -1,6 +1,9 @@
 package ctxutil
 
 import (
+	"net"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -49,7 +52,19 @@ func Get(c *gin.Context) *RequestMeta {
 }
 
 func ClientIP(c *gin.Context) string {
-	return c.ClientIP()
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	// nginx overwrites X-Real-IP; ignore client-supplied X-Forwarded-For.
+	if ip := strings.TrimSpace(c.GetHeader("X-Real-IP")); ip != "" {
+		if net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	if ip, _, err := net.SplitHostPort(c.Request.RemoteAddr); err == nil {
+		return ip
+	}
+	return c.RemoteIP()
 }
 
 func Domain(c *gin.Context) string {

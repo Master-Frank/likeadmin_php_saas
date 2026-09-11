@@ -2,7 +2,9 @@ package export
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -69,7 +71,7 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		response.Data(c, gin.H{
 			"count": n, "page_size": pageSize, "sum_page": sum,
 			"max_page": max / pageSize, "all_max_size": max,
-			"page_start": 1, "page_end": min(sum, 200), "file_name": fileName,
+			"page_start": 1, "page_end": min(sum, config.C.Project.Lists.ExportPages()), "file_name": fileName,
 		})
 		return true
 	}
@@ -97,16 +99,17 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 			response.Fail(c, err.Error())
 			return true
 		}
-		task := newReadyTask(domain, key)
+		task := newReadyTask(domain, key, exportOwner(c))
 		response.Data(c, taskPayload(task))
 		return true
 	}
 	id := newTaskID()
-	saveTask(Task{ID: id, Status: statusPending})
+	owner := exportOwner(c)
+	saveTask(Task{ID: id, Status: statusPending, AdminID: owner.AdminID, TenantID: owner.TenantID})
 	metrics.AddExport("pending")
 	fields := spec.Fields
 	name := fileName
-	go runExportTask(id, domain, name, rows, fields)
+	go runExportTask(id, domain, name, rows, fields, owner)
 	response.Data(c, gin.H{"task_id": id, "status": statusPending})
 	return true
 }
@@ -129,15 +132,11 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 		ext = ".xlsx"
 	}
 	download := base + "-" + time.Now().Format("2006-01-02-150405") + ext
-	relDir := filepath.Join("uploads", "export")
-	dir := filepath.Join(os.TempDir(), "likeadmin-export")
-	if config.C.App.PublicDir != "" {
-		dir = filepath.Join(config.C.App.PublicDir, relDir)
-	}
+	dir := exportRoot()
 	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return "", err
 	}
-	fname := fmt.Sprintf("%d_%s", time.Now().UnixNano(), filepath.Base(download))
+	fname := randomHex(16) + ext
 	path := filepath.Join(dir, fname)
 	records := toRecords(rows, fields)
 	if xlsx {
@@ -157,13 +156,9 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 		w.Flush()
 		_ = f.Close()
 	}
-	rel := filepath.ToSlash(filepath.Join(relDir, fname))
-	if config.C.App.PublicDir == "" {
-		rel = path
-	}
-	key := util.MD5(path + fmt.Sprintf("%d", time.Now().UnixNano()))
+	key := randomHex(16)
 	cache.Set("export_file_"+key, fileInfo{
-		Src: filepath.Dir(path) + string(os.PathSeparator), Name: filepath.Base(path), Download: download, Rel: rel,
+		Src: dir + string(os.PathSeparator), Name: fname, Download: download,
 	}, 30*time.Minute)
 	return key, nil
 }
@@ -185,17 +180,8 @@ func Serve(c *gin.Context) {
 		attach = info.Name
 	}
 	path := filepath.Join(info.Src, info.Name)
-	if info.Rel != "" && config.C.App.PublicDir != "" && !filepath.IsAbs(info.Rel) {
-		path = filepath.Join(config.C.App.PublicDir, filepath.FromSlash(info.Rel))
-	}
 	abs, err := filepath.Abs(path)
-	if err != nil {
-		response.Fail(c, "下载文件不存在")
-		return
-	}
-	root, _ := filepath.Abs(config.C.App.PublicDir)
-	tmp := filepath.Join(os.TempDir(), "likeadmin-export")
-	if root != "" && !strings.HasPrefix(abs, root+string(os.PathSeparator)) && !strings.HasPrefix(abs, tmp+string(os.PathSeparator)) {
+	if err != nil || !allowedExportPath(abs) {
 		response.Fail(c, "下载文件不存在")
 		return
 	}
@@ -310,6 +296,10 @@ func exportWindowLimitError(c *gin.Context) string {
 	}
 	pages := exportPageEnd(c) - exportPageStart(c) + 1
 	size := exportPageSize(c)
+	maxPages := config.C.Project.Lists.ExportPages()
+	if pages > maxPages {
+		return fmt.Sprintf("导出范围超过限制，最多%d页", maxPages)
+	}
 	maxRows := config.C.Project.Lists.ExportRows()
 	if pages > 0 && size > 0 && pages*size > maxRows {
 		return fmt.Sprintf("导出范围超过限制，最多%d条", maxRows)
@@ -333,6 +323,40 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func exportRoot() string {
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(filepath.Dir(config.C.App.PublicDir), "runtime", "export")
+	}
+	return filepath.Join(os.TempDir(), "likeadmin-export")
+}
+
+func allowedExportPath(abs string) bool {
+	roots := []string{exportRoot(), filepath.Join(os.TempDir(), "likeadmin-export")}
+	for _, root := range roots {
+		r, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		if abs == r || strings.HasPrefix(abs, r+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return util.MD5(fmt.Sprintf("export-%d", time.Now().UnixNano()))
+	}
+	return hex.EncodeToString(b)
+}
+
+func exportOwner(c *gin.Context) TaskOwner {
+	meta := ctxutil.Get(c)
+	return TaskOwner{AdminID: meta.AdminID, TenantID: meta.TenantID}
 }
 
 func exportPageType(c *gin.Context) int {
@@ -370,7 +394,7 @@ func exportPageStart(c *gin.Context) int {
 
 func exportPageEnd(c *gin.Context) int {
 	if !util.PHPIsset(httpx.Query(c), "page_end") {
-		return 200
+		return config.C.Project.Lists.ExportPages()
 	}
 	return httpx.QueryInt(c, "page_end")
 }

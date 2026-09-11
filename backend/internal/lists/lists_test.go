@@ -224,6 +224,16 @@ func TestValidateQueryMatchesListsValidate(t *testing.T) {
 	if msg := ValidateQuery(map[string]any{"page_type": "0", "export": "2", "order_by": "desc", "page_size": "10"}); msg != "" {
 		t.Fatalf("valid %q", msg)
 	}
+	oldLists := config.C.Project.Lists
+	config.C.Project.Lists.ExportMaxPages = 20
+	config.C.Project.Lists.ExportMaxRows = 10000
+	t.Cleanup(func() { config.C.Project.Lists = oldLists })
+	if msg := ValidateQuery(map[string]any{"export": "2", "page_start": "1", "page_end": "200", "page_size": "25"}); msg == "" {
+		t.Fatal("200 pages must be rejected")
+	}
+	if msg := ValidateQuery(map[string]any{"export": "2", "page_start": "1", "page_end": "2", "page_size": "10"}); msg != "" {
+		t.Fatalf("small window %q", msg)
+	}
 
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

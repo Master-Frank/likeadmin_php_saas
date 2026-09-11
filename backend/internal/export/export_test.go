@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 
@@ -129,6 +131,9 @@ func TestExportWindowLimitError(t *testing.T) {
 	}
 	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=200&page_size=25000")); msg == "" {
 		t.Fatal("200*25000 must be rejected")
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=200&page_size=10")); msg == "" {
+		t.Fatal("200 pages must be rejected")
 	}
 	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=4&page_size=10")); msg != "" {
 		t.Fatalf("small window %q", msg)
@@ -311,5 +316,78 @@ func TestServeTaskAndSyncReady(t *testing.T) {
 	Serve(c3)
 	if !strings.Contains(w3.Body.String(), "导出任务不存在") {
 		t.Fatalf("missing %s", w3.Body.String())
+	}
+}
+
+func TestSaveExportOutsidePublicUploads(t *testing.T) {
+	dir := t.TempDir()
+	pub := filepath.Join(dir, "public")
+	if err := os.MkdirAll(pub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	config.C.App.PublicDir = pub
+	key, err := SaveXLSX("demo", []map[string]any{{"id": 1}}, []Field{{Key: "id", Title: "ID"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) {
+		t.Fatal("file meta missing")
+	}
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	if strings.Contains(info.Src, "uploads") {
+		t.Fatalf("must not write under public uploads: %s", info.Src)
+	}
+	want := filepath.Join(dir, "runtime", "export")
+	if !strings.HasPrefix(info.Src, want) {
+		t.Fatalf("export root %s want prefix %s", info.Src, want)
+	}
+}
+
+func TestTaskOwnerMismatchHidden(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := newTaskID()
+	saveTask(Task{ID: id, Status: statusReady, AdminID: 9})
+	t.Cleanup(func() { cache.Del(taskCacheKey(id)) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+id, nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{AdminID: 1})
+	serveTask(c, id)
+	if !strings.Contains(w.Body.String(), "导出任务不存在") {
+		t.Fatalf("%s", w.Body.String())
+	}
+}
+
+func TestNewTaskIDRandom(t *testing.T) {
+	a, b := newTaskID(), newTaskID()
+	if a == b || len(a) < 16 {
+		t.Fatalf("%s %s", a, b)
+	}
+}
+
+func TestMaybeExportPreviewPageEnd(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.Lists
+	config.C.Project.Lists.ExportMaxPages = 20
+	t.Cleanup(func() { config.C.Project.Lists = old })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?export=1", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists"})
+	c.Set("likeadmin.export_count", int64(10000))
+	if !Maybe(c, "export", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=1")
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["page_end"] != float64(20) {
+		t.Fatalf("page_end %v", env.Data["page_end"])
 	}
 }
