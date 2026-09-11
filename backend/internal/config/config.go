@@ -18,25 +18,29 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Debug       bool   `mapstructure:"debug"`
-	Timezone    string `mapstructure:"timezone"`
-	PublicDir   string `mapstructure:"public_dir"`
-	InstallLock string `mapstructure:"install_lock"`
-	Listen      string `mapstructure:"listen"`
+	Debug         bool   `mapstructure:"debug"`
+	Timezone      string `mapstructure:"timezone"`
+	PublicDir     string `mapstructure:"public_dir"`
+	InstallLock   string `mapstructure:"install_lock"`
+	Listen        string `mapstructure:"listen"`
+	MultiInstance bool   `mapstructure:"multi_instance"`
+	CDNDomain     string `mapstructure:"cdn_domain"`
+	RequireRedis  bool   `mapstructure:"require_redis"`
 }
 
 type DatabaseConfig struct {
-	Hostname        string `mapstructure:"hostname"`
-	Hostport        int    `mapstructure:"hostport"`
-	Database        string `mapstructure:"database"`
-	Username        string `mapstructure:"username"`
-	Password        string `mapstructure:"password"`
-	Charset         string `mapstructure:"charset"`
-	Prefix          string `mapstructure:"prefix"`
-	MaxOpenConns    int    `mapstructure:"max_open_conns"`
-	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime_sec"`
-	ConnMaxIdleTime int    `mapstructure:"conn_max_idle_time_sec"`
+	Hostname        string           `mapstructure:"hostname"`
+	Hostport        int              `mapstructure:"hostport"`
+	Database        string           `mapstructure:"database"`
+	Username        string           `mapstructure:"username"`
+	Password        string           `mapstructure:"password"`
+	Charset         string           `mapstructure:"charset"`
+	Prefix          string           `mapstructure:"prefix"`
+	MaxOpenConns    int              `mapstructure:"max_open_conns"`
+	MaxIdleConns    int              `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime int              `mapstructure:"conn_max_lifetime_sec"`
+	ConnMaxIdleTime int              `mapstructure:"conn_max_idle_time_sec"`
+	Replicas        []DatabaseConfig `mapstructure:"replicas"`
 }
 
 type RedisConfig struct {
@@ -87,6 +91,7 @@ type ProjectConfig struct {
 	TenantToken          TokenConfig       `mapstructure:"tenant_token"`
 	UserToken            TokenConfig       `mapstructure:"user_token"`
 	Lists                ListsConfig       `mapstructure:"lists"`
+	ExportAsync          bool              `mapstructure:"export_async"`
 	DefaultImage         map[string]string `mapstructure:"default_image"`
 	FileImage            []string          `mapstructure:"file_image"`
 	FileVideo            []string          `mapstructure:"file_video"`
@@ -182,4 +187,62 @@ func Prefix() string {
 		return "la_"
 	}
 	return C.Database.Prefix
+}
+
+// ReplicaList returns configured read replicas with a hostname.
+func (d DatabaseConfig) ReplicaList() []DatabaseConfig {
+	out := make([]DatabaseConfig, 0, len(d.Replicas))
+	for _, r := range d.Replicas {
+		if strings.TrimSpace(r.Hostname) == "" {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func InstanceID() string {
+	if v := strings.TrimSpace(os.Getenv("LIKEADMIN_INSTANCE_ID")); v != "" {
+		return v
+	}
+	h, err := os.Hostname()
+	if err != nil || strings.TrimSpace(h) == "" {
+		return "unknown"
+	}
+	return h
+}
+
+func envFlag(name string) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
+// RequireRedisConfigured is true for multi-instance installs, yaml require_redis,
+// or LIKEADMIN_REQUIRE_REDIS=1.
+func RequireRedisConfigured() bool {
+	if C.App.RequireRedis || C.App.MultiInstance {
+		return true
+	}
+	return envFlag("LIKEADMIN_REQUIRE_REDIS")
+}
+
+// ExportAsyncEnabled is true for multi-instance installs, yaml export_async,
+// or LIKEADMIN_EXPORT_ASYNC=1.
+func ExportAsyncEnabled() bool {
+	if C.Project.ExportAsync || C.App.MultiInstance {
+		return true
+	}
+	return envFlag("LIKEADMIN_EXPORT_ASYNC")
+}
+
+func FileCDNDomain() string {
+	d := strings.TrimSpace(C.App.CDNDomain)
+	if d == "" {
+		return ""
+	}
+	d = strings.TrimRight(d, "/")
+	if !strings.Contains(d, "://") {
+		d = "https://" + d
+	}
+	return d
 }

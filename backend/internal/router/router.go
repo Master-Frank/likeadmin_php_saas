@@ -439,7 +439,7 @@ func readyz(c *gin.Context) {
 		c.String(http.StatusServiceUnavailable, "db")
 		return
 	}
-	if os.Getenv("LIKEADMIN_REQUIRE_REDIS") == "1" {
+	if config.RequireRedisConfigured() {
 		if bootstrap.RDB == nil {
 			c.String(http.StatusServiceUnavailable, "redis")
 			return

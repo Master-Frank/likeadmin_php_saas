@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"likeadmin/backend/internal/config"
@@ -22,8 +21,9 @@ import (
 )
 
 var (
-	DB  *gorm.DB
-	RDB *redis.Client
+	DB     *gorm.DB
+	ReadDB *gorm.DB
+	RDB    *redis.Client
 )
 
 func Init(cfgPath string) error {
@@ -92,8 +92,15 @@ func RequireDDLPrivileges() error {
 }
 
 func requireRedis() bool {
-	v := strings.TrimSpace(os.Getenv("LIKEADMIN_REQUIRE_REDIS"))
-	return v == "1" || strings.EqualFold(v, "true")
+	return config.RequireRedisConfigured()
+}
+
+// Read returns the replica session when configured, otherwise the master.
+func Read() *gorm.DB {
+	if ReadDB != nil {
+		return ReadDB
+	}
+	return DB
 }
 
 // RequireRedis fails closed in production when LIKEADMIN_REQUIRE_REDIS=1.
@@ -121,17 +128,92 @@ func redisTimeout(ms int) time.Duration {
 
 // RequestDB returns bootstrap.DB bound to the request context so SQL metrics attach.
 func RequestDB(c *gin.Context) *gorm.DB {
-	if DB == nil {
+	return requestSession(c, DB)
+}
+
+// RequestReadDB returns the replica (or master) bound to the request context.
+func RequestReadDB(c *gin.Context) *gorm.DB {
+	return requestSession(c, Read())
+}
+
+func requestSession(c *gin.Context, db *gorm.DB) *gorm.DB {
+	if db == nil {
 		return nil
 	}
 	if c != nil && c.Request != nil {
-		return DB.WithContext(c.Request.Context())
+		return db.WithContext(c.Request.Context())
 	}
-	return DB
+	return db
 }
 
 func initDB() error {
-	c := config.C.Database
+	db, err := openGorm(config.C.Database)
+	if err != nil {
+		return err
+	}
+	metrics.Register(db)
+	DB = db
+	bindReadDB(db)
+	return nil
+}
+
+func bindReadDB(master *gorm.DB) {
+	ReadDB = master
+	list := config.C.Database.ReplicaList()
+	if master == nil || len(list) == 0 {
+		return
+	}
+	rep := fillReplica(list[0], config.C.Database)
+	db, err := openGorm(rep)
+	if err != nil {
+		log.Printf("replica unavailable, reads stay on master: %v", err)
+		return
+	}
+	metrics.Register(db)
+	ReadDB = db
+}
+
+func fillReplica(r, master config.DatabaseConfig) config.DatabaseConfig {
+	if r.Hostport == 0 {
+		r.Hostport = master.Hostport
+	}
+	if r.Database == "" {
+		r.Database = master.Database
+	}
+	if r.Username == "" {
+		r.Username = master.Username
+	}
+	if r.Password == "" {
+		r.Password = master.Password
+	}
+	if r.Charset == "" {
+		r.Charset = master.Charset
+	}
+	if r.Prefix == "" {
+		r.Prefix = master.Prefix
+	}
+	if r.MaxOpenConns <= 0 {
+		r.MaxOpenConns = master.MaxOpenConns
+	}
+	if r.MaxIdleConns <= 0 {
+		r.MaxIdleConns = master.MaxIdleConns
+	}
+	if r.ConnMaxLifetime <= 0 {
+		r.ConnMaxLifetime = master.ConnMaxLifetime
+	}
+	if r.ConnMaxIdleTime <= 0 {
+		r.ConnMaxIdleTime = master.ConnMaxIdleTime
+	}
+	return r
+}
+
+func openGorm(c config.DatabaseConfig) (*gorm.DB, error) {
+	if c.Charset == "" {
+		c.Charset = "utf8mb4"
+	}
+	if c.Hostport == 0 {
+		c.Hostport = 3306
+	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local",
 		c.Username, c.Password, c.Hostname, c.Hostport, c.Database, c.Charset)
 	level := logger.Warn
@@ -146,19 +228,17 @@ func initDB() error {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sqlDB, err := db.DB()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(config.C.Database.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(config.C.Database.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(time.Duration(config.C.Database.ConnMaxLifetime) * time.Second)
-	sqlDB.SetConnMaxIdleTime(time.Duration(config.C.Database.ConnMaxIdleTime) * time.Second)
-	metrics.Register(db)
-	DB = db
-	return nil
+	sqlDB.SetMaxOpenConns(c.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(c.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(c.ConnMaxLifetime) * time.Second)
+	sqlDB.SetConnMaxIdleTime(time.Duration(c.ConnMaxIdleTime) * time.Second)
+	return db, nil
 }
 
 func initRedis() error {

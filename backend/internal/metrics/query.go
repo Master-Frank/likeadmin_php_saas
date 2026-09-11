@@ -74,6 +74,7 @@ func Middleware() gin.HandlerFunc {
 			c.Request = c.Request.WithContext(WithStats(c.Request.Context(), st))
 		}
 		c.Next()
+		AddHTTP()
 	}
 }
 
@@ -117,4 +118,5 @@ func after(db *gorm.DB) {
 		}
 	}
 	st.Add(1, elapsed)
+	AddSQL()
 }

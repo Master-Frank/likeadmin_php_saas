@@ -165,13 +165,13 @@ func WorkbenchIndex(c *gin.Context) {
 	tid := ctxutil.Get(c).TenantID
 	todayNew = workbench.CachedCount(workbench.UserTodayKey(tid, now), func() int64 {
 		var n int64
-		uq := scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
+		uq := scopeTID(tenantdb.UseRead(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
 		uq.Where("create_time >= ?", todayStart).Count(&n)
 		return n
 	})
 	totalNew = workbench.CachedCount(workbench.UserTotalKey(tid), func() int64 {
 		var n int64
-		scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c).Count(&n)
+		scopeTID(tenantdb.UseRead(c).Model(&model.User{}).Where("delete_time IS NULL"), c).Count(&n)
 		return n
 	})
 	vDates, vNums := workbench.Series(now, 15, 0, 100)

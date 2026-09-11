@@ -131,20 +131,48 @@ const getData = async () => {
     formData.page_end = res.page_end
     formData.page_start = res.page_start
 }
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const pollExportTask = async (taskId: string) => {
+    for (let i = 0; i < 120; i++) {
+        const res = await fetch(
+            `/platformapi/download/export?task=${encodeURIComponent(taskId)}`
+        )
+        const body = await res.json()
+        const data = body?.data || {}
+        if (data.status === 'ready' && data.url) {
+            return data.url as string
+        }
+        if (data.status === 'failed') {
+            throw new Error(data.msg || body?.msg || '导出失败')
+        }
+        await sleep(1000)
+    }
+    throw new Error('导出超时')
+}
 const handleConfirm = async () => {
     await formRef.value?.validate()
     feedback.loading('正在导出中...')
     try {
-        await props.fetchFun({
+        const res = await props.fetchFun({
             ...props.params,
             ...formData,
             page_size: props.pageSize,
             export: 2
         })
+        let url = res?.url as string | undefined
+        if (res?.status === 'pending' && res?.task_id) {
+            url = await pollExportTask(String(res.task_id))
+        }
+        if (url) {
+            window.location.href = url
+        }
         popupRef.value?.close()
         feedback.closeLoading()
-    } catch (error) {
+    } catch (error: any) {
         feedback.closeLoading()
+        if (error?.message) {
+            feedback.msgError(error.message)
+        }
     }
 }
 getData()

@@ -15,6 +15,7 @@ import (
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
@@ -89,15 +90,24 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		response.Fail(c, msg)
 		return true
 	}
-	key, err := SaveXLSX(fileName, rows, spec.Fields)
-	if err != nil {
-		response.Fail(c, err.Error())
+	domain := ctxutil.Domain(c)
+	if !config.ExportAsyncEnabled() {
+		key, err := SaveXLSX(fileName, rows, spec.Fields)
+		if err != nil {
+			response.Fail(c, err.Error())
+			return true
+		}
+		task := newReadyTask(domain, key)
+		response.Data(c, taskPayload(task))
 		return true
 	}
-	// PHP ListsExcelTrait::createExcel always url('platformapi/download/export').
-	// Download is notNeedLogin; tenant lists must keep the same prefix.
-	u := ctxutil.Domain(c) + "/platformapi/download/export?file=" + key
-	response.Result(c, response.CodeOpenNewPage, 1, "", gin.H{"url": u})
+	id := newTaskID()
+	saveTask(Task{ID: id, Status: statusPending})
+	metrics.AddExport("pending")
+	fields := spec.Fields
+	name := fileName
+	go runExportTask(id, domain, name, rows, fields)
+	response.Data(c, gin.H{"task_id": id, "status": statusPending})
 	return true
 }
 
@@ -159,6 +169,10 @@ func saveExport(fileName string, rows any, fields []Field, xlsx bool) (string, e
 }
 
 func Serve(c *gin.Context) {
+	if taskID := httpx.QueryRaw(c, "task"); taskID != "" {
+		serveTask(c, taskID)
+		return
+	}
 	key := httpx.QueryRaw(c, "file")
 	var info fileInfo
 	if !cache.GetJSON("export_file_"+key, &info) || info.Name == "" {

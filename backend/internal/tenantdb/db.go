@@ -35,22 +35,39 @@ func ShardableNames() []string {
 var registeredDB *gorm.DB
 
 func Register(db *gorm.DB) {
-	if db == nil || registeredDB == db {
+	if db == nil {
 		return
 	}
-	registeredDB = db
-	_ = db.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
-	_ = db.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
-	_ = db.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
-	_ = db.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
-	_ = db.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	if registeredDB != db {
+		registeredDB = db
+		_ = db.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
+		_ = db.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
+		_ = db.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
+		_ = db.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
+		_ = db.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	}
+	if bootstrap.ReadDB != nil && bootstrap.ReadDB != db {
+		_ = bootstrap.ReadDB.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
+		_ = bootstrap.ReadDB.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
+		_ = bootstrap.ReadDB.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
+		_ = bootstrap.ReadDB.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
+		_ = bootstrap.ReadDB.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	}
 }
 
 func Use(c *gin.Context) *gorm.DB {
-	if bootstrap.DB == nil {
+	return useOn(c, bootstrap.DB)
+}
+
+// UseRead is Use but on the replica when one is configured.
+func UseRead(c *gin.Context) *gorm.DB {
+	return useOn(c, bootstrap.Read())
+}
+
+func useOn(c *gin.Context, db *gorm.DB) *gorm.DB {
+	if db == nil {
 		return nil
 	}
-	db := bootstrap.DB
 	if c != nil && c.Request != nil {
 		db = db.WithContext(c.Request.Context())
 	}

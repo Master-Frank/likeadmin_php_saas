@@ -46,3 +46,47 @@ func TestPoolAndExportDefaults(t *testing.T) {
 		t.Fatalf("redis timeout %d", C.Redis.ReadTimeoutMs)
 	}
 }
+
+func TestReplicaListSkipsEmptyHost(t *testing.T) {
+	d := DatabaseConfig{Replicas: []DatabaseConfig{{Hostname: ""}, {Hostname: "10.0.0.2"}}}
+	got := d.ReplicaList()
+	if len(got) != 1 || got[0].Hostname != "10.0.0.2" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestExportAsyncAndRedisFlags(t *testing.T) {
+	oldApp, oldProj := C.App, C.Project
+	t.Cleanup(func() {
+		C.App, C.Project = oldApp, oldProj
+	})
+	C.App.MultiInstance = false
+	C.App.RequireRedis = false
+	C.Project.ExportAsync = false
+	t.Setenv("LIKEADMIN_REQUIRE_REDIS", "")
+	t.Setenv("LIKEADMIN_EXPORT_ASYNC", "")
+	if RequireRedisConfigured() || ExportAsyncEnabled() {
+		t.Fatal("single-node defaults must not force redis/async export")
+	}
+	C.App.MultiInstance = true
+	if !RequireRedisConfigured() || !ExportAsyncEnabled() {
+		t.Fatal("multi-instance must require redis and async export")
+	}
+}
+
+func TestFileCDNDomain(t *testing.T) {
+	old := C.App.CDNDomain
+	t.Cleanup(func() { C.App.CDNDomain = old })
+	C.App.CDNDomain = ""
+	if FileCDNDomain() != "" {
+		t.Fatal("empty cdn")
+	}
+	C.App.CDNDomain = "cdn.example.com/"
+	if FileCDNDomain() != "https://cdn.example.com" {
+		t.Fatalf("%s", FileCDNDomain())
+	}
+	C.App.CDNDomain = "http://cdn.local"
+	if FileCDNDomain() != "http://cdn.local" {
+		t.Fatalf("%s", FileCDNDomain())
+	}
+}

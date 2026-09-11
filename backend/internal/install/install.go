@@ -79,6 +79,15 @@ func Run(c *gin.Context) {
 	importTest := isOn(p, "import_test_data")
 	adminUser := pick(p, "admin_user")
 	adminPass := pick(p, "admin_password")
+	if msg := CheckTopology(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	deployMode := topologyMode(p, "deploy_mode", "single")
+	dbMode := topologyMode(p, "db_mode", "single")
+	replicaPort := httpx.BodyInt(c, "replica_port")
+	redisPort := httpx.BodyInt(c, "redis_port")
+	redisDB := httpx.BodyInt(c, "redis_db")
 
 	lockPath := lock
 	if lockPath == "" {
@@ -91,6 +100,13 @@ func Run(c *gin.Context) {
 		AdminUser: adminUser, AdminPassword: adminPass,
 		PublicDir: config.C.App.PublicDir, LockPath: lockPath, EnvPath: envPath,
 		GoConfigPath: config.Path, HTTPHost: ctxutilHost(c),
+		DeployMode: deployMode, DBMode: dbMode,
+		RedisHost: pick(p, "redis_host"), RedisPassword: pick(p, "redis_password"),
+		RedisPort: redisPort, RedisDB: redisDB,
+		ReplicaHost: firstNonEmpty(p, "replica_host", "replica_hostname"),
+		ReplicaUser: pick(p, "replica_user"), ReplicaPass: pick(p, "replica_password"),
+		ReplicaName: pick(p, "replica_name"), ReplicaPort: replicaPort,
+		CDNDomain: pick(p, "cdn_domain"),
 	})
 	if err != nil {
 		response.Fail(c, err.Error())

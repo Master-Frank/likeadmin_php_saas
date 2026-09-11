@@ -26,7 +26,7 @@ Go 已覆盖 PHP 全部 **307/307** 个公开 HTTP 动作、Think CLI、系统 c
 - **Think CLI：** `backend/cmd/think`（`make:*`、`vendor:publish`、`service:discover`、`build`、`run`、`list`、`crontab` 等）。**禁止 `exec PHP`。**
 - **crontab：** `query_refund`、`cancel_unpaid_orders`、`verification_orders`；启动时 `EnsureNativeJobs` 入库；独立 worker `cmd/crontab`。未知 `la_dev_crontab.command` 记「未定义的定时任务命令」，不回落 `php think`。
 - **代码生成器：** stub 在 `backend/internal/generator/stub/`。`generate_type=1` 写 Vue + 菜单 + `backend/internal/generated/*.go`，**不再写** `server/app` PHP。运行时 CRUD：`gencrud.Handle`。
-- **安装向导：** `GET/POST /install`、`GET /install/env`、`GET /install/check`、`Any /install/status`、`GET /install/install.php` → `install.Wizard`。lock 存在时文案与 PHP 一致：「可能已经安装过本系统了…」。
+- **安装向导：** `GET/POST /install`、`GET /install/env`、`GET /install/check`、`Any /install/status`、`GET /install/install.php` → `install.Wizard`。lock 存在时文案与 PHP 一致：「可能已经安装过本系统了…」。向导可选单/多实例、单库/主从，默认仍是单机单库。
 - **前端跳转：** `platform/src/utils/request/index.ts`、`tenant/src/utils/request/index.ts`、`pc/utils/http/index.ts` → `window.location.replace('/install')`。
 - **PHP `index.php`：** 未安装时 302 到 `/install`（不再跳 `/install/install.php`）。
 - **nginx：** `backend/deploy/nginx.production.conf` 的 `location /install` 已 `proxy_pass` Go。

@@ -83,7 +83,7 @@ func IndexConfig(c *gin.Context) {
 	var cached map[string]any
 	if cache.GetJSON(bootKey, &cached) && cached != nil {
 		cached["webPage"] = bootWebPage(c, cached)
-		response.Data(c, cached)
+		response.DataCached(c, cached, 30*time.Second)
 		return
 	}
 	cfgsvc.Warm(c, "website", "shop_logo", "h5_favicon", "shop_name")
@@ -119,7 +119,7 @@ func IndexConfig(c *gin.Context) {
 		"copyright": cfgsvc.Get(c, "copyright", "config", []any{}),
 	}
 	cache.Set(bootKey, payload, 2*time.Minute)
-	response.Data(c, payload)
+	response.DataCached(c, payload, 30*time.Second)
 }
 
 func bootWebPage(c *gin.Context, cached map[string]any) gin.H {
@@ -148,7 +148,7 @@ func IndexDecorate(c *gin.Context) {
 	typ := httpx.QueryInt(c, "type")
 	var cached any
 	if pubcache.GetJSON(tid, "decorate", util.ToString(typ), &cached) {
-		response.Data(c, cached)
+		response.DataCached(c, cached, 30*time.Second)
 		return
 	}
 	var p model.DecoratePage
@@ -156,7 +156,7 @@ func IndexDecorate(c *gin.Context) {
 	if db.First(&p).Error != nil {
 		empty := []any{}
 		pubcache.Set(tid, "decorate", util.ToString(typ), empty, pubcache.TTL)
-		response.Data(c, empty)
+		response.DataCached(c, empty, 30*time.Second)
 		return
 	}
 	payload := gin.H{
@@ -164,7 +164,7 @@ func IndexDecorate(c *gin.Context) {
 		"data": p.Data, "meta": p.Meta,
 	}
 	pubcache.Set(tid, "decorate", util.ToString(typ), payload, pubcache.TTL)
-	response.Data(c, payload)
+	response.DataCached(c, payload, 30*time.Second)
 }
 
 func LoginRegister(c *gin.Context) {

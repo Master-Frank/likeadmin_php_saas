@@ -41,6 +41,16 @@ go run ./cmd/strangler
 
 生产 Nginx（无 php-fpm）见 `deploy/nginx.production.conf`。本机切流校验用 `deploy/nginx.local.conf`（`:8091`）。
 systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.service`（把路径改成实际安装目录后 `systemctl enable --now`）。
+
+安装向导（`GET/POST /install`）可选拓扑，默认仍是单实例 + 单数据库：
+
+- **单实例**：不强制 Redis；导出在请求内完成，立刻 `ready`。
+- **多实例**：必须能连 Redis；写入 `app.multi_instance`、`project.export_async`、`app.require_redis`。多台 Go 还需共享 `public_dir` 或事后在后台改 OSS。crontab 已有 MySQL `GET_LOCK`，可只跑一个 crontab 进程。
+- **单库 / 主从**：主从只把日志列表、工作台计数等可延迟读打到 `database.replicas`；空配置读写都走主库。
+
+观测：`LIKEADMIN_INSTANCE_ID`（默认 hostname）；`LIKEADMIN_METRICS=1` 时 `127.0.0.1:9090/metrics`（不要挂到公网 API 域）；`LIKEADMIN_PPROF=1` 时 `127.0.0.1:6060`。
+可选 `app.cdn_domain` 给本地上传拼 CDN 前缀。`LIKEADMIN_EXPORT_ASYNC=1` 可在单实例也走导出队列。
+
 在线升级若包含 `project/backend/`，会先在完整源码副本中构建新
 `bin/api`/`bin/crontab`，构建失败不应用升级。启用
 `likeadmin-upgrade-restart.path` + `.service` 后，升级成功会延迟重启两个
@@ -82,5 +92,6 @@ export LIKEADMIN_UPGRADE_FIXTURE=/path/to/upgrade-fixture
 - 响应：`{code, show, msg, data}`
 - 鉴权 Header：`token`
 - 密码：`md5(salt + md5(password + salt))`，salt 为 `project.unique_identification`
+- 导出：`export=1` 预览；`export=2` 返回 `{task_id,status,url?}`（`code=1`）。单实例默认同步 `ready`；多实例/异步为 `pending`，轮询 `GET /platformapi/download/export?task=`，下载仍用 `?file=`
 
 验收清单见 [`tests/golden/README.md`](tests/golden/README.md)。

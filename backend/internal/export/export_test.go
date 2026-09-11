@@ -165,8 +165,11 @@ func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	url, _ := env.Data["url"].(string)
-	if env.Code != 2 || !strings.Contains(url, "/platformapi/download/export?file=") {
+	if env.Code != 1 || !strings.Contains(url, "/platformapi/download/export?file=") {
 		t.Fatalf("tenant export url must stay platformapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
+	}
+	if env.Data["status"] != "ready" || env.Data["task_id"] == "" {
+		t.Fatalf("sync export must return ready task: %s", w.Body.String())
 	}
 	if strings.Contains(url, "/tenantapi/") {
 		t.Fatalf("tenant prefix leaked: %s", url)
@@ -261,5 +264,52 @@ func TestWriteXLSXZip(t *testing.T) {
 	}
 	if !strings.Contains(sheet, "记录ID") || !strings.Contains(sheet, "查看") {
 		t.Fatalf("sheet %s", sheet)
+	}
+}
+
+func TestServeTaskAndSyncReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldApp, oldProj := config.C.App, config.C.Project
+	t.Cleanup(func() {
+		config.C.App, config.C.Project = oldApp, oldProj
+	})
+	config.C.App.MultiInstance = false
+	config.C.Project.ExportAsync = false
+	t.Setenv("LIKEADMIN_EXPORT_ASYNC", "")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/auth.admin/lists?export=2&page_start=1&page_end=1", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists", App: "platformapi"})
+	if !Maybe(c, "系统日志", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=2")
+	}
+	var env struct {
+		Code int            `json:"code"`
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	taskID, _ := env.Data["task_id"].(string)
+	if env.Code != 1 || taskID == "" || env.Data["status"] != "ready" {
+		t.Fatalf("body %s", w.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+taskID, nil)
+	Serve(c2)
+	if !strings.Contains(w2.Body.String(), `"status":"ready"`) {
+		t.Fatalf("poll %s", w2.Body.String())
+	}
+
+	w3 := httptest.NewRecorder()
+	c3, _ := gin.CreateTestContext(w3)
+	c3.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task=missing", nil)
+	Serve(c3)
+	if !strings.Contains(w3.Body.String(), "导出任务不存在") {
+		t.Fatalf("missing %s", w3.Body.String())
 	}
 }

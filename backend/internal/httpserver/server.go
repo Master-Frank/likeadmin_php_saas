@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"likeadmin/backend/internal/metrics"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 // Run starts an http.Server with timeouts and SIGTERM graceful shutdown.
 func Run(addr string, h http.Handler) error {
 	startPprof()
+	startMetrics()
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           withExportWriteTimeout(h),
@@ -80,6 +83,22 @@ func startPprof() {
 		log.Printf("pprof listening on 127.0.0.1:6060")
 		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
 			log.Printf("pprof: %v", err)
+		}
+	}()
+}
+
+func startMetrics() {
+	if os.Getenv("LIKEADMIN_METRICS") != "1" {
+		return
+	}
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			metrics.WritePrometheus(w)
+		})
+		log.Printf("metrics listening on 127.0.0.1:9090")
+		if err := http.ListenAndServe("127.0.0.1:9090", mux); err != nil {
+			log.Printf("metrics: %v", err)
 		}
 	}()
 }

@@ -233,7 +233,7 @@ func LogLists(c *gin.Context) {
 	if !ok {
 		return
 	}
-	db := bootstrap.DB.Model(&model.OperationLog{})
+	db := bootstrap.Read().Model(&model.OperationLog{})
 	if ctxutil.Get(c).App == "tenantapi" {
 		db = db.Where("url LIKE ?", "%/tenantapi/%")
 		if tid := ctxutil.Get(c).TenantID; tid > 0 {

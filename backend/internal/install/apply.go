@@ -21,14 +21,20 @@ var protectedDBs = map[string]bool{
 
 // Options is the PHP install.php step-4 pipeline, without HTTP.
 type Options struct {
-	Host, User, Password, Name, Prefix string
-	Port                               int
-	ClearDB, ImportTest, SkipSQL       bool
-	DeferLock                          bool
-	AdminUser, AdminPassword           string
-	PublicDir, LockPath, EnvPath       string
-	GoConfigPath, HTTPHost             string
-	Now                                int64
+	Host, User, Password, Name, Prefix                 string
+	Port                                               int
+	ClearDB, ImportTest, SkipSQL                       bool
+	DeferLock                                          bool
+	AdminUser, AdminPassword                           string
+	PublicDir, LockPath, EnvPath                       string
+	GoConfigPath, HTTPHost                             string
+	Now                                                int64
+	DeployMode, DBMode                                 string
+	RedisHost, RedisPassword                           string
+	RedisPort, RedisDB                                 int
+	ReplicaHost, ReplicaUser, ReplicaPass, ReplicaName string
+	ReplicaPort                                        int
+	CDNDomain                                          string
 }
 
 // Result is what POST /install returns in data.
@@ -47,6 +53,32 @@ func Apply(opt Options) (*Result, error) {
 		"admin_password": opt.AdminPassword, "admin_confirm_password": opt.AdminPassword,
 	}); msg != "" {
 		return nil, fmt.Errorf("%s", msg)
+	}
+	opt.normalize()
+	if msg := CheckTopology(opt.topologyMap()); msg != "" {
+		return nil, fmt.Errorf("%s", msg)
+	}
+	if opt.DeployMode == "multi" {
+		if err := CheckRedis(opt.RedisHost, opt.RedisPassword, opt.RedisPort, opt.RedisDB); err != nil {
+			return nil, err
+		}
+	}
+	if opt.DBMode == "replica" {
+		user := opt.ReplicaUser
+		if user == "" {
+			user = opt.User
+		}
+		pass := opt.ReplicaPass
+		if pass == "" {
+			pass = opt.Password
+		}
+		name := opt.ReplicaName
+		if name == "" {
+			name = opt.Name
+		}
+		if err := CheckReplica(opt.ReplicaHost, user, pass, name, opt.ReplicaPort); err != nil {
+			return nil, err
+		}
 	}
 	if opt.Host == "" {
 		opt.Host = "127.0.0.1"
@@ -131,7 +163,7 @@ func Apply(opt Options) (*Result, error) {
 		}
 	}
 	if opt.GoConfigPath != "" {
-		if err := WriteGoConfig(opt.GoConfigPath, opt.Host, opt.Name, opt.User, opt.Password, opt.Port, opt.Prefix, opt.HTTPHost, salt); err != nil {
+		if err := WriteGoConfigOpts(opt.goWrite(salt)); err != nil {
 			return nil, err
 		}
 	}
@@ -189,4 +221,56 @@ func restoreIndexLockDir(pub string) {
 	for _, dir := range []string{"admin", "mobile"} {
 		restoreIndexFile(filepath.Join(pub, dir))
 	}
+}
+
+func (opt *Options) normalize() {
+	if opt.DeployMode == "" {
+		opt.DeployMode = "single"
+	}
+	if opt.DBMode == "" {
+		opt.DBMode = "single"
+	}
+	if opt.RedisPort == 0 {
+		opt.RedisPort = 6379
+	}
+	if opt.ReplicaPort == 0 {
+		opt.ReplicaPort = opt.Port
+		if opt.ReplicaPort == 0 {
+			opt.ReplicaPort = 3306
+		}
+	}
+}
+
+func (opt Options) topologyMap() map[string]any {
+	return map[string]any{
+		"deploy_mode":  opt.DeployMode,
+		"db_mode":      opt.DBMode,
+		"redis_host":   opt.RedisHost,
+		"replica_host": opt.ReplicaHost,
+	}
+}
+
+func (opt Options) goWrite(salt string) GoWrite {
+	w := GoWrite{
+		Path: opt.GoConfigPath, Host: opt.Host, DBName: opt.Name, User: opt.User,
+		Pass: opt.Password, Port: opt.Port, Prefix: opt.Prefix, HTTPHost: opt.HTTPHost,
+		UniqueID: salt, CDNDomain: opt.CDNDomain,
+	}
+	if opt.DeployMode == "multi" {
+		w.MultiInstance = true
+		w.ExportAsync = true
+		w.RequireRedis = true
+		w.RedisHost = opt.RedisHost
+		w.RedisPort = opt.RedisPort
+		w.RedisPassword = opt.RedisPassword
+		w.RedisDB = opt.RedisDB
+	}
+	if opt.DBMode == "replica" {
+		w.ReplicaHost = opt.ReplicaHost
+		w.ReplicaPort = opt.ReplicaPort
+		w.ReplicaUser = opt.ReplicaUser
+		w.ReplicaPass = opt.ReplicaPass
+		w.ReplicaName = opt.ReplicaName
+	}
+	return w
 }

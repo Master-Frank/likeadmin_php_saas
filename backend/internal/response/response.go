@@ -1,7 +1,12 @@
 package response
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
+
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -65,6 +70,25 @@ func Data(c *gin.Context, data any) {
 		data = map[string]any{}
 	}
 	Result(c, CodeOK, 0, "", data)
+}
+
+// DataCached sets a weak ETag and short public Cache-Control for public-read APIs.
+func DataCached(c *gin.Context, data any, maxAge time.Duration) {
+	if data == nil {
+		data = map[string]any{}
+	}
+	raw, _ := json.Marshal(data)
+	etag := `W/"` + util.MD5(string(raw)) + `"`
+	if maxAge <= 0 {
+		maxAge = 30 * time.Second
+	}
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(maxAge.Seconds())))
+	if match := c.GetHeader("If-None-Match"); match != "" && match == etag {
+		c.AbortWithStatus(http.StatusNotModified)
+		return
+	}
+	Data(c, data)
 }
 
 func Fail(c *gin.Context, msg string) {
