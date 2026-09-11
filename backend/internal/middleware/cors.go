@@ -34,7 +34,8 @@ func InstallAndTenant() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/install") ||
 			strings.HasPrefix(c.Request.URL.Path, "/crontab") ||
-			c.Request.URL.Path == "/healthz" || c.Request.URL.Path == "/readyz" {
+			c.Request.URL.Path == "/healthz" || c.Request.URL.Path == "/readyz" ||
+			isStaticPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -143,6 +144,14 @@ func firstSegment(path string) string {
 		return ""
 	}
 	return strings.Split(path, "/")[0]
+}
+
+func isStaticPath(path string) bool {
+	switch firstSegment(path) {
+	case "resource", "uploads", "static":
+		return true
+	}
+	return false
 }
 
 func stripScheme(host string) string {

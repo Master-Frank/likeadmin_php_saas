@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
@@ -190,13 +189,13 @@ func probeDiskSpace() envItem {
 	if abs, err := filepath.Abs(dir); err == nil {
 		dir = abs
 	}
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(dir, &st); err != nil {
+	n, err := diskFreeBytes(dir)
+	if err != nil {
 		item.Status = "fail"
 		item.Value = err.Error()
 		return item
 	}
-	item.Value = formatDiskSpace(float64(st.Bavail) * float64(st.Bsize))
+	item.Value = formatDiskSpace(n)
 	return item
 }
 

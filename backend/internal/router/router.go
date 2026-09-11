@@ -56,11 +56,7 @@ func New() *gin.Engine {
 	r.POST("/install", install.Run)
 	r.Any("/install/status", install.Status)
 
-	spa := func(dir string) gin.HandlerFunc {
-		return func(c *gin.Context) {
-			c.File(filepath.Join(config.C.App.PublicDir, dir, "index.html"))
-		}
-	}
+	spa := serveSPA
 	if config.C.App.PublicDir != "" {
 		r.GET("/", func(c *gin.Context) {
 			index := filepath.Join(config.C.App.PublicDir, "index.html")
@@ -85,6 +81,35 @@ func New() *gin.Engine {
 		r.Static("/uploads", filepath.Join(config.C.App.PublicDir, "uploads"))
 	}
 	return r
+}
+
+// serveSPA returns hashed Vue assets from disk and falls back to index.html
+// for client-side routes. Serving index.html for *.js/*.css leaves the SPA
+// stuck on its preload spinner.
+func serveSPA(dir string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		root := filepath.Join(config.C.App.PublicDir, dir)
+		rel := strings.TrimPrefix(c.Request.URL.Path, "/"+dir)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel != "" && !strings.Contains(rel, "..") {
+			fp := filepath.Join(root, filepath.FromSlash(rel))
+			if st, err := os.Stat(fp); err == nil && !st.IsDir() && underDir(root, fp) {
+				c.File(fp)
+				return
+			}
+		}
+		c.File(filepath.Join(root, "index.html"))
+	}
+}
+
+func underDir(root, fp string) bool {
+	absRoot, err1 := filepath.Abs(root)
+	absFP, err2 := filepath.Abs(fp)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	sep := string(os.PathSeparator)
+	return absFP == absRoot || strings.HasPrefix(absFP, absRoot+sep)
 }
 
 func dispatch(app string, routes map[string]Handler, notNeed map[string][]string) gin.HandlerFunc {
