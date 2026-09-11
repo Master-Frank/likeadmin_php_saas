@@ -10,11 +10,14 @@
 - P0/P1 的大部分保护、首批索引、热路径缓存、查询降本和部署配置已经落地。
 - `go test ./...`、`go vet ./...` 已通过，但当前证据主要是功能与回归测试，不是吞吐、延迟或容量证明。
 - 精确 `count`、`page_size_max=25000` 和 PHP 兼容响应契约仍保留。
-- 本轮复审仍发现四个上线阻断点：
+- 本轮复审仍发现七类上线阻断点：
   1. 权限菜单实时回源查询失败时仍可能按“未登记路由”放行。
-  2. 导出只把 XLSX 写盘放进 goroutine；列表查询和结果物化仍在 HTTP 请求内完成，多实例下载仍依赖本机文件。
-  3. 操作日志 writer 会复制全部后台响应；GET 虽不落 response，导出下载等大响应仍会完整驻留内存。
-  4. 服务默认监听 `:8080`，但 `X-Real-IP` 被无条件信任；若运维未用防火墙隔离 Go 端口，客户端可伪造 IP 绕过限流并影响登录 IP 校验。
+  2. 租户异步导出错误地轮询 platform API，现有 tenant token 无法通过任务 owner 校验。
+  3. 导出只把 XLSX 写盘放进 goroutine；查询仍在 HTTP 请求内，多实例文件仍在本机且没有清理。
+  4. 操作日志 writer 会复制全部后台响应，而且日志表没有 tenant ID，存在跨租户日志混淆与敏感参数泄漏风险。
+  5. 服务默认监听 `:8080` 且无条件信任 `X-Real-IP`，直接访问可伪造 IP。
+  6. 多实例要求 Redis，但运行期 Redis 错误仍回落进程内状态，权限、会话、限流和任务会发生实例分裂。
+  7. 启动过程串行创建索引，大表或分表较多时可能被 metadata lock 阻塞并拖垮发布。
 
 ## 2. 当前状态
 
@@ -34,6 +37,7 @@
   - IP 读取 nginx 覆盖的 `X-Real-IP`，忽略客户端提供的 `X-Forwarded-For`；
   - 三份生产 nginx 配置均覆盖 `X-Real-IP` 和 `X-Forwarded-For`。
 - Redis dial/read/write timeout 默认 200ms；多实例或显式要求 Redis 时，启动检查会失败关闭。
+- 请求体读取错误目前在 `httpx` 中被忽略，超过 50 MiB 时不保证返回 HTTP 413，可能表现为普通参数校验失败。
 
 ### 2.2 数据库连接、索引与只读副本
 
@@ -50,6 +54,7 @@
   - user：`(tenant_id,delete_time)`；
   - operation_log：`(create_time)`。
 - `LIKEADMIN_REQUIRE_DDL=0` 时跳过启动建索引和 DDL 权限探测。
+- 默认安装会在 HTTP 监听前同步扫描表并串行 `CREATE INDEX`；错误仅写日志。
 - 可配置一个只读副本；运行期每 5 秒探活一次，不可用时读请求回落主库。
 - 操作日志列表、部分工作台统计和 tenant 读会使用只读入口；支付、鉴权、配置和写后读仍走主库。
 
@@ -83,6 +88,8 @@
 - 文章浏览量使用数据库原子自增。
 - GET 操作日志不把 response 写入数据库；非 GET 入库内容最多约 64 KiB。
 - 但 `bodyWriter` 当前仍会在内存中复制完整响应，截断发生在请求结束后。
+- 操作日志表没有 `tenant_id`；租户日志查询用 admin ID 与 URL 近似隔离，不能保证跨租户安全。
+- 参数脱敏仅覆盖少量顶层字段，嵌套 credential 仍可能入库。
 - `LIKEADMIN_OPLOG_ASYNC=1` 时操作日志进入 256 长度的进程内有界队列；队列满时丢弃。
 - 普通列表仍返回精确 `count`；没有改成 `has_more` 或估算值。
 - `page_type=0` 仍可读取 `page_size_max`，默认上限仍为 25000。
@@ -94,11 +101,13 @@
   - `export_max_rows` 默认 10000；
   - 超限直接报错，不再静默截断。
 - task ID 和 file key 使用加密随机数；任务状态保存 Redis 30 分钟。
-- 任务轮询绑定创建管理员和租户；tenant/platform Vue 轮询携带 `token`。
+- 任务轮询绑定创建管理员和租户；tenant/platform Vue 都携带 `token`，但 tenant 组件错误地固定请求 `/platformapi/download/export`，因此 tenant 异步任务当前无法正常轮询。
 - 文件写入 `public_dir` 同级的 `runtime/export`，不再暴露在匿名 `/uploads` 静态目录。
 - 单进程最多同时执行 2 个 XLSX 写盘任务，并有 panic 恢复。
 - 当前“异步”边界仅覆盖 XLSX 组装和写盘：列表 SQL、关联组装以及最多 10000 行结果仍在原 HTTP 请求内完成。
 - 文件仍写本机目录；Redis 中保存的是该实例的绝对路径。没有共享盘或对象存储时，另一实例无法下载。
+- 下载前会先删除 Redis 中的一次性 file key；请求落到没有该文件的实例时，后续无法重试正确实例。
+- 下载成功和 metadata TTL 到期都不会删除磁盘文件，`runtime/export` 会持续累积。
 - 最终文件 URL 仍是匿名 `download/export?file=<随机 key>`；创建人校验只覆盖 task 轮询，不覆盖文件下载。
 
 ### 2.6 多实例、静态资源与 CDN
@@ -152,21 +161,27 @@
 
 现状：
 
+- tenant Vue 把 task poll 固定到 `/platformapi/download/export`；platform middleware 不识别 tenant token，owner 校验失败后前端仍继续轮询到超时。
 - controller 先执行列表 COUNT/SELECT/关联组装，再调用 `export.Maybe`；
 - goroutine 只处理已经驻留内存的 `rows`；
 - 10000 行记录还会转换为 `[][]string`，XLSX sheet XML 再完整驻留内存；
 - `runtime/export` 是本机路径，负载均衡后的 poll/download 可能落到不同实例；
+- wrong-node 请求会先消费一次性 file key，再发现本机文件不存在；
+- 成功下载或 metadata 过期后都不删除文件；
 - task 有创建人绑定，但最终 file key 下载没有身份绑定。
 
 实施：
 
-1. HTTP 只保存导出条件、稳定排序字段、tenant/admin 身份和导出字段，立即返回 task ID。
-2. 独立 worker 从 Redis/数据库领取任务，重新建立租户上下文。
-3. 使用稳定主键游标分批读取；禁止把整个导出结果放进 HTTP 请求或单个 Go slice。
-4. CSV/XLSX 流式写出，限制每租户并发、总行数、文件大小、执行时长和保留时间。
-5. 多实例使用 OSS/S3 或明确挂载的共享目录；任务元数据记录对象 key，不保存实例绝对路径。
-6. 下载接口要求有效登录并校验 task owner，或生成短时、一次性的签名 URL；不能只依赖匿名随机 key。
-7. worker crash 后任务应超时失败或可重试；进程退出前停止领任务并处理租约。
+1. 立即修正 tenant 轮询到 `/tenantapi/download/export`，并让前端遇到非成功 `code` 时立即报错；增加带 tenant token 的完整 middleware 测试。
+2. HTTP 只保存导出条件、稳定排序字段、tenant/admin 身份和导出字段，立即返回 task ID。
+3. 独立 worker 从 Redis/数据库领取任务，重新建立租户上下文。
+4. 使用稳定主键游标分批读取；禁止把整个导出结果放进 HTTP 请求或单个 Go slice。
+5. CSV/XLSX 流式写出，限制每租户并发、总行数、文件大小、执行时长和保留时间。
+6. 多实例使用 OSS/S3 或明确挂载的共享目录；任务元数据记录对象 key，不保存实例绝对路径。
+7. 验证文件存在且可打开后才能消费一次性下载 token。
+8. 下载成功后删除本地文件；增加按年龄清理的 janitor，OSS 配置生命周期。
+9. 下载接口要求有效登录并校验 task owner，或生成短时、一次性的签名 URL；不能只依赖匿名随机 key。
+10. worker crash 后任务应超时失败或可重试；进程退出前停止领任务并处理租约。
 
 验收：
 
@@ -174,27 +189,34 @@
 - worker 处理大导出时普通 API 的 p99 和内存保持在预算内；
 - 任意实例都能轮询和下载同一任务；
 - 其他管理员、其他租户和匿名请求无法读取任务或文件。
+- 下载和未下载文件都在保留期后清理。
 
-### P0-3 大响应不得经过操作日志全量缓冲
+### P0-3 修复操作日志隔离、脱敏与全量缓冲
 
 现状：
 
 - `backend/internal/middleware/oplog.go` 的 `bodyWriter.Write` 无上限写入 `bytes.Buffer`。
 - GET 请求最终把 `result` 置空，但此前已经复制完整响应。
 - `download/export` 是后台 GET 路由，也经过 `OperationLog`；下载大文件时可能把整个文件再复制一份到 Go heap。
+- `OperationLog` 模型没有 `tenant_id`；租户日志列表依赖 admin ID 和 URL 模糊匹配，不同租户常见的相同 admin ID 可能互相命中。
+- 参数脱敏只处理少量顶层字段，嵌套的 storage/pay 配置以及 `private_key`、`mch_key`、`access_key_secret` 等仍可能入库。
 
 实施：
 
-1. GET/HEAD 请求不安装 response capture writer；只记录状态码、耗时和必要元数据。
-2. 非 GET 使用固定上限 capture writer，超过上限只保留前 N 字节并标记 truncated，不能先完整缓冲再切片。
-3. 下载、流式响应和导出路由完全跳过 body capture。
-4. 增加大响应测试，验证 writer 内存占用不随响应体线性增长。
+1. 日志表增加 `tenant_id`，写日志时从 request meta 填充，并增加 `(tenant_id,create_time,id)` 索引。
+2. 租户日志查询直接按 tenant ID 过滤，删除 admin ID + URL 的隔离替代方案。
+3. 对 map/list 递归脱敏所有 credential-shaped key，并为嵌套支付、短信、存储、公众号配置增加测试。
+4. GET/HEAD 请求不安装 response capture writer；只记录状态码、耗时和必要元数据。
+5. 非 GET 使用固定上限 capture writer，超过上限只保留前 N 字节并标记 truncated，不能先完整缓冲再切片。
+6. 下载、流式响应和导出路由完全跳过 body capture。
+7. 增加大响应测试，验证 writer 内存占用不随响应体线性增长。
 
 验收：
 
 - 100 MiB 下载不会产生约 100 MiB 的额外日志 buffer；
 - 普通 GET 不复制 response body；
 - POST 审计日志仍保留受限、脱敏后的结果。
+- 任意租户只能查询自己的操作日志。
 
 ### P0-4 固定可信代理与监听边界
 
@@ -238,6 +260,48 @@
 - 冷缓存、热缓存、Redis 故障和 replica 故障分别有基线；
 - 容量报告只引用实测数据，不再使用 PHP 经验倍数。
 
+### P0-6 多实例安全状态在 Redis 故障时失败关闭
+
+现状：
+
+- Redis 只在启动阶段强制可用。
+- 运行期所有 cache 操作失败后都回落到进程内 `sync.Map`。
+- 多实例下 session、权限版本、限流、配置失效和 export task 会分裂；readiness 虽失败，已进入实例的请求仍继续使用本机状态。
+
+实施：
+
+1. 把 session、权限、限流、导出任务等安全/协调状态与普通公开缓存分开。
+2. `RequireRedisConfigured()` 为真时，安全状态的 Redis 错误必须失败关闭，不能读写本机 fallback。
+3. 公开配置等允许降级的数据可使用有容量上限和淘汰策略的短 TTL L1。
+4. Redis 故障立即使实例 readiness 失败，并确保负载均衡摘流；记录 error/fallback 指标。
+5. 增加运行期断开 Redis 的多实例测试，覆盖权限撤销、登录、限流和任务状态。
+
+验收：
+
+- Redis 故障不会绕过权限/限流，也不会让已撤销 session 在单个实例继续有效；
+- 恢复 Redis 后不会重新使用故障期间产生的不一致本机状态。
+
+### P0-7 把生产索引创建移出服务启动
+
+现状：
+
+- 已安装应用在 HTTP 监听前同步执行 `EnsurePerfIndexes`。
+- 它会枚举所有分表并串行执行 `CREATE INDEX`；大表可能等待 metadata lock 或超过 systemd 启动预算。
+- 创建失败只写日志，服务最终可能在索引缺失状态下继续运行。
+
+实施：
+
+1. 将 DDL 放入显式、幂等、可观测的升级步骤；按 MySQL 版本配置 online DDL 策略。
+2. 发布前展示待执行表、索引、预计锁影响和执行结果。
+3. 应用启动只校验必要 schema version，不修改大表。
+4. 为失败、超时和部分完成提供可重试状态，不以普通日志代替迁移结果。
+
+验收：
+
+- API 发布启动时间不受业务表大小和分表数影响；
+- 索引迁移有独立状态、日志和失败告警；
+- 未完成必要迁移时按明确策略拒绝切流，而不是静默带病运行。
+
 ### P1-1 收紧普通列表上限与深分页
 
 现状：
@@ -258,30 +322,7 @@
 - 任意普通公网/后台列表都不能单请求物化 25000 行；
 - 调整不破坏当前精确 `count` 契约和 golden pair 门禁。
 
-### P1-2 Redis 故障与多实例一致性
-
-现状：
-
-- cache 层 Redis 命令失败会回落进程内 `sync.Map`；
-- 多实例下 token、权限、限流和缓存状态会在实例间分裂；
-- `/readyz` 会报 Redis 不健康，但已经进入实例的请求仍可能使用本机 fallback；
-- 本机 map 没有容量上限，过期项只在读取时清理。
-
-实施：
-
-1. 将 cache 分为安全状态和可降级数据：
-   - token、权限、限流、导出任务在多实例生产环境 Redis 错误时失败关闭；
-   - 公开配置可短时读取受限 L1。
-2. 为 fallback 增加命中、写入、容量和淘汰指标。
-3. 使用有上限的 LRU/TTL cache，并提供后台过期清理。
-4. 明确 readiness 摘流与应用内部失败关闭的关系。
-
-验收：
-
-- Redis 故障不会绕过权限/限流或制造跨实例登录不一致；
-- fallback 内存有明确上限并可观测。
-
-### P1-3 操作日志可靠性与退出处理
+### P1-2 操作日志可靠性与退出处理
 
 现状：
 
@@ -304,7 +345,7 @@
 - 安全审计日志满足明确的保留与可靠性要求；
 - 日志高峰不明显抬高普通 API p99。
 
-### P1-4 查询、缓存与只读副本细化
+### P1-3 查询、缓存与只读副本细化
 
 1. 平台 `PayWayGet` 和租户 `PayWayGet` 先收集 `pay_config_id`，用一次 `IN (?)` 查询配置并映射，删除逐行 `First`。
 2. 平台租户列表为 `tactics=1` 分表租户逐个 COUNT；应提供批量汇总来源、缓存统计或明确限制分表租户列表统计成本。
@@ -315,12 +356,32 @@
 7. 安装向导当前提示“导出读走从库”，但导出仍使用原列表查询路径；在真正接入副本前修正文案，避免错误的运维预期。
 8. 用生产数据 `EXPLAIN ANALYZE` 验证当前首批索引；启动自动 DDL 只作为兼容手段，生产升级仍应使用可审计迁移。
 
-### P1-5 静态、上传与 CDN 完成态
+### P1-4 静态、上传与 CDN 完成态
 
 1. 多实例上线前将本地上传迁到 OSS，或验证所有实例共享同一挂载及权限。
 2. 带内容 hash 的 SPA 文件设置 `immutable`；HTML 保持短缓存或 no-cache。
 3. 上传使用独立 location、体积和超时预算，不扩大普通 API 预算。
 4. CDN 只缓存公开、无用户态内容；缓存 key 必须包含 tenant、host、终端和相关 query。
+
+### P1-5 运行期正确性与故障边界
+
+1. 限流当前分开执行 `INCR` 和 `EXPIRE`；改为 Lua/事务原子操作，避免中间失败留下永久计数。
+2. `/readyz` 使用带短 deadline 的 `PingContext`；MySQL DSN 增加 dial/read/write timeout。
+3. replica 不能只检查 TCP Ping：
+   - 启动失败后应重试绑定；
+   - 检查 schema version、复制状态和可接受 lag；
+   - 可安全回退的读在 query error 时切回主库；
+   - 暴露 replica health/lag 指标。
+4. boot payload 包含请求生成的资源 origin，但 key 只有 host 没有 scheme；使用规范化外部 origin/CDN，或把校验后的 scheme 纳入 key，避免 HTTP 缓存污染 HTTPS。
+5. `ArticleCateUpdateStatus` 成功后补 `invalidatePublic(c, "cate")`，不能只等待 TTL。
+6. `schemacache.HasColumn` 的正负结果不能永久缓存且只按 table/column 区分；加入数据库身份/schema version 和 TTL，迁移后主动失效。
+7. 传播 `http.MaxBytesError` 并返回 413；普通 JSON 接口使用远小于上传的 route-specific body limit。
+
+验收：
+
+- 依赖黑洞、复制中断、在线 schema 变更和超大请求都有确定的超时、错误码、回退与指标；
+- HTTP/HTTPS boot 资源 origin 不互相污染；
+- 分类状态变更在主动失效后立即对公网可见。
 
 ### P2 后续容量演进
 
@@ -333,13 +394,15 @@
 ## 4. 实施顺序
 
 1. 修复权限 DB 错误 fail-open。
-2. 把导出改为独立 worker + 游标读取 + 共享/对象存储 + 鉴权下载。
-3. 移除操作日志对 GET、下载和大响应的全量缓冲。
+2. 修复 tenant task 轮询，再把导出改为独立 worker + 游标读取 + 共享/对象存储 + 鉴权下载和文件清理。
+3. 给操作日志增加 tenant ID、递归脱敏，并移除 GET/下载/大响应全量缓冲。
 4. 将 Go 监听限制在可信代理边界内。
-5. 建立固定数据集、负载脚本和完整指标。
-6. 用基线收紧普通列表并治理高成本 COUNT/深分页。
-7. 完善 Redis 故障策略和操作日志可靠性。
-8. 根据指标处理 replica 探活、缓存扫描、静态/CDN 和更深层数据库演进。
+5. 多实例安全状态在 Redis 运行期故障时失败关闭。
+6. 把生产索引 DDL 移出应用启动。
+7. 建立固定数据集、负载脚本和完整指标。
+8. 用基线收紧普通列表并治理高成本 COUNT/深分页。
+9. 完善日志可靠性、依赖超时和 replica 健康。
+10. 根据指标处理缓存扫描、静态/CDN 和更深层数据库演进。
 
 ## 5. 容量报告模板
 
