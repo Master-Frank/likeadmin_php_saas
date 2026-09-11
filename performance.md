@@ -78,7 +78,8 @@
 ### 2.4 查询与请求关键路径降本
 
 - `api/recharge/lists` 已分页，不再无界读取。
-- 平台租户列表使用聚合计数，支付方式批量读取配置，减少 N+1。
+- 平台租户列表对共享 `user` 表使用一次 `GROUP BY` 计数；`tactics=1` 分表租户仍逐租户计数。
+- 平台端和租户端支付方式仍按每条 pay-way 单独查询 pay-config，N+1 尚未消除。
 - 文章浏览量使用数据库原子自增。
 - GET 操作日志不把 response 写入数据库；非 GET 入库内容最多约 64 KiB。
 - 但 `bodyWriter` 当前仍会在内存中复制完整响应，截断发生在请求结束后。
@@ -303,13 +304,16 @@
 - 安全审计日志满足明确的保留与可靠性要求；
 - 日志高峰不明显抬高普通 API p99。
 
-### P1-4 缓存与只读副本细化
+### P1-4 查询、缓存与只读副本细化
 
-1. `BumpBoot` 已有版本 key，继续 `SCAN boot:{tenant}:*` 属于重复失效；改为仅 bump，并依赖 TTL 清理旧版本。
-2. boot key 中 host 需规范化并限制长度，避免异常 Host 制造高基数 key。
-3. replica 探活不应在请求 goroutine 中持全局 mutex 等待 Ping；改为后台健康状态或 singleflight/atomic。
-4. 对读副本延迟敏感的路径建立清单，写后立即读、余额、支付、登录和权限始终走主库。
-5. 用生产数据 `EXPLAIN ANALYZE` 验证当前首批索引；启动自动 DDL 只作为兼容手段，生产升级仍应使用可审计迁移。
+1. 平台 `PayWayGet` 和租户 `PayWayGet` 先收集 `pay_config_id`，用一次 `IN (?)` 查询配置并映射，删除逐行 `First`。
+2. 平台租户列表为 `tactics=1` 分表租户逐个 COUNT；应提供批量汇总来源、缓存统计或明确限制分表租户列表统计成本。
+3. `BumpBoot` 已有版本 key，继续 `SCAN boot:{tenant}:*` 属于重复失效；改为仅 bump，并依赖 TTL 清理旧版本。
+4. boot key 中 host 需规范化并限制长度，避免异常 Host 制造高基数 key。
+5. replica 探活不应在请求 goroutine 中持全局 mutex 等待 Ping；改为后台健康状态或 singleflight/atomic。
+6. 对读副本延迟敏感的路径建立清单，写后立即读、余额、支付、登录和权限始终走主库。
+7. 安装向导当前提示“导出读走从库”，但导出仍使用原列表查询路径；在真正接入副本前修正文案，避免错误的运维预期。
+8. 用生产数据 `EXPLAIN ANALYZE` 验证当前首批索引；启动自动 DDL 只作为兼容手段，生产升级仍应使用可审计迁移。
 
 ### P1-5 静态、上传与 CDN 完成态
 
