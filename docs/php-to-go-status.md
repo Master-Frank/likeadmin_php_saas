@@ -24,7 +24,7 @@ Go 覆盖原 PHP 全部公开 HTTP 动作、Think CLI、系统 crontab、代码�
 
 工作树和运行时都没有 PHP。排障时使用删树前的不可变锚点：
 
-- annotated tag：`php-reference-final-20260912`
+- annotated tag：`php-reference-final-20260912`（commit `23ba7183dd320e281ee142ac81089dbef34870eb`）
 - 单文件：`git show php-reference-final-20260912:server/app/platformapi/logic/LoginLogic.php`
 - 并排目录：`git worktree add /tmp/likeadmin-php-ref php-reference-final-20260912`
 - `origin/develop` 只是上游 PHP 1.0.7 血缘，**不是** cutover 最终状态，不要用它替代该 tag。
