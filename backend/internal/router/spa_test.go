@@ -129,3 +129,17 @@ func TestRedirectShopToPC(t *testing.T) {
 		t.Fatalf("mobile referer %q", loc)
 	}
 }
+
+func TestRedirectToPCApp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/information/detail/6", nil)
+	redirectToPCApp(c)
+	if w.Code != http.StatusFound {
+		t.Fatalf("status %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/pc/information/detail/6" {
+		t.Fatalf("location %q", loc)
+	}
+}

@@ -97,6 +97,14 @@ func New() *gin.Engine {
 	r.GET("/mobile/*any", spa("mobile"))
 	r.GET("/pc", spa("pc"))
 	r.GET("/pc/*any", spa("pc"))
+	// Old PC NuxtLink target=_blank drops baseURL /pc/; hop those app routes back.
+	r.GET("/information", redirectToPCApp)
+	r.GET("/information/*any", redirectToPCApp)
+	r.GET("/user/collection", redirectToPCApp)
+	r.GET("/user/info", redirectToPCApp)
+	r.GET("/account/security", redirectToPCApp)
+	r.GET("/policy", redirectToPCApp)
+	r.GET("/policy/*any", redirectToPCApp)
 	// PC decorate banners use uniapp shop paths like /pages/news/news (new tab).
 	r.GET("/pages", redirectShopToPC)
 	r.GET("/pages/*any", redirectShopToPC)
@@ -150,6 +158,14 @@ func redirectShopToPC(c *gin.Context) {
 	if target == "" {
 		c.Status(http.StatusNotFound)
 		return
+	}
+	c.Redirect(http.StatusFound, target)
+}
+
+func redirectToPCApp(c *gin.Context) {
+	target := "/pc" + c.Request.URL.Path
+	if q := c.Request.URL.RawQuery; q != "" {
+		target += "?" + q
 	}
 	c.Redirect(http.StatusFound, target)
 }
