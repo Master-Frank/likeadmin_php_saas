@@ -318,3 +318,23 @@ func TestPublicPath(t *testing.T) {
 		t.Fatalf("%s", got)
 	}
 }
+
+func TestLocalCDNDomain(t *testing.T) {
+	cache.Del("STORAGE_DEFAULT")
+	cache.Del("STORAGE_ENGINE")
+	t.Cleanup(func() {
+		cache.Del("STORAGE_DEFAULT")
+		cache.Del("STORAGE_ENGINE")
+		config.C.App.CDNDomain = ""
+	})
+	cache.Set("STORAGE_DEFAULT", "local", 0)
+	config.C.App.CDNDomain = "https://cdn.example.com"
+	c := imageTestContext()
+	if got := GetFileURL(c, "uploads/a.png"); got != "https://cdn.example.com/uploads/a.png" {
+		t.Fatalf("cdn url=%s", got)
+	}
+	config.C.App.CDNDomain = ""
+	if got := GetFileURL(c, "uploads/a.png"); !strings.Contains(got, "pair1.likeadmin.test") {
+		t.Fatalf("empty cdn falls back to host: %s", got)
+	}
+}

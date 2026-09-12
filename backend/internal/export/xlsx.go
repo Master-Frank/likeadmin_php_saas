@@ -2,8 +2,8 @@ package export
 
 import (
 	"archive/zip"
-	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -15,51 +15,73 @@ func writeXLSX(path string, records [][]string) error {
 	}
 	defer f.Close()
 	zw := zip.NewWriter(f)
-	files := map[string]string{
-		"[Content_Types].xml":        xlsxContentTypes,
-		"_rels/.rels":                xlsxRels,
-		"xl/workbook.xml":            xlsxWorkbook,
-		"xl/_rels/workbook.xml.rels": xlsxWorkbookRels,
-		"xl/styles.xml":              xlsxStyles,
-		"xl/worksheets/sheet1.xml":   xlsxSheet(records),
+	files := []struct {
+		name string
+		body string
+	}{
+		{"[Content_Types].xml", xlsxContentTypes},
+		{"_rels/.rels", xlsxRels},
+		{"xl/workbook.xml", xlsxWorkbook},
+		{"xl/_rels/workbook.xml.rels", xlsxWorkbookRels},
+		{"xl/styles.xml", xlsxStyles},
 	}
-	for name, body := range files {
-		w, err := zw.Create(name)
+	for _, file := range files {
+		w, err := zw.Create(file.name)
 		if err != nil {
 			_ = zw.Close()
 			return err
 		}
-		if _, err := w.Write([]byte(body)); err != nil {
+		if _, err := w.Write([]byte(file.body)); err != nil {
 			_ = zw.Close()
 			return err
 		}
 	}
+	w, err := zw.Create("xl/worksheets/sheet1.xml")
+	if err != nil {
+		_ = zw.Close()
+		return err
+	}
+	if err := writeSheet(w, records); err != nil {
+		_ = zw.Close()
+		return err
+	}
 	return zw.Close()
 }
 
-func xlsxSheet(records [][]string) string {
-	var b bytes.Buffer
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`)
-	b.WriteString(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`)
+func writeSheet(w io.Writer, records [][]string) error {
+	if _, err := io.WriteString(w, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`); err != nil {
+		return err
+	}
 	for i, rec := range records {
 		row := i + 1
 		style := 0
 		if i == 0 {
 			style = 1
 		}
-		fmt.Fprintf(&b, `<row r="%d">`, row)
+		if _, err := fmt.Fprintf(w, `<row r="%d">`, row); err != nil {
+			return err
+		}
 		for j, cell := range rec {
 			ref := colName(j) + fmt.Sprintf("%d", row)
 			if style > 0 {
-				fmt.Fprintf(&b, `<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>`, ref, style, xmlEscape(cell))
+				if _, err := fmt.Fprintf(w, `<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>`, ref, style, xmlEscape(cell)); err != nil {
+					return err
+				}
 			} else {
-				fmt.Fprintf(&b, `<c r="%s" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>`, ref, xmlEscape(cell))
+				if _, err := fmt.Fprintf(w, `<c r="%s" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>`, ref, xmlEscape(cell)); err != nil {
+					return err
+				}
 			}
 		}
-		b.WriteString(`</row>`)
+		if _, err := io.WriteString(w, `</row>`); err != nil {
+			return err
+		}
 	}
-	b.WriteString(`</sheetData></worksheet>`)
-	return b.String()
+	_, err := io.WriteString(w, `</sheetData></worksheet>`)
+	return err
 }
 
 func colName(idx int) string {

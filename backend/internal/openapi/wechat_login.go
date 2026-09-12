@@ -16,11 +16,13 @@ import (
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/pay"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 	"likeadmin/backend/internal/wechat"
+	"likeadmin/backend/internal/workbench"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -279,6 +281,7 @@ func authWechatUser(c *gin.Context, sess wechat.Session, terminal int, create bo
 			return nil, err
 		}
 		created = true
+		workbench.OnUserCreated(tid)
 	} else {
 		if user.IsDisable == 1 {
 			return nil, fmt.Errorf("您的账号异常，请联系客服。")
@@ -474,6 +477,9 @@ func UserGetMobileByMnpReal(c *gin.Context) {
 
 func SmsSendCodeReal(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindSMS) {
 		return
 	}
 	p := httpx.Body(c)

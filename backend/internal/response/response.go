@@ -1,7 +1,12 @@
 package response
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
+
+	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -67,6 +72,25 @@ func Data(c *gin.Context, data any) {
 	Result(c, CodeOK, 0, "", data)
 }
 
+// DataCached sets a weak ETag and short public Cache-Control for public-read APIs.
+func DataCached(c *gin.Context, data any, maxAge time.Duration) {
+	if data == nil {
+		data = map[string]any{}
+	}
+	raw, _ := json.Marshal(data)
+	etag := `W/"` + util.MD5(string(raw)) + `"`
+	if maxAge <= 0 {
+		maxAge = 30 * time.Second
+	}
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(maxAge.Seconds())))
+	if match := c.GetHeader("If-None-Match"); match != "" && match == etag {
+		c.AbortWithStatus(http.StatusNotModified)
+		return
+	}
+	Data(c, data)
+}
+
 func Fail(c *gin.Context, msg string) {
 	if msg == "" {
 		msg = "fail"
@@ -114,6 +138,16 @@ func Lists(c *gin.Context, lists any, count int64, pageNo, pageSize int, extend 
 
 // ExportHook is set by router to handle export=1/2 without import cycles.
 var ExportHook func(c *gin.Context, rows any, count int64) bool
+
+func AbortTooLarge(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Abort()
+	c.JSON(http.StatusRequestEntityTooLarge, Body{
+		Code: CodeFail, Show: 1, Msg: "请求体过大", Data: emptyArray(),
+	})
+}
 
 func AbortFail(c *gin.Context, msg string, code, show int) {
 	FailCode(c, msg, code, show)

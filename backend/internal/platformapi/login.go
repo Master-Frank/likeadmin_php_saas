@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
@@ -19,6 +20,9 @@ const platformLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindLogin) {
 		return
 	}
 	if msg := util.LoginTerminalCheck(httpx.Body(c)); msg != "" {

@@ -19,3 +19,9 @@ func TestWithSNNilAndEmpty(t *testing.T) {
 		t.Fatal("nil ForTenantOn")
 	}
 }
+
+func TestUseReadWithoutReplica(t *testing.T) {
+	if UseRead(nil) != nil {
+		t.Fatal("nil bootstrap.Read must stay nil")
+	}
+}

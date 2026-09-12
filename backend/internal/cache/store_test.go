@@ -1,6 +1,11 @@
 package cache
 
-import "testing"
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
 
 func TestFlush(t *testing.T) {
 	Set("keep_before_flush", "1", 0)
@@ -29,4 +34,44 @@ func TestDelPrefix(t *testing.T) {
 		t.Fatal("unrelated key deleted")
 	}
 	Del("other_key")
+}
+
+func TestSecurityKeysSkipMemWhenRedisRequired(t *testing.T) {
+	t.Setenv("LIKEADMIN_REQUIRE_REDIS", "1")
+	Set("rl:login:1.1.1.1", "9", 0)
+	if _, ok := Get("rl:login:1.1.1.1"); ok {
+		t.Fatal("rate-limit keys must not use process memory when Redis is required")
+	}
+	if n := Incr("rl:login:1.1.1.1"); n >= 0 {
+		t.Fatalf("incr must fail closed, got %d", n)
+	}
+	Set("boot:public", "ok", 0)
+	if _, ok := Get("boot:public"); !ok {
+		t.Fatal("public cache may still use local memory")
+	}
+	Del("boot:public")
+}
+
+func TestSetNXMemoryFallbackIsAtomic(t *testing.T) {
+	const key = "setnx_atomic_test"
+	Del(key)
+	t.Cleanup(func() { Del(key) })
+	var winners atomic.Int64
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if SetNX(key, "winner", time.Minute) {
+				winners.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if winners.Load() != 1 {
+		t.Fatalf("SetNX winners=%d, want 1", winners.Load())
+	}
 }

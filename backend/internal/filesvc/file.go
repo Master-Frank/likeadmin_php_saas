@@ -24,7 +24,7 @@ func GetImageAttr(c *gin.Context, uri string) string {
 }
 
 // EmptyFileURL matches PayConfig/TenantPayConfig getIconAttr and
-// CustomerServiceLogic: empty($value) ? '' : getFileUrl($value).
+// CustomerServiceLogic: empty($value) ? ” : getFileUrl($value).
 // No trim; "0" is empty.
 func EmptyFileURL(c *gin.Context, uri string) string {
 	if uri == "" || uri == "0" {
@@ -69,11 +69,18 @@ func GetFileURL(c *gin.Context, uri string) string {
 	def := storageDefault(c)
 	var domain string
 	if def == "local" {
-		domain = ctxutil.Domain(c)
+		domain = localFileDomain(c)
 	} else if engine := storageEngine(c, def); engine != nil {
 		domain, _ = engine["domain"].(string)
 	}
 	return Format(domain, uri)
+}
+
+func localFileDomain(c *gin.Context) string {
+	if d := config.FileCDNDomain(); d != "" {
+		return d
+	}
+	return ctxutil.Domain(c)
 }
 
 // RewriteContentDomains prefixes relative img/video src with the file domain,
@@ -171,7 +178,7 @@ func SetFileURL(c *gin.Context, uri string) string {
 	def := storageDefault(c)
 	var domain string
 	if def == "local" {
-		domain = ctxutil.Domain(c)
+		domain = localFileDomain(c)
 	} else if engine := storageEngine(c, def); engine != nil {
 		domain, _ = engine["domain"].(string)
 	}

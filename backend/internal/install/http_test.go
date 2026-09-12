@@ -51,6 +51,9 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "开始安装") {
 		t.Fatalf("expected form: %s", w.Body.String())
 	}
+	if !strings.Contains(w.Body.String(), "单实例") || !strings.Contains(w.Body.String(), "主从库") {
+		t.Fatalf("wizard should offer topology choices: %s", w.Body.String())
+	}
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)

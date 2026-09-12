@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -131,18 +132,32 @@ func TestPermsFingerprint(t *testing.T) {
 	}
 }
 
-func TestCachedURIListInvalidates(t *testing.T) {
+func TestCachedURIListCacheFirst(t *testing.T) {
 	cache.DelPrefix("admin_auth_")
-	t.Cleanup(func() { cache.DelPrefix("admin_auth_") })
-	storeURIList("admin_auth_all", []string{"old/path"})
-	cache.Set("admin_auth_all_md5", "stale", 0)
-	storeURIList("admin_auth_url_9", []string{"old/url"})
+	cache.Del("auth_cache_ver")
+	t.Cleanup(func() {
+		cache.DelPrefix("admin_auth_")
+		cache.Del("auth_cache_ver")
+	})
 	got := cachedURIList("admin_auth_all", func() []string { return []string{"auth.admin/lists"} })
 	if len(got) != 1 || got[0] != "auth.admin/lists" {
 		t.Fatalf("live perms=%v", got)
 	}
-	if loadURIList("admin_auth_url_9") != nil {
-		t.Fatal("stale admin url cache should drop when perms fingerprint changes")
+	got = cachedURIList("admin_auth_all", func() []string {
+		t.Fatal("load should not run on cache hit")
+		return nil
+	})
+	if len(got) != 1 || got[0] != "auth.admin/lists" {
+		t.Fatalf("cached perms=%v", got)
+	}
+	loads := 0
+	cache.BumpAuthCache()
+	got = cachedURIList("admin_auth_all", func() []string {
+		loads++
+		return []string{"auth.admin/add"}
+	})
+	if loads != 1 || len(got) != 1 || got[0] != "auth.admin/add" {
+		t.Fatalf("miss rebuild loads=%d got=%v", loads, got)
 	}
 }
 
@@ -165,15 +180,47 @@ func TestAuthURIListCache(t *testing.T) {
 	}
 }
 
+func TestLoadPlatformMenuURIsFailClosed(t *testing.T) {
+	if _, err := loadPlatformMenuURIs(); err == nil {
+		t.Fatal("nil DB must be an error so unregistered-route fail-open cannot run")
+	}
+	liveMenus = liveMenuCatalog{}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	_, err := liveMenuURIs(c, &ctxutil.RequestMeta{App: "platformapi"})
+	if err == nil {
+		t.Fatal("live lookup must fail when DB is unavailable")
+	}
+	if liveMenus.platformL {
+		t.Fatal("failed live lookup must not be cached")
+	}
+}
+
 func TestDynamicCRUDRequiresExplicitPermission(t *testing.T) {
 	all := []string{"generated.demo/lists"}
-	if adminURIAllowed(true, all, nil, "generated.demo/lists") {
+	if adminURIAllowed(true, all, nil, "generated.demo/lists", nil) {
 		t.Fatal("dynamic CRUD must not inherit the PHP missing-menu fail-open")
 	}
-	if !adminURIAllowed(true, all, []string{"generated.demo/lists"}, "generated.demo/lists") {
+	if !adminURIAllowed(true, all, []string{"generated.demo/lists"}, "generated.demo/lists", nil) {
 		t.Fatal("explicit dynamic CRUD permission should pass")
 	}
-	if !adminURIAllowed(false, all, nil, "unregistered/path") {
+	if !adminURIAllowed(false, all, nil, "unregistered/path", nil) {
 		t.Fatal("static PHP compatibility routes keep existing behavior")
+	}
+	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() (bool, error) { return true, nil }) {
+		t.Fatal("URI present in live menus but missing from cached all must not fail-open")
+	}
+	if !adminURIAllowed(false, all, []string{"tools.generator/lists"}, "tools.generator/lists", func() (bool, error) { return true, nil }) {
+		t.Fatal("live-registered URI should pass when the admin has the perm")
+	}
+	if adminURIAllowed(false, all, nil, "tools.generator/lists", func() (bool, error) {
+		return false, errors.New("db down")
+	}) {
+		t.Fatal("live menu lookup errors must deny instead of treating the URI as unregistered")
+	}
+	if !adminURIAllowed(false, all, nil, "unregistered/path", func() (bool, error) { return false, nil }) {
+		t.Fatal("a successful live miss still keeps PHP unregistered-route compatibility")
 	}
 }

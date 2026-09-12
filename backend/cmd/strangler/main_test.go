@@ -121,4 +121,15 @@ func TestServePublicSPA(t *testing.T) {
 	if servePublic(rec, req, dir) {
 		t.Fatal("path escape")
 	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/pages/news/news?id=1", nil)
+	if !servePublic(rec, req, dir) {
+		t.Fatal("pages should redirect to PC")
+	}
+	if rec.Code != http.StatusFound {
+		t.Fatalf("pages status %d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/pc/information" {
+		t.Fatalf("pages location %q", loc)
+	}
 }

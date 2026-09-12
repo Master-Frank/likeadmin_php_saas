@@ -10,7 +10,9 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
 	"likeadmin/backend/internal/httpx"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantdb"
 
@@ -32,6 +34,9 @@ func Status(c *gin.Context) {
 }
 
 func Run(c *gin.Context) {
+	if !ratelimit.Allow(c, ratelimit.KindInstall) {
+		return
+	}
 	lock := config.C.App.InstallLock
 	if lock != "" {
 		if _, err := os.Stat(lock); err == nil {
@@ -79,6 +84,15 @@ func Run(c *gin.Context) {
 	importTest := isOn(p, "import_test_data")
 	adminUser := pick(p, "admin_user")
 	adminPass := pick(p, "admin_password")
+	if msg := CheckTopology(p); msg != "" {
+		response.Fail(c, msg)
+		return
+	}
+	deployMode := topologyMode(p, "deploy_mode", "single")
+	dbMode := topologyMode(p, "db_mode", "single")
+	replicaPort := httpx.BodyInt(c, "replica_port")
+	redisPort := httpx.BodyInt(c, "redis_port")
+	redisDB := httpx.BodyInt(c, "redis_db")
 
 	lockPath := lock
 	if lockPath == "" {
@@ -91,6 +105,13 @@ func Run(c *gin.Context) {
 		AdminUser: adminUser, AdminPassword: adminPass,
 		PublicDir: config.C.App.PublicDir, LockPath: lockPath, EnvPath: envPath,
 		GoConfigPath: config.Path, HTTPHost: ctxutilHost(c),
+		DeployMode: deployMode, DBMode: dbMode,
+		RedisHost: pick(p, "redis_host"), RedisPassword: pick(p, "redis_password"),
+		RedisPort: redisPort, RedisDB: redisDB,
+		ReplicaHost: firstNonEmpty(p, "replica_host", "replica_hostname"),
+		ReplicaUser: pick(p, "replica_user"), ReplicaPass: pick(p, "replica_password"),
+		ReplicaName: pick(p, "replica_name"), ReplicaPort: replicaPort,
+		CDNDomain: pick(p, "cdn_domain"),
 	})
 	if err != nil {
 		response.Fail(c, err.Error())
@@ -98,6 +119,11 @@ func Run(c *gin.Context) {
 	}
 	if err := bootstrap.ReconnectDB(); err != nil {
 		response.Fail(c, "安装成功但数据库重连失败："+err.Error())
+		return
+	}
+	dbindex.EnsurePerfIndexes(bootstrap.DB)
+	if err := bootstrap.ReconnectRedis(); err != nil {
+		response.Fail(c, "安装成功但缓存重连失败："+err.Error())
 		return
 	}
 	if err := bootstrap.CheckDDLPrivileges(); err != nil {

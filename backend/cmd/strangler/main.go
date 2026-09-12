@@ -10,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"likeadmin/backend/internal/pcshop"
 )
 
 const maxUpload = 50 << 20
@@ -134,6 +136,16 @@ func servePublic(w http.ResponseWriter, r *http.Request, public string) bool {
 	reqPath := path.Clean("/" + r.URL.Path)
 	if !strings.HasPrefix(reqPath, "/") {
 		reqPath = "/" + reqPath
+	}
+	for _, prefix := range []string{"/pages", "/packages"} {
+		if reqPath == prefix || strings.HasPrefix(reqPath, prefix+"/") {
+			target := pcshop.Target(reqPath, r.URL.Query())
+			if target == "" {
+				return false
+			}
+			http.Redirect(w, r, target, http.StatusFound)
+			return true
+		}
 	}
 	rel := strings.TrimPrefix(reqPath, "/")
 	full := filepath.Join(public, filepath.FromSlash(rel))

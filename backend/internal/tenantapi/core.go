@@ -15,6 +15,8 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/middleware"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/pubcache"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
@@ -33,6 +35,9 @@ const tenantLockTag = `app\common\cache\AdminAccountSafeCache`
 
 func LoginAccount(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindLogin) {
 		return
 	}
 	if msg := util.LoginTerminalCheck(httpx.Body(c)); msg != "" {
@@ -157,10 +162,18 @@ func WorkbenchIndex(c *gin.Context) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	var todayNew, totalNew int64
-	uq := scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
-	uq.Where("create_time >= ?", todayStart).Count(&todayNew)
-	uq = scopeTID(tdb(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
-	uq.Count(&totalNew)
+	tid := ctxutil.Get(c).TenantID
+	todayNew = workbench.CachedCount(workbench.UserTodayKey(tid, now), func() int64 {
+		var n int64
+		uq := scopeTID(tenantdb.UseRead(c).Model(&model.User{}).Where("delete_time IS NULL"), c)
+		uq.Where("create_time >= ?", todayStart).Count(&n)
+		return n
+	})
+	totalNew = workbench.CachedCount(workbench.UserTotalKey(tid), func() int64 {
+		var n int64
+		scopeTID(tenantdb.UseRead(c).Model(&model.User{}).Where("delete_time IS NULL"), c).Count(&n)
+		return n
+	})
 	vDates, vNums := workbench.Series(now, 15, 0, 100)
 	sDates, sNums := workbench.Series(now, 7, 30, 200)
 	response.Data(c, gin.H{
@@ -261,6 +274,12 @@ func tenantDB(c *gin.Context) uint {
 	return ctxutil.Get(c).TenantID
 }
 
+func invalidatePublic(c *gin.Context, kinds ...string) {
+	tid := tenantDB(c)
+	pubcache.Invalidate(tid, kinds...)
+	cfgsvc.BumpBoot(tid)
+}
+
 func scopeTID(db *gorm.DB, c *gin.Context) *gorm.DB {
 	tid := tenantDB(c)
 	if tid == 0 {
@@ -345,7 +364,7 @@ func UserLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.User
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	_ = lists.FindChunked(db.Order("id desc"), q, &rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, u := range rows {
 		out = append(out, map[string]any{
@@ -658,6 +677,7 @@ func ArticleCateAdd(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	tdb(c).Create(&model.ArticleCate{Name: httpx.BodyRaw(c, "name"), Sort: httpx.BodyInt(c, "sort"), IsShow: httpx.BodyInt(c, "is_show"), TenantID: tenantDB(c), CreateTime: now, UpdateTime: util.UnixPtr(now)})
+	invalidatePublic(c, "cate")
 	response.SuccessNotice(c, "添加成功")
 }
 
@@ -676,6 +696,7 @@ func ArticleCateEdit(c *gin.Context) {
 		"name": httpx.BodyRaw(c, "name"), "sort": httpx.BodyInt(c, "sort"), "is_show": httpx.BodyInt(c, "is_show"),
 		"update_time": util.NowUnix(),
 	})
+	invalidatePublic(c, "cate")
 	response.SuccessNotice(c, "编辑成功")
 }
 
@@ -703,6 +724,7 @@ func ArticleCateDelete(c *gin.Context) {
 	}
 	now := util.NowUnix()
 	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(util.SoftDeleteFields(now))
+	invalidatePublic(c, "cate")
 	response.SuccessNotice(c, "删除成功")
 }
 
@@ -827,6 +849,7 @@ func DecoratePageSave(c *gin.Context) {
 		"type": httpx.BodyInt(c, "type"), "data": data,
 		"meta": decoratePayload(c, "meta"), "update_time": now,
 	})
+	invalidatePublic(c, "decorate")
 	response.SuccessNotice(c, "操作成功")
 }
 

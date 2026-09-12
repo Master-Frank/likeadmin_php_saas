@@ -1,10 +1,12 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/config"
@@ -13,8 +15,11 @@ import (
 	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/gencrud"
 	"likeadmin/backend/internal/install"
+	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/middleware"
+	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/openapi"
+	"likeadmin/backend/internal/pcshop"
 	"likeadmin/backend/internal/platformapi"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantapi"
@@ -31,17 +36,37 @@ func New() *gin.Engine {
 	}
 	tenantdb.Register(bootstrap.DB)
 	r := gin.New()
-	r.Use(gin.Recovery(), middleware.CORS(), middleware.InstallAndTenant())
+	r.Use(gin.Recovery(), metrics.Middleware(), middleware.CORS(), middleware.InstallAndTenant())
+	r.GET("/healthz", healthz)
+	r.GET("/readyz", readyz)
 	response.ExportHook = func(c *gin.Context, rows any, count int64) bool {
 		c.Set("likeadmin.export_count", count)
 		return export.Maybe(c, "export", rows)
 	}
 
 	notNeed := notNeedLogin()
+	plat := platformRoutes()
+	ten := tenantRoutes()
+	api := apiRoutes()
+	export.SetHandlerLookup(func(app, controller, action string) gin.HandlerFunc {
+		key := strings.ToLower(controller + "/" + action)
+		switch app {
+		case "platformapi":
+			return lookup(plat, key)
+		case "tenantapi":
+			return lookup(ten, key)
+		case "api":
+			return lookup(api, key)
+		default:
+			return nil
+		}
+	})
+	export.SetJobAuthorizer(authorizeExportJob)
+	export.Start()
 
-	r.Any("/platformapi/*path", dispatch("platformapi", platformRoutes(), notNeed["platformapi"]))
-	r.Any("/tenantapi/*path", dispatch("tenantapi", tenantRoutes(), notNeed["tenantapi"]))
-	r.Any("/api/*path", dispatch("api", apiRoutes(), notNeed["api"]))
+	r.Any("/platformapi/*path", dispatch("platformapi", plat, notNeed["platformapi"]))
+	r.Any("/tenantapi/*path", dispatch("tenantapi", ten, notNeed["tenantapi"]))
+	r.Any("/api/*path", dispatch("api", api, notNeed["api"]))
 
 	r.GET("/crontab", cron.HTTP)
 	r.GET("/install", install.Wizard)
@@ -53,11 +78,7 @@ func New() *gin.Engine {
 	r.POST("/install", install.Run)
 	r.Any("/install/status", install.Status)
 
-	spa := func(dir string) gin.HandlerFunc {
-		return func(c *gin.Context) {
-			c.File(filepath.Join(config.C.App.PublicDir, dir, "index.html"))
-		}
-	}
+	spa := serveSPA
 	if config.C.App.PublicDir != "" {
 		r.GET("/", func(c *gin.Context) {
 			index := filepath.Join(config.C.App.PublicDir, "index.html")
@@ -76,12 +97,79 @@ func New() *gin.Engine {
 	r.GET("/mobile/*any", spa("mobile"))
 	r.GET("/pc", spa("pc"))
 	r.GET("/pc/*any", spa("pc"))
+	// PC decorate banners use uniapp shop paths like /pages/news/news (new tab).
+	r.GET("/pages", redirectShopToPC)
+	r.GET("/pages/*any", redirectShopToPC)
+	r.GET("/packages", redirectShopToPC)
+	r.GET("/packages/*any", redirectShopToPC)
 
 	if config.C.App.PublicDir != "" {
 		r.Static("/resource", filepath.Join(config.C.App.PublicDir, "resource"))
 		r.Static("/uploads", filepath.Join(config.C.App.PublicDir, "uploads"))
 	}
 	return r
+}
+
+// serveSPA returns hashed Vue assets from disk and falls back to index.html
+// for client-side routes. Serving index.html for *.js/*.css leaves the SPA
+// stuck on its preload spinner.
+func serveSPA(dir string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		root := filepath.Join(config.C.App.PublicDir, dir)
+		rel := strings.TrimPrefix(c.Request.URL.Path, "/"+dir)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel != "" && !strings.Contains(rel, "..") {
+			fp := filepath.Join(root, filepath.FromSlash(rel))
+			if st, err := os.Stat(fp); err == nil && !st.IsDir() && underDir(root, fp) {
+				if hashedSPAAsset(rel) {
+					c.Header("Cache-Control", "public, max-age=31536000, immutable")
+				} else if strings.HasSuffix(strings.ToLower(rel), ".html") {
+					c.Header("Cache-Control", "no-cache")
+				}
+				c.File(fp)
+				return
+			}
+		}
+		c.Header("Cache-Control", "no-cache")
+		c.File(filepath.Join(root, "index.html"))
+	}
+}
+
+// redirectShopToPC sends decorate/shop links to the PC Nuxt site, not H5 /mobile.
+func redirectShopToPC(c *gin.Context) {
+	target := pcshop.Target(c.Request.URL.Path, c.Request.URL.Query())
+	if target == "" {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Redirect(http.StatusFound, target)
+}
+
+func underDir(root, fp string) bool {
+	absRoot, err1 := filepath.Abs(root)
+	absFP, err2 := filepath.Abs(fp)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	sep := string(os.PathSeparator)
+	return absFP == absRoot || strings.HasPrefix(absFP, absRoot+sep)
+}
+
+func hashedSPAAsset(rel string) bool {
+	n := strings.ToLower(strings.ReplaceAll(rel, "\\", "/"))
+	if strings.Contains(n, "/assets/") || strings.HasPrefix(n, "assets/") {
+		return true
+	}
+	for _, ext := range []string{".js", ".css", ".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"} {
+		if !strings.HasSuffix(n, ext) {
+			continue
+		}
+		base := strings.TrimSuffix(filepath.Base(n), ext)
+		if i := strings.LastIndex(base, "-"); i >= 0 && len(base)-i-1 >= 8 {
+			return true
+		}
+	}
+	return false
 }
 
 func dispatch(app string, routes map[string]Handler, notNeed map[string][]string) gin.HandlerFunc {
@@ -172,6 +260,46 @@ func lookup(routes map[string]Handler, key string) Handler {
 		}
 	}
 	return nil
+}
+
+func authorizeExportJob(c *gin.Context) bool {
+	meta := ctxutil.Get(c)
+	switch meta.App {
+	case "platformapi":
+		if bootstrap.DB == nil || meta.AdminID == 0 {
+			return false
+		}
+		var admin model.Admin
+		if bootstrap.DB.Where("id = ? AND disable = 0 AND delete_time IS NULL", meta.AdminID).First(&admin).Error != nil {
+			return false
+		}
+		var roles []uint
+		bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roles)
+		meta.AdminInfo = map[string]any{
+			"admin_id": admin.ID, "root": admin.Root, "name": admin.Name,
+			"account": admin.Account, "role_id": roles, "login_ip": ctxutil.ClientIP(c),
+		}
+	case "tenantapi":
+		db := tenantdb.Use(c)
+		if db == nil || meta.AdminID == 0 || meta.TenantID == 0 {
+			return false
+		}
+		var admin model.TenantAdmin
+		if db.Where("id = ? AND tenant_id = ? AND disable = 0 AND delete_time IS NULL", meta.AdminID, meta.TenantID).First(&admin).Error != nil {
+			return false
+		}
+		var roles []uint
+		db.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roles)
+		meta.AdminInfo = map[string]any{
+			"admin_id": admin.ID, "tenant_id": admin.TenantID, "root": admin.Root,
+			"name": admin.Name, "account": admin.Account, "role_id": roles,
+			"login_ip": ctxutil.ClientIP(c),
+		}
+	default:
+		return true
+	}
+	middleware.Auth()(c)
+	return !c.IsAborted()
 }
 
 func parsePath(p string) (ctrl, action string) {
@@ -416,4 +544,37 @@ func apiRoutes() map[string]Handler {
 		"pay/payway":      openapi.PayWay, "pay/prepay": openapi.PayPrepay, "pay/paystatus": openapi.PayStatus,
 		"pay/notifymnp": openapi.PayNotifyOK, "pay/notifyoa": openapi.PayNotifyOK, "pay/notifyapp": openapi.PayNotifyOK, "pay/alinotify": openapi.AliNotify,
 	}
+}
+
+func healthz(c *gin.Context) {
+	c.String(http.StatusOK, "ok")
+}
+
+func readyz(c *gin.Context) {
+	if bootstrap.DB == nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	sqlDB, err := bootstrap.DB.DB()
+	if err != nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	parent := context.Background()
+	if c.Request != nil {
+		parent = c.Request.Context()
+	}
+	ctx, cancel := context.WithTimeout(parent, time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		c.String(http.StatusServiceUnavailable, "db")
+		return
+	}
+	if config.RequireRedisConfigured() {
+		if err := bootstrap.PingRedis(); err != nil {
+			c.String(http.StatusServiceUnavailable, "redis")
+			return
+		}
+	}
+	c.String(http.StatusOK, "ok")
 }

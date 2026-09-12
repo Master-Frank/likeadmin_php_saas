@@ -113,7 +113,8 @@ CREATE TABLE `la_article`
     `create_time`   int(11)                                                       NULL     DEFAULT NULL COMMENT '创建时间',
     `update_time`   int(11)                                                       NULL     DEFAULT NULL COMMENT '更新时间',
     `delete_time`   int(11)                                                       NULL     DEFAULT NULL COMMENT '删除时间',
-    PRIMARY KEY (`id`) USING BTREE
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_tenant_show_delete` (`tenant_id`, `is_show`, `delete_time`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 4
   CHARACTER SET = utf8mb4
@@ -206,7 +207,8 @@ CREATE TABLE `la_config`
     `value`       text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci        NULL COMMENT '值',
     `create_time` int(10)                                                      NULL     DEFAULT NULL COMMENT '创建时间',
     `update_time` int(10)                                                      NULL     DEFAULT NULL COMMENT '更新时间',
-    PRIMARY KEY (`id`) USING BTREE
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_type_name` (`type`, `name`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4
@@ -735,8 +737,11 @@ CREATE TABLE `la_operation_log`
     `params`      text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci         NULL COMMENT '请求数据',
     `result`      text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci         NULL COMMENT '请求结果',
     `ip`          varchar(39) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci  NOT NULL DEFAULT '' COMMENT 'ip地址',
+    `tenant_id`   int(11)                                                       NOT NULL DEFAULT 0 COMMENT '租户ID',
     `create_time` int(10)                                                       NULL     DEFAULT NULL COMMENT '创建时间',
-    PRIMARY KEY (`id`) USING BTREE
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_create_time` (`create_time`) USING BTREE,
+    INDEX `idx_tenant_create_id` (`tenant_id`,`create_time`,`id`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4
@@ -1217,7 +1222,9 @@ CREATE TABLE `la_tenant`
     `create_time`         int(10)                                                       NOT NULL COMMENT '创建时间',
     `update_time`         int(10)                                                       NULL     DEFAULT NULL COMMENT '修改时间',
     `delete_time`         int(10)                                                       NULL     DEFAULT NULL COMMENT '删除时间',
-    PRIMARY KEY (`id`) USING BTREE
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_sn_delete_time` (`sn`, `delete_time`) USING BTREE,
+    INDEX `idx_domain_alias_delete_time` (`domain_alias`, `delete_time`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4
@@ -1327,7 +1334,8 @@ CREATE TABLE `la_tenant_config`
     `value`       text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci        NULL COMMENT '值',
     `create_time` int(10)                                                      NULL     DEFAULT NULL COMMENT '创建时间',
     `update_time` int(10)                                                      NULL     DEFAULT NULL COMMENT '更新时间',
-    PRIMARY KEY (`id`) USING BTREE
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_tenant_type_name` (`tenant_id`, `type`, `name`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4
@@ -2043,7 +2051,8 @@ CREATE TABLE `la_user`
     `delete_time`           int(10) UNSIGNED                                              NULL     DEFAULT NULL COMMENT '删除时间',
     PRIMARY KEY (`id`) USING BTREE,
     UNIQUE INDEX `sn` (`sn`) USING BTREE COMMENT '编号唯一',
-    UNIQUE INDEX `account` (`account`) USING BTREE COMMENT '账号唯一'
+    UNIQUE INDEX `account` (`account`) USING BTREE COMMENT '账号唯一',
+    INDEX `idx_tenant_delete_time` (`tenant_id`, `delete_time`) USING BTREE
 ) ENGINE = InnoDB
   AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4

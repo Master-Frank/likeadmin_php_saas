@@ -17,8 +17,10 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
 	"likeadmin/backend/internal/model"
 	paycfg "likeadmin/backend/internal/pay"
+	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
@@ -131,6 +133,8 @@ func registerBuiltins() {
 	Register("verification_orders", func([]string) string { return verificationOrders() })
 	Register("version", runVersion)
 	Register("optimize:schema", runOptimizeSchema)
+	Register("ensure-indexes", runEnsureIndexes)
+	Register("explain-indexes", runExplainIndexes)
 	Register("help", runHelp)
 	Register("list", runList)
 	Register("vendor:publish", runVendorPublish)
@@ -238,6 +242,10 @@ func normalizeCommand(raw string) string {
 		return "version"
 	case strings.Contains(cmd, "optimize:schema") || strings.Contains(cmd, "optimizeschema"):
 		return "optimize:schema"
+	case cmd == "ensure-indexes" || strings.Contains(cmd, "ensureindexes") || strings.Contains(cmd, "ensure-indexes"):
+		return "ensure-indexes"
+	case cmd == "explain-indexes" || strings.Contains(cmd, "explainindexes") || strings.Contains(cmd, "explain-indexes"):
+		return "explain-indexes"
 	case strings.Contains(cmd, "optimize:route") || strings.Contains(cmd, "optimizeroute"):
 		return "optimize:route"
 	case strings.Contains(cmd, "route:list") || strings.Contains(cmd, "routelist"):
@@ -251,6 +259,29 @@ func normalizeCommand(raw string) string {
 
 func flushCache() string {
 	cache.Flush()
+	return ""
+}
+
+func runEnsureIndexes([]string) string {
+	if bootstrap.DB == nil {
+		fmt.Println("database unavailable")
+		dbindex.WriteStatus(dbindex.Plan(nil), fmt.Errorf("database unavailable"))
+		return "database unavailable"
+	}
+	before := dbindex.Plan(bootstrap.DB)
+	fmt.Print(dbindex.FormatPlan(before))
+	dbindex.EnsurePerfIndexes(bootstrap.DB)
+	after := dbindex.Plan(bootstrap.DB)
+	dbindex.WriteStatus(after, nil)
+	fmt.Print(dbindex.FormatPlan(after))
+	return ""
+}
+
+func runExplainIndexes([]string) string {
+	if bootstrap.DB == nil {
+		return "database unavailable"
+	}
+	fmt.Print(dbindex.RunExplain(bootstrap.DB))
 	return ""
 }
 
@@ -735,14 +766,7 @@ func verifyTableOrders(db *gorm.DB, tenantID uint, cutoff, now int64, table stri
 }
 
 func tableHasColumn(db *gorm.DB, table, col string) bool {
-	if db == nil || table == "" || col == "" {
-		return false
-	}
-	var n int64
-	if db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", table, col).Scan(&n).Error != nil {
-		return false
-	}
-	return n > 0
+	return schemacache.HasColumn(db, table, col)
 }
 
 // EnsureNativeJobs inserts the Go-only system jobs a PHP install never shipped,

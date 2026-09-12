@@ -74,6 +74,7 @@ func ArticleCateUpdateStatus(c *gin.Context) {
 	scopeTID(tdb(c).Model(&model.ArticleCate{}).Where("id = ? AND delete_time IS NULL", httpx.BodyUint(c, "id")), c).Updates(map[string]any{
 		"is_show": httpx.BodyInt(c, "is_show"), "update_time": util.NowUnix(),
 	})
+	invalidatePublic(c, "cate")
 	response.SuccessNotice(c, "修改成功")
 }
 
@@ -182,6 +183,7 @@ func DecorateTabbarSave(c *gin.Context) {
 			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		})
 	}
+	invalidatePublic(c, "decorate", "tabbar")
 	response.SuccessNotice(c, "操作成功")
 }
 
@@ -222,6 +224,7 @@ func HotSearchSet(c *gin.Context) {
 			tdb(c).Create(&row)
 		}
 	}
+	invalidatePublic(c, "hot")
 	response.SuccessNotice(c, "设置成功")
 }
 

@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
 
@@ -112,6 +116,32 @@ func TestExportRangeError(t *testing.T) {
 	}
 }
 
+func TestExportWindowLimitError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.Lists
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	config.C.Project.Lists.ExportMaxRows = 10000
+	config.C.Project.Lists.ExportMaxPages = 20
+	t.Cleanup(func() { config.C.Project.Lists = old })
+
+	ctx := func(raw string) *gin.Context {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		return c
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=200&page_size=25000")); msg == "" {
+		t.Fatal("200*25000 must be rejected")
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=200&page_size=10")); msg == "" {
+		t.Fatal("200 pages must be rejected")
+	}
+	if msg := exportWindowLimitError(ctx("?export=2&page_start=1&page_end=4&page_size=10")); msg != "" {
+		t.Fatalf("small window %q", msg)
+	}
+}
+
 func TestMaybeIgnoresBodyExport(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -124,13 +154,13 @@ func TestMaybeIgnoresBodyExport(t *testing.T) {
 	}
 }
 
-func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
+func TestMaybeExportURLUsesAppPrefix(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/user.user/lists?export=2&page_start=1&page_end=1", nil)
 	c.Request.Host = "pair1.likeadmin.test"
-	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "user.user", Action: "lists", App: "tenantapi"})
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "user.user", Action: "lists", App: "tenantapi", AdminID: 7, TenantID: 3})
 	if !Maybe(c, "用户列表", []map[string]any{{"id": 1, "account": "a"}}) {
 		t.Fatal("export=2")
 	}
@@ -142,11 +172,17 @@ func TestMaybeExportURLAlwaysPlatformAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	url, _ := env.Data["url"].(string)
-	if env.Code != 2 || !strings.Contains(url, "/platformapi/download/export?file=") {
-		t.Fatalf("tenant export url must stay platformapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
+	if env.Code != 1 || !strings.Contains(url, "/tenantapi/download/export?file=") {
+		t.Fatalf("tenant export url must use tenantapi: code=%d url=%s body=%s", env.Code, url, w.Body.String())
 	}
-	if strings.Contains(url, "/tenantapi/") {
-		t.Fatalf("tenant prefix leaked: %s", url)
+	if !strings.Contains(url, "sig=") || !strings.Contains(url, "exp=") {
+		t.Fatalf("download url must be signed: %s", url)
+	}
+	if env.Data["status"] != "ready" || env.Data["task_id"] == "" {
+		t.Fatalf("sync export must return ready task: %s", w.Body.String())
+	}
+	if strings.Contains(url, "/platformapi/") {
+		t.Fatalf("platform prefix leaked: %s", url)
 	}
 }
 
@@ -161,6 +197,26 @@ func TestMaybeRejectsUnsupportedExport(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "该列表不支持导出") {
 		t.Fatalf("body %s", w.Body.String())
+	}
+}
+
+func TestMaybeKeepsAPIExportSynchronous(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.ExportAsync
+	config.C.Project.ExportAsync = true
+	t.Cleanup(func() { config.C.Project.ExportAsync = old })
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/recharge/recharge/lists?export=2&page_start=1&page_end=1", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{
+		App: "api", Controller: "recharge.recharge", Action: "lists", UserID: 9, TenantID: 2,
+	})
+	if !Maybe(c, "充值记录", []map[string]any{{"sn": "R1"}}) {
+		t.Fatal("export=2 should be handled")
+	}
+	if !strings.Contains(w.Body.String(), `"status":"ready"`) {
+		t.Fatalf("C-end export must finish in request: %s", w.Body.String())
 	}
 }
 
@@ -239,4 +295,258 @@ func TestWriteXLSXZip(t *testing.T) {
 	if !strings.Contains(sheet, "记录ID") || !strings.Contains(sheet, "查看") {
 		t.Fatalf("sheet %s", sheet)
 	}
+}
+
+func TestServeTaskAndSyncReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldApp, oldProj := config.C.App, config.C.Project
+	t.Cleanup(func() {
+		config.C.App, config.C.Project = oldApp, oldProj
+	})
+	config.C.App.MultiInstance = false
+	config.C.Project.ExportAsync = false
+	t.Setenv("LIKEADMIN_EXPORT_ASYNC", "")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/auth.admin/lists?export=2&page_start=1&page_end=1", nil)
+	c.Request.Host = "pair1.likeadmin.test"
+	ctxutil.Set(c, &ctxutil.RequestMeta{
+		Controller: "setting.system.log", Action: "lists", App: "platformapi", AdminID: 7,
+	})
+	if !Maybe(c, "系统日志", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=2")
+	}
+	var env struct {
+		Code int            `json:"code"`
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	taskID, _ := env.Data["task_id"].(string)
+	if env.Code != 1 || taskID == "" || env.Data["status"] != "ready" {
+		t.Fatalf("body %s", w.Body.String())
+	}
+	saved, ok := loadTask(taskID)
+	if !ok || saved.AdminID != 7 {
+		t.Fatalf("saved task %+v ok=%v", saved, ok)
+	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+taskID, nil)
+	ctxutil.Set(c2, &ctxutil.RequestMeta{AdminID: 7})
+	Serve(c2)
+	if !strings.Contains(w2.Body.String(), `"status":"ready"`) {
+		t.Fatalf("poll %s", w2.Body.String())
+	}
+
+	w3 := httptest.NewRecorder()
+	c3, _ := gin.CreateTestContext(w3)
+	c3.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task=missing", nil)
+	Serve(c3)
+	if !strings.Contains(w3.Body.String(), "导出任务不存在") {
+		t.Fatalf("missing %s", w3.Body.String())
+	}
+}
+
+func TestSaveExportOutsidePublicUploads(t *testing.T) {
+	dir := t.TempDir()
+	pub := filepath.Join(dir, "public")
+	if err := os.MkdirAll(pub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := config.C.App.PublicDir
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	config.C.App.PublicDir = pub
+	key, err := SaveXLSX("demo", []map[string]any{{"id": 1}}, []Field{{Key: "id", Title: "ID"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) {
+		t.Fatal("file meta missing")
+	}
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	if strings.Contains(info.Name, "uploads") || strings.Contains(exportRoot(), "uploads") {
+		t.Fatalf("must not write under public uploads: %s", exportRoot())
+	}
+	want := filepath.Join(dir, "runtime", "export")
+	if !strings.HasPrefix(exportRoot(), want) {
+		t.Fatalf("export root %s want prefix %s", exportRoot(), want)
+	}
+	if info.Rel != info.Name || info.Name == "" {
+		t.Fatalf("relative name %+v", info)
+	}
+}
+
+func TestTaskOwnerMismatchHidden(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := newTaskID()
+	saveTask(Task{ID: id, Status: statusReady, AdminID: 9})
+	t.Cleanup(func() { cache.Del(taskCacheKey(id)) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+id, nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{AdminID: 1})
+	serveTask(c, id)
+	if !strings.Contains(w.Body.String(), "导出任务不存在") {
+		t.Fatalf("%s", w.Body.String())
+	}
+}
+
+func TestTaskWithoutOwnerIsNotPollable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := newTaskID()
+	saveTask(Task{ID: id, Status: statusReady})
+	t.Cleanup(func() { cache.Del(taskCacheKey(id)) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+id, nil)
+	serveTask(c, id)
+	if !strings.Contains(w.Body.String(), "导出任务不存在") {
+		t.Fatalf("%s", w.Body.String())
+	}
+}
+
+func TestNewTaskIDRandom(t *testing.T) {
+	a, b := newTaskID(), newTaskID()
+	if a == b || len(a) < 16 {
+		t.Fatalf("%s %s", a, b)
+	}
+}
+
+func TestMaybeExportPreviewPageEnd(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.Lists
+	config.C.Project.Lists.ExportMaxPages = 20
+	t.Cleanup(func() { config.C.Project.Lists = old })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/lists?export=1", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists"})
+	c.Set("likeadmin.export_count", int64(10000))
+	if !Maybe(c, "export", []map[string]any{{"id": 1}}) {
+		t.Fatal("export=1")
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data["page_end"] != float64(20) {
+		t.Fatalf("page_end %v", env.Data["page_end"])
+	}
+}
+
+func TestServeKeepsKeyWhenFileMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	key := randomHex(8)
+	owner := TaskOwner{AdminID: 2, TenantID: 4}
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: "gone.xlsx", AdminID: owner.AdminID, TenantID: owner.TenantID}, time.Hour)
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	exp := time.Now().Add(time.Minute).Unix()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/tenantapi/download/export?file="+key+"&exp="+itoa64(exp)+"&sig="+signExportFile(key, owner, exp), nil)
+	Serve(c)
+	if !strings.Contains(w.Body.String(), "下载文件不存在") {
+		t.Fatalf("body %s", w.Body.String())
+	}
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) {
+		t.Fatal("missing file must not consume the download key")
+	}
+}
+
+func TestServeRejectsUnsignedDownload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	name := "ok.xlsx"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("xlsx"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	key := randomHex(8)
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: name, AdminID: 9, TenantID: 3}, time.Hour)
+	t.Cleanup(func() { cache.Del("export_file_" + key) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?file="+key, nil)
+	Serve(c)
+	if !strings.Contains(w.Body.String(), "下载文件不存在") {
+		t.Fatalf("body %s", w.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+		t.Fatal("unsigned request must not delete the file")
+	}
+}
+
+func TestServeDeletesFileAfterDownload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := withExportRoot(t)
+	name := "ok.xlsx"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("xlsx-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	key := randomHex(8)
+	owner := TaskOwner{AdminID: 1}
+	cache.Set("export_file_"+key, fileInfo{Src: dir + string(os.PathSeparator), Name: name, Download: "demo.xlsx", AdminID: owner.AdminID}, time.Hour)
+	exp := time.Now().Add(time.Minute).Unix()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?file="+key+"&exp="+itoa64(exp)+"&sig="+signExportFile(key, owner, exp), nil)
+	Serve(c)
+	if w.Body.String() != "xlsx-bytes" {
+		t.Fatalf("body %q", w.Body.String())
+	}
+	if _, ok := cache.Get("export_file_" + key); ok {
+		t.Fatal("consumed key should be gone")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("downloaded file should be removed")
+	}
+}
+
+func TestCleanOldExports(t *testing.T) {
+	dir := withExportRoot(t)
+	keep := filepath.Join(dir, "keep.xlsx")
+	drop := filepath.Join(dir, "old.xlsx")
+	if err := os.WriteFile(keep, []byte("k"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(drop, []byte("d"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(drop, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	cleanOldExports(30 * time.Minute)
+	if _, err := os.Stat(drop); !os.IsNotExist(err) {
+		t.Fatal("stale export should be removed")
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatal("fresh export should stay")
+	}
+}
+
+func withExportRoot(t *testing.T) string {
+	t.Helper()
+	old := config.C.App.PublicDir
+	root := t.TempDir()
+	config.C.App.PublicDir = filepath.Join(root, "public")
+	t.Cleanup(func() { config.C.App.PublicDir = old })
+	dir := exportRoot()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func itoa64(n int64) string {
+	return strconv.FormatInt(n, 10)
 }

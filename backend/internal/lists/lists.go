@@ -9,11 +9,14 @@ import (
 	"unicode"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/export"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Query struct {
@@ -78,7 +81,10 @@ func Parse(c *gin.Context) Query {
 	}
 	// PHP ListsExcelTrait defaults; applied only for export=2 + page_type=1.
 	q.PageStart = 1
-	q.PageEnd = 200
+	q.PageEnd = config.C.Project.Lists.ExportPages()
+	if q.PageEnd <= 0 {
+		q.PageEnd = 20
+	}
 	// PHP get('page_start', default): missing keeps default; present "" / "0" become 0.
 	if v, ok := query["page_start"]; ok {
 		q.PageStart = util.ToInt(v)
@@ -86,10 +92,38 @@ func Parse(c *gin.Context) Query {
 	if v, ok := query["page_end"]; ok {
 		q.PageEnd = util.ToInt(v)
 	}
+	maxRows := config.C.Project.Lists.ExportRows()
+	maxPages := config.C.Project.Lists.ExportPages()
 	if q.Export == 2 && q.PageType == 1 {
 		perPage := q.PageSize
+		pages := q.PageEnd - q.PageStart + 1
+		if pages < 0 {
+			pages = 0
+		}
+		if pages > maxPages {
+			pages = maxPages
+		}
+		rows := pages * perPage
+		if rows > maxRows {
+			rows = maxRows
+		}
 		q.Offset = (q.PageStart - 1) * perPage
-		q.PageSize = (q.PageEnd - q.PageStart + 1) * perPage
+		q.PageSize = rows
+		if q.Offset < 0 {
+			q.Offset = 0
+		}
+	} else if q.Export == 2 && q.PageSize > maxRows {
+		q.PageSize = maxRows
+	}
+	if q.Export == 0 {
+		hard := 500
+		if q.PageType == 1 && q.PageSize > hard {
+			q.PageSize = hard
+		}
+		if q.PageType != 1 && ctxutil.Get(c).App == "api" && q.PageSize > hard {
+			q.PageSize = hard
+		}
+		q.Offset = (q.PageNo - 1) * q.PageSize
 		if q.Offset < 0 {
 			q.Offset = 0
 		}
@@ -109,6 +143,9 @@ func ParseGET(c *gin.Context) (Query, bool) {
 	}
 	if msg := ValidateQuery(httpx.Query(c)); msg != "" {
 		response.Fail(c, msg)
+		return Query{}, false
+	}
+	if export.EnqueueFromRequest(c) {
 		return Query{}, false
 	}
 	return Parse(c), true
@@ -202,6 +239,51 @@ func ValidateQuery(query map[string]any) string {
 		if s != "1" && s != "2" {
 			return "export必须在 1,2 范围内"
 		}
+		if s == "2" {
+			if msg := exportWindowQueryError(query); msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+func exportWindowQueryError(query map[string]any) string {
+	pageType := "1"
+	if pt, ok := queryNonEmpty(query, "page_type"); ok {
+		pageType = pt
+	}
+	if pageType != "1" {
+		return ""
+	}
+	start := 1
+	end := config.C.Project.Lists.ExportPages()
+	if end <= 0 {
+		end = 20
+	}
+	if ps, ok := queryNonEmpty(query, "page_start"); ok {
+		start, _ = strconv.Atoi(ps)
+	}
+	if pe, ok := queryNonEmpty(query, "page_end"); ok {
+		end, _ = strconv.Atoi(pe)
+	}
+	pages := end - start + 1
+	size := config.C.Project.Lists.PageSize
+	if size <= 0 {
+		size = 25
+	}
+	if psz, ok := queryNonEmpty(query, "page_size"); ok {
+		if n, err := strconv.Atoi(psz); err == nil && n > 0 {
+			size = n
+		}
+	}
+	maxPages := config.C.Project.Lists.ExportPages()
+	if pages > maxPages {
+		return fmt.Sprintf("导出范围超过限制，最多%d页", maxPages)
+	}
+	maxRows := config.C.Project.Lists.ExportRows()
+	if pages > 0 && size > 0 && pages*size > maxRows {
+		return fmt.Sprintf("导出范围超过限制，最多%d条", maxRows)
 	}
 	return ""
 }
@@ -324,4 +406,55 @@ func OrderSQL(q Query, fallback string, allowed map[string]bool) string {
 		return fallback
 	}
 	return field + " " + dir
+}
+
+const exportReadChunk = 500
+
+// ExportChunkPlan splits a large export window into OFFSET/LIMIT steps.
+func ExportChunkPlan(offset, total, chunk int) [][2]int {
+	if total <= 0 {
+		return nil
+	}
+	if chunk <= 0 {
+		chunk = exportReadChunk
+	}
+	if total <= chunk {
+		return [][2]int{{offset, total}}
+	}
+	var out [][2]int
+	remaining := total
+	off := offset
+	for remaining > 0 {
+		n := chunk
+		if remaining < n {
+			n = remaining
+		}
+		out = append(out, [2]int{off, n})
+		off += n
+		remaining -= n
+	}
+	return out
+}
+
+// FindChunked runs Find in 500-row steps for export=2 windows larger than that
+// so MySQL is not asked for a single 10000-row result. Ordinary lists are unchanged.
+func FindChunked[T any](db *gorm.DB, q Query, dest *[]T) error {
+	if db == nil || dest == nil {
+		return nil
+	}
+	if q.Export != 2 || q.PageSize <= exportReadChunk {
+		return db.Offset(q.Offset).Limit(q.PageSize).Find(dest).Error
+	}
+	*dest = (*dest)[:0]
+	for _, step := range ExportChunkPlan(q.Offset, q.PageSize, exportReadChunk) {
+		var part []T
+		if err := db.Offset(step[0]).Limit(step[1]).Find(&part).Error; err != nil {
+			return err
+		}
+		*dest = append(*dest, part...)
+		if len(part) < step[1] {
+			break
+		}
+	}
+	return nil
 }

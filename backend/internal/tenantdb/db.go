@@ -6,7 +6,6 @@ import (
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/ctxutil"
-	"likeadmin/backend/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -36,29 +35,50 @@ func ShardableNames() []string {
 var registeredDB *gorm.DB
 
 func Register(db *gorm.DB) {
-	if db == nil || registeredDB == db {
+	if db == nil {
 		return
 	}
-	registeredDB = db
-	_ = db.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
-	_ = db.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
-	_ = db.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
-	_ = db.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
-	_ = db.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	if registeredDB != db {
+		registeredDB = db
+		_ = db.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
+		_ = db.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
+		_ = db.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
+		_ = db.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
+		_ = db.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	}
+	if bootstrap.ReadDB != nil && bootstrap.ReadDB != db {
+		_ = bootstrap.ReadDB.Callback().Query().Before("gorm:query").Register("likeadmin:shard", rewrite)
+		_ = bootstrap.ReadDB.Callback().Create().Before("gorm:create").Register("likeadmin:shard_create", rewrite)
+		_ = bootstrap.ReadDB.Callback().Update().Before("gorm:update").Register("likeadmin:shard_update", rewrite)
+		_ = bootstrap.ReadDB.Callback().Delete().Before("gorm:delete").Register("likeadmin:shard_delete", rewrite)
+		_ = bootstrap.ReadDB.Callback().Row().Before("gorm:row").Register("likeadmin:shard_row", rewrite)
+	}
 }
 
 func Use(c *gin.Context) *gorm.DB {
-	if bootstrap.DB == nil {
+	return useOn(c, bootstrap.DB)
+}
+
+// UseRead is Use but on the replica when one is configured.
+func UseRead(c *gin.Context) *gorm.DB {
+	return useOn(c, bootstrap.Read())
+}
+
+func useOn(c *gin.Context, db *gorm.DB) *gorm.DB {
+	if db == nil {
 		return nil
 	}
+	if c != nil && c.Request != nil {
+		db = db.WithContext(c.Request.Context())
+	}
 	if c == nil {
-		return bootstrap.DB
+		return db
 	}
 	meta := ctxutil.Get(c)
 	if meta.Tactics != 1 || meta.TenantSN == "" {
-		return bootstrap.DB
+		return db
 	}
-	return UseSN(meta.TenantSN)
+	return WithSN(db, meta.TenantSN)
 }
 
 // ForTenant returns the shard DB when la_tenant.tactics=1, otherwise the shared DB.
@@ -69,8 +89,8 @@ func ForTenant(tenantID uint) *gorm.DB {
 	if tenantID == 0 {
 		return bootstrap.DB
 	}
-	var t model.Tenant
-	if err := bootstrap.DB.Select("id", "sn", "tactics").Where("id = ?", tenantID).First(&t).Error; err != nil {
+	t, ok := ByID(tenantID)
+	if !ok {
 		return bootstrap.DB
 	}
 	if t.Tactics == 1 && t.SN != "" {
@@ -109,8 +129,8 @@ func ForTenantOn(db *gorm.DB, tenantID uint) *gorm.DB {
 	if bootstrap.DB == nil {
 		return db
 	}
-	var t model.Tenant
-	if err := bootstrap.DB.Select("id", "sn", "tactics").Where("id = ?", tenantID).First(&t).Error; err != nil {
+	t, ok := ByID(tenantID)
+	if !ok {
 		return db
 	}
 	if t.Tactics == 1 && t.SN != "" {

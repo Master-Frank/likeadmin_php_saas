@@ -15,7 +15,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
-	"likeadmin/backend/internal/tenantdb"
+	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -233,21 +233,13 @@ func LogLists(c *gin.Context) {
 	if !ok {
 		return
 	}
-	db := bootstrap.DB.Model(&model.OperationLog{})
+	db := bootstrap.RequestReadDB(c).Model(&model.OperationLog{})
 	if ctxutil.Get(c).App == "tenantapi" {
-		db = db.Where("url LIKE ?", "%/tenantapi/%")
-		if tid := ctxutil.Get(c).TenantID; tid > 0 {
-			adb := tenantdb.Use(c)
-			if adb == nil {
-				adb = bootstrap.DB
-			}
-			var ids []uint
-			adb.Model(&model.TenantAdmin{}).Where("tenant_id = ? AND delete_time IS NULL", tid).Pluck("id", &ids)
-			if len(ids) == 0 {
-				db = db.Where("1 = 0")
-			} else {
-				db = db.Where("admin_id IN ?", ids)
-			}
+		tid := ctxutil.Get(c).TenantID
+		if tid == 0 || !schemacache.HasColumn(bootstrap.DB, model.OperationLog{}.TableName(), "tenant_id") {
+			db = db.Where("1 = 0")
+		} else {
+			db = db.Where("tenant_id = ?", tid)
 		}
 	}
 	if lists.PHPTruthy(q, "admin_name") {
@@ -269,7 +261,7 @@ func LogLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.OperationLog
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	_ = lists.FindChunked(db.Order("id desc"), q, &rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, map[string]any{

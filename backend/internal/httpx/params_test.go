@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -190,5 +191,20 @@ func TestParamTenantID(t *testing.T) {
 	}
 	if id, ok := req("?tenant_id=3", `{}`); !ok || id != 3 {
 		t.Fatalf("query %d %v", id, ok)
+	}
+}
+
+func TestBodyAbortTooLarge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/platformapi/auth.admin/add", strings.NewReader(strings.Repeat("x", 32)))
+	c.Request.Body = http.MaxBytesReader(w, c.Request.Body, 8)
+	_ = Body(c)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status %d body %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "请求体过大") {
+		t.Fatalf("body %s", w.Body.String())
 	}
 }

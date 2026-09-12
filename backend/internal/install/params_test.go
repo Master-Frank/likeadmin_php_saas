@@ -45,6 +45,31 @@ func TestCheckParams(t *testing.T) {
 	}
 }
 
+func TestCheckTopology(t *testing.T) {
+	ok := map[string]any{"prefix": "la_", "admin_user": "a", "admin_password": "a", "admin_confirm_password": "a"}
+	if CheckTopology(ok) != "" {
+		t.Fatal("default single")
+	}
+	if CheckTopology(map[string]any{"deploy_mode": "multi"}) != "多实例部署必须填写 Redis 地址" {
+		t.Fatal(CheckTopology(map[string]any{"deploy_mode": "multi"}))
+	}
+	if CheckTopology(map[string]any{"deploy_mode": "multi", "redis_host": "127.0.0.1"}) != "" {
+		t.Fatal("multi with redis")
+	}
+	if CheckTopology(map[string]any{"db_mode": "replica"}) != "请填写从库主机" {
+		t.Fatal(CheckTopology(map[string]any{"db_mode": "replica"}))
+	}
+	if CheckTopology(map[string]any{"db_mode": "cluster"}) != "请选择数据库模式" {
+		t.Fatal("bad db mode")
+	}
+	if err := CheckRedis("", "", 0, 0); err == nil {
+		t.Fatal("empty redis")
+	}
+	if err := CheckReplica("", "u", "p", "db", 3306); err == nil {
+		t.Fatal("empty replica")
+	}
+}
+
 func TestInstallReadsBodyOnly(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

@@ -1,6 +1,8 @@
 package openapi
 
 import (
+	"time"
+
 	"likeadmin/backend/internal/authsvc"
 	"likeadmin/backend/internal/biz"
 	"likeadmin/backend/internal/cache"
@@ -12,9 +14,12 @@ import (
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/pubcache"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
+	"likeadmin/backend/internal/workbench"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -72,9 +77,22 @@ func userCollectsArticle(c *gin.Context, uid, articleID uint) bool {
 }
 
 func IndexConfig(c *gin.Context) {
+	tid := ctxutil.Get(c).TenantID
+	ver := cfgsvc.BootVersion(tid)
+	bootKey := "boot:" + util.ToString(tid) + ":" + ver + ":" + ctxutil.Scheme(c) + ":" + ctxutil.Host(c)
+	var cached map[string]any
+	if cache.GetJSON(bootKey, &cached) && cached != nil {
+		cached["webPage"] = bootWebPage(c, cached)
+		response.DataCached(c, cached, 30*time.Second)
+		return
+	}
+	cfgsvc.Warm(c, "website", "shop_logo", "h5_favicon", "shop_name")
+	cfgsvc.Warm(c, "login", "login_way", "coerce_mobile", "login_agreement", "third_auth", "wechat_auth", "qq_auth")
+	cfgsvc.Warm(c, "web_page", "status", "page_status", "page_url")
+	cfgsvc.Warm(c, "copyright", "config")
 	websiteLogo := cfgsvc.GetString(c, "website", "shop_logo", config.C.Project.Website["shop_logo"])
 	websiteIcon := cfgsvc.GetString(c, "website", "h5_favicon", config.C.Project.Website["h5_favicon"])
-	response.Data(c, gin.H{
+	payload := gin.H{
 		"domain": filesvc.GetFileURL(c, ""),
 		"style":  decorate.Style(c),
 		"tabbar": decorate.Lists(c),
@@ -99,7 +117,22 @@ func IndexConfig(c *gin.Context) {
 		},
 		"version":   config.C.Project.Version,
 		"copyright": cfgsvc.Get(c, "copyright", "config", []any{}),
-	})
+	}
+	cache.Set(bootKey, payload, 2*time.Minute)
+	response.DataCached(c, payload, 30*time.Second)
+}
+
+func bootWebPage(c *gin.Context, cached map[string]any) gin.H {
+	page, _ := cached["webPage"].(map[string]any)
+	if page == nil {
+		page = map[string]any{}
+	}
+	return gin.H{
+		"status":      page["status"],
+		"page_status": page["page_status"],
+		"page_url":    page["page_url"],
+		"url":         ctxutil.Domain(c) + "/mobile",
+	}
 }
 
 func IndexPolicy(c *gin.Context) {
@@ -111,20 +144,34 @@ func IndexPolicy(c *gin.Context) {
 }
 
 func IndexDecorate(c *gin.Context) {
-	var p model.DecoratePage
-	db := scopeTenant(tdb(c).Where("type = ?", httpx.QueryInt(c, "type")), c)
-	if db.First(&p).Error != nil {
-		response.Data(c, []any{})
+	tid := ctxutil.Get(c).TenantID
+	typ := httpx.QueryInt(c, "type")
+	var cached any
+	if pubcache.GetJSON(tid, "decorate", util.ToString(typ), &cached) {
+		response.DataCached(c, cached, 30*time.Second)
 		return
 	}
-	response.Data(c, gin.H{
+	var p model.DecoratePage
+	db := scopeTenant(tdb(c).Where("type = ?", typ), c)
+	if db.First(&p).Error != nil {
+		empty := []any{}
+		pubcache.Set(tid, "decorate", util.ToString(typ), empty, pubcache.TTL)
+		response.DataCached(c, empty, 30*time.Second)
+		return
+	}
+	payload := gin.H{
 		"type": p.Type, "name": p.Name,
 		"data": p.Data, "meta": p.Meta,
-	})
+	}
+	pubcache.Set(tid, "decorate", util.ToString(typ), payload, pubcache.TTL)
+	response.DataCached(c, payload, 30*time.Second)
 }
 
 func LoginRegister(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindLogin) {
 		return
 	}
 	if !httpx.BodyPresent(c, "channel") {
@@ -178,11 +225,15 @@ func LoginRegister(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
+	workbench.OnUserCreated(tid)
 	response.Result(c, response.CodeOK, 1, "注册成功", []any{})
 }
 
 func LoginAccount(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindLogin) {
 		return
 	}
 	if !httpx.BodyPresent(c, "terminal") {
@@ -403,6 +454,12 @@ func ArticleLists(c *gin.Context) {
 }
 
 func ArticleCate(c *gin.Context) {
+	tid := ctxutil.Get(c).TenantID
+	var cached any
+	if pubcache.GetJSON(tid, "cate", "", &cached) {
+		response.Data(c, cached)
+		return
+	}
 	var rows []model.ArticleCate
 	db := scopeTenant(tdb(c).Where("delete_time IS NULL AND is_show = 1"), c)
 	db.Order("sort desc, id desc").Find(&rows)
@@ -410,17 +467,26 @@ func ArticleCate(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, map[string]any{"id": r.ID, "name": r.Name})
 	}
+	pubcache.Set(tid, "cate", "", out, pubcache.TTL)
 	response.Data(c, out)
 }
 
 func SearchHot(c *gin.Context) {
+	tid := ctxutil.Get(c).TenantID
+	var cached any
+	if pubcache.GetJSON(tid, "hot", "", &cached) {
+		response.Data(c, cached)
+		return
+	}
 	var rows []model.HotSearch
 	scopeTenant(tdb(c).Model(&model.HotSearch{}), c).Order("sort desc, id desc").Find(&rows)
 	data := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		data = append(data, map[string]any{"name": r.Name, "sort": r.Sort})
 	}
-	response.Data(c, gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": data})
+	payload := gin.H{"status": cfgsvc.GetInt(c, "hot_search", "status", 0), "data": data}
+	pubcache.Set(tid, "hot", "", payload, pubcache.TTL)
+	response.Data(c, payload)
 }
 
 func RechargeLists(c *gin.Context) {
@@ -432,9 +498,8 @@ func RechargeLists(c *gin.Context) {
 	db := scopeTenant(tdb(c).Model(&model.RechargeOrder{}).Where("user_id = ? AND pay_status = 1 AND delete_time IS NULL", uid), c)
 	var count int64
 	db.Count(&count)
-	// PHP api RechargeLists::lists has no limit() — return every paid row.
 	var rows []model.RechargeOrder
-	db.Order("id desc").Find(&rows)
+	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, map[string]any{

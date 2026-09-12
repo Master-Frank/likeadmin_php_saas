@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/export"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,6 +74,59 @@ func TestParsePageType(t *testing.T) {
 	}
 }
 
+func TestParsePageSizeHardCap(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldSize, oldMax := config.C.Project.Lists.PageSize, config.C.Project.Lists.PageSizeMax
+	config.C.Project.Lists.PageSize = 25
+	config.C.Project.Lists.PageSizeMax = 25000
+	t.Cleanup(func() {
+		config.C.Project.Lists.PageSize = oldSize
+		config.C.Project.Lists.PageSizeMax = oldMax
+	})
+	parse := func(raw, app string) Query {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/lists"+raw, nil)
+		ctxutil.Set(c, &ctxutil.RequestMeta{App: app})
+		return Parse(c)
+	}
+	q := parse("?page_type=1&page_size=25000", "platformapi")
+	if q.PageSize != 500 {
+		t.Fatalf("paged lists must cap at 500, got %d", q.PageSize)
+	}
+	q = parse("?page_type=0&page_size=10", "platformapi")
+	if q.PageSize != 25000 {
+		t.Fatalf("admin unpaged still uses page_size_max, got %d", q.PageSize)
+	}
+	q = parse("?page_type=0", "api")
+	if q.PageSize != 500 {
+		t.Fatalf("public api unpaged must cap at 500, got %d", q.PageSize)
+	}
+}
+
+func TestParseGETEnqueueSkipsList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("LIKEADMIN_EXPORT_ASYNC", "1")
+	var ran int
+	export.SetHandlerLookup(func(app, controller, action string) gin.HandlerFunc {
+		return func(c *gin.Context) { ran++ }
+	})
+	t.Cleanup(func() { export.SetHandlerLookup(nil) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/setting.system.log/lists?export=2&page_size=10", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{App: "platformapi", Controller: "setting.system.log", Action: "lists", AdminID: 3})
+	if _, ok := ParseGET(c); ok {
+		t.Fatal("async export must stop ParseGET before the list query")
+	}
+	if ran != 0 {
+		t.Fatal("list handler must not run on enqueue")
+	}
+	if !strings.Contains(w.Body.String(), `"status":"pending"`) || !strings.Contains(w.Body.String(), "task_id") {
+		t.Fatalf("enqueue payload %s", w.Body.String())
+	}
+}
+
 func TestParseIgnoresJSONPageNo(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldSize, oldMax := config.C.Project.Lists.PageSize, config.C.Project.Lists.PageSizeMax
@@ -119,9 +175,14 @@ func TestParseExportWindow(t *testing.T) {
 		t.Fatalf("window offset=%d size=%d", q.Offset, q.PageSize)
 	}
 
+	q = parse("?export=2&page_start=1&page_end=200&page_size=25000")
+	if q.PageSize != 10000 {
+		t.Fatalf("export window must cap rows, got size=%d", q.PageSize)
+	}
+
 	q = parse("?export=2&page_type=0&page_start=2&page_end=4&page_size=10")
-	if q.Offset != 0 || q.PageSize != 25000 {
-		t.Fatalf("unpaged export %+v", q)
+	if q.Offset != 0 || q.PageSize != 10000 {
+		t.Fatalf("unpaged export should cap to export_max_rows %+v", q)
 	}
 
 	q = parse("?export=2&page_start=&page_end=")
@@ -218,6 +279,16 @@ func TestValidateQueryMatchesListsValidate(t *testing.T) {
 	}
 	if msg := ValidateQuery(map[string]any{"page_type": "0", "export": "2", "order_by": "desc", "page_size": "10"}); msg != "" {
 		t.Fatalf("valid %q", msg)
+	}
+	oldLists := config.C.Project.Lists
+	config.C.Project.Lists.ExportMaxPages = 20
+	config.C.Project.Lists.ExportMaxRows = 10000
+	t.Cleanup(func() { config.C.Project.Lists = oldLists })
+	if msg := ValidateQuery(map[string]any{"export": "2", "page_start": "1", "page_end": "200", "page_size": "25"}); msg == "" {
+		t.Fatal("200 pages must be rejected")
+	}
+	if msg := ValidateQuery(map[string]any{"export": "2", "page_start": "1", "page_end": "2", "page_size": "10"}); msg != "" {
+		t.Fatalf("small window %q", msg)
 	}
 
 	gin.SetMode(gin.TestMode)

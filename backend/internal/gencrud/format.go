@@ -9,6 +9,7 @@ import (
 	"likeadmin/backend/internal/ctxutil"
 	"likeadmin/backend/internal/generator"
 	"likeadmin/backend/internal/model"
+	"likeadmin/backend/internal/schemacache"
 	"likeadmin/backend/internal/tenantdb"
 	"likeadmin/backend/internal/util"
 
@@ -290,14 +291,7 @@ func attachHasMany(rows, related []map[string]any, rel relSpec) {
 }
 
 func tableHasColumn(db *gorm.DB, table, col string) bool {
-	if db == nil || table == "" || col == "" {
-		return false
-	}
-	var n int64
-	if db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?", table, col).Scan(&n).Error != nil {
-		return false
-	}
-	return n > 0
+	return schemacache.HasColumn(db, table, col)
 }
 
 func uniqueIDs(rows []map[string]any, key string) []any {

@@ -135,10 +135,25 @@ func PayWayGet(c *gin.Context) {
 	for i := 1; i <= maxScene; i++ {
 		lists[i] = []map[string]any{}
 	}
+	ids := make([]uint, 0, len(rows))
+	seen := map[uint]bool{}
 	for _, r := range rows {
-		var cfg model.TenantPayConfig
-		cq := tdb(c).Where("id = ? AND tenant_id = ?", r.PayConfigID, tid)
-		cq.First(&cfg)
+		if r.PayConfigID == 0 || seen[r.PayConfigID] {
+			continue
+		}
+		seen[r.PayConfigID] = true
+		ids = append(ids, r.PayConfigID)
+	}
+	cfgByID := map[uint]model.TenantPayConfig{}
+	if len(ids) > 0 {
+		var cfgs []model.TenantPayConfig
+		tdb(c).Where("id IN ? AND tenant_id = ?", ids, tid).Find(&cfgs)
+		for _, cfg := range cfgs {
+			cfgByID[cfg.ID] = cfg
+		}
+	}
+	for _, r := range rows {
+		cfg := cfgByID[r.PayConfigID]
 		lists[r.Scene] = append(lists[r.Scene], map[string]any{
 			"id": r.ID, "pay_config_id": r.PayConfigID, "scene": r.Scene,
 			"is_default": r.IsDefault, "status": r.Status,

@@ -15,7 +15,15 @@ export LIKEADMIN_CONFIG=$(pwd)/configs/config.yaml
 go run ./cmd/api
 ```
 
-默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。
+默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。生产 systemd 单元默认 `127.0.0.1:8080`，只信任来自本机/`LIKEADMIN_TRUSTED_PROXIES` 的 `X-Real-IP`。
+
+生产索引请用 `bin/think ensure-indexes`（或 `LIKEADMIN_ENSURE_INDEXES=1`）显式创建，HTTP 启动默认不再串行 `CREATE INDEX`。`LIKEADMIN_REQUIRE_INDEXES=1` 可在缺索引时拒绝启动；`bin/think explain-indexes` 输出首批查询形状的 `EXPLAIN`，仅在明确设置 `LIKEADMIN_EXPLAIN_ANALYZE=1` 时执行 `EXPLAIN ANALYZE`。
+
+2 核 2GB 且 MySQL 同机时，不要用满默认 `max_open_conns=50`。建议 `LIKEADMIN_DB_MAX_OPEN=15`、`LIKEADMIN_DB_MAX_IDLE=5`，并开启 `LIKEADMIN_EXPORT_ASYNC=1`。规划并发见仓库根目录 [performance.md](../performance.md) 第 2.8 节（规划口径，不是实测 QPS）。
+
+平台端入口校验 `project.http_host`：与浏览器地址栏主机不一致时会返回「平台端入口域名错误」。用 `http://127.0.0.1:8080/platform/` 访问时，该项应写成 `127.0.0.1:8080`；不限域名则置空。
+
+PC 端入口是 `/pc/`。装修轮播等店铺链接沿用 uniapp 路径（如 `/pages/news/news`），Go 会 302 到对应 PC 页面（资讯中心 `/pc/information`），**不会**进 H5 `/mobile/`。H5 请直接访问 `/mobile/`。
 
 生产构建及初次安装：
 
@@ -41,6 +49,16 @@ go run ./cmd/strangler
 
 生产 Nginx（无 php-fpm）见 `deploy/nginx.production.conf`。本机切流校验用 `deploy/nginx.local.conf`（`:8091`）。
 systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.service`（把路径改成实际安装目录后 `systemctl enable --now`）。
+
+安装向导（`GET/POST /install`）可选拓扑，默认仍是单实例 + 单数据库：
+
+- **单实例**：不强制 Redis；导出在请求内完成，立刻 `ready`。
+- **多实例**：必须能连 Redis；写入 `app.multi_instance`、`project.export_async`、`app.require_redis`。多台 Go 的导出目录还需通过 `LIKEADMIN_EXPORT_DIR` 指向同一私有共享挂载；公开上传使用共享 `public_dir` 或后台 OSS。crontab 已有 MySQL `GET_LOCK`，可只跑一个 crontab 进程。
+- **单库 / 主从**：主从只把日志列表、工作台计数等可延迟读打到 `database.replicas`；空配置读写都走主库。`LIKEADMIN_REPLICA_MAX_LAG` 设置允许的复制延迟秒数（默认 30），`LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS` 设置后台探测超时（默认 1000ms）。无法读取复制延迟时默认回落主库；托管只读端点确实不提供 lag 时可显式设置 `LIKEADMIN_REPLICA_ALLOW_UNKNOWN_LAG=1`。连接类查询错误会将当前读回放到主库。
+
+观测：`LIKEADMIN_INSTANCE_ID`（默认 hostname）；`LIKEADMIN_METRICS=1` 时 `127.0.0.1:9090/metrics`（不要挂到公网 API 域）；`LIKEADMIN_PPROF=1` 时 `127.0.0.1:6060`。
+可选 `app.cdn_domain` 给本地上传拼 CDN 前缀。`LIKEADMIN_EXPORT_ASYNC=1` 可在单实例也让平台/租户后台导出走队列；C 端导出保留请求内用户上下文并同步完成。
+
 在线升级若包含 `project/backend/`，会先在完整源码副本中构建新
 `bin/api`/`bin/crontab`，构建失败不应用升级。启用
 `likeadmin-upgrade-restart.path` + `.service` 后，升级成功会延迟重启两个
@@ -82,5 +100,6 @@ export LIKEADMIN_UPGRADE_FIXTURE=/path/to/upgrade-fixture
 - 响应：`{code, show, msg, data}`
 - 鉴权 Header：`token`
 - 密码：`md5(salt + md5(password + salt))`，salt 为 `project.unique_identification`
+- 导出：`export=1` 预览；`export=2` 返回 `{task_id,status,url?}`（`code=1`）。单实例默认同步 `ready`；多实例/异步为 `pending`，轮询 `GET /platformapi/download/export?task=`，下载仍用 `?file=`
 
 验收清单见 [`tests/golden/README.md`](tests/golden/README.md)。

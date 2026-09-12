@@ -6,10 +6,14 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/dbindex"
+	"likeadmin/backend/internal/metrics"
 
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -18,8 +22,9 @@ import (
 )
 
 var (
-	DB  *gorm.DB
-	RDB *redis.Client
+	DB     *gorm.DB
+	ReadDB *gorm.DB
+	RDB    *redis.Client
 )
 
 func Init(cfgPath string) error {
@@ -36,7 +41,23 @@ func Init(cfgPath string) error {
 		log.Printf("database unavailable before install: %v", err)
 		DB = nil
 	}
-	initRedis()
+	if err := initRedis(); err != nil {
+		return err
+	}
+	if Installed() && DB != nil {
+		if os.Getenv("LIKEADMIN_ENSURE_INDEXES") == "1" {
+			dbindex.EnsurePerfIndexes(DB)
+			dbindex.WriteStatus(dbindex.Plan(DB), nil)
+		} else {
+			missing := dbindex.Missing(DB)
+			if len(missing) > 0 {
+				log.Printf("missing performance indexes (%d); run `bin/think ensure-indexes`\n%s", len(missing), dbindex.FormatPlan(missing))
+				if os.Getenv("LIKEADMIN_REQUIRE_INDEXES") == "1" {
+					return fmt.Errorf("required indexes missing; run bin/think ensure-indexes")
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -53,6 +74,11 @@ func Installed() bool {
 // ReconnectDB opens the DB after a successful /install (config.C already updated).
 func ReconnectDB() error {
 	return initDB()
+}
+
+// ReconnectRedis opens Redis after /install writes a new topology.
+func ReconnectRedis() error {
+	return initRedis()
 }
 
 var ddlIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
@@ -82,9 +108,193 @@ func RequireDDLPrivileges() error {
 	return CheckDDLPrivileges()
 }
 
+func requireRedis() bool {
+	return config.RequireRedisConfigured()
+}
+
+// Read returns the replica session when configured and healthy, otherwise the master.
+func Read() *gorm.DB {
+	if ReadDB == nil || ReadDB == DB {
+		if ReadDB != nil {
+			return ReadDB
+		}
+		return DB
+	}
+	if replicaHealthy() {
+		return ReadDB
+	}
+	return DB
+}
+
+var replicaHealth struct {
+	mu      sync.Mutex
+	checked time.Time
+	live    bool
+}
+
+func replicaHealthy() bool {
+	if ReadDB == nil || ReadDB == DB || ReadDB.Config == nil {
+		return false
+	}
+	replicaHealth.mu.Lock()
+	live := replicaHealth.live
+	replicaHealth.mu.Unlock()
+	return live
+}
+
+func pingDB(db *gorm.DB) bool {
+	if db == nil || db.Config == nil {
+		return false
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), replicaHealthTimeout())
+	defer cancel()
+	return sqlDB.PingContext(ctx) == nil
+}
+
+func resetReplicaHealth() {
+	replicaHealth.mu.Lock()
+	replicaHealth.checked = time.Time{}
+	replicaHealth.live = false
+	replicaHealth.mu.Unlock()
+}
+
+func PingRedis() error {
+	if RDB == nil {
+		return fmt.Errorf("redis unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	defer cancel()
+	return RDB.Ping(ctx).Err()
+}
+
+// RequireRedis fails closed in production when LIKEADMIN_REQUIRE_REDIS=1.
+func RequireRedis() error {
+	if !requireRedis() || !Installed() {
+		return nil
+	}
+	if RDB == nil {
+		return fmt.Errorf("redis required but unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	defer cancel()
+	if err := RDB.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis required: %w", err)
+	}
+	return nil
+}
+
+func redisTimeout(ms int) time.Duration {
+	if ms <= 0 {
+		return 200 * time.Millisecond
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+// RequestDB returns bootstrap.DB bound to the request context so SQL metrics attach.
+func RequestDB(c *gin.Context) *gorm.DB {
+	return requestSession(c, DB)
+}
+
+// RequestReadDB returns the replica (or master) bound to the request context.
+func RequestReadDB(c *gin.Context) *gorm.DB {
+	return requestSession(c, Read())
+}
+
+func requestSession(c *gin.Context, db *gorm.DB) *gorm.DB {
+	if db == nil {
+		return nil
+	}
+	if c != nil && c.Request != nil {
+		return db.WithContext(c.Request.Context())
+	}
+	return db
+}
+
 func initDB() error {
-	c := config.C.Database
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local",
+	db, err := openGorm(config.C.Database)
+	if err != nil {
+		return err
+	}
+	metrics.Register(db)
+	if sqlDB, err := db.DB(); err == nil {
+		metrics.SetSQLDB(sqlDB)
+	}
+	DB = db
+	bindReadDB(db)
+	startReplicaRetry()
+	return nil
+}
+
+func bindReadDB(master *gorm.DB) {
+	ReadDB = master
+	list := config.C.Database.ReplicaList()
+	if master == nil || len(list) == 0 {
+		metrics.SetReplicaConfigured(false)
+		return
+	}
+	metrics.SetReplicaConfigured(true)
+	rep := fillReplica(list[0], config.C.Database)
+	db, err := openGorm(rep)
+	if err != nil {
+		log.Printf("replica unavailable, reads stay on master: %v", err)
+		return
+	}
+	metrics.Register(db)
+	registerReplicaFailover(db)
+	if sqlDB, err := db.DB(); err == nil {
+		metrics.SetReplicaSQLDB(sqlDB)
+	}
+	ReadDB = db
+	resetReplicaHealth()
+	go refreshReplicaHealth()
+}
+
+func fillReplica(r, master config.DatabaseConfig) config.DatabaseConfig {
+	if r.Hostport == 0 {
+		r.Hostport = master.Hostport
+	}
+	if r.Database == "" {
+		r.Database = master.Database
+	}
+	if r.Username == "" {
+		r.Username = master.Username
+	}
+	if r.Password == "" {
+		r.Password = master.Password
+	}
+	if r.Charset == "" {
+		r.Charset = master.Charset
+	}
+	if r.Prefix == "" {
+		r.Prefix = master.Prefix
+	}
+	if r.MaxOpenConns <= 0 {
+		r.MaxOpenConns = master.MaxOpenConns
+	}
+	if r.MaxIdleConns <= 0 {
+		r.MaxIdleConns = master.MaxIdleConns
+	}
+	if r.ConnMaxLifetime <= 0 {
+		r.ConnMaxLifetime = master.ConnMaxLifetime
+	}
+	if r.ConnMaxIdleTime <= 0 {
+		r.ConnMaxIdleTime = master.ConnMaxIdleTime
+	}
+	return r
+}
+
+func openGorm(c config.DatabaseConfig) (*gorm.DB, error) {
+	if c.Charset == "" {
+		c.Charset = "utf8mb4"
+	}
+	if c.Hostport == 0 {
+		c.Hostport = 3306
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=false&loc=Local&timeout=5s&readTimeout=10s&writeTimeout=10s",
 		c.Username, c.Password, c.Hostname, c.Hostport, c.Database, c.Charset)
 	level := logger.Warn
 	if config.C.App.Debug {
@@ -98,28 +308,40 @@ func initDB() error {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sqlDB, err := db.DB()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(50)
-	DB = db
-	return nil
+	sqlDB.SetMaxOpenConns(c.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(c.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(c.ConnMaxLifetime) * time.Second)
+	sqlDB.SetConnMaxIdleTime(time.Duration(c.ConnMaxIdleTime) * time.Second)
+	return db, nil
 }
 
-func initRedis() {
+func initRedis() error {
 	c := config.C.Redis
 	RDB = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", c.Host, c.Port),
-		Password: c.Password,
-		DB:       c.DB,
+		Addr:         fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Password:     c.Password,
+		DB:           c.DB,
+		DialTimeout:  redisTimeout(c.DialTimeoutMs),
+		ReadTimeout:  redisTimeout(c.ReadTimeoutMs),
+		WriteTimeout: redisTimeout(c.WriteTimeoutMs),
 	})
-	if err := RDB.Ping(context.Background()).Err(); err != nil {
-		log.Printf("redis unavailable (%v), fallback to memory-less cache via DB only", err)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(c.DialTimeoutMs))
+	defer cancel()
+	if err := RDB.Ping(ctx).Err(); err != nil {
+		if requireRedis() && Installed() {
+			return fmt.Errorf("redis required: %w", err)
+		}
+		log.Printf("redis unavailable (%v), fallback to in-memory cache", err)
+		_ = RDB.Close()
+		RDB = nil
 	}
+	return nil
 }
 
 func RedisKey(k string) string {

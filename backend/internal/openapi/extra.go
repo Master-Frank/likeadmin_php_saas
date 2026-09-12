@@ -13,6 +13,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/pay"
+	"likeadmin/backend/internal/ratelimit"
 	"likeadmin/backend/internal/response"
 	"likeadmin/backend/internal/sms"
 	"likeadmin/backend/internal/tenantdb"
@@ -109,8 +110,8 @@ func ArticleDetail(c *gin.Context) {
 		response.Data(c, gin.H{"collect": collect})
 		return
 	}
-	tdb(c).Model(&a).Updates(map[string]any{
-		"click_actual": a.ClickActual + 1, "update_time": util.NowUnix(),
+	tdb(c).Model(&model.Article{}).Where("id = ?", a.ID).Updates(map[string]any{
+		"click_actual": gorm.Expr("click_actual + 1"), "update_time": util.NowUnix(),
 	})
 	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
 	out["collect"] = collect
@@ -192,11 +193,27 @@ func PayWay(c *gin.Context) {
 	var ways []model.TenantPayWay
 	scopeTenant(tdb(c).Where("scene = ? AND status = 1", terminal), c).Order("is_default desc").Find(&ways)
 	u := currentUser(c)
+	cfgIDs := make([]uint, 0, len(ways))
+	seen := map[uint]bool{}
+	for _, w := range ways {
+		if w.PayConfigID == 0 || seen[w.PayConfigID] {
+			continue
+		}
+		seen[w.PayConfigID] = true
+		cfgIDs = append(cfgIDs, w.PayConfigID)
+	}
+	cfgByID := map[uint]model.TenantPayConfig{}
+	if len(cfgIDs) > 0 {
+		var cfgs []model.TenantPayConfig
+		scopeTenant(tdb(c).Where("id IN ?", cfgIDs), c).Find(&cfgs)
+		for _, cfg := range cfgs {
+			cfgByID[cfg.ID] = cfg
+		}
+	}
 	out := make([]map[string]any, 0)
 	for _, w := range ways {
-		var cfg model.TenantPayConfig
-		cfgQ := scopeTenant(tdb(c).Where("id = ?", w.PayConfigID), c)
-		if cfgQ.First(&cfg).Error != nil {
+		cfg, ok := cfgByID[w.PayConfigID]
+		if !ok {
 			continue
 		}
 		if from == "recharge" && cfg.PayWay == 1 {
@@ -237,6 +254,9 @@ func sortPayWayItems(out []map[string]any) {
 
 func PayPrepay(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindPay) {
 		return
 	}
 	p := httpx.Body(c)
@@ -557,8 +577,8 @@ func PcArticleDetail(c *gin.Context) {
 		response.Data(c, pcArticleMissing(c, id))
 		return
 	}
-	tdb(c).Model(&a).Updates(map[string]any{
-		"click_actual": a.ClickActual + 1, "update_time": util.NowUnix(),
+	tdb(c).Model(&model.Article{}).Where("id = ?", a.ID).Updates(map[string]any{
+		"click_actual": gorm.Expr("click_actual + 1"), "update_time": util.NowUnix(),
 	})
 	list := limitArticles(c, source, 0, int(a.Cid), 0)
 	nowIndex := 0
@@ -695,6 +715,9 @@ func decoratePageMap(page model.DecoratePage) gin.H {
 
 func UploadImage(c *gin.Context) {
 	if !response.RequirePOST(c) {
+		return
+	}
+	if !ratelimit.Allow(c, ratelimit.KindUpload) {
 		return
 	}
 	// PHP UploadController::image always stores cid=0 and ignores the form field.

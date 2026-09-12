@@ -3,9 +3,11 @@ package middleware
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"likeadmin/backend/internal/authsvc"
@@ -68,7 +70,9 @@ func Auth() gin.HandlerFunc {
 		}
 		accessURI := strings.ToLower(meta.Controller + "/" + meta.Action)
 		all, mine := adminURIs(c, meta)
-		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI) {
+		if !adminURIAllowed(c.GetBool("likeadmin.gencrud"), all, mine, accessURI, func() (bool, error) {
+			return menuPermExists(c, meta, accessURI)
+		}) {
 			response.AbortFail(c, "权限不足，无法访问或操作", response.CodeFail, 1)
 			return
 		}
@@ -76,11 +80,22 @@ func Auth() gin.HandlerFunc {
 	}
 }
 
-func adminURIAllowed(dynamic bool, all, mine []string, accessURI string) bool {
+func adminURIAllowed(dynamic bool, all, mine []string, accessURI string, live func() (bool, error)) bool {
 	if dynamic {
 		return containsURI(mine, accessURI)
 	}
-	return !containsURI(all, accessURI) || containsURI(mine, accessURI)
+	registered := containsURI(all, accessURI)
+	if !registered && live != nil {
+		exists, err := live()
+		if err != nil {
+			return false
+		}
+		registered = exists
+	}
+	if !registered {
+		return true
+	}
+	return containsURI(mine, accessURI)
 }
 
 // loginIPChanged matches PHP `$adminInfo['login_ip'] != request()->ip()`:
@@ -270,7 +285,7 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		if util.ToInt(meta.AdminInfo["root"]) == 1 {
 			return all, all
 		}
-		urlKey := "admin_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+		urlKey := "admin_auth_url_" + strconv.FormatUint(uint64(meta.AdminID), 10) + ":" + cache.AuthCacheVer()
 		if cached := loadURIList(urlKey); cached != nil {
 			return all, cached
 		}
@@ -303,7 +318,7 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 		q.Find(&menus)
 		return collectTenantPerms(menus)
 	})
-	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10)
+	urlKey := "tenant_auth_url_" + strconv.FormatUint(uint64(tid), 10) + "_" + strconv.FormatUint(uint64(meta.AdminID), 10) + ":" + cache.AuthCacheVer()
 	if cached := loadURIList(urlKey); cached != nil {
 		return all, cached
 	}
@@ -324,25 +339,13 @@ func adminURIs(c *gin.Context, meta *ctxutil.RequestMeta) (all, mine []string) {
 }
 
 func cachedURIList(key string, load func() []string) []string {
-	live := load()
-	md5Key := key + "_md5"
-	fp := permsFingerprint(live)
-	cachedFp, _ := cache.Get(md5Key)
-	if cachedFp != fp {
-		cache.Del(key)
-		if strings.HasPrefix(key, "admin_auth_all") {
-			cache.DelPrefix("admin_auth_url_")
-		} else if strings.HasPrefix(key, "tenant_auth_all") {
-			cache.DelPrefix("tenant_auth_url_")
-		}
-		cache.Set(md5Key, fp, time.Hour)
-		storeURIList(key, live)
-		return live
-	}
-	if cached := loadURIList(key); cached != nil {
+	vk := key + ":" + cache.AuthCacheVer()
+	if cached := loadURIList(vk); cached != nil {
 		return cached
 	}
-	storeURIList(key, live)
+	live := load()
+	cache.Set(vk+"_md5", permsFingerprint(live), time.Hour)
+	storeURIList(vk, live)
 	return live
 }
 
@@ -401,6 +404,99 @@ func containsURI(list []string, uri string) bool {
 		}
 	}
 	return false
+}
+
+// liveMenuCatalog re-reads enabled menu perms so a stale Redis "all" list
+// cannot fail-open newly inserted generator menus.
+type liveMenuCatalog struct {
+	mu        sync.Mutex
+	ver       string
+	at        time.Time
+	platform  []string
+	tenant    map[uint][]string
+	platformL bool
+}
+
+var liveMenus liveMenuCatalog
+
+const liveMenuTTL = 15 * time.Second
+
+func menuPermExists(c *gin.Context, meta *ctxutil.RequestMeta, accessURI string) (bool, error) {
+	if meta == nil || accessURI == "" {
+		return false, nil
+	}
+	uris, err := liveMenuURIs(c, meta)
+	if err != nil {
+		return false, err
+	}
+	return containsURI(uris, accessURI), nil
+}
+
+func liveMenuURIs(c *gin.Context, meta *ctxutil.RequestMeta) ([]string, error) {
+	ver := cache.AuthCacheVer()
+	now := time.Now()
+	liveMenus.mu.Lock()
+	defer liveMenus.mu.Unlock()
+	if liveMenus.ver != ver || now.Sub(liveMenus.at) > liveMenuTTL {
+		liveMenus.ver = ver
+		liveMenus.at = now
+		liveMenus.platform = nil
+		liveMenus.tenant = nil
+		liveMenus.platformL = false
+	}
+	if meta.App == "platformapi" {
+		if !liveMenus.platformL {
+			uris, err := loadPlatformMenuURIs()
+			if err != nil {
+				return nil, err
+			}
+			liveMenus.platform = uris
+			liveMenus.platformL = true
+		}
+		return liveMenus.platform, nil
+	}
+	tid := meta.TenantID
+	if tid == 0 {
+		return nil, nil
+	}
+	if liveMenus.tenant == nil {
+		liveMenus.tenant = map[uint][]string{}
+	}
+	if uris, ok := liveMenus.tenant[tid]; ok {
+		return uris, nil
+	}
+	uris, err := loadTenantMenuURIs(c, tid)
+	if err != nil {
+		return nil, err
+	}
+	liveMenus.tenant[tid] = uris
+	return uris, nil
+}
+
+func loadPlatformMenuURIs() ([]string, error) {
+	if bootstrap.DB == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
+	var menus []model.SystemMenu
+	if err := bootstrap.DB.Where("is_disable = 0 AND perms <> ''").Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return collectPerms(menus), nil
+}
+
+func loadTenantMenuURIs(c *gin.Context, tid uint) ([]string, error) {
+	db := tenantdb.Use(c)
+	if db == nil {
+		db = bootstrap.DB
+	}
+	if db == nil || tid == 0 {
+		return nil, fmt.Errorf("database unavailable")
+	}
+	var menus []model.TenantSystemMenu
+	if err := db.Where("is_disable = 0 AND perms <> '' AND tenant_id = ?", tid).Find(&menus).Error; err != nil {
+		return nil, err
+	}
+	return collectTenantPerms(menus), nil
 }
 
 func toUintSlice(v any) []uint {

@@ -179,6 +179,7 @@ type OperationLog struct {
 	Params     string `gorm:"column:params" json:"params"`
 	Result     string `gorm:"column:result" json:"result"`
 	IP         string `gorm:"column:ip" json:"ip"`
+	TenantID   uint   `gorm:"column:tenant_id" json:"tenant_id"`
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 }
 
