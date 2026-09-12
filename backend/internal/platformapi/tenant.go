@@ -1246,7 +1246,11 @@ func tenantUserCount(t model.Tenant) int64 {
 	}
 	var users int64
 	tenantdb.ForTenant(t.ID).Model(&model.User{}).Where("tenant_id = ? AND delete_time IS NULL", t.ID).Count(&users)
-	cache.Set(key, strconv.FormatInt(users, 10), 30*time.Second)
+	// Do not cache a zero count: shard tenants often get their first user a
+	// moment after create, and a 30s zero would hide them from detail.
+	if users > 0 {
+		cache.Set(key, strconv.FormatInt(users, 10), 30*time.Second)
+	}
 	return users
 }
 

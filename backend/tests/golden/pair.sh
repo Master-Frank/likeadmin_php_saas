@@ -126,7 +126,16 @@ if [[ -n "$TENANT_HOST" ]]; then
   if [[ -z "$TENANT_TOKEN" ]]; then
     TENANT_TOKEN="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("token") or "")' <<<"$go_t")"
   fi
+  TENANT_ID="${TENANT_ID:-}"
+  if [[ -z "$TENANT_ID" ]] && command -v mysql >/dev/null; then
+    host_only="${TENANT_HOST%%:*}"
+    sn_guess="${host_only%%.*}"
+    TENANT_ID="$(mysql -h127.0.0.1 -ulikeadmin -proot "$MYSQL_DATABASE" -N -e "SELECT id FROM la_tenant WHERE delete_time IS NULL AND (domain_alias='$TENANT_HOST' OR domain_alias='$host_only' OR sn='$sn_guess') ORDER BY id DESC LIMIT 1" 2>/dev/null || true)"
+  fi
+  TENANT_ID="${TENANT_ID:-1}"
+  echo "tenant_id=$TENANT_ID host=$TENANT_HOST"
 fi
+TENANT_ID="${TENANT_ID:-1}"
 
 paths=(
   /platformapi/config/getConfig
@@ -411,7 +420,7 @@ if [[ -n "$TENANT_HOST" ]]; then
   if [[ -n "$UT" ]] && command -v mysql >/dev/null; then
     sess_tid="$(mysql -h127.0.0.1 -ulikeadmin -proot "$MYSQL_DATABASE" -N -e "SELECT tenant_id FROM la_user_session WHERE token='$UT'" 2>/dev/null)"
     echo "user_session_tenant_id=$sess_tid"
-    if [[ "$sess_tid" != "1" ]]; then
+    if [[ "$sess_tid" != "$TENANT_ID" ]]; then
       fail=$((fail + 1))
     fi
     go_ul2="$(curl -sS -X POST "$GO/api/login/account" -H "Host: $TENANT_HOST" -H 'Content-Type: application/json' -d "$login_body")"
@@ -540,10 +549,10 @@ print((ls[0] if ls else {}).get("id") or 0)
     if [[ -n "${uid:-}" ]] && command -v mysql >/dev/null; then
       mysqlq() { mysql -h127.0.0.1 -ulikeadmin -proot "$MYSQL_DATABASE" -N -e "$1" 2>/dev/null || true; }
       now="$(date +%s)"
-      mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,1,$now)"
+      mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,$TENANT_ID,$now)"
       mysqlq "INSERT INTO la_article_collect (user_id,article_id,status,tenant_id,create_time) VALUES ($uid,${aid:-1},1,999,$now)"
       go_addc="$(curl -sS -X POST "$GO/api/article/addCollect" -H "Host: $TENANT_HOST" -H "token: $UT" -H 'Content-Type: application/json' -d "{\"id\":${aid:-1}}")"
-      own_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect WHERE user_id=$uid AND article_id=${aid:-1} AND status=1 AND delete_time IS NULL AND tenant_id=1")"
+      own_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect WHERE user_id=$uid AND article_id=${aid:-1} AND status=1 AND delete_time IS NULL AND tenant_id=$TENANT_ID")"
       leak_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect WHERE user_id=$uid AND tenant_id=999 AND status=1 AND create_time=$now")"
       echo "collect_add go_code=$(jcode <<<"$go_addc") own=$own_cl leak=$leak_cl"
       if [[ "$(jcode <<<"$go_addc")" != "1" || "$own_cl" == "0" || "$leak_cl" != "1" ]]; then
@@ -553,7 +562,7 @@ print((ls[0] if ls else {}).get("id") or 0)
       php_cl="$(curl -sS "$PHP/api/article/collect" -H "Host: $TENANT_HOST" -H "token: $UT")"
       go_cl="$(curl -sS "$GO/api/article/collect" -H "Host: $TENANT_HOST" -H "token: $UT")"
       go_cln="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("data") or {}).get("lists") or []))' <<<"$go_cl")"
-      expect_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect c JOIN la_article a ON a.id=c.article_id WHERE c.user_id=$uid AND c.status=1 AND c.delete_time IS NULL AND c.tenant_id=1 AND a.tenant_id=1 AND a.is_show=1 AND a.delete_time IS NULL")"
+      expect_cl="$(mysqlq "SELECT COUNT(*) FROM la_article_collect c JOIN la_article a ON a.id=c.article_id WHERE c.user_id=$uid AND c.status=1 AND c.delete_time IS NULL AND c.tenant_id=$TENANT_ID AND a.tenant_id=$TENANT_ID AND a.is_show=1 AND a.delete_time IS NULL")"
       echo "collect_tenant_scope n=$go_cln expect=$expect_cl"
       if [[ "$go_cln" != "$expect_cl" ]]; then
         echo "  go_cl=${go_cl:0:240}"
@@ -1381,7 +1390,7 @@ print(next((x.get("id") for x in ls if x.get("name")==name), 0))
       fail=$((fail + 1))
     fi
     sname="pairsys$(date +%s)"
-    go_sys="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$sname\",\"type\":1,\"command\":\"cancel_unpaid_orders\",\"status\":2,\"expression\":\"0 * * * *\",\"params\":\"\",\"remark\":\"pair\",\"system\":1}")"
+    go_sys="$(curl -sS -X POST "$GO/platformapi/crontab.crontab/add" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$sname\",\"type\":1,\"command\":\"pair_system_probe\",\"status\":2,\"expression\":\"0 * * * *\",\"params\":\"\",\"remark\":\"pair\",\"system\":1}")"
     sysid="$(python3 -c '
 import json,sys
 d=json.loads(sys.stdin.read())
