@@ -122,6 +122,10 @@ func TestCopyTenantStampsUpdateTime(t *testing.T) {
 	if strings.Contains(home.Data, `"id":3,`) || strings.Contains(home.Data, `"id":3}`) {
 		t.Fatalf("template article id leaked into tenant home decorate: %s", home.Data)
 	}
+	if strings.Contains(home.Data, `"id":6,`) || strings.Contains(home.Data, `"id":6}`) ||
+		strings.Contains(pc.Data, `"id":6,`) || strings.Contains(pc.Data, `"id":6}`) {
+		t.Fatalf("picker id 6 is not a template article and must not survive clone: home=%s pc=%s", home.Data, pc.Data)
+	}
 	if !strings.Contains(pc.Data, "/pages/news_detail/news_detail") {
 		t.Fatalf("pc banner should copy mobile article links, got %s", pc.Data)
 	}
@@ -328,6 +332,14 @@ func TestInitShardedTenantChain(t *testing.T) {
 	if notices < 1 || arts < 1 || pays < 1 || menus < 1 || links != 1 {
 		t.Fatalf("shard chain notice=%d article=%d pay=%d menu=%d admin_dept=%d",
 			notices, arts, pays, menus, links)
+	}
+
+	var home model.DecoratePage
+	if err := sdb.Where("tenant_id = ? AND type = 1", tid).First(&home).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(home.Data, `"id":6,`) || strings.Contains(home.Data, `"id":6}`) {
+		t.Fatalf("sharded decorate still has picker id 6: %s", home.Data)
 	}
 
 	var pair1Menus int64

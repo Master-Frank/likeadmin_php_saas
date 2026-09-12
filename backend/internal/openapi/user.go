@@ -71,6 +71,10 @@ func userCollectsArticle(c *gin.Context, uid, articleID uint) bool {
 	if uid == 0 || articleID == 0 {
 		return false
 	}
+	articleID = visibleArticleID(c, articleID)
+	if articleID == 0 {
+		return false
+	}
 	var n int64
 	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, articleID).Count(&n)
 	return n > 0
@@ -95,7 +99,7 @@ func IndexConfig(c *gin.Context) {
 	payload := gin.H{
 		"domain": filesvc.GetFileURL(c, ""),
 		"style":  decorate.Style(c),
-		"tabbar": decorate.Lists(c),
+		"tabbar": remapTabbarArticleIDs(c, decorate.Lists(c)),
 		"login": gin.H{
 			"login_way":       cfgsvc.Get(c, "login", "login_way", []any{"1", "2"}),
 			"coerce_mobile":   cfgsvc.GetInt(c, "login", "coerce_mobile", 1),
@@ -161,7 +165,7 @@ func IndexDecorate(c *gin.Context) {
 	}
 	payload := gin.H{
 		"type": p.Type, "name": p.Name,
-		"data": p.Data, "meta": p.Meta,
+		"data": applyTenantArticleIDs(c, p.Data), "meta": p.Meta,
 	}
 	pubcache.Set(tid, "decorate", util.ToString(typ), payload, pubcache.TTL)
 	response.DataCached(c, payload, 30*time.Second)

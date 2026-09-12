@@ -7,6 +7,7 @@ import (
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/decorate"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -127,9 +128,14 @@ func DecorateDataArticle(c *gin.Context) {
 	if limit <= 0 {
 		limit = 10
 	}
+	// PHP lists tenant_id=0 templates; C-end article lists are tenant-scoped,
+	// so the decorate news preview and later link picks must use tenant copies.
+	q := bootstrap.DB.Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0")
+	if tid := tenantDB(c); tid > 0 && tdb(c) != nil {
+		q = scopeTID(tdb(c).Where("delete_time IS NULL AND is_show = 1"), c)
+	}
 	var rows []model.Article
-	bootstrap.DB.Where("delete_time IS NULL AND is_show = 1 AND tenant_id = 0").
-		Order("id desc").Limit(limit).Find(&rows)
+	q.Order("id desc").Limit(limit).Find(&rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, map[string]any{
@@ -139,6 +145,18 @@ func DecorateDataArticle(c *gin.Context) {
 		})
 	}
 	response.Success(c, "获取成功", out)
+}
+
+func tenantDecorateIDMap(c *gin.Context) map[uint]uint {
+	tplDB := bootstrap.DB
+	if tplDB == nil {
+		tplDB = tdb(c)
+	}
+	return decorate.TenantArticleIDMap(tplDB, tdb(c), tenantDB(c))
+}
+
+func applyDecorateArticleIDs(c *gin.Context, raw string) string {
+	return decorate.RemapArticleIDs(raw, tenantDecorateIDMap(c))
 }
 
 func DecorateDataPC(c *gin.Context) {
@@ -179,8 +197,9 @@ func DecorateTabbarSave(c *gin.Context) {
 		}
 		tdb(c).Create(&model.DecorateTabbar{
 			Name: util.ToString(m["name"]), Selected: filesvc.SetFileURL(c, util.ToString(m["selected"])),
-			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])), Link: util.EncodeJSON(m["link"]),
-			IsShow: util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
+			Unselected: filesvc.SetFileURL(c, util.ToString(m["unselected"])),
+			Link:       applyDecorateArticleIDs(c, util.EncodeJSON(m["link"])),
+			IsShow:     util.ToInt(m["is_show"]), TenantID: tid, CreateTime: now, UpdateTime: util.UnixPtr(now),
 		})
 	}
 	invalidatePublic(c, "decorate", "tabbar")

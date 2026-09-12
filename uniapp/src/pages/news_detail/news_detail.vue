@@ -32,7 +32,7 @@
             </view>
             <!-- 内容 -->
             <view class="mt-[20rpx]">
-                <u-parse :html="newsData.content"></u-parse>
+                <u-parse :html="newsData.content || ''"></u-parse>
             </view>
         </view>
 
@@ -56,7 +56,8 @@ const newsData = ref<any>({})
 let newsId = ''
 
 const getData = async (id) => {
-    newsData.value = await getArticleDetail({ id })
+    const data = await getArticleDetail({ id })
+    newsData.value = data && typeof data === 'object' ? data : {}
 }
 
 const handleAddCollect = async (id: number) => {

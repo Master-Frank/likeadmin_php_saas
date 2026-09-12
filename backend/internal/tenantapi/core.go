@@ -812,7 +812,7 @@ func DecoratePageDetail(c *gin.Context) {
 	}
 	response.Success(c, "获取成功", gin.H{
 		"id": p.ID, "type": p.Type, "name": p.Name,
-		"data": p.Data, "meta": p.Meta, "tenant_id": p.TenantID,
+		"data": applyDecorateArticleIDs(c, p.Data), "meta": p.Meta, "tenant_id": p.TenantID,
 		"create_time": util.FormatDateTime(p.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(p.UpdateTime),
 	})
@@ -838,7 +838,7 @@ func DecoratePageSave(c *gin.Context) {
 		response.Fail(c, "装修信息参数缺失")
 		return
 	}
-	data := decoratePayload(c, "data")
+	data := applyDecorateArticleIDs(c, decoratePayload(c, "data"))
 	var page model.DecoratePage
 	if scopeTID(tdb(c).Where("id = ?", id), c).First(&page).Error != nil {
 		response.Fail(c, "信息不存在")

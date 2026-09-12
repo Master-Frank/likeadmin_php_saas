@@ -6,6 +6,45 @@ import (
 	"testing"
 )
 
+func TestMapTemplateArticleIDsSkipsSameID(t *testing.T) {
+	got := MapTemplateArticleIDs(
+		[]ArticleIDTitle{{ID: 3, Title: "金山电池"}, {ID: 1, Title: "居家好物"}},
+		[]ArticleIDTitle{{ID: 3, Title: "金山电池"}, {ID: 1, Title: "居家好物"}},
+	)
+	if len(got) != 0 {
+		t.Fatalf("same-id copies should not remap, got %v", got)
+	}
+	got = MapTemplateArticleIDs(
+		[]ArticleIDTitle{{ID: 3, Title: "金山电池"}},
+		[]ArticleIDTitle{{ID: 6, Title: "金山电池"}},
+	)
+	if got[3] != 6 {
+		t.Fatalf("expected 3→6, got %v", got)
+	}
+}
+
+func TestRemapArticleIDsRewritesAliasCopyID(t *testing.T) {
+	raw := `{"path":"/pages/news_detail/news_detail","query":{"id":6},"type":"article","id":6}`
+	got := RemapArticleIDs(raw, map[uint]uint{3: 69, 6: 69})
+	if strings.Contains(got, `"id":6,`) || strings.Contains(got, `"id":6}`) {
+		t.Fatalf("alias copy id leaked: %s", got)
+	}
+	if !strings.Contains(got, `"id":69`) {
+		t.Fatalf("expected tenant copy 69, got %s", got)
+	}
+}
+
+func TestRemapArticleIDsRewritesStandaloneTabbarLink(t *testing.T) {
+	raw := `{"path":"/pages/news_detail/news_detail","query":{"id":3},"type":"article","id":3}`
+	got := RemapArticleIDs(raw, map[uint]uint{3: 6})
+	if strings.Contains(got, `"id":3`) {
+		t.Fatalf("template id leaked: %s", got)
+	}
+	if !strings.Contains(got, `"id":6`) {
+		t.Fatalf("expected tenant copy id 6, got %s", got)
+	}
+}
+
 func TestRemapArticleIDsRewritesNewsDetailQuery(t *testing.T) {
 	raw := `[{"name":"banner","content":{"data":[{"link":{"path":"/pages/news_detail/news_detail","query":{"id":3},"type":"article","id":3}}]}}]`
 	got := RemapArticleIDs(raw, map[uint]uint{3: 6})

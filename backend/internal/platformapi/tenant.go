@@ -843,6 +843,9 @@ func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 		return err
 	}
 	sdb := tenantdb.UseSN(tenant.SN)
+	if err := remapShardedDecorate(sdb, tenant.ID); err != nil {
+		return err
+	}
 	// PHP TenantCreatService::initAccount uses isset() on raw params.
 	pwd := config.C.Project.DefaultPassword
 	if httpx.BodyHas(c, "password") {
@@ -1010,7 +1013,66 @@ func canonicalizeNoticeJSON(raw string) string {
 	return util.EncodeJSON(v)
 }
 
+// remapShardedDecorate aligns SQL-seeded decorate pages the same way shared
+// clone does: copy mobile banner links onto PC, then rewrite template article
+// ids onto the shard copies (tenantData.sql historically stored picker id=6).
+func remapShardedDecorate(sdb *gorm.DB, tenantID uint) error {
+	if sdb == nil || tenantID == 0 {
+		return nil
+	}
+	tplDB := bootstrap.DB
+	if tplDB == nil {
+		tplDB = sdb
+	}
+	artMap := decorate.TenantArticleIDMap(tplDB, sdb, tenantID)
+	var pages []model.DecoratePage
+	if err := sdb.Where("tenant_id = ?", tenantID).Find(&pages).Error; err != nil {
+		return err
+	}
+	mobile := ""
+	for _, p := range pages {
+		if p.Type == 1 {
+			mobile = p.Data
+			break
+		}
+	}
+	for _, p := range pages {
+		data := p.Data
+		if p.Type == 4 && mobile != "" {
+			data = decorate.CopyBannerLinksByImage(data, mobile)
+		}
+		data = decorate.RemapArticleIDs(data, artMap)
+		if data == p.Data {
+			continue
+		}
+		if err := sdb.Model(&model.DecoratePage{}).Where("id = ? AND tenant_id = ?", p.ID, tenantID).
+			Update("data", data).Error; err != nil {
+			return err
+		}
+	}
+	var bars []model.DecorateTabbar
+	if err := sdb.Where("tenant_id = ?", tenantID).Find(&bars).Error; err != nil {
+		return err
+	}
+	for _, b := range bars {
+		link := decorate.RemapArticleIDs(b.Link, artMap)
+		if link == b.Link {
+			continue
+		}
+		if err := sdb.Model(&model.DecorateTabbar{}).Where("id = ? AND tenant_id = ?", b.ID, tenantID).
+			Update("link", link).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func copyTenantDecorate(tx *gorm.DB, tenantID uint, artMap map[uint]uint) error {
+	if expanded := decorate.TenantArticleIDMap(tx, tx, tenantID); len(expanded) > 0 {
+		artMap = expanded
+	} else if artMap == nil {
+		artMap = map[uint]uint{}
+	}
 	now := util.NowUnix()
 	var pages []model.DecoratePage
 	tx.Where("tenant_id = 0").Find(&pages)
@@ -1040,6 +1102,7 @@ func copyTenantDecorate(tx *gorm.DB, tenantID uint, artMap map[uint]uint) error 
 	for _, b := range bars {
 		b.ID = 0
 		b.TenantID = tenantID
+		b.Link = decorate.RemapArticleIDs(b.Link, artMap)
 		b.CreateTime = now
 		b.UpdateTime = util.UnixPtr(now)
 		if err := tx.Create(&b).Error; err != nil {

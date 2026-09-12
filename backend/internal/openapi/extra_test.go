@@ -1,8 +1,10 @@
 package openapi
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"likeadmin/backend/internal/ctxutil"
@@ -81,6 +83,32 @@ func TestLoadVisibleArticleResolvesTemplateID(t *testing.T) {
 	}
 	if a.Title == "" || a.ID == 3 {
 		t.Fatalf("expected tenant copy, got id=%d title=%q", a.ID, a.Title)
+	}
+}
+
+func TestTenantArticleIDMapRewritesDecorateJSON(t *testing.T) {
+	if !initOpenapiDB(t) {
+		t.Skip("no database")
+	}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{TenantID: 1})
+	idMap := tenantArticleIDMap(c)
+	if idMap[3] == 0 || idMap[3] == 3 {
+		t.Fatalf("template id 3 should map onto tenant copy, got %v", idMap)
+	}
+	if idMap[6] != 0 && idMap[6] != idMap[3] {
+		t.Fatalf("demo picker id 6 should alias onto the same copy as template 3, got %v", idMap)
+	}
+	raw := `[{"name":"banner","content":{"data":[{"link":{"path":"/pages/news_detail/news_detail","query":{"id":3},"type":"article","id":3}}]}}]`
+	got := applyTenantArticleIDs(c, raw)
+	if strings.Contains(got, `"id":3,`) || strings.Contains(got, `"id":3}`) {
+		t.Fatalf("template id leaked: %s", got)
+	}
+	if !strings.Contains(got, fmt.Sprintf(`"id":%d`, idMap[3])) {
+		t.Fatalf("expected tenant id %d in %s", idMap[3], got)
 	}
 }
 

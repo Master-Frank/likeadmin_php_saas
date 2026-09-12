@@ -1,6 +1,7 @@
 package decorate
 
 import (
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -45,11 +46,12 @@ func Lists(c *gin.Context) []map[string]any {
 	db := tenantdb.Use(c).Where("tenant_id = ?", tid)
 	db.Order("id asc").Find(&bars)
 	out = make([]map[string]any, 0, len(bars))
+	idMap := TenantArticleIDMap(bootstrap.DB, tenantdb.Use(c), tid)
 	for _, b := range bars {
 		item := map[string]any{
 			"id": b.ID, "name": b.Name, "tenant_id": b.TenantID, "is_show": b.IsShow,
 			"selected": filesvc.FileURLUnlessEmpty(c, b.Selected), "unselected": filesvc.FileURLUnlessEmpty(c, b.Unselected),
-			"link":        util.DecodeJSON(b.Link),
+			"link":        util.DecodeJSON(RemapArticleIDs(b.Link, idMap)),
 			"create_time": util.FormatDateTime(b.CreateTime),
 			"update_time": util.FormatDateTimePtr(b.UpdateTime),
 		}

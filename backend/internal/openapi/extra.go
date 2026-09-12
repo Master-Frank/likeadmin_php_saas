@@ -33,8 +33,11 @@ func ArticleAddCollect(c *gin.Context) {
 		response.Fail(c, "参数错误")
 		return
 	}
-	// PHP ArticleController::addCollect uses post('id/d') (query is ignored).
-	aid := httpx.BodyUint(c, "id")
+	aid := visibleArticleID(c, httpx.BodyUint(c, "id"))
+	if aid == 0 {
+		response.Fail(c, "参数错误")
+		return
+	}
 	var row model.ArticleCollect
 	err := articleCollectDB(c).Where("user_id = ? AND article_id = ?", uid, aid).First(&row).Error
 	if err != nil {
@@ -53,7 +56,11 @@ func ArticleCancelCollect(c *gin.Context) {
 		return
 	}
 	uid := ctxutil.Get(c).UserID
-	aid := httpx.BodyUint(c, "id")
+	aid := visibleArticleID(c, httpx.BodyUint(c, "id"))
+	if aid == 0 {
+		response.Success(c, "操作成功", nil)
+		return
+	}
 	articleCollectDB(c).Where("user_id = ? AND article_id = ? AND status = 1", uid, aid).
 		Updates(map[string]any{"status": 0, "update_time": util.NowUnix()})
 	response.Success(c, "操作成功", nil)
@@ -154,6 +161,45 @@ func loadVisibleArticle(c *gin.Context, id uint) (model.Article, bool) {
 		return a, false
 	}
 	return copy, true
+}
+
+func visibleArticleID(c *gin.Context, id uint) uint {
+	if a, ok := loadVisibleArticle(c, id); ok {
+		return a.ID
+	}
+	return 0
+}
+
+// tenantArticleIDMap maps template article ids onto the current tenant copies
+// so decorate JSON (banners, nav, user widgets, tabbar) can be rewritten
+// before the C-end follows /pages/news_detail?id=.
+func tenantArticleIDMap(c *gin.Context) map[uint]uint {
+	if c == nil {
+		return map[uint]uint{}
+	}
+	tid := ctxutil.Get(c).TenantID
+	tplDB := bootstrap.DB
+	if tplDB == nil {
+		tplDB = tdb(c)
+	}
+	return decorate.TenantArticleIDMap(tplDB, tdb(c), tid)
+}
+
+func applyTenantArticleIDs(c *gin.Context, raw string) string {
+	return decorate.RemapArticleIDs(raw, tenantArticleIDMap(c))
+}
+
+func remapTabbarArticleIDs(c *gin.Context, items []map[string]any) []map[string]any {
+	idMap := tenantArticleIDMap(c)
+	if len(idMap) == 0 {
+		return items
+	}
+	for _, item := range items {
+		if link, ok := item["link"]; ok {
+			item["link"] = util.DecodeJSON(decorate.RemapArticleIDs(util.EncodeJSON(link), idMap))
+		}
+	}
+	return items
 }
 
 func userTerminal(c *gin.Context) int {
@@ -546,13 +592,14 @@ func PcIndex(c *gin.Context) {
 	db := scopeTenant(tdb(c).Where("type = 4"), c)
 	_ = db.First(&page)
 	if page.ID > 0 && page.Data != "" {
+		page.Data = applyTenantArticleIDs(c, page.Data)
 		var mobile model.DecoratePage
 		_ = scopeTenant(tdb(c).Where("type = 1"), c).First(&mobile)
-		data := page.Data
 		if mobile.ID > 0 {
-			data = decorate.FillDefaultBannerLinksByImage(data, mobile.Data)
+			mobile.Data = applyTenantArticleIDs(c, mobile.Data)
+			page.Data = decorate.FillDefaultBannerLinksByImage(page.Data, mobile.Data)
 		}
-		page.Data = decorate.RewriteForPC(data, func(id uint) uint {
+		page.Data = decorate.RewriteForPC(page.Data, func(id uint) uint {
 			if a, ok := loadVisibleArticle(c, id); ok {
 				return a.ID
 			}
@@ -731,6 +778,7 @@ func IndexIndex(c *gin.Context) {
 	var page model.DecoratePage
 	db := scopeTenant(tdb(c).Where("type = 1"), c)
 	_ = db.First(&page)
+	page.Data = applyTenantArticleIDs(c, page.Data)
 	articles := limitArticles(c, "new", 20, 0, 0)
 	out := make([]map[string]any, 0, len(articles))
 	for _, a := range articles {

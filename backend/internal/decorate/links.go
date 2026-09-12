@@ -5,9 +5,96 @@ import (
 	"net/url"
 	"strings"
 
+	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/pcshop"
 	"likeadmin/backend/internal/util"
+
+	"gorm.io/gorm"
 )
+
+// ArticleIDTitle is a title-keyed article id used to map template picker rows
+// onto tenant copies.
+type ArticleIDTitle struct {
+	ID    uint
+	Title string
+}
+
+// MapTemplateArticleIDs maps tenant_id=0 template ids onto tenant copies that
+// share the same title. Same-id rows (sharded seed copies that reuse 1/2/3)
+// are skipped so decorate JSON is left alone.
+func MapTemplateArticleIDs(templates, copies []ArticleIDTitle) map[uint]uint {
+	out := map[uint]uint{}
+	byTitle := map[string]uint{}
+	for _, tpl := range templates {
+		if tpl.Title == "" || tpl.ID == 0 {
+			continue
+		}
+		byTitle[tpl.Title] = tpl.ID
+	}
+	if len(byTitle) == 0 {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, a := range copies {
+		if a.Title == "" || seen[a.Title] {
+			continue
+		}
+		seen[a.Title] = true
+		if old, ok := byTitle[a.Title]; ok && old != a.ID {
+			out[old] = a.ID
+		}
+	}
+	return out
+}
+
+// TenantArticleIDMap loads template articles from tplDB and tenant copies from
+// tenantDB, then maps template ids onto the copies.
+func TenantArticleIDMap(tplDB, tenantDB *gorm.DB, tenantID uint) map[uint]uint {
+	if tplDB == nil || tenantDB == nil || tenantID == 0 {
+		return map[uint]uint{}
+	}
+	var tpls []model.Article
+	tplDB.Where("tenant_id = 0 AND is_show = 1 AND delete_time IS NULL").Find(&tpls)
+	if len(tpls) == 0 {
+		return map[uint]uint{}
+	}
+	titles := make([]string, 0, len(tpls))
+	templates := make([]ArticleIDTitle, 0, len(tpls))
+	for _, tpl := range tpls {
+		if tpl.Title == "" {
+			continue
+		}
+		templates = append(templates, ArticleIDTitle{ID: tpl.ID, Title: tpl.Title})
+		titles = append(titles, tpl.Title)
+	}
+	if len(titles) == 0 {
+		return map[uint]uint{}
+	}
+	var copies []model.Article
+	tenantDB.Where("tenant_id = ? AND is_show = 1 AND delete_time IS NULL AND title IN ?", tenantID, titles).
+		Order("id asc").Find(&copies)
+	refs := make([]ArticleIDTitle, 0, len(copies))
+	copyByTitle := map[string]uint{}
+	for _, a := range copies {
+		refs = append(refs, ArticleIDTitle{ID: a.ID, Title: a.Title})
+		if _, ok := copyByTitle[a.Title]; !ok {
+			copyByTitle[a.Title] = a.ID
+		}
+	}
+	out := MapTemplateArticleIDs(templates, refs)
+	// Decorate JSON may store another tenant's copy id (demo seed used 6) or a
+	// template id. Map every visible row with the same title onto this tenant.
+	var aliases []model.Article
+	tplDB.Where("is_show = 1 AND delete_time IS NULL AND title IN ?", titles).Find(&aliases)
+	for _, a := range aliases {
+		nid, ok := copyByTitle[a.Title]
+		if !ok || a.ID == nid {
+			continue
+		}
+		out[a.ID] = nid
+	}
+	return out
+}
 
 // RemapArticleIDs rewrites decorate JSON so template article ids (tenant_id=0
 // picker rows) become the tenant copies. Used when cloning decorate pages.
