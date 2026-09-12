@@ -148,7 +148,9 @@ func TestMaybeIgnoresBodyExport(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/setting.system.log/lists?page_size=1", bytes.NewBufferString(`{"export":2,"file_name":"hack"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
-	ctxutil.Set(c, &ctxutil.RequestMeta{Controller: "setting.system.log", Action: "lists", App: "platformapi"})
+	ctxutil.Set(c, &ctxutil.RequestMeta{
+		Controller: "setting.system.log", Action: "lists", App: "platformapi", AdminID: 7,
+	})
 	if Maybe(c, "export", []map[string]any{{"id": 1}}) {
 		t.Fatal("body export=2 must be ignored")
 	}
@@ -310,6 +312,7 @@ func TestServeTaskAndSyncReady(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+taskID, nil)
+	ctxutil.Set(c2, &ctxutil.RequestMeta{AdminID: 7})
 	Serve(c2)
 	if !strings.Contains(w2.Body.String(), `"status":"ready"`) {
 		t.Fatalf("poll %s", w2.Body.String())

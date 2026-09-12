@@ -104,7 +104,7 @@ func withIndexLock(db *gorm.DB, fn func()) bool {
 	if db == nil || fn == nil {
 		return false
 	}
-	if db.Dialector == nil || db.Dialector.Name() != "mysql" {
+	if db.Config == nil || db.Dialector == nil || db.Dialector.Name() != "mysql" {
 		fn()
 		return true
 	}
