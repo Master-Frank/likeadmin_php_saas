@@ -308,6 +308,10 @@ func TestServeTaskAndSyncReady(t *testing.T) {
 	if env.Code != 1 || taskID == "" || env.Data["status"] != "ready" {
 		t.Fatalf("body %s", w.Body.String())
 	}
+	saved, ok := loadTask(taskID)
+	if !ok || saved.AdminID != 7 {
+		t.Fatalf("saved task %+v ok=%v", saved, ok)
+	}
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
