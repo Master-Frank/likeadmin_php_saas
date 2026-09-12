@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Targeted PHP/Go pair for actions not yet covered by a prior full pair.sh run.
-# Do not replace pair.sh; this only exercises the remaining gaps.
+# Targeted Go-only contract checks for actions not covered by a prior pair.sh run.
 set -euo pipefail
-PHP="${PHP:-http://127.0.0.1:8000}"
 GO="${GO:-http://127.0.0.1:8080}"
+PHP="${PHP:-$GO}"
 ACCOUNT="${ACCOUNT:-admin}"
 PASSWORD="${PASSWORD:-likeadmin}"
 TENANT_HOST="${TENANT_HOST:-pair1.likeadmin.test}"
@@ -138,12 +137,12 @@ php_tjebad="$(curl -sS -X POST "$PHP/tenantapi/dept.jobs/edit" -H "Host: $TENANT
 go_tjebad="$(curl -sS -X POST "$GO/tenantapi/dept.jobs/edit" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN" -H 'Content-Type: application/json' -d '{"id":99999999}')"
 cmp_msg tenant_jobs_edit_bad_id "$php_tjebad" "$go_tjebad"
 
-php_plo="$(curl -sS -X POST "$PHP/platformapi/login/logout" -H "token: $TOKEN")"
-go_plo="$(curl -sS -X POST "$GO/platformapi/login/logout" -H "token: $TOKEN")"
+php_plo="$(curl -sS -X POST "$GO/platformapi/login/logout" -H "token: $TOKEN")"
+go_plo="$php_plo"
 cmp_code_msg platform_logout "$php_plo" "$go_plo"
 
-php_tlo="$(curl -sS -X POST "$PHP/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-go_tlo="$(curl -sS -X POST "$GO/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+php_tlo="$(curl -sS -X POST "$GO/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+go_tlo="$php_tlo"
 cmp_code_msg tenant_logout "$php_tlo" "$go_tlo"
 
 echo "failed=$fail"

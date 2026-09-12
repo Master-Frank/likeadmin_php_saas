@@ -1,59 +1,56 @@
 # 黄金对拍与模块验收
 
-项目级迁移状态、删 PHP 前检查清单：[docs/php-to-go-status.md](../../../docs/php-to-go-status.md)。
+项目级迁移状态、PHP 对照 tag：[docs/php-to-go-status.md](../../../docs/php-to-go-status.md)。
 
-阶段完成定义：**同一请求 PHP vs Go JSON 对拍通过 + 对应前端主路径走通 + Nginx 已切该前缀到 Go**。PHP 公开动作已全部迁完，`LIKEADMIN_PHP_FALLBACK` 默认关闭。
+阶段完成定义：**Go JSON 契约通过 + 对应前端主路径走通 + Nginx 已切该前缀到 Go**。
 
-2026-09-08 live：`./backend/tests/golden/pair.sh` 直连 Go `:8080` **`failed=0`**。本轮未再跑 strangler `:8090` / Nginx `:8091`。无真实支付/短信凭证时只对拍失败与校验语义。
+默认 `./backend/tests/golden/pair.sh` 只打 Go `:8080`（`PHP` 默认等于 `GO`）。历史 PHP 双跑需要 checkout tag `php-reference-final-20260912` 到 worktree 并显式设置 `PHP=http://127.0.0.1:8000`。无真实支付/短信凭证时只覆盖失败与校验语义。
 
 「路由已注册 / `go test` 绿」不等于验收完成。
 
 ## 模块验收清单
 
-PHP 源文件与 Go 路由的 1:1 清单由 `backend/internal/router/php_module_test.go` 守门：公开动作 **307/307**，Logic/Lists/Validate/中间件/服务/缓存/命令均已入表。新增 PHP 文件未登记会失败；Go 多出来的路由必须落在「Vue 两端共用 / 已注释 PHP 动作」白名单，避免漏迁或重复实现。
+前端路由硬编码白名单由 `backend/internal/router/coverage_test.go` 守门。Go 多出来的路由必须落在「Vue 两端共用 / 已注释 PHP 动作」白名单。
 
-| 模块 | PHP 源 | Go | 状态 |
-|---|---|---|---|
-| 环境 | `like.sql` + Redis | `bootstrap` / `install` | 对拍已过 |
-| 平台登录/RBAC/组织 | `platformapi/logic/{Login,auth,dept}` | `platformapi/login.go` `admin.go` `menu_role.go` `dept_jobs.go` | 对拍已过 |
-| 平台租户生命周期 | `TenantLogic` `TenantAdminLogic` `TenantCreatService` | `platformapi/tenant.go` `tenantdb` | 对拍已过（分表走 shard；删除/停用比 PHP 多清理） |
-| 平台设置 | storage/dict/notice/pay/web/user/system | `platformapi/setting.go` `extra.go` | 对拍已过 |
-| 代码生成 / 升级 | `GeneratorLogic` `UpgradeLogic` | `generator/`（内嵌 stub）`gencrud/` `upgrade/` | 生成写入 Vue + 菜单 + gencrud 运行时，不再写 PHP 后端文件 |
-| 定时/安装 | `Crontab` `QueryRefund` `public/install` | `cron/` `cmd/crontab` `install/` | 三件系统任务已 `EnsureNativeJobs` 入库；独立 worker 含 `route:list` |
-| 租户内核 | login/config/workbench/RBAC/dept | `tenantapi/core.go` `auth.go` `org.go` | 对拍已过 |
-| 租户业务 | 文章/用户/装修/渠道/财务/充值/文件/通知 | `tenantapi/core.go` `extra.go` `channel.go` `file.go` `pay.go` | 对拍已过 |
-| 用户端 `/api` | `api/logic/*` + lists | `openapi/` | 对拍已过 |
-| 支付/短信/微信/存储 | `common/service/{pay,sms,wechat,storage}` | `pay/` `sms/` `wechat/` `storage/` `filesvc/` | 已迁；未使用的 AliPay transfer / silentLogin 不迁 |
-| 中间件 | Login/Auth/Demo/CORS/租户识别/操作日志 | `middleware/` | 已迁 |
-| Think CLI | `php think` + console.php | `cmd/think` `cron/think_*.go` | 已迁；不 exec PHP |
-| 全量切流 | nginx / strangler | `cmd/strangler` `deploy/nginx.local.conf` | 直连/切流/Nginx 对拍 failed=0；PHP 回落默认关 |
+| 模块 | Go | 状态 |
+|---|---|---|
+| 环境 | `bootstrap` / `install` | 契约已过 |
+| 平台登录/RBAC/组织 | `platformapi/login.go` `admin.go` `menu_role.go` `dept_jobs.go` | 契约已过 |
+| 平台租户生命周期 | `platformapi/tenant.go` `tenantdb` | 契约已过（分表走 shard；删除/停用比 PHP 多清理） |
+| 平台设置 | `platformapi/setting.go` `extra.go` | 契约已过 |
+| 代码生成 / 升级 | `generator/`（内嵌 stub）`gencrud/` `upgrade/` | 生成写入 Vue + 菜单 + gencrud 运行时 |
+| 定时/安装 | `cron/` `cmd/crontab` `install/` | 三件系统任务已 `EnsureNativeJobs` 入库 |
+| 租户内核 | `tenantapi/core.go` `auth.go` `org.go` | 契约已过 |
+| 租户业务 | `tenantapi/core.go` `extra.go` `channel.go` `file.go` `pay.go` | 契约已过 |
+| 用户端 `/api` | `openapi/` | 契约已过 |
+| 支付/短信/微信/存储 | `pay/` `sms/` `wechat/` `storage/` `filesvc/` | 已迁；未使用的 AliPay transfer / silentLogin 不迁 |
+| 中间件 | `middleware/` | 已迁 |
+| Think CLI | `cmd/think` `cron/think_*.go` | 已迁；不 exec PHP；PHP 脚手架永久关闭 |
+| 全量切流 | `cmd/strangler` `deploy/nginx.local.conf` | 静态根为 `public/` |
 
 允许差异：新签发 `token`、键顺序、工作台随机演示曲线。不允许：`code`/`show`/`msg` 语义、列表字段、空 `data` 形态、时间格式。
 
 ## 对拍覆盖
 
-`pair.sh` + `pair-gap.sh` + `pair-generator-zip.sh` 必须点名全部 **307** 个 PHP 公开动作（由 `TestPairScriptsMentionPHPActions` 守门）。无真实微信/支付宝/短信凭证时只对拍失败与校验语义；成功下单、真实退款、公众号菜单发布需凭证。
+`pair.sh` + `pair-gap.sh` + `pair-generator-zip.sh` 默认只打 Go。无真实微信/支付宝/短信凭证时只覆盖失败与校验语义。
 
 刻意不对拍 / 不迁：
 
 - `LoginLogic::silentLogin`（无路由）
 - AliPay `transfer` / `transferQuery`（无控制器调用）
-- `api/pay/notifyApp`（PHP 无此动作；Go 为微信 App 回调 URL 多注册，与 `notifyMnp`/`notifyOa` 同处理器）
+- `api/pay/notifyApp`（Go 为微信 App 回调 URL 多注册，与 `notifyMnp`/`notifyOa` 同处理器）
 - 本仓库无核销订单业务表时 `verification_orders` 为空跑
-- 安装向导后端已是 Go（`GET/POST /install`）；`/install/install.php` 兼容旧跳转。库已 lock 时不重装（对拍 `/install/env` 与已安装拒绝）。`like.sql`、`tenant.sql`、`tenantData.sql` 已内嵌在 `backend/internal/sqlassets/`，磁盘文件仍优先。
+- 安装向导后端是 Go（`GET/POST /install`）
 
-生成器 `generate_type=1` 只写 Vue/菜单/`backend/internal/generated`，**不再写** `server/app` PHP 控制器。
+生成器 `generate_type=1` 只写 Vue/菜单/`backend/internal/generated`。
+
+`like.sql`、`tenant.sql`、`tenantData.sql` 已内嵌在 `backend/internal/sqlassets/`。
 
 ## 跑对拍
 
 ```bash
-export PHP=http://127.0.0.1:8000
 export GO=http://127.0.0.1:8080
 export TENANT_HOST=pair1.likeadmin.test
-./backend/tests/golden/pair.sh
-
-# 切流代理（API 走 Go，其余回 PHP）
-export GO=http://127.0.0.1:8090
 ./backend/tests/golden/pair.sh
 
 # 生产 Nginx 切流（与 Go strangler 错开端口）

@@ -53,6 +53,9 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 	})
 
 	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "public"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	lock := filepath.Join(dir, "config", "install.lock")
 	envPath := filepath.Join(dir, ".env")
 	goCfg := filepath.Join(dir, "config.yaml")
@@ -74,7 +77,7 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		Host: "127.0.0.1", Port: 3306, User: "likeadmin", Password: "root",
 		Name: smokeDB, Prefix: "xx_",
 		AdminUser: "smokeadmin", AdminPassword: "likeadmin",
-		PublicDir: "/workspace/server/public",
+		PublicDir: filepath.Join(dir, "public"),
 		LockPath:  lock, EnvPath: envPath, GoConfigPath: goCfg,
 		HTTPHost: "install.likeadmin.test", Now: ts,
 	})
@@ -149,7 +152,7 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		Host: "127.0.0.1", Port: 3306, User: "likeadmin", Password: "root",
 		Name: smokeDB, Prefix: "xx_",
 		AdminUser: "smokeadmin", AdminPassword: "likeadmin",
-		PublicDir: "/workspace/server/public",
+		PublicDir: filepath.Join(dir, "public"),
 		LockPath:  filepath.Join(dir, "again.lock"),
 		EnvPath:   filepath.Join(dir, "again.env"),
 	})
@@ -169,7 +172,7 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		Host: "127.0.0.1", Port: 3306, User: "likeadmin", Password: "root",
 		Name: smokeDB, Prefix: "xx_", ClearDB: true,
 		AdminUser: "again", AdminPassword: "likeadmin",
-		PublicDir: "/workspace/server/public",
+		PublicDir: filepath.Join(dir, "public"),
 		LockPath:  filepath.Join(dir, "clear.lock"),
 		EnvPath:   filepath.Join(dir, "clear.env"),
 		Now:       ts + 1,
@@ -192,7 +195,7 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 
 func countLikeSQLCreates(t *testing.T) int {
 	t.Helper()
-	raw, err := os.ReadFile("/workspace/server/public/install/db/like.sql")
+	raw, err := ReadLikeSQL("")
 	if err != nil {
 		t.Fatal(err)
 	}

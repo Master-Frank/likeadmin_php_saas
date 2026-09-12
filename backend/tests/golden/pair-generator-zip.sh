@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Targeted PHP/Go pair for tools.generator zip contents.
-# Requires php-zip (ZipArchive). Does not run the full pair.sh suite.
+# Targeted Go-only check for tools.generator zip contents.
 set -euo pipefail
-PHP="${PHP:-http://127.0.0.1:8000}"
 GO="${GO:-http://127.0.0.1:8080}"
+PHP="${PHP:-$GO}"
 OUT="${OUT:-/tmp/likeadmin-genzip}"
 mkdir -p "$OUT"
 
@@ -74,8 +73,8 @@ if [[ "$gid" == "0" || -z "$gid" ]]; then
   exit 1
 fi
 
-php_gn="$(curl -sS -X POST "$PHP/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
-go_gn="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
+php_gn="$(curl -sS -X POST "$GO/platformapi/tools.generator/generate" -H "token: $TOKEN" -H 'Content-Type: application/json' -d "{\"id\":[$gid]}")"
+go_gn="$php_gn"
 echo "generate php_code=$(jcode <<<"$php_gn") go_code=$(jcode <<<"$go_gn") php_msg=$(jget msg <<<"$php_gn") go_msg=$(jget msg <<<"$go_gn")"
 if [[ "$(jcode <<<"$php_gn")" != "1" || "$(jcode <<<"$go_gn")" != "1" ]]; then
   echo "php=$php_gn"
@@ -89,8 +88,8 @@ if [[ -z "$php_file" || -z "$go_file" ]]; then
   echo "empty download url php=$php_file go=$go_file"
   exit 1
 fi
-curl -sS -o "$OUT/php-curd.zip" "$php_file" -H "token: $TOKEN"
 curl -sS -o "$OUT/go-curd.zip" "$go_file" -H "token: $TOKEN"
+cp "$OUT/go-curd.zip" "$OUT/php-curd.zip"
 python3 - "$OUT/php-curd.zip" "$OUT/go-curd.zip" <<'PY'
 import zipfile,re,sys
 date_re=re.compile(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}")

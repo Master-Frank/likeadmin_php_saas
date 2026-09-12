@@ -25,14 +25,14 @@ func TestApplyAuthorizedFixtureZip(t *testing.T) {
 	}
 
 	tree := t.TempDir()
-	public := filepath.Join(tree, "proj", "server", "public")
+	public := filepath.Join(tree, "proj", "public")
 	if err := os.MkdirAll(public, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(tree, "proj", "server", "upgrade"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tree, "proj", "upgrade"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tree, "proj", "server", "upgrade", "version.json"), []byte(`{"version":"1.0.5"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tree, "proj", "upgrade", "version.json"), []byte(`{"version":"1.0.5"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,11 +79,14 @@ func TestApplyAuthorizedDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 	tree := t.TempDir()
-	public := filepath.Join(tree, "server", "public")
-	if err := os.MkdirAll(filepath.Join(tree, "server", "upgrade"), 0755); err != nil {
+	public := filepath.Join(tree, "public")
+	if err := os.MkdirAll(public, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tree, "server", "upgrade", "version.json"), []byte(`{"version":"1.0.5"}`), 0644); err != nil {
+	if err := os.MkdirAll(filepath.Join(tree, "upgrade"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "upgrade", "version.json"), []byte(`{"version":"1.0.5"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	oldPub := config.C.App.PublicDir

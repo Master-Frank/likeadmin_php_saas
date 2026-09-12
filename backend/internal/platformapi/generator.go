@@ -449,10 +449,9 @@ func GeneratorGetModels(c *gin.Context) {
 		response.Result(c, 1, 1, "", []string{})
 		return
 	}
-	out := scanPHPModels(filepath.Join(filepath.Dir(config.C.App.PublicDir), "app", module, "model"), module)
-	if len(out) == 0 && module == "common" {
-		// Go-only deploy: keep the relation picker usable without the PHP tree.
-		out = scanGoModels(filepath.Join(filepath.Dir(filepath.Dir(config.C.App.PublicDir)), "backend", "internal", "model"))
+	out := scanGoModels(filepath.Join(generator.RepoRoot(), "backend", "internal", "model"))
+	if len(out) == 0 {
+		out = []string{}
 	}
 	response.Result(c, 1, 1, "", out)
 }

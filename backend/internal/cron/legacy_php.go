@@ -1,12 +1,7 @@
 package cron
 
-import (
-	"os"
-	"strings"
-)
-
-const legacyPHPDisabled = "PHP 脚手架默认关闭；如需兼容输出请设置 LIKEADMIN_ENABLE_PHP_SCAFFOLD=1"
+const legacyPHPDisabled = "PHP 脚手架已关闭；后端只生成 Go 与 Vue"
 
 func legacyPHPScaffoldEnabled() bool {
-	return strings.TrimSpace(os.Getenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD")) == "1"
+	return false
 }

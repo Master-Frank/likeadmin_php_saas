@@ -15,6 +15,7 @@ func TestInitAllowsMissingDBBeforeInstall(t *testing.T) {
 		config.C = oldC
 		config.Path = oldPath
 	})
+	t.Setenv("DATABASE_DATABASE", "likeadmin_missing_db_xyz")
 
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "public"), 0755); err != nil {

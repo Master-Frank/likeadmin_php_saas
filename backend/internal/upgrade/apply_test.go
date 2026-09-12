@@ -109,16 +109,34 @@ func TestApplyExtractedCopiesServerAndBackend(t *testing.T) {
 	}
 }
 
+func TestApplyExtractedCopiesNewPublicPrefix(t *testing.T) {
+	src := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "project", "public"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "project", "public", "probe.txt"), []byte("new-layout"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	if err := applyExtracted(src, dest, t.TempDir(), nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "public", "probe.txt"))
+	if err != nil || string(got) != "new-layout" {
+		t.Fatalf("new public prefix: %q %v", got, err)
+	}
+}
+
 func TestApplyLocalWritesVersionJSON(t *testing.T) {
 	zipPath := writeZip(t, map[string]string{
 		"project/server/public/local-probe.txt": "apply-local",
 	})
 	tree := t.TempDir()
-	public := filepath.Join(tree, "proj", "server", "public")
+	public := filepath.Join(tree, "proj", "public")
 	if err := os.MkdirAll(public, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(tree, "proj", "server", "upgrade"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tree, "proj", "upgrade"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	oldPub := config.C.App.PublicDir

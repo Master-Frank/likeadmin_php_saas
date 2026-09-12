@@ -4,7 +4,7 @@
  <h1 align="center">likeadmin-SaaS（PHP）
  通用管理后台</h1>
 
-> **后端状态（2026-09-08）：** HTTP / CLI / crontab / 代码生成 / 安装向导已迁到 Go（`backend/`）。PHP `server/` 仍在仓库中，生产应走 Go，删 PHP 应用树前见 **[docs/php-to-go-status.md](docs/php-to-go-status.md)**。给 AI 的短交接：**[AGENTS.md](AGENTS.md)**。
+> **后端状态（2026-09-12）：** HTTP / CLI / crontab / 代码生成 / 安装向导是 Go（`backend/`）。PHP `server/` 已从工作树删除；静态资源在 `public/`。历史 PHP 对照见 tag `php-reference-final-20260912` 与 **[docs/php-to-go-status.md](docs/php-to-go-status.md)**。给 AI 的短交接：**[AGENTS.md](AGENTS.md)**。
 <h4 align="center">🚀快速开发 🏘️多租户管理 📊租户独立配置 🌍自定义域名</h4> 
 <p align="center">
 <a href="https://www.php.net/"><img src="https://img.shields.io/badge/PHP-8-8892bf"></a>
@@ -30,14 +30,14 @@
 </p>
 </p>
 
-![](/server/public/readme/platform-2.png)
+![](/public/readme/platform-2.png)
 
-![](/server/public/readme/admin-2.png)
+![](/public/readme/admin-2.png)
 <br>
 
 ## ⤵️ SaaS 架构图
 
-![](/server/public/readme/architecture.png)
+![](/public/readme/architecture.png)
 
 <br>
 
@@ -70,32 +70,32 @@ https://saas.fishblog.cn/pc/
 
 ### 🖥️ 界面预览
 
-![](/server/public/readme/platform-1.png)
-![](/server/public/readme/platform-2.png)
-![](/server/public/readme/platform-3.png)
-![](/server/public/readme/platform-4.png)
+![](/public/readme/platform-1.png)
+![](/public/readme/platform-2.png)
+![](/public/readme/platform-3.png)
+![](/public/readme/platform-4.png)
 
-![](/server/public/readme/admin-1.png)
-![](/server/public/readme/admin-2.png)
-![](/server/public/readme/admin-3.png)
-![](/server/public/readme/admin-4.png)
+![](/public/readme/admin-1.png)
+![](/public/readme/admin-2.png)
+![](/public/readme/admin-3.png)
+![](/public/readme/admin-4.png)
 <br>
 
 ### 📱 手机端前台界面
 
 <center class="half">
-<img  width="23%"  src="/server/public/readme/mobile-1.png" />
-<img  width="23%"  src="/server/public/readme/mobile-2.png" />
-<img  width="23%"  src="/server/public/readme/mobile-3.png" />
-<img  width="23%"  src="/server/public/readme/mobile-4.png" />
+<img  width="23%"  src="/public/readme/mobile-1.png" />
+<img  width="23%"  src="/public/readme/mobile-2.png" />
+<img  width="23%"  src="/public/readme/mobile-3.png" />
+<img  width="23%"  src="/public/readme/mobile-4.png" />
 </center> <br>
 
 ### 🖥️PC 端前台界面
 
-![](/server/public/readme/pc-1.png)
-![](/server/public/readme/pc-2.png)
-![](/server/public/readme/pc-3.png)
-![](/server/public/readme/pc-4.png)
+![](/public/readme/pc-1.png)
+![](/public/readme/pc-2.png)
+![](/public/readme/pc-3.png)
+![](/public/readme/pc-4.png)
 
 ## 👨‍💻‍ 简介
 

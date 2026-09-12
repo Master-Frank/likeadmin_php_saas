@@ -142,12 +142,12 @@ func TestCheckOpenBasedir(t *testing.T) {
 		t.Fatalf("empty: %v", err)
 	}
 	t.Setenv("LIKEADMIN_OPEN_BASEDIR", "/var/www/server/public")
-	if err := CheckOpenBasedir(); err == nil || !strings.Contains(err.Error(), "跨域攻击") {
-		t.Fatalf("server path: %v", err)
-	}
-	t.Setenv("LIKEADMIN_OPEN_BASEDIR", "/tmp")
 	if err := CheckOpenBasedir(); err != nil {
-		t.Fatalf("other path: %v", err)
+		t.Fatalf("LIKEADMIN path with server substring must not block: %v", err)
+	}
+	t.Setenv("PHP_OPEN_BASEDIR", "/tmp")
+	if err := CheckOpenBasedir(); err == nil || !strings.Contains(err.Error(), "跨域攻击") {
+		t.Fatalf("explicit PHP open_basedir: %v", err)
 	}
 }
 

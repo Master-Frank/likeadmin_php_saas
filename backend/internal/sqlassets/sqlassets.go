@@ -1,6 +1,4 @@
-// Package sqlassets embeds dumps that PHP stored under server/.
-// Disk copies remain preferred so operators can customize SQL; embed is the
-// fallback after the PHP tree is removed.
+// Package sqlassets embeds install and tenant SQL dumps.
 package sqlassets
 
 import _ "embed"

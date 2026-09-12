@@ -19,3 +19,16 @@ bin-release/
 
 /.idea
 dump.rdb
+
+# Install / runtime (never commit)
+.env
+/.env
+/config/install.lock
+/runtime/*
+!/runtime/index.html
+/upgrade/
+/public/uploads/*
+!/public/uploads/index.html
+backend/internal/install/.env
+backend/runtime/
+*.log

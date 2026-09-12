@@ -12,25 +12,6 @@ import (
 //go:embed stub
 var stubFS embed.FS
 
-func findServerRoot() string {
-	if pub := config.C.App.PublicDir; pub != "" {
-		root := filepath.Dir(pub)
-		if st, err := os.Stat(root); err == nil && st.IsDir() {
-			return root
-		}
-	}
-	wd, _ := os.Getwd()
-	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
-		if st, err := os.Stat(filepath.Join(d, "server", "app")); err == nil && st.IsDir() {
-			return filepath.Join(d, "server")
-		}
-		if st, err := os.Stat(filepath.Join(d, "app", "common")); err == nil && st.IsDir() {
-			return d
-		}
-	}
-	return "server"
-}
-
 func findBackendRoot() string {
 	wd, _ := os.Getwd()
 	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
@@ -47,7 +28,7 @@ func findBackendRoot() string {
 		}
 	}
 	if pub := config.C.App.PublicDir; pub != "" {
-		repo := filepath.Dir(filepath.Dir(pub))
+		repo := filepath.Dir(pub)
 		if st, err := os.Stat(filepath.Join(repo, "backend")); err == nil && st.IsDir() {
 			return filepath.Join(repo, "backend")
 		}
@@ -55,18 +36,13 @@ func findBackendRoot() string {
 	return "backend"
 }
 
-// ServerRoot is the PHP project root when it still exists (pair / dual-stack).
-func ServerRoot() string {
-	return findServerRoot()
-}
-
-// RepoRoot is the parent of the PHP server root (where platform/ and tenant/ live).
+// RepoRoot is the parent of backend/ (where platform/ and tenant/ live).
 func RepoRoot() string {
 	backend := findBackendRoot()
 	if filepath.Base(backend) == "backend" {
 		return filepath.Dir(backend)
 	}
-	return filepath.Dir(ServerRoot())
+	return backend
 }
 
 // StubDir is the embedded stub tree. Kept for test error messages.
@@ -74,7 +50,7 @@ func StubDir() string {
 	return "embed:stub"
 }
 
-// RuntimeDir is backend/runtime/generate — independent of server/.
+// RuntimeDir is backend/runtime/generate — independent of public/.
 func RuntimeDir() string {
 	return filepath.Join(findBackendRoot(), "runtime", "generate")
 }

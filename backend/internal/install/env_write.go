@@ -13,7 +13,7 @@ type envPair struct {
 	Val string
 }
 
-// WriteEnv merges install values into server/.example.env the way PHP YxEnv::putEnv does.
+// WriteEnv merges install values into .example.env the way PHP YxEnv::putEnv does.
 func WriteEnv(path string, host, dbName, user, pass string, port int, prefix, httpHost, uniqueID string) error {
 	if prefix == "" {
 		prefix = "la_"
@@ -87,7 +87,7 @@ func exampleEnvCandidates(envPath string) []string {
 	if config.C.App.PublicDir != "" {
 		out = append(out, filepath.Join(filepath.Dir(config.C.App.PublicDir), ".example.env"))
 	}
-	out = append(out, "/workspace/server/.example.env")
+	out = append(out, ".example.env")
 	return out
 }
 

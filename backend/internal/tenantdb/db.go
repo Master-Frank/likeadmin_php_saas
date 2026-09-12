@@ -13,7 +13,7 @@ import (
 
 type ctxKey struct{}
 
-// Shardable tables match server/app/platformapi/db/tenant.sql (la_* without prefix).
+// Shardable tables match backend/internal/sqlassets/tenant.sql (la_* without prefix).
 var shardable = map[string]struct{}{
 	"tenant_admin": {}, "tenant_admin_dept": {}, "tenant_admin_jobs": {}, "tenant_admin_role": {},
 	"tenant_admin_session": {}, "tenant_config": {}, "tenant_dept": {}, "tenant_file": {},

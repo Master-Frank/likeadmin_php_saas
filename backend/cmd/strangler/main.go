@@ -114,9 +114,9 @@ func resolvePublicDir() string {
 		return v
 	}
 	for _, cand := range []string{
-		"/workspace/server/public",
-		filepath.Join("..", "..", "server", "public"),
-		filepath.Join("server", "public"),
+		"/workspace/public",
+		filepath.Join("..", "..", "public"),
+		filepath.Join("public"),
 	} {
 		if st, err := os.Stat(cand); err == nil && st.IsDir() {
 			abs, err := filepath.Abs(cand)

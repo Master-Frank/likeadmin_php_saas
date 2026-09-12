@@ -65,18 +65,6 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 }
 
 func TestNewEnvInstallEntrypointsSkipPHPWizard(t *testing.T) {
-	idx, err := os.ReadFile("/workspace/server/public/index.php")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(idx)
-	if strings.Contains(s, "location:/install/install.php") {
-		t.Fatal("index.php must not send a fresh install to the PHP wizard")
-	}
-	if !strings.Contains(s, "location:/install") {
-		t.Fatal("index.php should redirect an uninstalled app to /install")
-	}
-
 	for _, rel := range []string{
 		"platform/src/utils/request/index.ts",
 		"tenant/src/utils/request/index.ts",
@@ -128,7 +116,12 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 	})
 
 	root := t.TempDir()
-	pub := "/workspace/server/public"
+	pub := filepath.Join(root, "public")
+	for _, sub := range []string{"uploads", "platform", "admin", "mobile"} {
+		if err := os.MkdirAll(filepath.Join(pub, sub), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := os.MkdirAll(filepath.Join(root, "runtime"), 0755); err != nil {
 		t.Fatal(err)
 	}

@@ -1,10 +1,10 @@
 # likeadmin-SaaS Go 后端
 
-渐进式替换 `server/` 下的 ThinkPHP 后端。接口前缀、JSON 信封、`token` Header、密码算法与 PHP 保持一致。
+接口前缀、JSON 信封、`token` Header、密码算法与历史 PHP 保持一致。
 
-**迁移交接：** 完成范围、live 对拍、删 PHP 前检查清单见仓库根目录 [docs/php-to-go-status.md](../docs/php-to-go-status.md) 与 [AGENTS.md](../AGENTS.md)。
+**迁移交接：** 完成范围、PHP 对照 tag、验收口径见仓库根目录 [docs/php-to-go-status.md](../docs/php-to-go-status.md) 与 [AGENTS.md](../AGENTS.md)。
 
-本机黄金对拍（直连 live `pair.sh` `failed=0`，2026-09-08）已绿。未覆盖路径不再默认回落 PHP。`server/` 仍保留静态资源与 `like.sql`，不要整树删除。
+默认 `pair.sh` 只打 Go `:8080`。静态资源在仓库根 `public/`。PHP 对照用 tag `php-reference-final-20260912`。
 
 ## 运行
 
@@ -36,16 +36,16 @@ sudo make install PREFIX=/opt/likeadmin/backend
 `CREATE`/`DROP`（分表租户及结构升级需要）。授权模板见
 `deploy/mysql.production.example.sql`。
 
-切流前门（API → Go，静态 / SPA 出自 `LIKEADMIN_PUBLIC`，默认 `server/public`）：
+切流前门（API → Go，静态 / SPA 出自 `LIKEADMIN_PUBLIC`，默认仓库根 `public/`）：
 
 ```bash
 LIKEADMIN_STRANGLER=127.0.0.1:8090 \
 LIKEADMIN_GO=http://127.0.0.1:8080 \
-LIKEADMIN_PUBLIC=/workspace/server/public \
+LIKEADMIN_PUBLIC=/workspace/public \
 go run ./cmd/strangler
 ```
 
-`LIKEADMIN_PHP_FALLBACK` 默认关闭。只有仍需临时代理未知 PHP 路径时才设为 `1`。
+`LIKEADMIN_PHP_FALLBACK` 默认关闭。不要再把它打开去代理 PHP。
 
 生产 Nginx（无 php-fpm）见 `deploy/nginx.production.conf`。本机切流校验用 `deploy/nginx.local.conf`（`:8091`）。
 systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.service`（把路径改成实际安装目录后 `systemctl enable --now`）。
@@ -68,17 +68,14 @@ Go 服务；没有 `LIKEADMIN_UPGRADE_RESTART_COMMAND` 时拒绝在线应用 Go 
 
 ```bash
 go run ./cmd/crontab          # 循环执行 la_dev_crontab
-go run ./cmd/think            # 等价 php think，列出已迁命令
+go run ./cmd/think            # 列出已迁命令
 go run ./cmd/think help clear
-go run ./cmd/think crontab    # 等价 php think crontab，只跑一轮
+go run ./cmd/think crontab    # 只跑一轮
 go run ./cmd/think query_refund
 go run ./cmd/think run --port 8000
-LIKEADMIN_ENABLE_PHP_SCAFFOLD=1 go run ./cmd/think make:controller tenantapi@Demo
 ```
 
-`make:*`、`build`、`vendor:publish`、`service:discover` 会产生 PHP 文件，
-默认关闭；只有兼容旧开发流程时显式设置
-`LIKEADMIN_ENABLE_PHP_SCAFFOLD=1`。Go 运行时和生产部署不需要这些产物。
+`make:*`、`build`、`vendor:publish`、`service:discover` 的 PHP 脚手架已永久关闭。Go 运行时和生产部署不需要 PHP 产物。
 
 未知 `la_dev_crontab.command` 记「未定义的定时任务命令」，不再回落 `php think`。
 仓库内 `make:*` / `vendor:publish` / `service:discover` / `build` 已迁；`think run` 起 Go HTTP（默认 `:8000`）。

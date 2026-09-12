@@ -2,8 +2,6 @@ package install
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"likeadmin/backend/internal/sqlassets"
@@ -61,24 +59,8 @@ func ImportSQL(db *gorm.DB, content, prefix string, dbName ...string) (int, erro
 	return n, nil
 }
 
-func FindLikeSQL(publicDir string) string {
-	cands := []string{
-		filepath.Join(publicDir, "install", "db", "like.sql"),
-		filepath.Join(publicDir, "..", "public", "install", "db", "like.sql"),
-	}
-	for _, p := range cands {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return p
-		}
-	}
-	return ""
-}
-
-// ReadLikeSQL prefers a customized dump under public_dir, then the embed.
+// ReadLikeSQL returns the embedded like.sql dump.
 func ReadLikeSQL(publicDir string) ([]byte, error) {
-	if p := FindLikeSQL(publicDir); p != "" {
-		return os.ReadFile(p)
-	}
 	if sqlassets.LikeSQL != "" {
 		return []byte(sqlassets.LikeSQL), nil
 	}

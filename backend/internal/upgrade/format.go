@@ -13,7 +13,7 @@ import (
 const ProductCode = "462953db655787cb99deb5893f8d523a"
 const BaseURL = "https://server.mddai.cn"
 
-// LocalVersion reads PHP ./upgrade/version.json, creating it from project.version if missing.
+// LocalVersion reads ./upgrade/version.json, creating it from project.version if missing.
 func LocalVersion() string {
 	dir := filepath.Join(serverRoot(), "upgrade")
 	path := filepath.Join(dir, "version.json")

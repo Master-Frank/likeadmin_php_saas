@@ -36,28 +36,35 @@ func downloadClient() *http.Client {
 	}
 }
 
-func serverRoot() string {
+// productRoot is the install/product root: the parent of public_dir.
+func productRoot() string {
 	if pub := config.C.App.PublicDir; pub != "" {
 		return filepath.Dir(pub)
 	}
 	wd, _ := os.Getwd()
 	for d := wd; d != "" && d != "/"; d = filepath.Dir(d) {
-		if st, err := os.Stat(filepath.Join(d, "server", "app")); err == nil && st.IsDir() {
-			return filepath.Join(d, "server")
-		}
-		if st, err := os.Stat(filepath.Join(d, "app", "common")); err == nil && st.IsDir() {
+		if _, err := os.Stat(filepath.Join(d, "backend", "go.mod")); err == nil {
 			return d
 		}
+		if d == filepath.Dir(d) {
+			break
+		}
 	}
-	return "server"
+	return "."
 }
 
-// backendRoot is the Go module root (sibling of server/). Upgrade zips may
-// ship project/backend/ with the same layout as this directory.
+// serverRoot is the product root (upgrade/ lives here). Kept as an alias so
+// LocalVersion and ApplyPackage share one directory after the PHP tree was removed.
+func serverRoot() string {
+	return productRoot()
+}
+
+// backendRoot is the Go module root. Upgrade zips may ship project/backend/
+// with the same layout as this directory.
 func backendRoot() string {
-	root := serverRoot()
-	candidate := filepath.Join(filepath.Dir(root), "backend")
-	if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+	root := productRoot()
+	candidate := filepath.Join(root, "backend")
+	if st, err := os.Stat(filepath.Join(candidate, "cmd", "api")); err == nil && st.IsDir() {
 		return candidate
 	}
 	wd, _ := os.Getwd()

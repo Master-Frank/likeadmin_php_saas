@@ -3,8 +3,6 @@ package platformapi
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1179,15 +1177,6 @@ func runTenantSQL(sn string) error {
 }
 
 func readTenantSQL(name string) ([]byte, error) {
-	candidates := []string{
-		filepath.Join(config.C.App.PublicDir, "../app/platformapi/db", name),
-	}
-	for _, p := range candidates {
-		raw, err := os.ReadFile(p)
-		if err == nil {
-			return raw, nil
-		}
-	}
 	switch name {
 	case "tenant.sql":
 		if sqlassets.TenantSQL != "" {

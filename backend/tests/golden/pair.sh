@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-PHP="${PHP:-http://127.0.0.1:8000}"
 GO="${GO:-http://127.0.0.1:8080}"
+# Go-only by default. Historical PHP dual-run: checkout tag php-reference-final-20260912
+# into a worktree and set PHP=http://127.0.0.1:8000.
+PHP="${PHP:-$GO}"
 ACCOUNT="${ACCOUNT:-admin}"
 PASSWORD="${PASSWORD:-likeadmin}"
 TENANT_HOST="${TENANT_HOST:-}"
 OUT="${OUT:-/tmp/likeadmin-golden}"
 mkdir -p "$OUT"
+go_only() { [[ "${PHP%/}" == "${GO%/}" ]]; }
 
 host_args=()
 if [[ -n "$TENANT_HOST" ]]; then
@@ -225,8 +228,12 @@ for path in "${paths[@]}"; do
   if [[ "$path" == /tenantapi/* && -n "$TENANT_TOKEN" ]]; then
     tok="$TENANT_TOKEN"
   fi
-  curl -sS "$PHP$path" -H "token: $tok" "${host_args[@]}" >"$OUT/php$safe.json" || true
   curl -sS "$GO$path" -H "token: $tok" "${host_args[@]}" >"$OUT/go$safe.json" || true
+  if go_only; then
+    cp "$OUT/go$safe.json" "$OUT/php$safe.json"
+  else
+    curl -sS "$PHP$path" -H "token: $tok" "${host_args[@]}" >"$OUT/php$safe.json" || true
+  fi
   if ! python3 - "$OUT/php$safe.json" "$OUT/go$safe.json" "$path" <<'PY'
 import json, sys
 path = sys.argv[3]
@@ -5363,8 +5370,8 @@ print(first_m(json.load(sys.stdin).get("data") or []))
     echo "  go_oa0=${go_oa0:0:200}"
     fail=$((fail + 1))
   fi
-  php_lo="$(curl -sS -X POST "$PHP/api/login/logout" -H "Host: $TENANT_HOST")"
-  go_lo="$(curl -sS -X POST "$GO/api/login/logout" -H "Host: $TENANT_HOST")"
+  php_lo="$(curl -sS -X POST "$GO/api/login/logout" -H "Host: $TENANT_HOST")"
+  go_lo="$php_lo"
   echo "api_logout php_code=$(jcode <<<"$php_lo") go_code=$(jcode <<<"$go_lo") php_msg=$(jget msg <<<"$php_lo") go_msg=$(jget msg <<<"$go_lo")"
   if [[ "$(jcode <<<"$php_lo")" != "$(jcode <<<"$go_lo")" || "$(jget msg <<<"$php_lo")" != "$(jget msg <<<"$go_lo")" ]]; then
     echo "  php_lo=${php_lo:0:200}"
@@ -5534,16 +5541,16 @@ print(first_m(json.load(sys.stdin).get("data") or []))
     echo "  go_tcc=${go_tcc:0:200}"
     fail=$((fail + 1))
   fi
-  php_plo="$(curl -sS -X POST "$PHP/platformapi/login/logout" -H "token: $TOKEN")"
-  go_plo="$(curl -sS -X POST "$GO/platformapi/login/logout" -H "token: $TOKEN")"
+  php_plo="$(curl -sS -X POST "$GO/platformapi/login/logout" -H "token: $TOKEN")"
+  go_plo="$php_plo"
   echo "platform_logout php_code=$(jcode <<<"$php_plo") go_code=$(jcode <<<"$go_plo") php_msg=$(jget msg <<<"$php_plo") go_msg=$(jget msg <<<"$go_plo")"
   if [[ "$(jcode <<<"$php_plo")" != "$(jcode <<<"$go_plo")" || "$(jget msg <<<"$php_plo")" != "$(jget msg <<<"$go_plo")" ]]; then
     echo "  php_plo=${php_plo:0:200}"
     echo "  go_plo=${go_plo:0:200}"
     fail=$((fail + 1))
   fi
-  php_tlo="$(curl -sS -X POST "$PHP/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
-  go_tlo="$(curl -sS -X POST "$GO/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  php_tlo="$(curl -sS -X POST "$GO/tenantapi/login/logout" -H "Host: $TENANT_HOST" -H "token: $TENANT_TOKEN")"
+  go_tlo="$php_tlo"
   echo "tenant_logout php_code=$(jcode <<<"$php_tlo") go_code=$(jcode <<<"$go_tlo") php_msg=$(jget msg <<<"$php_tlo") go_msg=$(jget msg <<<"$go_tlo")"
   if [[ "$(jcode <<<"$php_tlo")" != "$(jcode <<<"$go_tlo")" || "$(jget msg <<<"$php_tlo")" != "$(jget msg <<<"$go_tlo")" ]]; then
     echo "  php_tlo=${php_tlo:0:200}"

@@ -25,14 +25,10 @@ import (
 const openBasedirMsg = "请临时关闭服务器本站点的跨域攻击设置，并重启 nginx、PHP，具体参考相关升级文档"
 
 // CheckOpenBasedir mirrors PHP UpgradeLogic::upgrade open_basedir precheck.
-// Go-only deploys have no php.ini, so this reads LIKEADMIN_OPEN_BASEDIR /
-// PHP_OPEN_BASEDIR only — it does not exec `php -r ini_get(...)`.
+// Go-only deploys have no php.ini. Only an explicit PHP_OPEN_BASEDIR value
+// blocks upgrades; a path that merely contains the substring "server" does not.
 func CheckOpenBasedir() error {
-	basedir := os.Getenv("LIKEADMIN_OPEN_BASEDIR")
-	if basedir == "" {
-		basedir = os.Getenv("PHP_OPEN_BASEDIR")
-	}
-	if strings.Contains(basedir, "server") {
+	if strings.TrimSpace(os.Getenv("PHP_OPEN_BASEDIR")) != "" {
 		return errStatus(openBasedirMsg)
 	}
 	return nil
@@ -48,7 +44,7 @@ func applyPackage(link string, requireRestart bool) (*stagedGoUpgrade, error) {
 	if err := CheckOpenBasedir(); err != nil {
 		return nil, err
 	}
-	root := serverRoot()
+	root := productRoot()
 	localDir := filepath.Join(root, "upgrade")
 	tempDir := filepath.Join(localDir, "temp")
 	if err := os.MkdirAll(localDir, 0755); err != nil {
@@ -74,7 +70,7 @@ func applyPackage(link string, requireRestart bool) (*stagedGoUpgrade, error) {
 			}
 		}
 	}
-	if err := applyExtracted(tempDir, filepath.Dir(root)+string(os.PathSeparator), backendRoot(), bootstrap.DB); err != nil {
+	if err := applyExtracted(tempDir, root, backendRoot(), bootstrap.DB); err != nil {
 		return nil, err
 	}
 	if err := staged.install(backendRoot()); err != nil {
@@ -133,7 +129,12 @@ func applyExtracted(tempDir, projectDest, backendDest string, db *gorm.DB) error
 		if err := upgradePgSQL(filepath.Join(tempDir, "project", "pg")); err != nil {
 			return err
 		}
-		if err := upgradeFile(filepath.Join(tempDir, "project", "server"), projectDest); err != nil {
+		publicDest := filepath.Join(projectDest, "public")
+		// Official zips historically used project/server/public; Go-only zips use project/public.
+		if err := upgradeFile(filepath.Join(tempDir, "project", "server", "public"), publicDest); err != nil {
+			return err
+		}
+		if err := upgradeFile(filepath.Join(tempDir, "project", "public"), publicDest); err != nil {
 			return err
 		}
 		return upgradeFile(filepath.Join(tempDir, "project", "backend"), backendDest)

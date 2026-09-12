@@ -39,151 +39,23 @@ func TestPHPScaffoldDisabledByDefault(t *testing.T) {
 	}
 }
 
-func TestMakeControllerAndModel(t *testing.T) {
+func TestPHPScaffoldIgnoredEvenWhenEnabled(t *testing.T) {
 	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
 	dir := t.TempDir()
 	old := config.C.App.PublicDir
 	config.C.App.PublicDir = filepath.Join(dir, "public")
 	t.Cleanup(func() { config.C.App.PublicDir = old })
-
-	if got := RunNamed("make:controller", "tenantapi@Demo"); got != "" {
-		t.Fatal(got)
+	if got := RunNamed("make:controller", "tenantapi@Demo"); got != legacyPHPDisabled {
+		t.Fatalf("make:controller=%q", got)
 	}
-	path := filepath.Join(dir, "app", "tenantapi", "controller", "DemoController.php")
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(dir, "app", "tenantapi", "controller", "DemoController.php")); err == nil {
+		t.Fatal("PHP controller must not be written")
 	}
-	text := string(body)
-	if !strings.Contains(text, "namespace app\\tenantapi\\controller;") || !strings.Contains(text, "class DemoController") {
-		t.Fatalf("controller %s", text)
+	if got := RunNamed("vendor:publish"); got != legacyPHPDisabled {
+		t.Fatalf("vendor:publish=%q", got)
 	}
-	if !strings.Contains(text, "function index()") || !strings.Contains(text, "function create()") {
-		t.Fatal("resource stub")
-	}
-	if got := RunNamed("make:controller", "tenantapi@Demo"); !strings.Contains(got, "already exists") {
-		t.Fatalf("dup %q", got)
-	}
-	if got := RunNamed("make:controller", "--api", "Ping"); got != "" {
-		t.Fatal(got)
-	}
-	api, err := os.ReadFile(filepath.Join(dir, "app", "controller", "PingController.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(api), "function create()") {
-		t.Fatal("api stub should omit create")
-	}
-	if got := RunNamed("make:model", "tenantapi@Demo"); got != "" {
-		t.Fatal(got)
-	}
-	modelBody, err := os.ReadFile(filepath.Join(dir, "app", "tenantapi", "model", "Demo.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(modelBody), "class Demo extends Model") {
-		t.Fatalf("model %s", modelBody)
-	}
-	if got := RunNamed("make:command", "Foo", "foo:bar"); got != "" {
-		t.Fatal(got)
-	}
-	cmd, err := os.ReadFile(filepath.Join(dir, "app", "command", "Foo.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(cmd), "setName('foo:bar')") {
-		t.Fatalf("command %s", cmd)
-	}
-	if got := RunNamed("make:controller"); got != `Not enough arguments (missing: "name").` {
-		t.Fatalf("missing name %q", got)
-	}
-}
-
-func TestVendorPublishAndServiceDiscover(t *testing.T) {
-	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
-	dir := t.TempDir()
-	old := config.C.App.PublicDir
-	config.C.App.PublicDir = filepath.Join(dir, "public")
-	t.Cleanup(func() { config.C.App.PublicDir = old })
-
-	pkgDir := filepath.Join(dir, "vendor", "acme", "demo")
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "vendor", "composer"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pkgDir, "src-config.php"), []byte("<?php return [];"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	installed := `{
-  "packages": [{
-    "name": "acme/demo",
-    "extra": {
-      "think": {
-        "services": ["think\\app\\Service", "acme\\DemoService"],
-        "config": {"demo": "src-config.php"}
-      }
-    }
-  }]
-}`
-	if err := os.WriteFile(filepath.Join(dir, "vendor", "composer", "installed.json"), []byte(installed), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if got := RunNamed("vendor:publish"); got != "" {
-		t.Fatal(got)
-	}
-	copied, err := os.ReadFile(filepath.Join(dir, "config", "demo.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(copied) != "<?php return [];" {
-		t.Fatalf("copied %s", copied)
-	}
-	if got := RunNamed("service:discover"); got != "" {
-		t.Fatal(got)
-	}
-	services, err := os.ReadFile(filepath.Join(dir, "vendor", "services.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(services)
-	if !strings.Contains(text, "<?php") || !strings.Contains(text, `think\\app\\Service`) || !strings.Contains(text, `acme\\DemoService`) {
-		t.Fatalf("services %s", text)
-	}
-}
-
-func TestBuildAppDirs(t *testing.T) {
-	t.Setenv("LIKEADMIN_ENABLE_PHP_SCAFFOLD", "1")
-	dir := t.TempDir()
-	old := config.C.App.PublicDir
-	config.C.App.PublicDir = filepath.Join(dir, "public")
-	t.Cleanup(func() { config.C.App.PublicDir = old })
-	if got := RunNamed("build", "demo"); got != "" {
-		t.Fatal(got)
-	}
-	for _, p := range []string{
-		filepath.Join(dir, "app", "demo", "controller"),
-		filepath.Join(dir, "app", "demo", "model"),
-		filepath.Join(dir, "app", "demo", "view"),
-	} {
-		if st, err := os.Stat(p); err != nil || !st.IsDir() {
-			t.Fatalf("missing dir %s", p)
-		}
-	}
-	hello, err := os.ReadFile(filepath.Join(dir, "app", "demo", "controller", "IndexController.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(hello), "namespace app\\demo\\controller;") {
-		t.Fatalf("hello %s", hello)
-	}
-	common, err := os.ReadFile(filepath.Join(dir, "app", "demo", "common.php"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(common), "系统自动生成的公共文件") {
-		t.Fatalf("common %s", common)
+	if got := RunNamed("build", "demo"); got != legacyPHPDisabled {
+		t.Fatalf("build=%q", got)
 	}
 }
 

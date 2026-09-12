@@ -31,7 +31,7 @@ func TestParseINIPHPScanner(t *testing.T) {
 }
 
 func TestParseINIRealExampleEnv(t *testing.T) {
-	raw, err := os.ReadFile("/workspace/server/.example.env")
+	raw, err := os.ReadFile("/workspace/.example.env")
 	if err != nil {
 		t.Skip(err)
 	}

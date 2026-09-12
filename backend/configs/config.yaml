@@ -1,8 +1,8 @@
 app:
   debug: true
   timezone: Asia/Shanghai
-  public_dir: ../../server/public
-  install_lock: ../../server/config/install.lock
+  public_dir: ../../public
+  install_lock: ../../config/install.lock
   listen: ":8080"
 
 database:
