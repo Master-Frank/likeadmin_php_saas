@@ -104,11 +104,19 @@ func Get(key string) (string, bool) {
 	if bootstrap.RDB != nil {
 		v, err := bootstrap.RDB.Get(ctx(), bootstrap.RedisKey(key)).Result()
 		if err == nil {
+			metrics.AddRedisHit()
 			return v, true
 		}
-		noteRedisErr(err)
+		if err == redis.Nil {
+			metrics.AddRedisMiss()
+		} else {
+			noteRedisErr(err)
+		}
 		if !useMemFallback(key) {
 			return "", false
+		}
+		if err != redis.Nil {
+			metrics.AddRedisFallback()
 		}
 	} else if !useMemFallback(key) {
 		return "", false
@@ -142,6 +150,9 @@ func Set(key string, val any, ttl time.Duration) {
 			return
 		} else {
 			noteRedisErr(err)
+			if useMemFallback(key) {
+				metrics.AddRedisFallback()
+			}
 		}
 		if !useMemFallback(key) {
 			return

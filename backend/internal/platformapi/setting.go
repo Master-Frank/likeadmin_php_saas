@@ -261,7 +261,7 @@ func LogLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.OperationLog
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	_ = lists.FindChunked(db.Order("id desc"), q, &rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, map[string]any{

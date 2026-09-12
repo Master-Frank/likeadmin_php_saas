@@ -256,6 +256,7 @@ func bindReadDB(master *gorm.DB) {
 		return
 	}
 	metrics.Register(db)
+	registerReplicaFailover(db)
 	ReadDB = db
 }
 

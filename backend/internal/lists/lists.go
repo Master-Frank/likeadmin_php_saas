@@ -16,6 +16,7 @@ import (
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Query struct {
@@ -405,4 +406,55 @@ func OrderSQL(q Query, fallback string, allowed map[string]bool) string {
 		return fallback
 	}
 	return field + " " + dir
+}
+
+const exportReadChunk = 500
+
+// ExportChunkPlan splits a large export window into OFFSET/LIMIT steps.
+func ExportChunkPlan(offset, total, chunk int) [][2]int {
+	if total <= 0 {
+		return nil
+	}
+	if chunk <= 0 {
+		chunk = exportReadChunk
+	}
+	if total <= chunk {
+		return [][2]int{{offset, total}}
+	}
+	var out [][2]int
+	remaining := total
+	off := offset
+	for remaining > 0 {
+		n := chunk
+		if remaining < n {
+			n = remaining
+		}
+		out = append(out, [2]int{off, n})
+		off += n
+		remaining -= n
+	}
+	return out
+}
+
+// FindChunked runs Find in 500-row steps for export=2 windows larger than that
+// so MySQL is not asked for a single 10000-row result. Ordinary lists are unchanged.
+func FindChunked[T any](db *gorm.DB, q Query, dest *[]T) error {
+	if db == nil || dest == nil {
+		return nil
+	}
+	if q.Export != 2 || q.PageSize <= exportReadChunk {
+		return db.Offset(q.Offset).Limit(q.PageSize).Find(dest).Error
+	}
+	*dest = (*dest)[:0]
+	for _, step := range ExportChunkPlan(q.Offset, q.PageSize, exportReadChunk) {
+		var part []T
+		if err := db.Offset(step[0]).Limit(step[1]).Find(&part).Error; err != nil {
+			return err
+		}
+		*dest = append(*dest, part...)
+		if len(part) < step[1] {
+			break
+		}
+	}
+	return nil
 }

@@ -27,6 +27,9 @@ func TestWritePrometheus(t *testing.T) {
 		"likeadmin_export_in_flight",
 		"likeadmin_oplog_dropped_total",
 		"likeadmin_go_goroutines",
+		"likeadmin_redis_hits_total",
+		"likeadmin_redis_misses_total",
+		"likeadmin_redis_fallbacks_total",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %s in %s", want, body)

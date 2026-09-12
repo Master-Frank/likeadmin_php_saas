@@ -364,7 +364,7 @@ func UserLists(c *gin.Context) {
 	var count int64
 	db.Count(&count)
 	var rows []model.User
-	db.Order("id desc").Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	_ = lists.FindChunked(db.Order("id desc"), q, &rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, u := range rows {
 		out = append(out, map[string]any{

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -58,6 +59,7 @@ func EnsurePerfIndexes(db *gorm.DB) {
 		return
 	}
 	ensureOperationLogTenantID(db)
+	online := supportsOnlineDDL(db)
 	for _, s := range specs() {
 		tables := []string{s.table}
 		if s.shards {
@@ -75,16 +77,68 @@ func EnsurePerfIndexes(db *gorm.DB) {
 			if hasIndex(db, table, s.name) {
 				continue
 			}
-			sql := "CREATE INDEX `" + s.name + "` ON `" + table + "` (" + s.cols + ")"
+			sql := addIndexSQL(online, table, s.name, s.cols)
 			if err := db.Exec(sql).Error; err != nil {
-				log.Printf("perf index %s on %s: %v", s.name, table, err)
+				fallback := "CREATE INDEX `" + s.name + "` ON `" + table + "` (" + s.cols + ")"
+				if sql != fallback {
+					err = db.Exec(fallback).Error
+				}
+				if err != nil {
+					log.Printf("perf index %s on %s: %v", s.name, table, err)
+				}
 			}
 		}
 	}
 }
 
 func lockNote() string {
-	return "MySQL 8 secondary INDEX is typically INPLACE with a brief metadata lock; run against large tables in a maintenance window."
+	return "MySQL 5.7.8+/8.0 secondary INDEX uses ALTER TABLE ... ALGORITHM=INPLACE, LOCK=NONE when the server supports it; large tables still need a maintenance window."
+}
+
+func addIndexSQL(online bool, table, name, cols string) string {
+	sql := "CREATE INDEX `" + name + "` ON `" + table + "` (" + cols + ")"
+	if online {
+		return "ALTER TABLE `" + table + "` ADD INDEX `" + name + "` (" + cols + "), ALGORITHM=INPLACE, LOCK=NONE"
+	}
+	return sql
+}
+
+func supportsOnlineDDL(db *gorm.DB) bool {
+	if db == nil {
+		return false
+	}
+	var ver string
+	if db.Raw("SELECT VERSION()").Scan(&ver).Error != nil || ver == "" {
+		return false
+	}
+	return mysqlOnlineDDLVersion(ver)
+}
+
+func mysqlOnlineDDLVersion(ver string) bool {
+	ver = strings.TrimSpace(ver)
+	if i := strings.IndexAny(ver, "- "); i >= 0 {
+		ver = ver[:i]
+	}
+	parts := strings.Split(ver, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	major, _ := strconv.Atoi(parts[0])
+	minor, _ := strconv.Atoi(parts[1])
+	patch := 0
+	if len(parts) > 2 {
+		patch, _ = strconv.Atoi(parts[2])
+	}
+	if major > 8 {
+		return true
+	}
+	if major == 8 {
+		return true
+	}
+	if major == 5 && minor == 7 && patch >= 8 {
+		return true
+	}
+	return false
 }
 
 // Plan reports each candidate index without modifying schema.

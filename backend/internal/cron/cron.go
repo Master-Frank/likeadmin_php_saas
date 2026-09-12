@@ -134,6 +134,7 @@ func registerBuiltins() {
 	Register("version", runVersion)
 	Register("optimize:schema", runOptimizeSchema)
 	Register("ensure-indexes", runEnsureIndexes)
+	Register("explain-indexes", runExplainIndexes)
 	Register("help", runHelp)
 	Register("list", runList)
 	Register("vendor:publish", runVendorPublish)
@@ -243,6 +244,8 @@ func normalizeCommand(raw string) string {
 		return "optimize:schema"
 	case cmd == "ensure-indexes" || strings.Contains(cmd, "ensureindexes") || strings.Contains(cmd, "ensure-indexes"):
 		return "ensure-indexes"
+	case cmd == "explain-indexes" || strings.Contains(cmd, "explainindexes") || strings.Contains(cmd, "explain-indexes"):
+		return "explain-indexes"
 	case strings.Contains(cmd, "optimize:route") || strings.Contains(cmd, "optimizeroute"):
 		return "optimize:route"
 	case strings.Contains(cmd, "route:list") || strings.Contains(cmd, "routelist"):
@@ -271,6 +274,14 @@ func runEnsureIndexes([]string) string {
 	after := dbindex.Plan(bootstrap.DB)
 	dbindex.WriteStatus(after, nil)
 	fmt.Print(dbindex.FormatPlan(after))
+	return ""
+}
+
+func runExplainIndexes([]string) string {
+	if bootstrap.DB == nil {
+		return "database unavailable"
+	}
+	fmt.Print(dbindex.RunExplain(bootstrap.DB))
 	return ""
 }
 

@@ -33,3 +33,34 @@ func TestWriteStatusNilOK(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMysqlOnlineDDLVersion(t *testing.T) {
+	if !mysqlOnlineDDLVersion("8.0.36") || !mysqlOnlineDDLVersion("5.7.8") {
+		t.Fatal("supported")
+	}
+	if mysqlOnlineDDLVersion("5.6.10") || mysqlOnlineDDLVersion("5.7.7") {
+		t.Fatal("old")
+	}
+	if !mysqlOnlineDDLVersion("8.0.36-0ubuntu0.22.04.1") {
+		t.Fatal("suffix")
+	}
+}
+
+func TestAddIndexSQL(t *testing.T) {
+	got := addIndexSQL(true, "la_user", "idx_x", "`id`")
+	if !strings.Contains(got, "ALGORITHM=INPLACE") || !strings.Contains(got, "LOCK=NONE") {
+		t.Fatalf("%s", got)
+	}
+	if addIndexSQL(false, "la_user", "idx_x", "`id`") != "CREATE INDEX `idx_x` ON `la_user` (`id`)" {
+		t.Fatal(addIndexSQL(false, "la_user", "idx_x", "`id`"))
+	}
+}
+
+func TestExplainQueriesAndNilDB(t *testing.T) {
+	if len(ExplainQueries()) < 6 {
+		t.Fatal("missing shapes")
+	}
+	if RunExplain(nil) != "database unavailable" {
+		t.Fatal(RunExplain(nil))
+	}
+}

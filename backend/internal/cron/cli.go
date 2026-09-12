@@ -17,6 +17,7 @@ var commandDescs = map[string]string{
 	"clear":                "Clear runtime file",
 	"crontab":              "Run scheduled tasks once",
 	"ensure-indexes":       "Create missing performance indexes",
+	"explain-indexes":      "EXPLAIN first-batch index query shapes",
 	"help":                 "Displays help for a command",
 	"list":                 "Lists commands",
 	"make:command":         "Create a new command class",

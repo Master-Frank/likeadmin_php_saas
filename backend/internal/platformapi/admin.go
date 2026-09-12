@@ -39,7 +39,7 @@ func AdminLists(c *gin.Context) {
 	db.Count(&count)
 	order := lists.OrderSQL(q, "id desc", map[string]bool{"create_time": true, "id": true})
 	var rows []model.Admin
-	db.Order(order).Offset(q.Offset).Limit(q.PageSize).Find(&rows)
+	_ = lists.FindChunked(db.Order(order), q, &rows)
 	out := make([]map[string]any, 0, len(rows))
 	for _, a := range rows {
 		out = append(out, adminListItem(c, a))

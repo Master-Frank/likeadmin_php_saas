@@ -31,6 +31,9 @@ var (
 	oplogDropped   atomic.Int64
 	oplogWritten   atomic.Int64
 	redisErrors    atomic.Int64
+	redisHits      atomic.Int64
+	redisMisses    atomic.Int64
+	redisFallbacks atomic.Int64
 	replicaUp      atomic.Int64
 	replicaLagMs   atomic.Int64
 	sqlDB          atomic.Pointer[sql.DB]
@@ -41,6 +44,12 @@ func AddHTTP() { httpRequests.Add(1) }
 func AddSQL() { sqlQueries.Add(1) }
 
 func AddRedisError() { redisErrors.Add(1) }
+
+func AddRedisHit() { redisHits.Add(1) }
+
+func AddRedisMiss() { redisMisses.Add(1) }
+
+func AddRedisFallback() { redisFallbacks.Add(1) }
 
 func AddOplogQueued() { oplogQueued.Add(1) }
 
@@ -127,6 +136,12 @@ func WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintf(w, "likeadmin_oplog_written_total{instance=%q} %d\n", id, oplogWritten.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_redis_errors_total counter\n")
 	fmt.Fprintf(w, "likeadmin_redis_errors_total{instance=%q} %d\n", id, redisErrors.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_redis_hits_total counter\n")
+	fmt.Fprintf(w, "likeadmin_redis_hits_total{instance=%q} %d\n", id, redisHits.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_redis_misses_total counter\n")
+	fmt.Fprintf(w, "likeadmin_redis_misses_total{instance=%q} %d\n", id, redisMisses.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_redis_fallbacks_total counter\n")
+	fmt.Fprintf(w, "likeadmin_redis_fallbacks_total{instance=%q} %d\n", id, redisFallbacks.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_replica_up gauge\n")
 	fmt.Fprintf(w, "likeadmin_replica_up{instance=%q} %d\n", id, replicaUp.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_replica_lag_seconds gauge\n")

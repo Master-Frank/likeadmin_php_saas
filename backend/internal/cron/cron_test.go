@@ -76,7 +76,7 @@ func TestCommandRegistry(t *testing.T) {
 	want := map[string]bool{
 		"cache": true, "clear": true, "session": true, "query_refund": true,
 		"cancel_unpaid_orders": true, "version": true, "optimize:schema": true,
-		"help": true, "list": true, "verification_orders": true, "ensure-indexes": true,
+		"help": true, "list": true, "verification_orders": true, "ensure-indexes": true, "explain-indexes": true,
 	}
 	for _, n := range names {
 		delete(want, n)

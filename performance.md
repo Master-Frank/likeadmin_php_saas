@@ -108,7 +108,7 @@
 - worker 使用 Redis 队列 `export_jobs` + `SETNX` 租约；无 Redis 的单实例走进程内队列。租约丢失的 pending 任务会再入队，最多 3 次，超时失败。每租户互斥，单进程 2 个 worker，单任务 2 分钟，文件 50MiB。
 - XLSX sheet 流式写入 zip，不再先拼整张表字符串。
 - 关闭异步时仍走原路径：列表查询在 HTTP goroutine 内完成。
-- worker 内仍 `Find` 最多 10000 行到内存；没有为每个列表改成主键游标分批 SQL。导出文件默认不上传到公开 OSS（避免进入 CDN `/uploads`）；多实例需挂载同一 `LIKEADMIN_EXPORT_DIR`。
+- worker 内仍最多拼出 10000 行结果；操作日志/管理员/用户等大导出改为 500 行分步 `Find`，避免一次向 MySQL 要整窗。没有为每个列表改成主键游标。导出文件默认不上传到公开 OSS；多实例需挂载同一 `LIKEADMIN_EXPORT_DIR`。
 
 ### 2.6 多实例、静态资源与 CDN
 
@@ -130,23 +130,23 @@
   - SQL 总数、延迟直方图、`sql.DB.Stats()`；
   - export pending/ready/failed 与在飞；
   - oplog queued/dropped/written；
-  - Redis 错误计数；
+  - Redis 错误计数、hit/miss/fallback；
   - replica up/lag；
   - Go heap / goroutine / GC pause；
   - instance 标签。
 - `backend/tests/performance/` 含 query stats 测试和 k6 场景脚本（boot/文章/后台列表/用户中心/写路径/导出）。脚本可重复跑，仓库不包含任何实测 QPS。
-- Redis hit/miss 分项和请求级 replica query-error 自动切主仍未拆开。
+- Redis hit/miss 分项已输出；请求级 replica 连接错误会立刻标记从库不健康并在当前语句上回放到主库。
 - 因此当前不能给出可信的单机 QPS、p95/p99、容量上限或“提升倍数”。
 
 ## 3. 待办
 
 ### P0-2 异步导出
 
-已完成：tenant 轮询、签名下载、打开后再消费 file key、janitor、HTTP 入队、worker 重放列表、相对路径/`LIKEADMIN_EXPORT_DIR`、租约与崩溃再入队、流式 XLSX、每租户互斥和文件大小上限。
+已完成：tenant 轮询、签名下载、打开后再消费 file key、janitor、HTTP 入队、worker 重放列表、相对路径/`LIKEADMIN_EXPORT_DIR`、租约与崩溃再入队、流式 XLSX、每租户互斥和文件大小上限；操作日志/管理员/用户导出分 500 行读取。
 
-仍待（需要按列表改 SQL，本轮不做）：
+仍待（需要按列表改 SQL 或运维环境）：
 
-- 每个导出列表改成稳定主键游标分批读取，避免 worker 内最多 10000 行的单个 slice。
+- 每个导出列表改成稳定主键游标分批读取，并在写出时流式消费，避免最终仍拼出最多 10000 行。
 - 私有导出对象存储（与公开 `/uploads` CDN 隔离）以及跨实例不共享磁盘时的下载。
 - 用压测证明创建任务延迟不随行数线性增长。
 
@@ -158,9 +158,9 @@
 
 ### P0-7 生产索引迁移
 
-已完成：启动默认只校验；`LIKEADMIN_REQUIRE_INDEXES=1` 在缺失时拒绝启动；`bin/think ensure-indexes` 打印计划/锁影响并写 `runtime/index-status.json`。
+已完成：启动默认只校验；`LIKEADMIN_REQUIRE_INDEXES=1` 在缺失时拒绝启动；`bin/think ensure-indexes` 打印计划/锁影响并写 `runtime/index-status.json`；MySQL 5.7.8+/8.0 使用 `ALGORITHM=INPLACE, LOCK=NONE`（失败回退普通 `CREATE INDEX`）；`bin/think explain-indexes` 对首批查询形状跑 `EXPLAIN`（`LIKEADMIN_EXPLAIN_ANALYZE=1` 才执行 ANALYZE）。
 
-仍待：按 MySQL 版本自动选择 online DDL 算法；用生产数据 `EXPLAIN ANALYZE` 验证首批索引。
+仍待：在生产规模数据上解读 `EXPLAIN`/`EXPLAIN ANALYZE` 结果并据此增补索引。
 
 ### P1-1 列表上限与深分页
 
@@ -170,15 +170,15 @@
 
 ### P1-2 操作日志
 
-已完成：POST/登录不可静默丢弃；GET 可丢；queued/dropped/written 指标；停机 drain。
+已完成：POST/登录不可静默丢弃；GET 可丢；queued/dropped/written 指标；停机 drain；异步路径 16 条/200ms 批量 INSERT，失败重试 3 次后再逐条写。
 
-仍待：批量 INSERT、失败持久化重试。
+仍待：跨进程持久化 WAL（进程崩溃时未刷盘的批次仍会丢，须持久队列才能避免）。
 
 ### P1-3 查询、缓存与只读副本
 
-已完成：PayWay `IN (?)`、boot bump、replica 探活不持锁、`tactics=1` 用户数 30s 缓存、replica lag/`SHOW REPLICA STATUS`、绑定失败后台重试、replica 指标。
+已完成：PayWay `IN (?)`、boot bump、replica 探活不持锁、`tactics=1` 用户数 30s 缓存、replica lag/`SHOW REPLICA STATUS`、绑定失败后台重试、replica 指标；replica 连接类错误立即标不健康并把当前 SQL 回放到主库。
 
-仍待：replica query error 立即切主；生产数据 `EXPLAIN ANALYZE`。
+仍待：在生产规模数据上确认 `EXPLAIN` 真正走了首批索引。
 
 ### P1-4 静态、上传与 CDN
 
@@ -188,9 +188,7 @@
 
 ### P1-5 运行期正确性
 
-已完成：原子限流、`/readyz` `PingContext`、DSN timeout、JSON 1MiB / 上传 50MiB、replica lag 与绑定重试。
-
-仍待：读请求在 replica query error 时立即回主库。
+已完成：原子限流、`/readyz` `PingContext`、DSN timeout、JSON 1MiB / 上传 50MiB、replica lag 与绑定重试、replica 查询错误回放主库。
 
 ### P2 后续容量演进
 
@@ -203,14 +201,14 @@
 ## 4. 实施顺序
 
 1. ~~修复权限 DB 错误 fail-open。~~
-2. ~~tenant 轮询 + 独立 worker 入队；~~ 游标分批 SQL 与私有对象存储仍待。
+2. ~~tenant 轮询 + 独立 worker 入队；~~ 全列表主键游标与私有对象存储仍待。
 3. ~~操作日志 tenant ID、递归脱敏、GET 不缓冲。~~
 4. ~~Go 监听限制在可信代理边界内。~~
 5. ~~多实例安全状态 Redis 故障失败关闭。~~
-6. ~~生产索引 DDL 移出启动并补齐计划/状态文件。~~
+6. ~~生产索引 DDL 移出启动并补齐计划/状态文件 / online DDL / EXPLAIN 命令。~~
 7. ~~指标与 k6 脚本。~~ 固定数据集实测仍待。
 8. ~~收紧普通列表 500。~~ COUNT/深分页仍待数据。
-9. ~~日志可靠性与 replica lag。~~ query error 切主仍待。
+9. ~~日志可靠性、replica lag、查询错误切主。~~
 10. 根据实测指标处理缓存扫描和更深层数据库演进。
 
 ## 5. 容量报告模板

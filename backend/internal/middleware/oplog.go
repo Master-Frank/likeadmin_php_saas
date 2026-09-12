@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"likeadmin/backend/internal/bootstrap"
@@ -50,6 +51,7 @@ func (w *bodyWriter) Write(b []byte) (int, error) {
 var (
 	oplogOnce sync.Once
 	oplogCh   chan model.OperationLog
+	oplogBusy atomic.Int64
 )
 
 func oplogAsync() bool {
@@ -58,18 +60,44 @@ func oplogAsync() bool {
 }
 
 func writeOplog(item model.OperationLog) {
-	if bootstrap.DB == nil {
+	writeOplogBatch([]model.OperationLog{item})
+}
+
+func writeOplogBatch(items []model.OperationLog) {
+	if len(items) == 0 || bootstrap.DB == nil {
 		return
 	}
+	oplogBusy.Add(1)
+	defer oplogBusy.Add(-1)
 	db := bootstrap.DB
+	omitTenant := !schemacache.HasColumn(db, items[0].TableName(), "tenant_id")
 	var err error
-	if !schemacache.HasColumn(db, item.TableName(), "tenant_id") {
-		err = db.Omit("tenant_id").Create(&item).Error
-	} else {
-		err = db.Create(&item).Error
+	for attempt := 0; attempt < 3; attempt++ {
+		tx := db
+		if omitTenant {
+			tx = db.Omit("tenant_id")
+		}
+		err = tx.CreateInBatches(items, 32).Error
+		if err == nil {
+			metrics.AddOplogWritten()
+			// CreateInBatches counts as one success for the batch; record remaining rows.
+			if n := len(items); n > 1 {
+				for i := 1; i < n; i++ {
+					metrics.AddOplogWritten()
+				}
+			}
+			return
+		}
+		time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
 	}
-	if err == nil {
-		metrics.AddOplogWritten()
+	for _, item := range items {
+		tx := db
+		if omitTenant {
+			tx = db.Omit("tenant_id")
+		}
+		if tx.Create(&item).Error == nil {
+			metrics.AddOplogWritten()
+		}
 	}
 }
 
@@ -83,11 +111,7 @@ func enqueueOplog(row model.OperationLog) {
 	}
 	oplogOnce.Do(func() {
 		oplogCh = make(chan model.OperationLog, 256)
-		go func() {
-			for item := range oplogCh {
-				writeOplog(item)
-			}
-		}()
+		go oplogWorker()
 	})
 	select {
 	case oplogCh <- row:
@@ -98,6 +122,34 @@ func enqueueOplog(row model.OperationLog) {
 			return
 		}
 		metrics.AddOplogDropped()
+	}
+}
+
+func oplogWorker() {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	buf := make([]model.OperationLog, 0, 32)
+	flush := func() {
+		if len(buf) == 0 {
+			return
+		}
+		writeOplogBatch(buf)
+		buf = buf[:0]
+	}
+	for {
+		select {
+		case item, ok := <-oplogCh:
+			if !ok {
+				flush()
+				return
+			}
+			buf = append(buf, item)
+			if len(buf) >= 16 {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
 	}
 }
 
@@ -116,9 +168,11 @@ func DrainOplog() {
 	}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		if len(oplogCh) == 0 {
+		if len(oplogCh) == 0 && oplogBusy.Load() == 0 {
 			time.Sleep(20 * time.Millisecond)
-			return
+			if len(oplogCh) == 0 && oplogBusy.Load() == 0 {
+				return
+			}
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
