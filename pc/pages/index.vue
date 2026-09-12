@@ -8,14 +8,20 @@
                     trigger="click"
                     height="340px"
                 >
-                    <ElCarouselItem v-for="item in showList" :key="item">
-                        <NuxtLink :to="item.link.path" target="_blank">
+                    <ElCarouselItem v-for="(item, idx) in showList" :key="idx">
+                        <NuxtLink v-if="bannerTo(item.link)" :to="bannerTo(item.link)">
                             <ElImage
                                 class="w-full h-full rounded-[8px] bg-white overflow-hidden"
                                 :src="appStore.getImageUrl(item.image)"
                                 fit="contain"
                             />
                         </NuxtLink>
+                        <ElImage
+                            v-else
+                            class="w-full h-full rounded-[8px] bg-white overflow-hidden"
+                            :src="appStore.getImageUrl(item.image)"
+                            fit="contain"
+                        />
                     </ElCarouselItem>
                 </ElCarousel>
             </div>
@@ -77,5 +83,37 @@ const getSwiperData = computed(() => {
 const showList = computed(() => {
     return getSwiperData.value?.data || []
 })
+
+function bannerTo(link: { path?: string; query?: Record<string, any> } | undefined) {
+    const path = String(link?.path || '').replace(/\/+$/, '')
+    if (!path) {
+        return undefined
+    }
+    const id = link?.query?.id
+    const type = link?.query?.type
+    switch (path) {
+        case '/pages/news/news':
+            return '/information'
+        case '/pages/news_detail/news_detail':
+            return id ? `/information/detail/${id}` : '/information'
+        case '/pages/collection/collection':
+            return '/user/collection'
+        case '/pages/index/index':
+        case '/pages/search/search':
+            return '/'
+        case '/pages/user/user':
+        case '/pages/user_data/user_data':
+            return '/user/info'
+        case '/pages/user_set/user_set':
+            return '/account/security'
+        case '/pages/agreement/agreement':
+            return type ? `/policy/${type}` : '/'
+        default:
+            if (path.startsWith('/pages/') || path.startsWith('/packages/')) {
+                return '/'
+            }
+            return id ? { path, query: link?.query } : path
+    }
+}
 </script>
 <style lang="scss" scoped></style>

@@ -8,6 +8,7 @@ import (
 	"likeadmin/backend/internal/cfgsvc"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/decorate"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -105,8 +106,8 @@ func ArticleCollect(c *gin.Context) {
 func ArticleDetail(c *gin.Context) {
 	id := httpx.QueryUint(c, "id")
 	collect := userCollectsArticle(c, ctxutil.Get(c).UserID, id)
-	var a model.Article
-	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {
+	a, ok := loadVisibleArticle(c, id)
+	if !ok {
 		response.Data(c, gin.H{"collect": collect})
 		return
 	}
@@ -114,8 +115,45 @@ func ArticleDetail(c *gin.Context) {
 		"click_actual": gorm.Expr("click_actual + 1"), "update_time": util.NowUnix(),
 	})
 	out := articleDetailMap(c, a, a.ClickActual+a.ClickVirtual+1)
-	out["collect"] = collect
+	out["collect"] = userCollectsArticle(c, ctxutil.Get(c).UserID, a.ID)
 	response.Data(c, out)
+}
+
+// loadVisibleArticle finds a tenant article by id. Decorate pickers list
+// tenant_id=0 template rows (PHP DecorateDataLogic::getArticleLists), so a
+// stored id may belong to the template; map it onto the tenant copy by title.
+func loadVisibleArticle(c *gin.Context, id uint) (model.Article, bool) {
+	var a model.Article
+	if id == 0 {
+		return a, false
+	}
+	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error == nil {
+		return a, true
+	}
+	tid := uint(0)
+	if c != nil {
+		tid = ctxutil.Get(c).TenantID
+	}
+	if tid == 0 {
+		return a, false
+	}
+	db := bootstrap.DB
+	if db == nil {
+		db = tdb(c)
+	}
+	if db == nil {
+		return a, false
+	}
+	var tpl model.Article
+	if db.Where("id = ? AND tenant_id = 0 AND is_show = 1 AND delete_time IS NULL", id).First(&tpl).Error != nil || tpl.ID == 0 {
+		return a, false
+	}
+	var copy model.Article
+	if scopeTenant(tdb(c).Where("is_show = 1 AND delete_time IS NULL AND title = ?", tpl.Title), c).
+		Order("id asc").First(&copy).Error != nil || copy.ID == 0 {
+		return a, false
+	}
+	return copy, true
 }
 
 func userTerminal(c *gin.Context) int {
@@ -507,6 +545,20 @@ func PcIndex(c *gin.Context) {
 	var page model.DecoratePage
 	db := scopeTenant(tdb(c).Where("type = 4"), c)
 	_ = db.First(&page)
+	if page.ID > 0 && page.Data != "" {
+		var mobile model.DecoratePage
+		_ = scopeTenant(tdb(c).Where("type = 1"), c).First(&mobile)
+		data := page.Data
+		if mobile.ID > 0 {
+			data = decorate.FillDefaultBannerLinksByImage(data, mobile.Data)
+		}
+		page.Data = decorate.RewriteForPC(data, func(id uint) uint {
+			if a, ok := loadVisibleArticle(c, id); ok {
+				return a.ID
+			}
+			return id
+		})
+	}
 	response.Data(c, gin.H{
 		"page": decoratePageValue(page),
 		"all":  limitArticles(c, "all", 5, 0, 0),
@@ -572,11 +624,12 @@ func PcArticleDetail(c *gin.Context) {
 	if util.PHPIsset(httpx.Query(c), "source") {
 		source = httpx.QueryRaw(c, "source")
 	}
-	var a model.Article
-	if scopeTenant(tdb(c).Where("id = ? AND is_show = 1 AND delete_time IS NULL", id), c).First(&a).Error != nil {
+	a, ok := loadVisibleArticle(c, id)
+	if !ok {
 		response.Data(c, pcArticleMissing(c, id))
 		return
 	}
+	id = a.ID
 	tdb(c).Model(&model.Article{}).Where("id = ?", a.ID).Updates(map[string]any{
 		"click_actual": gorm.Expr("click_actual + 1"), "update_time": util.NowUnix(),
 	})

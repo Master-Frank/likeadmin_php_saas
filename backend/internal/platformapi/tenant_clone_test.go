@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,13 +62,14 @@ func TestCopyTenantStampsUpdateTime(t *testing.T) {
 		if err := copyTenantDept(tx, tid, 0); err != nil {
 			return err
 		}
-		if err := copyTenantArticles(tx, tid); err != nil {
+		artMap, err := copyTenantArticles(tx, tid)
+		if err != nil {
 			return err
 		}
 		if err := copyTenantNotice(tx, tid); err != nil {
 			return err
 		}
-		return copyTenantDecorate(tx, tid)
+		return copyTenantDecorate(tx, tid, artMap)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +110,20 @@ func TestCopyTenantStampsUpdateTime(t *testing.T) {
 	}
 	if notice.UpdateTime == nil || *notice.UpdateTime < before {
 		t.Fatalf("notice update_time leaked template: %+v", notice.UpdateTime)
+	}
+
+	var home, pc model.DecoratePage
+	if err := db.Where("tenant_id = ? AND type = 1", tid).First(&home).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("tenant_id = ? AND type = 4", tid).First(&pc).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(home.Data, `"id":3,`) || strings.Contains(home.Data, `"id":3}`) {
+		t.Fatalf("template article id leaked into tenant home decorate: %s", home.Data)
+	}
+	if !strings.Contains(pc.Data, "/pages/news_detail/news_detail") {
+		t.Fatalf("pc banner should copy mobile article links, got %s", pc.Data)
 	}
 }
 

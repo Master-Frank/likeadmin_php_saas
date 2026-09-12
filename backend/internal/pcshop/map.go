@@ -39,3 +39,16 @@ func Target(path string, query url.Values) string {
 	}
 	return ""
 }
+
+// Internal is Target without the /pc prefix so NuxtLink (baseURL /pc/) does
+// not produce /pc/pc/information.
+func Internal(path string, query url.Values) string {
+	target := Target(path, query)
+	if target == "" {
+		return ""
+	}
+	if target == "/pc" || target == "/pc/" {
+		return "/"
+	}
+	return strings.TrimPrefix(target, "/pc")
+}

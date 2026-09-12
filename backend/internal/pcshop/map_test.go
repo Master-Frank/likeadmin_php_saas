@@ -23,3 +23,16 @@ func TestTargetNewsGoesToPCNotMobile(t *testing.T) {
 		t.Fatal("unrelated path")
 	}
 }
+
+func TestInternalDropsPCPrefix(t *testing.T) {
+	if got := Internal("/pages/news/news", nil); got != "/information" {
+		t.Fatalf("news list %q", got)
+	}
+	q := url.Values{"id": []string{"6"}}
+	if got := Internal("/pages/news_detail/news_detail", q); got != "/information/detail/6" {
+		t.Fatalf("news detail %q", got)
+	}
+	if got := Internal("/pages/index/index", nil); got != "/" {
+		t.Fatalf("home %q", got)
+	}
+}

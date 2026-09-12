@@ -63,6 +63,27 @@ func TestArticleDetailMapFields(t *testing.T) {
 	}
 }
 
+func TestLoadVisibleArticleResolvesTemplateID(t *testing.T) {
+	if !initOpenapiDB(t) {
+		t.Skip("no database")
+	}
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/article/detail?id=3", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{TenantID: 1})
+	a, ok := loadVisibleArticle(c, 3)
+	if !ok {
+		t.Fatal("template article 3 should resolve to tenant copy")
+	}
+	if a.TenantID != 1 {
+		t.Fatalf("tenant_id=%d", a.TenantID)
+	}
+	if a.Title == "" || a.ID == 3 {
+		t.Fatalf("expected tenant copy, got id=%d title=%q", a.ID, a.Title)
+	}
+}
+
 func TestPcArticleMissingShape(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

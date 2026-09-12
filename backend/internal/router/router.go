@@ -135,14 +135,33 @@ func serveSPA(dir string) gin.HandlerFunc {
 	}
 }
 
-// redirectShopToPC sends decorate/shop links to the PC Nuxt site, not H5 /mobile.
+// redirectShopToPC sends decorate/shop links to the matching storefront.
+// PC banners open /pages/* in a new tab; H5 already lives under /mobile/.
 func redirectShopToPC(c *gin.Context) {
+	if refererIsMobile(c.GetHeader("Referer"), c.GetHeader("Referrer")) {
+		target := "/mobile" + c.Request.URL.Path
+		if q := c.Request.URL.RawQuery; q != "" {
+			target += "?" + q
+		}
+		c.Redirect(http.StatusFound, target)
+		return
+	}
 	target := pcshop.Target(c.Request.URL.Path, c.Request.URL.Query())
 	if target == "" {
 		c.Status(http.StatusNotFound)
 		return
 	}
 	c.Redirect(http.StatusFound, target)
+}
+
+func refererIsMobile(values ...string) bool {
+	for _, v := range values {
+		u := strings.ToLower(v)
+		if strings.Contains(u, "/mobile/") || strings.HasSuffix(u, "/mobile") {
+			return true
+		}
+	}
+	return false
 }
 
 func underDir(root, fp string) bool {

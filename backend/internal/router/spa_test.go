@@ -119,4 +119,13 @@ func TestRedirectShopToPC(t *testing.T) {
 	if loc := pkg.Header().Get("Location"); loc != "/pc/" {
 		t.Fatalf("package location %q", loc)
 	}
+
+	h5 := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(h5)
+	c.Request = httptest.NewRequest(http.MethodGet, "/pages/news_detail/news_detail?id=3", nil)
+	c.Request.Header.Set("Referer", "http://127.0.0.1:8080/mobile/")
+	redirectShopToPC(c)
+	if loc := h5.Header().Get("Location"); loc != "/mobile/pages/news_detail/news_detail?id=3" {
+		t.Fatalf("mobile referer %q", loc)
+	}
 }

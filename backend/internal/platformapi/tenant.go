@@ -14,6 +14,7 @@ import (
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
+	"likeadmin/backend/internal/decorate"
 	"likeadmin/backend/internal/filesvc"
 	"likeadmin/backend/internal/httpx"
 	"likeadmin/backend/internal/lists"
@@ -820,7 +821,8 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if err := copyTenantMenus(tx, tenant.ID); err != nil {
 		return err
 	}
-	if err := copyTenantArticles(tx, tenant.ID); err != nil {
+	artMap, err := copyTenantArticles(tx, tenant.ID)
+	if err != nil {
 		return err
 	}
 	if err := copyTenantPay(tx, tenant.ID); err != nil {
@@ -829,7 +831,7 @@ func initSharedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
 	if err := copyTenantNotice(tx, tenant.ID); err != nil {
 		return err
 	}
-	return copyTenantDecorate(tx, tenant.ID)
+	return copyTenantDecorate(tx, tenant.ID, artMap)
 }
 
 func initShardedTenant(tx *gorm.DB, tenant model.Tenant, c *gin.Context) error {
@@ -880,7 +882,7 @@ func copyTenantDept(tx *gorm.DB, tenantID, adminID uint) error {
 // copyTenantArticles remaps each template category once. PHP ArticleLogic::initialization
 // nests cate create inside the article loop (duplicate cate rows per article); Go keeps
 // one cate per template id so tenant article/cid graphs stay consistent.
-func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
+func copyTenantArticles(tx *gorm.DB, tenantID uint) (map[uint]uint, error) {
 	var cates []model.ArticleCate
 	tx.Where("tenant_id = 0 AND delete_time IS NULL").Find(&cates)
 	idMap := map[uint]uint{}
@@ -892,13 +894,15 @@ func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 		cate.CreateTime = now
 		cate.UpdateTime = util.UnixPtr(now)
 		if err := tx.Create(&cate).Error; err != nil {
-			return err
+			return nil, err
 		}
 		idMap[old] = cate.ID
 	}
+	artMap := map[uint]uint{}
 	var arts []model.Article
 	tx.Where("tenant_id = 0 AND delete_time IS NULL").Find(&arts)
 	for _, a := range arts {
+		old := a.ID
 		a.ID = 0
 		a.TenantID = tenantID
 		if nid, ok := idMap[a.Cid]; ok {
@@ -907,10 +911,11 @@ func copyTenantArticles(tx *gorm.DB, tenantID uint) error {
 		a.CreateTime = now
 		a.UpdateTime = util.UnixPtr(now)
 		if err := tx.Create(&a).Error; err != nil {
-			return err
+			return nil, err
 		}
+		artMap[old] = a.ID
 	}
-	return nil
+	return artMap, nil
 }
 
 func copyTenantPay(tx *gorm.DB, tenantID uint) error {
@@ -1005,13 +1010,25 @@ func canonicalizeNoticeJSON(raw string) string {
 	return util.EncodeJSON(v)
 }
 
-func copyTenantDecorate(tx *gorm.DB, tenantID uint) error {
+func copyTenantDecorate(tx *gorm.DB, tenantID uint, artMap map[uint]uint) error {
 	now := util.NowUnix()
 	var pages []model.DecoratePage
 	tx.Where("tenant_id = 0").Find(&pages)
+	mobile := ""
+	for _, p := range pages {
+		if p.Type == 1 {
+			mobile = p.Data
+			break
+		}
+	}
 	for _, p := range pages {
 		p.ID = 0
 		p.TenantID = tenantID
+		data := p.Data
+		if p.Type == 4 && mobile != "" {
+			data = decorate.CopyBannerLinksByImage(data, mobile)
+		}
+		p.Data = decorate.RemapArticleIDs(data, artMap)
 		p.CreateTime = now
 		p.UpdateTime = util.UnixPtr(now)
 		if err := tx.Create(&p).Error; err != nil {
