@@ -9,7 +9,7 @@
 - PHP → Go HTTP 迁移已完成，307/307 个公开动作由 Go 提供；后续性能工作不再讨论重写后端。
 - P0/P1 的大部分保护、首批索引、热路径缓存、查询降本和部署配置已经落地。
 - 本轮已关闭先前的上线阻断点中的权限 fail-open、tenant 导出轮询、操作日志隔离/脱敏/缓冲、可信代理、Redis 安全状态 fail-closed，以及启动期串行建索引。
-- 导出在 `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时改为 HTTP 只入队、worker 重放列表；worker 内仍最多物化 `export_max_rows`（默认 10000）行，没有改成逐列表游标 SQL。
+- 平台/租户后台导出在 `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时改为 HTTP 只入队、worker 重放列表；C 端导出保留请求内用户上下文并同步完成。worker 内仍最多物化 `export_max_rows`（默认 10000）行，没有改成逐列表游标 SQL。
 - `go test ./...`、`go vet ./...` 是功能与回归证据，不是吞吐、延迟或容量证明。k6 脚本已提供，仓库里仍然没有实测 QPS。
 - 精确 `count` 和 PHP 兼容响应契约仍保留。普通 `page_type=1` 列表硬限制 500 行；后台 `page_type=0` 仍可用 `page_size_max`（默认 25000）。
 
@@ -105,7 +105,7 @@
 - 任务轮询绑定创建管理员和租户；文件下载校验签名，或校验已登录 owner。
 - 文件写入 `public_dir` 同级的 `runtime/export`，或 `LIKEADMIN_EXPORT_DIR`；元数据保存相对文件名，不再保存实例绝对路径。
 - 打开并确认文件可读后才删除一次性 file key；下载成功后删除磁盘文件；janitor 按任务 TTL 清理过期文件。
-- `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时，HTTP 只保存导出条件并返回 `task_id`；后台 worker 带租户/管理员上下文重放原列表 handler。
+- `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时，平台/租户后台 HTTP 只保存导出条件并返回 `task_id`；后台 worker 带租户/管理员上下文重放原列表 handler。C 端用户上下文不写入该 job，仍在原请求内完成并直接返回签名下载 URL。
 - job 只保存列表所需的管理员身份/角色上下文，不复制 token、login IP、expire time 等 session 字段。
 - worker 使用 Redis 队列 `export_jobs` + `SETNX` 任务租约和 tenant/platform scope 租约；无 Redis 的单实例走进程内队列。租约丢失的 pending 任务会再入队，最多 3 次，超时失败。多实例同租户互斥，单进程 2 个 worker，任务状态超时 2 分钟，文件 50MiB。
 - timeout/ready 使用 `export_finish_*` 原子终态锁，超时后的迟到 worker 不会把 failed 覆盖成 ready；底层列表若未使用 request context，超时后 SQL 仍可能继续到自身数据库超时。

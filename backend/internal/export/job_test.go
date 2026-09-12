@@ -1,10 +1,14 @@
 package export
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"likeadmin/backend/internal/cache"
+	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/ctxutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,6 +100,23 @@ func TestExportAdminInfoDropsSessionSecrets(t *testing.T) {
 		if _, ok := got[key]; ok {
 			t.Fatalf("job persisted %s: %#v", key, got)
 		}
+	}
+}
+
+func TestAPIExportDoesNotEnterAdminJobQueue(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.ExportAsync
+	config.C.Project.ExportAsync = true
+	t.Cleanup(func() { config.C.Project.ExportAsync = old })
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/recharge/recharge/lists?export=2", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{
+		App: "api", Controller: "recharge.recharge", Action: "lists", UserID: 9, TenantID: 2,
+	})
+	if EnqueueFromRequest(c) {
+		t.Fatal("C-end export must retain request-local user context")
 	}
 }
 

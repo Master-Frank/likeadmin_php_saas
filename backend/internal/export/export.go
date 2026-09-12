@@ -138,7 +138,9 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 		}
 		return true
 	}
-	if !config.ExportAsyncEnabled() {
+	// C-end exports retain the authenticated user context and complete in the
+	// request. The background job format only carries platform/tenant admins.
+	if !config.ExportAsyncEnabled() || app == "api" {
 		key, err := saveOwnedXLSX(fileName, rows, spec.Fields, owner)
 		if err != nil {
 			response.Fail(c, err.Error())

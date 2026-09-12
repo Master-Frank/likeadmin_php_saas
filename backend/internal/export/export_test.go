@@ -200,6 +200,26 @@ func TestMaybeRejectsUnsupportedExport(t *testing.T) {
 	}
 }
 
+func TestMaybeKeepsAPIExportSynchronous(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := config.C.Project.ExportAsync
+	config.C.Project.ExportAsync = true
+	t.Cleanup(func() { config.C.Project.ExportAsync = old })
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/recharge/recharge/lists?export=2&page_start=1&page_end=1", nil)
+	ctxutil.Set(c, &ctxutil.RequestMeta{
+		App: "api", Controller: "recharge.recharge", Action: "lists", UserID: 9, TenantID: 2,
+	})
+	if !Maybe(c, "充值记录", []map[string]any{{"sn": "R1"}}) {
+		t.Fatal("export=2 should be handled")
+	}
+	if !strings.Contains(w.Body.String(), `"status":"ready"`) {
+		t.Fatalf("C-end export must finish in request: %s", w.Body.String())
+	}
+}
+
 func TestMaybeQueryFileName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

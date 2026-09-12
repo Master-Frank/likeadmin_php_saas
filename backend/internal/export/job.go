@@ -81,6 +81,11 @@ func EnqueueFromRequest(c *gin.Context) bool {
 	if meta.Controller == "" || meta.Action == "" {
 		return false
 	}
+	// C-end handlers depend on request-local user context that is deliberately
+	// not serialized into admin export jobs. Keep those exports in-request.
+	if meta.App == "api" {
+		return false
+	}
 	if lookupHandler == nil || lookupHandler(meta.App, meta.Controller, meta.Action) == nil {
 		return false
 	}

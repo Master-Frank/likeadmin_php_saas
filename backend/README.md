@@ -55,7 +55,7 @@ systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.serv
 - **单库 / 主从**：主从只把日志列表、工作台计数等可延迟读打到 `database.replicas`；空配置读写都走主库。`LIKEADMIN_REPLICA_MAX_LAG` 设置允许的复制延迟秒数（默认 30），`LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS` 设置后台探测超时（默认 1000ms）。无法读取复制延迟时默认回落主库；托管只读端点确实不提供 lag 时可显式设置 `LIKEADMIN_REPLICA_ALLOW_UNKNOWN_LAG=1`。连接类查询错误会将当前读回放到主库。
 
 观测：`LIKEADMIN_INSTANCE_ID`（默认 hostname）；`LIKEADMIN_METRICS=1` 时 `127.0.0.1:9090/metrics`（不要挂到公网 API 域）；`LIKEADMIN_PPROF=1` 时 `127.0.0.1:6060`。
-可选 `app.cdn_domain` 给本地上传拼 CDN 前缀。`LIKEADMIN_EXPORT_ASYNC=1` 可在单实例也走导出队列。
+可选 `app.cdn_domain` 给本地上传拼 CDN 前缀。`LIKEADMIN_EXPORT_ASYNC=1` 可在单实例也让平台/租户后台导出走队列；C 端导出保留请求内用户上下文并同步完成。
 
 在线升级若包含 `project/backend/`，会先在完整源码副本中构建新
 `bin/api`/`bin/crontab`，构建失败不应用升级。启用
