@@ -86,6 +86,33 @@ func TestIsStaticPath(t *testing.T) {
 	}
 }
 
+func TestRootSkipsTenantLookup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	lock := filepath.Join(dir, "install.lock")
+	if err := os.WriteFile(lock, []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldLock, oldHost := config.C.App.InstallLock, config.C.Project.HTTPHost
+	t.Cleanup(func() {
+		config.C.App.InstallLock = oldLock
+		config.C.Project.HTTPHost = oldHost
+	})
+	config.C.App.InstallLock = lock
+	config.C.Project.HTTPHost = "demo.gosaas.cn"
+
+	r := gin.New()
+	r.Use(InstallAndTenant())
+	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "root") })
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "demo.gosaas.cn"
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK || w.Body.String() != "root" {
+		t.Fatalf("platform / must skip tenant resolve: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestStaticPathSkipsTenantLookup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dir := t.TempDir()

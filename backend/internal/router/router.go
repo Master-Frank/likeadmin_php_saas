@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -80,16 +81,8 @@ func New() *gin.Engine {
 	r.Any("/install/status", install.Status)
 
 	spa := serveSPA
-	if config.C.App.PublicDir != "" {
-		r.GET("/", func(c *gin.Context) {
-			index := filepath.Join(config.C.App.PublicDir, "index.html")
-			if _, err := os.Stat(index); err == nil {
-				c.File(index)
-				return
-			}
-			c.Status(http.StatusNotFound)
-		})
-	}
+	r.GET("/", siteRoot)
+	r.HEAD("/", siteRoot)
 	r.GET("/platform", spa("platform"))
 	r.GET("/platform/*any", spa("platform"))
 	r.GET("/admin", spa("admin"))
@@ -117,6 +110,44 @@ func New() *gin.Engine {
 		r.Static("/uploads", filepath.Join(config.C.App.PublicDir, "uploads"))
 	}
 	return r
+}
+
+// siteRoot mirrors PHP public/index.php: on the platform HTTP_HOST, "/" redirects
+// to /platform/. Other hosts fall through to IndexController, which served
+// public/platform/index.html.
+func siteRoot(c *gin.Context) {
+	want := strings.TrimSpace(config.C.Project.HTTPHost)
+	got := ctxutil.Host(c)
+	if want == "" || hostKey(got) == hostKey(want) {
+		c.Redirect(http.StatusFound, "/platform/")
+		return
+	}
+	index := filepath.Join(config.C.App.PublicDir, "platform", "index.html")
+	if _, err := os.Stat(index); err == nil {
+		c.Header("Cache-Control", "no-cache")
+		c.File(index)
+		return
+	}
+	c.Status(http.StatusNotFound)
+}
+
+func hostKey(h string) string {
+	h = strings.ToLower(strings.TrimSpace(h))
+	h = strings.TrimPrefix(h, "http://")
+	h = strings.TrimPrefix(h, "https://")
+	if i := strings.IndexByte(h, '/'); i >= 0 {
+		h = h[:i]
+	}
+	if h == "" {
+		return ""
+	}
+	if host, port, err := net.SplitHostPort(h); err == nil {
+		if port == "80" || port == "443" {
+			return strings.ToLower(host)
+		}
+		return strings.ToLower(host) + ":" + port
+	}
+	return h
 }
 
 // serveSPA returns hashed Vue assets from disk and falls back to index.html

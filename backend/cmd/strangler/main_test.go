@@ -33,6 +33,7 @@ func TestGoAPI(t *testing.T) {
 		"/api/index/config":                     true,
 		"/crontab":                              true,
 		"/install":                              true,
+		"/":                                     true,
 		"/install/install.php":                  true,
 		"/index.php/platformapi/login/account":  true,
 		"/index.php/tenantapi/config/getConfig": true,
