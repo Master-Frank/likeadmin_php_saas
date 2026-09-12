@@ -10,6 +10,7 @@ TENANT_HOST="${TENANT_HOST:-}"
 OUT="${OUT:-/tmp/likeadmin-golden}"
 MYSQL_DATABASE="${MYSQL_DATABASE:-localhost_likeadmin}"
 mkdir -p "$OUT"
+export OUT MYSQL_DATABASE
 go_only() { [[ "${PHP%/}" == "${GO%/}" ]]; }
 
 host_args=()
@@ -258,7 +259,7 @@ done
 php_uk="$(python3 -c '
 import json
 try:
-    d=json.load(open("/tmp/likeadmin-golden/php_platformapi_upgrade.upgrade_lists.json"))
+    d=json.load(open("'"$OUT"'/php_platformapi_upgrade.upgrade_lists.json"))
     ls=(d.get("data") or {}).get("lists") or []
     row=ls[0] if ls else {}
     keys=("version_str","able_update","notice","add","optimize","repair","content_desc","new_version")
@@ -269,7 +270,7 @@ except Exception:
 go_uk="$(python3 -c '
 import json
 try:
-    d=json.load(open("/tmp/likeadmin-golden/go_platformapi_upgrade.upgrade_lists.json"))
+    d=json.load(open("'"$OUT"'/go_platformapi_upgrade.upgrade_lists.json"))
     ls=(d.get("data") or {}).get("lists") or []
     row=ls[0] if ls else {}
     keys=("version_str","able_update","notice","add","optimize","repair","content_desc","new_version")
@@ -277,8 +278,8 @@ try:
 except Exception:
     print("")
 ')"
-php_wn="$(python3 -c 'import json; print((json.load(open("/tmp/likeadmin-golden/php_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
-go_wn="$(python3 -c 'import json; print((json.load(open("/tmp/likeadmin-golden/go_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
+php_wn="$(python3 -c 'import json; print((json.load(open("'"$OUT"'/php_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
+go_wn="$(python3 -c 'import json; print((json.load(open("'"$OUT"'/go_platformapi_setting.web.web_setting_getWebsite.json")).get("data") or {}).get("name",""))' 2>/dev/null || true)"
 echo "website_name php=$php_wn go=$go_wn"
 if [[ -n "$php_wn" && "$php_wn" != "$go_wn" ]]; then
   fail=$((fail + 1))
@@ -286,8 +287,8 @@ fi
 pay_cfg_eq="$(python3 -c '
 import json
 try:
-    p=(json.load(open("/tmp/likeadmin-golden/php_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
-    g=(json.load(open("/tmp/likeadmin-golden/go_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
+    p=(json.load(open("'"$OUT"'/php_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
+    g=(json.load(open("'"$OUT"'/go_platformapi_setting.pay.pay_config_getConfig_id=1.json")).get("data") or {}).get("config")
     print("1" if p==g else "0")
 except Exception:
     print("")
@@ -445,32 +446,32 @@ if [[ -n "$TENANT_HOST" ]]; then
         fail=$((fail + 1))
       fi
     done
-    php_rk="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
-    go_rk="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    php_rk="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/php_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    go_rk="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/go_api_recharge_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
     echo "recharge_lists_keys php=$php_rk go=$go_rk"
     if [[ -n "$php_rk" && "$php_rk" != "$go_rk" ]]; then
       fail=$((fail + 1))
     fi
-    php_ak="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
-    go_ak="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    php_ak="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
+    go_ak="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print(",".join(sorted((ls[0] if ls else {}).keys())))')"
     echo "account_log_lists_keys php=$php_ak go=$go_ak"
     if [[ -n "$php_ak" && "$php_ak" != "$go_ak" ]]; then
       fail=$((fail + 1))
     fi
-    php_am="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
-    go_am="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
+    php_am="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/php_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
+    go_am="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/go_api_account_log_lists.json")); ls=(d.get("data") or {}).get("lists") or []; print((ls[0] if ls else {}).get("change_amount"), (ls[0] if ls else {}).get("change_amount_desc"))')"
     echo "account_log_amount php=$php_am go=$go_am"
     if [[ -n "$php_am" && "$php_am" != "$go_am" ]]; then
       fail=$((fail + 1))
     fi
-    php_um="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_user_center.json")); print((d.get("data") or {}).get("user_money"), type((d.get("data") or {}).get("user_money")).__name__)')"
-    go_um="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_user_center.json")); print((d.get("data") or {}).get("user_money"), type((d.get("data") or {}).get("user_money")).__name__)')"
+    php_um="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/php_api_user_center.json")); print((d.get("data") or {}).get("user_money"), type((d.get("data") or {}).get("user_money")).__name__)')"
+    go_um="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/go_api_user_center.json")); print((d.get("data") or {}).get("user_money"), type((d.get("data") or {}).get("user_money")).__name__)')"
     echo "user_money php=$php_um go=$go_um"
     if [[ "$php_um" != "$go_um" ]]; then
       fail=$((fail + 1))
     fi
-    php_rcfg="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/php_api_recharge_config.json")); data=d.get("data") or {}; print(data.get("user_money"), type(data.get("user_money")).__name__, data.get("min_amount"), type(data.get("min_amount")).__name__)')"
-    go_rcfg="$(python3 -c 'import json; d=json.load(open("/tmp/likeadmin-golden/go_api_recharge_config.json")); data=d.get("data") or {}; print(data.get("user_money"), type(data.get("user_money")).__name__, data.get("min_amount"), type(data.get("min_amount")).__name__)')"
+    php_rcfg="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/php_api_recharge_config.json")); data=d.get("data") or {}; print(data.get("user_money"), type(data.get("user_money")).__name__, data.get("min_amount"), type(data.get("min_amount")).__name__)')"
+    go_rcfg="$(python3 -c 'import json; d=json.load(open("'"$OUT"'/go_api_recharge_config.json")); data=d.get("data") or {}; print(data.get("user_money"), type(data.get("user_money")).__name__, data.get("min_amount"), type(data.get("min_amount")).__name__)')"
     echo "recharge_config_money php=$php_rcfg go=$go_rcfg"
     if [[ "$php_rcfg" != "$go_rcfg" ]]; then
       fail=$((fail + 1))
@@ -1653,7 +1654,7 @@ print(json.dumps(d.get("data") or {}, ensure_ascii=False))
   vid="$(python3 -c '
 import json
 try:
-    d=json.load(open("/tmp/likeadmin-golden/php_platformapi_upgrade.upgrade_lists.json"))
+    d=json.load(open("'"$OUT"'/php_platformapi_upgrade.upgrade_lists.json"))
     ls=(d.get("data") or {}).get("lists") or []
     print(ls[0].get("id") if ls else "")
 except Exception:
@@ -2945,21 +2946,21 @@ if [[ -n "$TENANT_HOST" && -n "$TENANT_TOKEN" ]]; then
     echo "  go_d99=${go_d99:0:200}"
     fail=$((fail + 1))
   fi
-  php_oa_hdr="$(curl -sS -D - -o /tmp/likeadmin-golden/php_oa_echo.txt "$PHP/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
-  go_oa_hdr="$(curl -sS -D - -o /tmp/likeadmin-golden/go_oa_echo.txt "$GO/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  php_oa_hdr="$(curl -sS -D - -o "$OUT"/php_oa_echo.txt "$PHP/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  go_oa_hdr="$(curl -sS -D - -o "$OUT"/go_oa_echo.txt "$GO/tenantapi/channel.official_account_reply/index?echostr=pairabc" -H "Host: $TENANT_HOST" | tr -d '\r')"
   oa_ct() { awk -F': ' 'tolower($1)=="content-type"{gsub(/ /,"",$2); print tolower($2); exit}' <<<"$1"; }
   php_oact="$(oa_ct "$php_oa_hdr")"
   go_oact="$(oa_ct "$go_oa_hdr")"
-  echo "oa_echo_ct php=$php_oact go=$go_oact php_body=$(head -c 40 /tmp/likeadmin-golden/php_oa_echo.txt) go_body=$(head -c 40 /tmp/likeadmin-golden/go_oa_echo.txt)"
+  echo "oa_echo_ct php=$php_oact go=$go_oact php_body=$(head -c 40 "$OUT"/php_oa_echo.txt) go_body=$(head -c 40 "$OUT"/go_oa_echo.txt)"
   if [[ "$go_oact" != "text/plain;charset=utf-8" ]]; then
     fail=$((fail + 1))
   fi
-  if [[ "$(head -c 20 /tmp/likeadmin-golden/php_oa_echo.txt)" == "pairabc" && "$php_oact" != "$go_oact" ]]; then
+  if [[ "$(head -c 20 "$OUT"/php_oa_echo.txt)" == "pairabc" && "$php_oact" != "$go_oact" ]]; then
     fail=$((fail + 1))
   fi
-  go_oa_bad="$(curl -sS -D - -o /tmp/likeadmin-golden/go_oa_bad.txt "$GO/tenantapi/channel.official_account_reply/index?signature=bad&timestamp=1&nonce=2&echostr=hello" -H "Host: $TENANT_HOST" | tr -d '\r')"
+  go_oa_bad="$(curl -sS -D - -o "$OUT"/go_oa_bad.txt "$GO/tenantapi/channel.official_account_reply/index?signature=bad&timestamp=1&nonce=2&echostr=hello" -H "Host: $TENANT_HOST" | tr -d '\r')"
   go_oabad_ct="$(oa_ct "$go_oa_bad")"
-  go_oabad_body="$(head -c 40 /tmp/likeadmin-golden/go_oa_bad.txt)"
+  go_oabad_body="$(head -c 40 "$OUT"/go_oa_bad.txt)"
   echo "oa_bad_sig go_ct=$go_oabad_ct go_body=$go_oabad_body"
   if [[ "$go_oabad_ct" != "text/plain;charset=utf-8" || "$go_oabad_body" != "hello" ]]; then
     # Empty OA token skips the signature check and still echoes echostr (pair default).
@@ -3716,16 +3717,16 @@ print(n)' <<<"$go_tlog")"
   mysqlq "DELETE FROM la_operation_log WHERE action='pair-plat-leak'"
 fi
 if [[ -n "$go_exu" ]]; then
-  if ! go_exf="$(curl -sS -D - -o /tmp/likeadmin-golden/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"; then
+  if ! go_exf="$(curl -sS -D - -o "$OUT"/go_export.bin "$go_exu" -H "token: $TOKEN" | tr -d '\r')"; then
     echo "log_export_xlsx download_failed url=$go_exu"
     fail=$((fail + 1))
   else
     go_disp="$(printf '%s\n' "$go_exf" | awk -F': ' 'tolower($1)=="content-disposition"{print $2}')"
-    echo "log_export_xlsx php_url=${php_exu:0:80} go_url=${go_exu:0:80} disposition=$go_disp magic=$(head -c 2 /tmp/likeadmin-golden/go_export.bin | od -An -tx1)"
+    echo "log_export_xlsx php_url=${php_exu:0:80} go_url=${go_exu:0:80} disposition=$go_disp magic=$(head -c 2 "$OUT"/go_export.bin | od -An -tx1)"
     if [[ "$go_disp" != *.xlsx* ]]; then
       fail=$((fail + 1))
     fi
-    if ! cmp -s <(printf 'PK') <(head -c 2 /tmp/likeadmin-golden/go_export.bin); then
+    if ! cmp -s <(printf 'PK') <(head -c 2 "$OUT"/go_export.bin); then
       fail=$((fail + 1))
     fi
   fi
@@ -4629,7 +4630,7 @@ print(",".join(sorted(ls[0])) if ls else "")
   fi
   mid="$(python3 -c 'import json,sys
 try:
-  d=json.load(open("/tmp/likeadmin-golden/php_platformapi_auth.menu_lists.json"))
+  d=json.load(open("'"$OUT"'/php_platformapi_auth.menu_lists.json"))
 except Exception:
   d={}
 ls=(d.get("data") or {}).get("lists") or d.get("data") or []

@@ -51,6 +51,8 @@
 ```bash
 export GO=http://127.0.0.1:8080
 export TENANT_HOST=pair1.likeadmin.test
+export TENANT_ACCOUNT=pair1
+export MYSQL_DATABASE=likeadmin_saas   # default is localhost_likeadmin
 ./backend/tests/golden/pair.sh
 
 # 生产 Nginx 切流（与 Go strangler 错开端口）
