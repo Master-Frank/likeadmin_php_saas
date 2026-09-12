@@ -73,6 +73,7 @@ func New() *gin.Engine {
 	r.GET("/install/", install.Wizard)
 	// PHP index.php and old Vue builds may still request install.php; nginx /install is Go.
 	r.GET("/install/install.php", install.Wizard)
+	r.GET("/install/assets/*filepath", install.Asset)
 	r.GET("/install/env", install.Env)
 	r.GET("/install/check", install.Status)
 	r.POST("/install", install.Run)

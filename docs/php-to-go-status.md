@@ -101,7 +101,7 @@ export GO=http://127.0.0.1:8080 TENANT_HOST=pair1.likeadmin.test
 
 - 不要重做已迁 HTTP Logic / Think CLI / gencrud。
 - 不要为与 PHP 字节级一致而回退分表清理、删除停用清理、写接口 GET 拒绝。
-- 不要把 PHP 四步 layui 安装页做成 Go 克隆。
+- 安装向导外观对齐历史 PHP 四步页，但提交仍走 Go JSON `POST /install`，不要恢复 ThinkPHP 或 layui.js。
 - 不要 `exec PHP` 跑 think 命令。
 - 不要恢复 ThinkPHP `server/` 作为运行时依赖。
 - 不要提交 `.env` / `install.lock` / pair 生成的 CRUD Vue。
