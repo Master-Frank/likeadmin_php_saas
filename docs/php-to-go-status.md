@@ -22,7 +22,7 @@ Go 覆盖原 PHP 全部公开 HTTP 动作、Think CLI、系统 crontab、代码�
 
 ## 删 `server/` 后如何对照 PHP
 
-工作树和运行时都没有 PHP。排障时使用删树前的不可变锚点：
+工作树和运行时都没有 PHP。排障时使用删树前的不可变锚点。命令与路径对照写在 [AGENTS.md](../AGENTS.md)「如何读 PHP 对照源码」。
 
 - annotated tag：`php-reference-final-20260912`（commit `23ba7183dd320e281ee142ac81089dbef34870eb`）
 - 单文件：`git show php-reference-final-20260912:server/app/platformapi/logic/LoginLogic.php`
