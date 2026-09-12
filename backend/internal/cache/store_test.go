@@ -1,6 +1,11 @@
 package cache
 
-import "testing"
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
 
 func TestFlush(t *testing.T) {
 	Set("keep_before_flush", "1", 0)
@@ -45,4 +50,28 @@ func TestSecurityKeysSkipMemWhenRedisRequired(t *testing.T) {
 		t.Fatal("public cache may still use local memory")
 	}
 	Del("boot:public")
+}
+
+func TestSetNXMemoryFallbackIsAtomic(t *testing.T) {
+	const key = "setnx_atomic_test"
+	Del(key)
+	t.Cleanup(func() { Del(key) })
+	var winners atomic.Int64
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if SetNX(key, "winner", time.Minute) {
+				winners.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if winners.Load() != 1 {
+		t.Fatalf("SetNX winners=%d, want 1", winners.Load())
+	}
 }

@@ -15,8 +15,8 @@ func registerReplicaFailover(db *gorm.DB) {
 		return
 	}
 	_ = db.Callback().Query().After("gorm:after_query").Register("likeadmin:replica_retry", replicaRetryAfter)
-	_ = db.Callback().Row().After("gorm:row").Register("likeadmin:replica_retry_row", replicaRetryAfter)
-	_ = db.Callback().Raw().After("gorm:raw").Register("likeadmin:replica_retry_raw", replicaRetryAfter)
+	_ = db.Callback().Row().Before("gorm:row").Register("likeadmin:replica_row_mode", replicaRowMode)
+	_ = db.Callback().Row().After("gorm:row").Register("likeadmin:replica_retry_row", replicaRowRetryAfter)
 }
 
 func replicaRetryAfter(db *gorm.DB) {
@@ -48,6 +48,42 @@ func replicaRetryAfter(db *gorm.DB) {
 	if err == nil {
 		db.Error = nil
 	}
+}
+
+func replicaRowMode(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	if isRows, ok := db.Get("rows"); ok {
+		db.InstanceSet("likeadmin:replica_rows", isRows)
+	}
+}
+
+func replicaRowRetryAfter(db *gorm.DB) {
+	if db == nil || db.Error == nil || db.Statement == nil ||
+		!usingReplica(db) || !isRetryableDBErr(db.Error) {
+		return
+	}
+	MarkReplicaUnhealthy()
+	if DB == nil || DB.Config == nil || db.Statement.SQL.Len() == 0 {
+		return
+	}
+	master := DB.WithContext(db.Statement.Context).Session(&gorm.Session{NewDB: true})
+	isRows, _ := db.InstanceGet("likeadmin:replica_rows")
+	if many, _ := isRows.(bool); many {
+		rows, err := master.Statement.ConnPool.QueryContext(
+			db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...,
+		)
+		if err == nil {
+			db.Statement.Dest = rows
+			db.Error = nil
+		}
+		return
+	}
+	db.Statement.Dest = master.Statement.ConnPool.QueryRowContext(
+		db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...,
+	)
+	db.Error = nil
 }
 
 func usingReplica(db *gorm.DB) bool {

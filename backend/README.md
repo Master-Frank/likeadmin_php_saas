@@ -17,7 +17,7 @@ go run ./cmd/api
 
 默认监听 `:8080`。可用 `LIKEADMIN_LISTEN=:8080` 覆盖。生产 systemd 单元默认 `127.0.0.1:8080`，只信任来自本机/`LIKEADMIN_TRUSTED_PROXIES` 的 `X-Real-IP`。
 
-生产索引请用 `bin/think ensure-indexes`（或 `LIKEADMIN_ENSURE_INDEXES=1`）显式创建，HTTP 启动默认不再串行 `CREATE INDEX`。
+生产索引请用 `bin/think ensure-indexes`（或 `LIKEADMIN_ENSURE_INDEXES=1`）显式创建，HTTP 启动默认不再串行 `CREATE INDEX`。`LIKEADMIN_REQUIRE_INDEXES=1` 可在缺索引时拒绝启动；`bin/think explain-indexes` 输出首批查询形状的 `EXPLAIN`，仅在明确设置 `LIKEADMIN_EXPLAIN_ANALYZE=1` 时执行 `EXPLAIN ANALYZE`。
 
 平台端入口校验 `project.http_host`：与浏览器地址栏主机不一致时会返回「平台端入口域名错误」。用 `http://127.0.0.1:8080/platform/` 访问时，该项应写成 `127.0.0.1:8080`；不限域名则置空。
 
@@ -51,8 +51,8 @@ systemd 单元：`deploy/likeadmin-api.service`、`deploy/likeadmin-crontab.serv
 安装向导（`GET/POST /install`）可选拓扑，默认仍是单实例 + 单数据库：
 
 - **单实例**：不强制 Redis；导出在请求内完成，立刻 `ready`。
-- **多实例**：必须能连 Redis；写入 `app.multi_instance`、`project.export_async`、`app.require_redis`。多台 Go 还需共享 `public_dir` 或事后在后台改 OSS。crontab 已有 MySQL `GET_LOCK`，可只跑一个 crontab 进程。
-- **单库 / 主从**：主从只把日志列表、工作台计数等可延迟读打到 `database.replicas`；空配置读写都走主库。
+- **多实例**：必须能连 Redis；写入 `app.multi_instance`、`project.export_async`、`app.require_redis`。多台 Go 的导出目录还需通过 `LIKEADMIN_EXPORT_DIR` 指向同一私有共享挂载；公开上传使用共享 `public_dir` 或后台 OSS。crontab 已有 MySQL `GET_LOCK`，可只跑一个 crontab 进程。
+- **单库 / 主从**：主从只把日志列表、工作台计数等可延迟读打到 `database.replicas`；空配置读写都走主库。`LIKEADMIN_REPLICA_MAX_LAG` 设置允许的复制延迟秒数（默认 30），`LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS` 设置后台探测超时（默认 1000ms）。无法读取复制延迟时默认回落主库；托管只读端点确实不提供 lag 时可显式设置 `LIKEADMIN_REPLICA_ALLOW_UNKNOWN_LAG=1`。连接类查询错误会将当前读回放到主库。
 
 观测：`LIKEADMIN_INSTANCE_ID`（默认 hostname）；`LIKEADMIN_METRICS=1` 时 `127.0.0.1:9090/metrics`（不要挂到公网 API 域）；`LIKEADMIN_PPROF=1` 时 `127.0.0.1:6060`。
 可选 `app.cdn_domain` 给本地上传拼 CDN 前缀。`LIKEADMIN_EXPORT_ASYNC=1` 可在单实例也走导出队列。

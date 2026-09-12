@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"likeadmin/backend/internal/config"
+
+	"gorm.io/gorm"
 )
 
 func TestPlanNilDB(t *testing.T) {
@@ -62,5 +64,12 @@ func TestExplainQueriesAndNilDB(t *testing.T) {
 	}
 	if RunExplain(nil) != "database unavailable" {
 		t.Fatal(RunExplain(nil))
+	}
+}
+
+func TestWithIndexLockNonMySQLRunsFunction(t *testing.T) {
+	ran := false
+	if !withIndexLock(&gorm.DB{}, func() { ran = true }) || !ran {
+		t.Fatal("non-MySQL test DB should execute without advisory lock")
 	}
 }

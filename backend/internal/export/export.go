@@ -110,17 +110,28 @@ func Maybe(c *gin.Context, fileName string, rows any) bool {
 	startExportJanitor()
 	if id, _ := c.Get("likeadmin.export_task_id"); id != nil {
 		taskID, _ := id.(string)
+		if c.GetBool("likeadmin.export_worker") {
+			task, ok := loadTask(taskID)
+			if !ok || task.Status != statusPending ||
+				(c.Request != nil && c.Request.Context().Err() != nil) {
+				return true
+			}
+		}
 		key, err := saveOwnedXLSX(fileName, rows, spec.Fields, owner)
 		if err != nil {
-			saveTask(Task{ID: taskID, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID})
-			metrics.AddExport(statusFailed)
+			if finishTask(Task{ID: taskID, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID}) {
+				metrics.AddExport(statusFailed)
+			}
 			if !c.GetBool("likeadmin.export_worker") {
 				response.Fail(c, err.Error())
 			}
 			return true
 		}
 		t := Task{ID: taskID, Status: statusReady, URL: downloadURL(app, domain, key, owner), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID}
-		saveTask(t)
+		if !finishTask(t) {
+			discardExport(key)
+			return true
+		}
 		metrics.AddExport(statusReady)
 		if !c.GetBool("likeadmin.export_worker") {
 			response.Data(c, taskPayload(t))
@@ -500,6 +511,22 @@ func cleanOldExports(maxAge time.Duration) {
 		if info.ModTime().Before(cutoff) {
 			_ = os.Remove(filepath.Join(dir, e.Name()))
 		}
+	}
+}
+
+func discardExport(key string) {
+	var info fileInfo
+	if !cache.GetJSON("export_file_"+key, &info) {
+		return
+	}
+	cache.Del("export_file_" + key)
+	dir := info.Src
+	if dir == "" {
+		dir = exportRoot()
+	}
+	path, err := filepath.Abs(filepath.Join(dir, info.Name))
+	if err == nil && allowedExportPath(path) {
+		_ = os.Remove(path)
 	}
 }
 

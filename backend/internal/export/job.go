@@ -1,7 +1,9 @@
 package export
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,12 +22,14 @@ import (
 )
 
 const (
-	jobQueueKey  = "export_jobs"
-	jobLeasePref = "export_lease_"
-	jobLeaseTTL  = 2 * time.Minute
-	jobMaxAge    = 10 * time.Minute
-	maxFileBytes = 50 << 20
-	workerN      = 2
+	jobQueueKey     = "export_jobs"
+	jobLeasePref    = "export_lease_"
+	tenantLeasePref = "export_tenant_lease_"
+	jobLeaseTTL     = 2 * time.Minute
+	tenantLeaseTTL  = 3 * time.Minute
+	jobMaxAge       = 10 * time.Minute
+	maxFileBytes    = 50 << 20
+	workerN         = 2
 )
 
 type Job struct {
@@ -47,9 +51,11 @@ type Job struct {
 }
 
 type HandlerLookup func(app, controller, action string) gin.HandlerFunc
+type JobAuthorizer func(*gin.Context) bool
 
 var (
 	lookupHandler HandlerLookup
+	jobAuthorizer JobAuthorizer
 	workersOnce   sync.Once
 	stopping      atomic.Bool
 	inFlight      atomic.Int64
@@ -58,6 +64,7 @@ var (
 )
 
 func SetHandlerLookup(fn HandlerLookup) { lookupHandler = fn }
+func SetJobAuthorizer(fn JobAuthorizer) { jobAuthorizer = fn }
 
 func WorkerInFlight() int64 { return inFlight.Load() }
 
@@ -83,7 +90,7 @@ func EnqueueFromRequest(c *gin.Context) bool {
 		ID: id, App: meta.App, Controller: meta.Controller, Action: meta.Action,
 		RawQuery: c.Request.URL.RawQuery, Host: ctxutil.Host(c), Scheme: ctxutil.Scheme(c),
 		Domain: ctxutil.Domain(c), AdminID: owner.AdminID, TenantID: owner.TenantID, TenantSN: meta.TenantSN,
-		Tactics: meta.Tactics, AdminInfo: meta.AdminInfo, Created: time.Now().Unix(),
+		Tactics: meta.Tactics, AdminInfo: exportAdminInfo(meta.AdminInfo), Created: time.Now().Unix(),
 	}
 	saveTask(Task{ID: id, Status: statusPending, AdminID: owner.AdminID, TenantID: owner.TenantID})
 	metrics.AddExport("pending")
@@ -99,6 +106,22 @@ func EnqueueFromRequest(c *gin.Context) bool {
 }
 
 func jobCacheKey(id string) string { return "export_job_" + id }
+
+func exportAdminInfo(info map[string]any) map[string]any {
+	if len(info) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(info))
+	for k, v := range info {
+		switch strings.ToLower(k) {
+		case "token", "password", "login_ip", "expire_time", "refresh_token":
+			continue
+		default:
+			out[k] = v
+		}
+	}
+	return out
+}
 
 func pushJob(id string) bool {
 	if cache.ListPush(jobQueueKey, id) {
@@ -184,6 +207,18 @@ func runQueuedJob(id string) {
 	}
 	unlock := lockTenant(job.TenantID)
 	defer unlock()
+	releaseTenantLease, ok := acquireTenantLease(job)
+	if !ok {
+		time.Sleep(200 * time.Millisecond)
+		_ = pushJob(id)
+		return
+	}
+	retainTenantLease := false
+	defer func() {
+		if !retainTenantLease {
+			releaseTenantLease()
+		}
+	}()
 	inFlight.Add(1)
 	metrics.SetExportInFlight(inFlight.Load())
 	defer func() {
@@ -208,7 +243,9 @@ func runQueuedJob(id string) {
 	if job.RawQuery != "" {
 		path += "?" + job.RawQuery
 	}
-	c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+	jobCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	c.Request = httptest.NewRequest(http.MethodGet, path, nil).WithContext(jobCtx)
 	c.Request.Host = job.Host
 	if job.Scheme != "" {
 		c.Request.Header.Set("X-Forwarded-Proto", job.Scheme)
@@ -223,14 +260,23 @@ func runQueuedJob(id string) {
 		AdminID: job.AdminID, TenantID: job.TenantID, TenantSN: job.TenantSN,
 		Tactics: job.Tactics, AdminInfo: job.AdminInfo,
 	})
-	done := make(chan struct{})
+	if jobAuthorizer != nil && !jobAuthorizer(c) {
+		failJob(job, "导出权限已失效")
+		return
+	}
+	done := make(chan any, 1)
 	go func() {
-		defer close(done)
+		defer func() { done <- recover() }()
 		h(c)
 	}()
 	select {
-	case <-done:
-	case <-time.After(2 * time.Minute):
+	case rec := <-done:
+		if rec != nil {
+			failJob(job, "导出失败")
+			return
+		}
+	case <-jobCtx.Done():
+		retainTenantLease = true
 		failJob(job, "导出执行超时")
 		return
 	}
@@ -249,8 +295,9 @@ func runQueuedJob(id string) {
 }
 
 func failJob(job Job, msg string) {
-	saveTask(Task{ID: job.ID, Status: statusFailed, Msg: msg, AdminID: job.AdminID, TenantID: job.TenantID})
-	metrics.AddExport(statusFailed)
+	if finishTask(Task{ID: job.ID, Status: statusFailed, Msg: msg, AdminID: job.AdminID, TenantID: job.TenantID}) {
+		metrics.AddExport(statusFailed)
+	}
 }
 
 func lockTenant(tid uint) func() {
@@ -258,6 +305,18 @@ func lockTenant(tid uint) func() {
 	mu := v.(*sync.Mutex)
 	mu.Lock()
 	return mu.Unlock
+}
+
+func acquireTenantLease(job Job) (func(), bool) {
+	scope := fmt.Sprintf("tenant:%d", job.TenantID)
+	if job.TenantID == 0 {
+		scope = "platform"
+	}
+	key := tenantLeasePref + scope
+	if !cache.SetNX(key, job.ID, tenantLeaseTTL) {
+		return func() {}, false
+	}
+	return func() { cache.Del(key) }, true
 }
 
 func recoverLoop() {

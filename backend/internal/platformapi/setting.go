@@ -233,7 +233,7 @@ func LogLists(c *gin.Context) {
 	if !ok {
 		return
 	}
-	db := bootstrap.Read().Model(&model.OperationLog{})
+	db := bootstrap.RequestReadDB(c).Model(&model.OperationLog{})
 	if ctxutil.Get(c).App == "tenantapi" {
 		tid := ctxutil.Get(c).TenantID
 		if tid == 0 || !schemacache.HasColumn(bootstrap.DB, model.OperationLog{}.TableName(), "tenant_id") {

@@ -96,4 +96,7 @@ func TestOplogMustPersistWrites(t *testing.T) {
 	if !oplogMustPersist(model.OperationLog{Type: "GET", URL: "/platformapi/login/account"}) {
 		t.Fatal("login URL must persist")
 	}
+	if !oplogMustPersist(model.OperationLog{Type: "GET", Action: "列表-数据导出", URL: "/platformapi/user/lists?export=2"}) {
+		t.Fatal("export audit must persist")
+	}
 }

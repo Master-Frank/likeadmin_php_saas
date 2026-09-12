@@ -25,3 +25,14 @@ func TestAsSeconds(t *testing.T) {
 		t.Fatal("nil")
 	}
 }
+
+func TestReplicaHealthTimeout(t *testing.T) {
+	t.Setenv("LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS", "")
+	if replicaHealthTimeout() != time.Second {
+		t.Fatalf("default %s", replicaHealthTimeout())
+	}
+	t.Setenv("LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS", "2500")
+	if replicaHealthTimeout() != 2500*time.Millisecond {
+		t.Fatalf("configured %s", replicaHealthTimeout())
+	}
+}

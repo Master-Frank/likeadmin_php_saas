@@ -49,9 +49,10 @@ func (w *bodyWriter) Write(b []byte) (int, error) {
 }
 
 var (
-	oplogOnce sync.Once
-	oplogCh   chan model.OperationLog
-	oplogBusy atomic.Int64
+	oplogOnce    sync.Once
+	oplogCh      chan model.OperationLog
+	oplogBusy    atomic.Int64
+	oplogPending atomic.Int64
 )
 
 func oplogAsync() bool {
@@ -97,6 +98,8 @@ func writeOplogBatch(items []model.OperationLog) {
 		}
 		if tx.Create(&item).Error == nil {
 			metrics.AddOplogWritten()
+		} else {
+			metrics.AddOplogFailed()
 		}
 	}
 }
@@ -113,10 +116,12 @@ func enqueueOplog(row model.OperationLog) {
 		oplogCh = make(chan model.OperationLog, 256)
 		go oplogWorker()
 	})
+	oplogPending.Add(1)
 	select {
 	case oplogCh <- row:
 		metrics.AddOplogQueued()
 	default:
+		oplogPending.Add(-1)
 		if oplogMustPersist(row) {
 			writeOplog(row)
 			return
@@ -133,7 +138,9 @@ func oplogWorker() {
 		if len(buf) == 0 {
 			return
 		}
+		n := int64(len(buf))
 		writeOplogBatch(buf)
+		oplogPending.Add(-n)
 		buf = buf[:0]
 	}
 	for {
@@ -158,7 +165,11 @@ func oplogMustPersist(row model.OperationLog) bool {
 		return true
 	}
 	ctrl := strings.ToLower(row.Action)
-	return strings.Contains(ctrl, "登录") || strings.Contains(strings.ToLower(row.URL), "/login/")
+	url := strings.ToLower(row.URL)
+	return strings.Contains(ctrl, "登录") ||
+		strings.Contains(ctrl, "数据导出") ||
+		strings.Contains(url, "/login/") ||
+		strings.Contains(url, "export=2")
 }
 
 // DrainOplog waits for the async queue to empty so SIGTERM does not drop writes.
@@ -168,9 +179,9 @@ func DrainOplog() {
 	}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		if len(oplogCh) == 0 && oplogBusy.Load() == 0 {
+		if oplogPending.Load() == 0 && oplogBusy.Load() == 0 {
 			time.Sleep(20 * time.Millisecond)
-			if len(oplogCh) == 0 && oplogBusy.Load() == 0 {
+			if oplogPending.Load() == 0 && oplogBusy.Load() == 0 {
 				return
 			}
 		}

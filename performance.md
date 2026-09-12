@@ -1,6 +1,6 @@
 # likeadmin-SaaS Go 后端性能现状与待办
 
-> Review 日期：2026-09-11
+> Review 日期：2026-09-12
 > 适用范围：当前 `backend/` Go 后端。PHP `server/` 仅作为静态资源、SQL 和兼容对照源。
 > 本文只记录已经存在的能力和仍需实施的事项。测试通过不等于完成容量验证；仓库目前没有可复现的生产规模压测结果。
 
@@ -20,7 +20,7 @@
 - `backend/internal/httpserver/server.go`
   - 显式 `http.Server`；
   - `ReadHeaderTimeout=10s`、`ReadTimeout=30s`、普通 `WriteTimeout=30s`、导出 `120s`、`IdleTimeout=60s`；
-  - 1 MiB header 上限、50 MiB 应用层请求体上限；
+  - 1 MiB header 上限；普通 JSON 请求体 1 MiB，`/upload/` 路径 50 MiB；
   - 超过上限时 `httpx.Body` 识别 `http.MaxBytesError` 并返回 HTTP 413；
   - SIGINT/SIGTERM 优雅停机；
   - pprof 仅在 `LIKEADMIN_PPROF=1` 时监听 `127.0.0.1:6060`。
@@ -31,6 +31,7 @@
   - 登录、注册、短信、上传、支付预下单、安装和代码生成已有按 IP 的 Redis 计数限流；
   - `INCR`+`EXPIRE` 在 Redis 上通过 Lua 原子执行；
   - `RequireRedisConfigured()` 为真且 Redis 不可用时限流失败关闭。
+  - debug 模式默认不启用限流；需要在 debug 压测限流时显式设置 `LIKEADMIN_RATE_LIMIT=1`。生产 systemd 强制关闭 debug。
 - 生产 systemd 默认 `LIKEADMIN_LISTEN=127.0.0.1:8080`。
 - `X-Real-IP` / `X-Forwarded-Proto` / `X-Forwarded-Host` 仅在 `RemoteAddr` 属于本机或 `LIKEADMIN_TRUSTED_PROXIES` 时读取；忽略客户端 `X-Forwarded-For`。
 - Redis dial/read/write timeout 默认 200ms；多实例或显式要求 Redis 时，启动检查会失败关闭。
@@ -52,8 +53,8 @@
   - operation_log：`(create_time)`、`(tenant_id,create_time,id)`。
 - HTTP 启动默认不再串行 `CREATE INDEX`。安装成功后会执行一次；存量库使用 `bin/think ensure-indexes` 或 `LIKEADMIN_ENSURE_INDEXES=1`。
 - `LIKEADMIN_REQUIRE_DDL=0` 时跳过建索引、加列和 DDL 权限探测。
-- 可配置一个只读副本；探活在后台刷新健康状态，不再在请求 goroutine 里持锁等待 Ping。不可用或复制 lag 超过 `LIKEADMIN_REPLICA_MAX_LAG`（默认 30s）时读请求回落主库。绑定失败会在后台重试。
-- 操作日志列表、部分工作台统计和 tenant 读会使用只读入口；支付、鉴权、配置和写后读仍走主库。
+- 可配置一个只读副本；后台每 5 秒刷新 Ping + replication status，读请求只读取缓存健康状态。不可用、复制 lag 未知（默认 fail-closed）或超过 `LIKEADMIN_REPLICA_MAX_LAG`（默认 30s）时回落主库；`LIKEADMIN_REPLICA_ALLOW_UNKNOWN_LAG=1` 可显式允许无 lag 数据的托管只读端点。健康检查 timeout 由 `LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS` 控制，默认 1000ms。绑定失败会在后台重试。
+- 操作日志列表、平台工作台统计以及显式调用 `tenantdb.UseRead(c)` 的 tenant 查询使用只读入口；租户元数据解析、支付、鉴权、配置和写后读仍走主库。操作日志列表接受复制延迟，不提供 read-your-write。
 - 安装向导已更正：主从只把日志/统计等可延迟读打到从库，导出仍走原列表查询路径。
 
 ### 2.3 热路径缓存
@@ -86,10 +87,10 @@
 - 平台租户列表对共享 `user` 表使用一次 `GROUP BY` 计数；`tactics=1` 分表租户仍逐租户计数，结果缓存 30 秒。
 - 平台端和租户端 `PayWayGet` 先收集 `pay_config_id`，一次 `IN (?)` 查询配置。
 - 文章浏览量使用数据库原子自增。
-- GET/HEAD 和 `download/*` 不安装 response capture writer；非 GET 使用 64 KiB 上限的边写边截断 buffer。
+- GET/HEAD 和 `download/*` 不安装 response capture writer；非 GET 使用 65535 bytes 上限的边写边截断 buffer。
 - 操作日志表有 `tenant_id`；租户日志按 tenant ID 过滤。列尚未升级时租户查询失败关闭（空列表），不会回退到 admin ID + URL 近似隔离。
 - 参数脱敏递归处理 map/list，覆盖 password/secret/private_key/mch_key/access_key_secret 等 credential-shaped key。
-- `LIKEADMIN_OPLOG_ASYNC=1` 时操作日志进入 256 长度的进程内有界队列；GET 队列满可丢弃，POST/登录等审计事件改为同步写入。进程退出前 `DrainOplog`。
+- `LIKEADMIN_OPLOG_ASYNC=1` 时操作日志进入 256 长度的进程内有界队列；普通 GET 队列满可丢弃，POST/登录/`export=2` 审计事件改为同步写入。进程退出前 `DrainOplog`。
 - 普通列表仍返回精确 `count`；没有改成 `has_more` 或估算值。
 - 普通 `page_type=1` 列表 `page_size` 硬限制 500；C 端 `app=api` 的 `page_type=0` 同样限制 500。平台/租户后台 `page_type=0` 仍使用 `page_size_max`（菜单/字典/素材）。`ValidateQuery` 的 25000 报错文案未改。
 
@@ -99,13 +100,16 @@
   - `export_max_pages` 默认 20；
   - `export_max_rows` 默认 10000；
   - 超限直接报错，不再静默截断。
-- task ID 和 file key 使用加密随机数；任务状态保存 Redis 30 分钟。
+- task ID 和 file key 使用加密随机数；任务状态保存 30 分钟，多实例/要求 Redis 时只写 Redis，单实例无 Redis 时可写进程内安全缓存。
 - 下载 URL 按 app 返回 `/platformapi` 或 `/tenantapi`，带 HMAC 签名和过期时间；tenant Vue 轮询 `/tenantapi/download/export`，非成功 `code` 立即失败。
 - 任务轮询绑定创建管理员和租户；文件下载校验签名，或校验已登录 owner。
 - 文件写入 `public_dir` 同级的 `runtime/export`，或 `LIKEADMIN_EXPORT_DIR`；元数据保存相对文件名，不再保存实例绝对路径。
 - 打开并确认文件可读后才删除一次性 file key；下载成功后删除磁盘文件；janitor 按任务 TTL 清理过期文件。
 - `LIKEADMIN_EXPORT_ASYNC=1` 或多实例时，HTTP 只保存导出条件并返回 `task_id`；后台 worker 带租户/管理员上下文重放原列表 handler。
-- worker 使用 Redis 队列 `export_jobs` + `SETNX` 租约；无 Redis 的单实例走进程内队列。租约丢失的 pending 任务会再入队，最多 3 次，超时失败。每租户互斥，单进程 2 个 worker，单任务 2 分钟，文件 50MiB。
+- job 只保存列表所需的管理员身份/角色上下文，不复制 token、login IP、expire time 等 session 字段。
+- worker 使用 Redis 队列 `export_jobs` + `SETNX` 任务租约和 tenant/platform scope 租约；无 Redis 的单实例走进程内队列。租约丢失的 pending 任务会再入队，最多 3 次，超时失败。多实例同租户互斥，单进程 2 个 worker，任务状态超时 2 分钟，文件 50MiB。
+- timeout/ready 使用 `export_finish_*` 原子终态锁，超时后的迟到 worker 不会把 failed 覆盖成 ready；底层列表若未使用 request context，超时后 SQL 仍可能继续到自身数据库超时。
+- worker 执行前重新读取管理员状态和角色并复跑权限判断；已删除、禁用或失去权限的管理员不能继续导出。无 owner 的 task 不允许通过公开轮询接口读取。
 - XLSX sheet 流式写入 zip，不再先拼整张表字符串。
 - 关闭异步时仍走原路径：列表查询在 HTTP goroutine 内完成。
 - worker 内仍最多拼出 10000 行结果；操作日志/管理员/用户等大导出改为 500 行分步 `Find`，避免一次向 MySQL 要整窗。没有为每个列表改成主键游标。导出文件默认不上传到公开 OSS；多实例需挂载同一 `LIKEADMIN_EXPORT_DIR`。
@@ -124,14 +128,14 @@
 
 ### 2.7 当前可观测性与验证
 
-- GORM callback 可以把使用 request context 的 SQL 数量和耗时挂到请求。
+- GORM callback 统计全部 GORM SQL 的总数和耗时；使用 request context 的 SQL 还会挂到该请求。只读操作日志与平台工作台已使用 `RequestReadDB(c)`，tenant 只读入口由 `UseRead(c)` 绑定 context；仍直接使用全局 `bootstrap.DB` 的 handler 只有进程级 SQL 指标，没有请求级 SQL/请求统计。副本故障后同一逻辑查询会记录失败尝试和主库重试两条 SQL。
 - `LIKEADMIN_METRICS=1` 时，`127.0.0.1:9090/metrics` 输出：
   - HTTP 总数、在飞、延迟直方图；
-  - SQL 总数、延迟直方图、`sql.DB.Stats()`；
+  - SQL 总数、延迟直方图、主库与 replica `sql.DB.Stats()`；
   - export pending/ready/failed 与在飞；
-  - oplog queued/dropped/written；
-  - Redis 错误计数、hit/miss/fallback；
-  - replica up/lag；
+  - oplog queued/dropped/written/failed；
+  - Redis 层错误计数、hit/miss/fallback（进程内缓存命中不计作 Redis hit）；
+  - replica configured/up/lag-known/lag；
   - Go heap / goroutine / GC pause；
   - instance 标签。
 - `backend/tests/performance/` 含 query stats 测试和 k6 场景脚本（boot/文章/后台列表/用户中心/写路径/导出）。脚本可重复跑，仓库不包含任何实测 QPS。
@@ -142,7 +146,7 @@
 
 ### P0-2 异步导出
 
-已完成：tenant 轮询、签名下载、打开后再消费 file key、janitor、HTTP 入队、worker 重放列表、相对路径/`LIKEADMIN_EXPORT_DIR`、租约与崩溃再入队、流式 XLSX、每租户互斥和文件大小上限；操作日志/管理员/用户导出分 500 行读取。
+已完成：tenant 轮询、签名下载、打开后再消费 file key、janitor、HTTP 入队、worker 重放列表、相对路径/`LIKEADMIN_EXPORT_DIR`、租约与崩溃再入队、终态竞争保护、流式 XLSX、每租户互斥和文件大小上限；操作日志/管理员/用户导出分 500 行读取。
 
 仍待（需要按列表改 SQL 或运维环境）：
 
@@ -170,7 +174,7 @@
 
 ### P1-2 操作日志
 
-已完成：POST/登录不可静默丢弃；GET 可丢；queued/dropped/written 指标；停机 drain；异步路径 16 条/200ms 批量 INSERT，失败重试 3 次后再逐条写。
+已完成：POST/登录不可静默丢弃；GET 可丢；queued/dropped/written/failed 指标；停机 drain 最多等待 8 秒且会计入 worker 本地批次；异步路径 16 条/200ms 批量 INSERT，失败重试 3 次后再逐条写。
 
 仍待：跨进程持久化 WAL（进程崩溃时未刷盘的批次仍会丢，须持久队列才能避免）。
 

@@ -24,7 +24,10 @@ type memItem struct {
 	exp time.Time
 }
 
-var mem sync.Map
+var (
+	mem   sync.Map
+	memMu sync.Mutex
+)
 
 func memGet(key string) (string, bool) {
 	v, ok := mem.Load(key)
@@ -77,6 +80,8 @@ func isSecurityKey(key string) bool {
 		strings.HasPrefix(key, "export_file_"),
 		strings.HasPrefix(key, "export_job_"),
 		strings.HasPrefix(key, "export_lease_"),
+		strings.HasPrefix(key, "export_tenant_lease_"),
+		strings.HasPrefix(key, "export_finish_"),
 		key == "export_jobs":
 		return true
 	default:
@@ -176,6 +181,8 @@ func SetNX(key, val string, ttl time.Duration) bool {
 	} else if !useMemFallback(key) {
 		return false
 	}
+	memMu.Lock()
+	defer memMu.Unlock()
 	if _, ok := memGet(key); ok {
 		return false
 	}

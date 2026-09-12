@@ -111,17 +111,15 @@ func after(db *gorm.DB) {
 	if db == nil || db.Statement == nil {
 		return
 	}
-	st := FromContext(db.Statement.Context)
-	if st == nil {
-		return
-	}
 	elapsed := time.Duration(0)
 	if v, ok := db.InstanceGet("likeadmin:qstart"); ok {
 		if start, ok := v.(time.Time); ok {
 			elapsed = time.Since(start)
 		}
 	}
-	st.Add(1, elapsed)
+	if st := FromContext(db.Statement.Context); st != nil {
+		st.Add(1, elapsed)
+	}
 	AddSQL()
 	ObserveSQL(elapsed)
 }

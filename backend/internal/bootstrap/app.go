@@ -133,25 +133,11 @@ var replicaHealth struct {
 }
 
 func replicaHealthy() bool {
+	if ReadDB == nil || ReadDB == DB || ReadDB.Config == nil {
+		return false
+	}
 	replicaHealth.mu.Lock()
-	if time.Since(replicaHealth.checked) < 5*time.Second {
-		live := replicaHealth.live
-		replicaHealth.mu.Unlock()
-		return live
-	}
-	replicaHealth.mu.Unlock()
-	live := pingDB(ReadDB)
-	lag, lagOK := replicaLag(ReadDB)
-	if live && lagOK && lag > replicaMaxLag() {
-		live = false
-	}
-	if lagOK {
-		metrics.SetReplicaLag(lag)
-	}
-	metrics.SetReplicaUp(live && ReadDB != nil && ReadDB != DB)
-	replicaHealth.mu.Lock()
-	replicaHealth.checked = time.Now()
-	replicaHealth.live = live
+	live := replicaHealth.live
 	replicaHealth.mu.Unlock()
 	return live
 }
@@ -164,7 +150,7 @@ func pingDB(db *gorm.DB) bool {
 	if err != nil {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout(config.C.Redis.DialTimeoutMs))
+	ctx, cancel := context.WithTimeout(context.Background(), replicaHealthTimeout())
 	defer cancel()
 	return sqlDB.PingContext(ctx) == nil
 }
@@ -172,7 +158,7 @@ func pingDB(db *gorm.DB) bool {
 func resetReplicaHealth() {
 	replicaHealth.mu.Lock()
 	replicaHealth.checked = time.Time{}
-	replicaHealth.live = true
+	replicaHealth.live = false
 	replicaHealth.mu.Unlock()
 }
 
@@ -247,8 +233,10 @@ func bindReadDB(master *gorm.DB) {
 	ReadDB = master
 	list := config.C.Database.ReplicaList()
 	if master == nil || len(list) == 0 {
+		metrics.SetReplicaConfigured(false)
 		return
 	}
+	metrics.SetReplicaConfigured(true)
 	rep := fillReplica(list[0], config.C.Database)
 	db, err := openGorm(rep)
 	if err != nil {
@@ -257,7 +245,12 @@ func bindReadDB(master *gorm.DB) {
 	}
 	metrics.Register(db)
 	registerReplicaFailover(db)
+	if sqlDB, err := db.DB(); err == nil {
+		metrics.SetReplicaSQLDB(sqlDB)
+	}
 	ReadDB = db
+	resetReplicaHealth()
+	go refreshReplicaHealth()
 }
 
 func fillReplica(r, master config.DatabaseConfig) config.DatabaseConfig {

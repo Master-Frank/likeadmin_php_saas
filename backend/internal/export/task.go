@@ -48,6 +48,17 @@ func saveTask(t Task) {
 	cache.Set(taskCacheKey(t.ID), t, taskTTL)
 }
 
+func finishTask(t Task) bool {
+	if t.ID == "" || t.Status == statusPending {
+		return false
+	}
+	if !cache.SetNX("export_finish_"+t.ID, t.Status, taskTTL) {
+		return false
+	}
+	saveTask(t)
+	return true
+}
+
 func loadTask(id string) (Task, bool) {
 	var t Task
 	if id == "" || !cache.GetJSON(taskCacheKey(id), &t) || t.ID == "" {
@@ -97,26 +108,32 @@ var exportSem = make(chan struct{}, maxExportJobs)
 func runExportTask(id, app, domain, fileName string, rows any, fields []Field, owner TaskOwner) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			saveTask(Task{ID: id, Status: statusFailed, Msg: "导出失败", AdminID: owner.AdminID, TenantID: owner.TenantID})
-			metrics.AddExport(statusFailed)
+			if finishTask(Task{ID: id, Status: statusFailed, Msg: "导出失败", AdminID: owner.AdminID, TenantID: owner.TenantID}) {
+				metrics.AddExport(statusFailed)
+			}
 		}
 	}()
 	select {
 	case exportSem <- struct{}{}:
 		defer func() { <-exportSem }()
 	default:
-		saveTask(Task{ID: id, Status: statusFailed, Msg: "导出任务繁忙，请稍后重试", AdminID: owner.AdminID, TenantID: owner.TenantID})
-		metrics.AddExport(statusFailed)
+		if finishTask(Task{ID: id, Status: statusFailed, Msg: "导出任务繁忙，请稍后重试", AdminID: owner.AdminID, TenantID: owner.TenantID}) {
+			metrics.AddExport(statusFailed)
+		}
 		return
 	}
 	key, err := saveOwnedXLSX(fileName, rows, fields, owner)
 	if err != nil {
-		saveTask(Task{ID: id, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID})
-		metrics.AddExport(statusFailed)
+		if finishTask(Task{ID: id, Status: statusFailed, Msg: err.Error(), AdminID: owner.AdminID, TenantID: owner.TenantID}) {
+			metrics.AddExport(statusFailed)
+		}
 		return
 	}
-	saveTask(Task{ID: id, Status: statusReady, URL: downloadURL(app, domain, key, owner), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID})
-	metrics.AddExport(statusReady)
+	if finishTask(Task{ID: id, Status: statusReady, URL: downloadURL(app, domain, key, owner), File: key, AdminID: owner.AdminID, TenantID: owner.TenantID}) {
+		metrics.AddExport(statusReady)
+	} else {
+		discardExport(key)
+	}
 }
 
 func serveTask(c *gin.Context, id string) {
@@ -130,7 +147,7 @@ func serveTask(c *gin.Context, id string) {
 
 func taskOwnerOK(c *gin.Context, t Task) bool {
 	if t.AdminID == 0 && t.TenantID == 0 {
-		return true
+		return false
 	}
 	meta := ctxutil.Get(c)
 	if t.AdminID != 0 && meta.AdminID != t.AdminID {

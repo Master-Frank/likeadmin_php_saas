@@ -26,6 +26,7 @@ func TestWritePrometheus(t *testing.T) {
 		"likeadmin_http_request_duration_seconds",
 		"likeadmin_export_in_flight",
 		"likeadmin_oplog_dropped_total",
+		"likeadmin_oplog_failed_total",
 		"likeadmin_go_goroutines",
 		"likeadmin_redis_hits_total",
 		"likeadmin_redis_misses_total",

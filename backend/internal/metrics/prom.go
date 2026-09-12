@@ -14,29 +14,33 @@ import (
 var httpBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
 var (
-	httpRequests   atomic.Int64
-	httpInFlight   atomic.Int64
-	httpDurCount   atomic.Int64
-	httpDurSumMs   atomic.Int64
-	httpDurBuckets [12]atomic.Int64
-	sqlQueries     atomic.Int64
-	sqlDurCount    atomic.Int64
-	sqlDurSumMs    atomic.Int64
-	sqlDurBuckets  [12]atomic.Int64
-	exportPending  atomic.Int64
-	exportReady    atomic.Int64
-	exportFailed   atomic.Int64
-	exportInFlight atomic.Int64
-	oplogQueued    atomic.Int64
-	oplogDropped   atomic.Int64
-	oplogWritten   atomic.Int64
-	redisErrors    atomic.Int64
-	redisHits      atomic.Int64
-	redisMisses    atomic.Int64
-	redisFallbacks atomic.Int64
-	replicaUp      atomic.Int64
-	replicaLagMs   atomic.Int64
-	sqlDB          atomic.Pointer[sql.DB]
+	httpRequests      atomic.Int64
+	httpInFlight      atomic.Int64
+	httpDurCount      atomic.Int64
+	httpDurSumMs      atomic.Int64
+	httpDurBuckets    [12]atomic.Int64
+	sqlQueries        atomic.Int64
+	sqlDurCount       atomic.Int64
+	sqlDurSumMs       atomic.Int64
+	sqlDurBuckets     [12]atomic.Int64
+	exportPending     atomic.Int64
+	exportReady       atomic.Int64
+	exportFailed      atomic.Int64
+	exportInFlight    atomic.Int64
+	oplogQueued       atomic.Int64
+	oplogDropped      atomic.Int64
+	oplogWritten      atomic.Int64
+	oplogFailed       atomic.Int64
+	redisErrors       atomic.Int64
+	redisHits         atomic.Int64
+	redisMisses       atomic.Int64
+	redisFallbacks    atomic.Int64
+	replicaUp         atomic.Int64
+	replicaConfigured atomic.Int64
+	replicaLagKnown   atomic.Int64
+	replicaLagMs      atomic.Int64
+	sqlDB             atomic.Pointer[sql.DB]
+	replicaSQLDB      atomic.Pointer[sql.DB]
 )
 
 func AddHTTP() { httpRequests.Add(1) }
@@ -57,6 +61,8 @@ func AddOplogDropped() { oplogDropped.Add(1) }
 
 func AddOplogWritten() { oplogWritten.Add(1) }
 
+func AddOplogFailed() { oplogFailed.Add(1) }
+
 func SetExportInFlight(n int64) { exportInFlight.Store(n) }
 
 func SetReplicaUp(up bool) {
@@ -67,11 +73,29 @@ func SetReplicaUp(up bool) {
 	replicaUp.Store(0)
 }
 
+func SetReplicaConfigured(configured bool) {
+	if configured {
+		replicaConfigured.Store(1)
+		return
+	}
+	replicaConfigured.Store(0)
+}
+
+func SetReplicaLagKnown(known bool) {
+	if known {
+		replicaLagKnown.Store(1)
+		return
+	}
+	replicaLagKnown.Store(0)
+}
+
 func SetReplicaLag(d time.Duration) {
 	replicaLagMs.Store(d.Milliseconds())
 }
 
 func SetSQLDB(db *sql.DB) { sqlDB.Store(db) }
+
+func SetReplicaSQLDB(db *sql.DB) { replicaSQLDB.Store(db) }
 
 func HTTPInFlightAdd(n int64) { httpInFlight.Add(n) }
 
@@ -134,6 +158,8 @@ func WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintf(w, "likeadmin_oplog_dropped_total{instance=%q} %d\n", id, oplogDropped.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_oplog_written_total counter\n")
 	fmt.Fprintf(w, "likeadmin_oplog_written_total{instance=%q} %d\n", id, oplogWritten.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_oplog_failed_total counter\n")
+	fmt.Fprintf(w, "likeadmin_oplog_failed_total{instance=%q} %d\n", id, oplogFailed.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_redis_errors_total counter\n")
 	fmt.Fprintf(w, "likeadmin_redis_errors_total{instance=%q} %d\n", id, redisErrors.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_redis_hits_total counter\n")
@@ -144,9 +170,14 @@ func WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintf(w, "likeadmin_redis_fallbacks_total{instance=%q} %d\n", id, redisFallbacks.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_replica_up gauge\n")
 	fmt.Fprintf(w, "likeadmin_replica_up{instance=%q} %d\n", id, replicaUp.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_configured gauge\n")
+	fmt.Fprintf(w, "likeadmin_replica_configured{instance=%q} %d\n", id, replicaConfigured.Load())
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_lag_known gauge\n")
+	fmt.Fprintf(w, "likeadmin_replica_lag_known{instance=%q} %d\n", id, replicaLagKnown.Load())
 	fmt.Fprintf(w, "# TYPE likeadmin_replica_lag_seconds gauge\n")
 	fmt.Fprintf(w, "likeadmin_replica_lag_seconds{instance=%q} %.3f\n", id, float64(replicaLagMs.Load())/1000)
 	writeDBStats(w, id)
+	writeReplicaDBStats(w, id)
 	writeRuntime(w, id)
 }
 
@@ -181,6 +212,24 @@ func writeDBStats(w http.ResponseWriter, id string) {
 	fmt.Fprintf(w, "likeadmin_db_wait_duration_seconds{instance=%q} %.6f\n", id, st.WaitDuration.Seconds())
 	fmt.Fprintf(w, "# TYPE likeadmin_db_max_open_connections gauge\n")
 	fmt.Fprintf(w, "likeadmin_db_max_open_connections{instance=%q} %d\n", id, st.MaxOpenConnections)
+}
+
+func writeReplicaDBStats(w http.ResponseWriter, id string) {
+	db := replicaSQLDB.Load()
+	if db == nil {
+		return
+	}
+	st := db.Stats()
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_db_open_connections gauge\n")
+	fmt.Fprintf(w, "likeadmin_replica_db_open_connections{instance=%q} %d\n", id, st.OpenConnections)
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_db_in_use gauge\n")
+	fmt.Fprintf(w, "likeadmin_replica_db_in_use{instance=%q} %d\n", id, st.InUse)
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_db_idle gauge\n")
+	fmt.Fprintf(w, "likeadmin_replica_db_idle{instance=%q} %d\n", id, st.Idle)
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_db_wait_count_total counter\n")
+	fmt.Fprintf(w, "likeadmin_replica_db_wait_count_total{instance=%q} %d\n", id, st.WaitCount)
+	fmt.Fprintf(w, "# TYPE likeadmin_replica_db_wait_duration_seconds counter\n")
+	fmt.Fprintf(w, "likeadmin_replica_db_wait_duration_seconds{instance=%q} %.6f\n", id, st.WaitDuration.Seconds())
 }
 
 func writeRuntime(w http.ResponseWriter, id string) {

@@ -369,6 +369,20 @@ func TestTaskOwnerMismatchHidden(t *testing.T) {
 	}
 }
 
+func TestTaskWithoutOwnerIsNotPollable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := newTaskID()
+	saveTask(Task{ID: id, Status: statusReady})
+	t.Cleanup(func() { cache.Del(taskCacheKey(id)) })
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/platformapi/download/export?task="+id, nil)
+	serveTask(c, id)
+	if !strings.Contains(w.Body.String(), "导出任务不存在") {
+		t.Fatalf("%s", w.Body.String())
+	}
+}
+
 func TestNewTaskIDRandom(t *testing.T) {
 	a, b := newTaskID(), newTaskID()
 	if a == b || len(a) < 16 {

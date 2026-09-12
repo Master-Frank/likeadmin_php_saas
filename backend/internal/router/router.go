@@ -17,6 +17,7 @@ import (
 	"likeadmin/backend/internal/install"
 	"likeadmin/backend/internal/metrics"
 	"likeadmin/backend/internal/middleware"
+	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/openapi"
 	"likeadmin/backend/internal/pcshop"
 	"likeadmin/backend/internal/platformapi"
@@ -60,6 +61,7 @@ func New() *gin.Engine {
 			return nil
 		}
 	})
+	export.SetJobAuthorizer(authorizeExportJob)
 	export.Start()
 
 	r.Any("/platformapi/*path", dispatch("platformapi", plat, notNeed["platformapi"]))
@@ -258,6 +260,46 @@ func lookup(routes map[string]Handler, key string) Handler {
 		}
 	}
 	return nil
+}
+
+func authorizeExportJob(c *gin.Context) bool {
+	meta := ctxutil.Get(c)
+	switch meta.App {
+	case "platformapi":
+		if bootstrap.DB == nil || meta.AdminID == 0 {
+			return false
+		}
+		var admin model.Admin
+		if bootstrap.DB.Where("id = ? AND disable = 0 AND delete_time IS NULL", meta.AdminID).First(&admin).Error != nil {
+			return false
+		}
+		var roles []uint
+		bootstrap.DB.Model(&model.AdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roles)
+		meta.AdminInfo = map[string]any{
+			"admin_id": admin.ID, "root": admin.Root, "name": admin.Name,
+			"account": admin.Account, "role_id": roles, "login_ip": ctxutil.ClientIP(c),
+		}
+	case "tenantapi":
+		db := tenantdb.Use(c)
+		if db == nil || meta.AdminID == 0 || meta.TenantID == 0 {
+			return false
+		}
+		var admin model.TenantAdmin
+		if db.Where("id = ? AND tenant_id = ? AND disable = 0 AND delete_time IS NULL", meta.AdminID, meta.TenantID).First(&admin).Error != nil {
+			return false
+		}
+		var roles []uint
+		db.Model(&model.TenantAdminRole{}).Where("admin_id = ?", admin.ID).Pluck("role_id", &roles)
+		meta.AdminInfo = map[string]any{
+			"admin_id": admin.ID, "tenant_id": admin.TenantID, "root": admin.Root,
+			"name": admin.Name, "account": admin.Account, "role_id": roles,
+			"login_ip": ctxutil.ClientIP(c),
+		}
+	default:
+		return true
+	}
+	middleware.Auth()(c)
+	return !c.IsAborted()
 }
 
 func parsePath(p string) (ctrl, action string) {

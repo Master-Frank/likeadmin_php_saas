@@ -1,6 +1,9 @@
 package dbindex
 
 import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -58,8 +61,14 @@ func EnsurePerfIndexes(db *gorm.DB) {
 	if os.Getenv("LIKEADMIN_REQUIRE_DDL") == "0" {
 		return
 	}
-	ensureOperationLogTenantID(db)
 	online := supportsOnlineDDL(db)
+	if !withIndexLock(db, func() { ensurePerfIndexes(db, online) }) {
+		log.Printf("perf indexes skipped: another migration holds the advisory lock")
+	}
+}
+
+func ensurePerfIndexes(db *gorm.DB, online bool) {
+	ensureOperationLogTenantID(db, online)
 	for _, s := range specs() {
 		tables := []string{s.table}
 		if s.shards {
@@ -89,6 +98,44 @@ func EnsurePerfIndexes(db *gorm.DB) {
 			}
 		}
 	}
+}
+
+func withIndexLock(db *gorm.DB, fn func()) bool {
+	if db == nil || fn == nil {
+		return false
+	}
+	if db.Dialector == nil || db.Dialector.Name() != "mysql" {
+		fn()
+		return true
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	rawName := "likeadmin:" + config.C.Database.Database + ":ensure-indexes"
+	if len(rawName) > 64 {
+		sum := fmt.Sprintf("%x", sha256.Sum256([]byte(rawName)))
+		rawName = "likeadmin:" + sum[:54]
+	}
+	var acquired sql.NullInt64
+	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, 0)", rawName).Scan(&acquired); err != nil ||
+		!acquired.Valid || acquired.Int64 != 1 {
+		return false
+	}
+	defer func() {
+		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer releaseCancel()
+		_, _ = conn.ExecContext(releaseCtx, "SELECT RELEASE_LOCK(?)", rawName)
+	}()
+	fn()
+	return true
 }
 
 func lockNote() string {
@@ -236,13 +283,23 @@ func WriteStatus(items []Item, runErr error) {
 	_ = os.WriteFile(path, b, 0o644)
 }
 
-func ensureOperationLogTenantID(db *gorm.DB) {
+func ensureOperationLogTenantID(db *gorm.DB, online bool) {
 	table := config.Prefix() + "operation_log"
 	if !tableExists(db, table) || hasColumn(db, table, "tenant_id") {
 		return
 	}
-	sql := "ALTER TABLE `" + table + "` ADD COLUMN `tenant_id` int NOT NULL DEFAULT 0 COMMENT '租户ID'"
-	if err := db.Exec(sql).Error; err != nil {
+	stmt := "ALTER TABLE `" + table + "` ADD COLUMN `tenant_id` int NOT NULL DEFAULT 0 COMMENT '租户ID'"
+	if online {
+		stmt += ", ALGORITHM=INPLACE, LOCK=NONE"
+	}
+	if err := db.Exec(stmt).Error; err != nil {
+		if online {
+			err = db.Exec("ALTER TABLE `" + table + "` ADD COLUMN `tenant_id` int NOT NULL DEFAULT 0 COMMENT '租户ID'").Error
+		}
+		if err == nil {
+			schemacache.Invalidate()
+			return
+		}
 		log.Printf("operation_log tenant_id: %v", err)
 		return
 	}

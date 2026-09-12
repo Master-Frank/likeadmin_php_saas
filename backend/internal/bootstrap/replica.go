@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"likeadmin/backend/internal/config"
+	"likeadmin/backend/internal/metrics"
 
 	"gorm.io/gorm"
 )
 
 var replicaRetryOnce sync.Once
+var replicaProbeMu sync.Mutex
 
 func replicaMaxLag() time.Duration {
 	s := strings.TrimSpace(os.Getenv("LIKEADMIN_REPLICA_MAX_LAG"))
@@ -34,7 +36,7 @@ func startReplicaRetry() {
 	}
 	replicaRetryOnce.Do(func() {
 		go func() {
-			ticker := time.NewTicker(15 * time.Second)
+			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
 				if len(config.C.Database.ReplicaList()) == 0 || DB == nil {
@@ -42,10 +44,58 @@ func startReplicaRetry() {
 				}
 				if ReadDB == nil || ReadDB == DB {
 					bindReadDB(DB)
+					continue
 				}
+				refreshReplicaHealth()
 			}
 		}()
 	})
+}
+
+func refreshReplicaHealth() {
+	replicaProbeMu.Lock()
+	defer replicaProbeMu.Unlock()
+	rep := ReadDB
+	if rep == nil || rep == DB {
+		metrics.SetReplicaConfigured(len(config.C.Database.ReplicaList()) > 0)
+		metrics.SetReplicaUp(false)
+		return
+	}
+	live := pingDB(rep)
+	lag, lagOK := replicaLag(rep)
+	if !lagOK {
+		metrics.SetReplicaLagKnown(false)
+		if os.Getenv("LIKEADMIN_REPLICA_ALLOW_UNKNOWN_LAG") != "1" {
+			live = false
+		}
+	} else {
+		metrics.SetReplicaLagKnown(true)
+		metrics.SetReplicaLag(lag)
+		if lag > replicaMaxLag() {
+			live = false
+		}
+	}
+	replicaHealth.mu.Lock()
+	if ReadDB == rep {
+		replicaHealth.checked = time.Now()
+		replicaHealth.live = live
+	}
+	replicaHealth.mu.Unlock()
+	metrics.SetReplicaConfigured(true)
+	metrics.SetReplicaUp(live)
+}
+
+func replicaHealthTimeout() time.Duration {
+	const defaultTimeout = time.Second
+	raw := strings.TrimSpace(os.Getenv("LIKEADMIN_REPLICA_HEALTH_TIMEOUT_MS"))
+	if raw == "" {
+		return defaultTimeout
+	}
+	ms, err := strconv.Atoi(raw)
+	if err != nil || ms <= 0 {
+		return defaultTimeout
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 func replicaLag(db *gorm.DB) (time.Duration, bool) {
@@ -56,7 +106,7 @@ func replicaLag(db *gorm.DB) (time.Duration, bool) {
 	if err != nil {
 		return 0, false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), replicaHealthTimeout())
 	defer cancel()
 	for _, q := range []string{"SHOW REPLICA STATUS", "SHOW SLAVE STATUS"} {
 		d, ok := scanReplicaLag(ctx, sqlDB, q)
