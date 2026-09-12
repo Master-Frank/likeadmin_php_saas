@@ -87,6 +87,9 @@ func setForwarded(req *http.Request, host string) {
 }
 
 func goAPI(path string) bool {
+	if path == "/" {
+		return true
+	}
 	path = canonicalAPIPath(path)
 	for _, p := range []string{"/platformapi/", "/tenantapi/", "/api/", "/crontab", "/install"} {
 		if strings.HasPrefix(path, p) || path == strings.TrimSuffix(p, "/") {

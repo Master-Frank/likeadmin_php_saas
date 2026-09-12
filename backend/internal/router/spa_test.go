@@ -143,3 +143,63 @@ func TestRedirectToPCApp(t *testing.T) {
 		t.Fatalf("location %q", loc)
 	}
 }
+
+func TestSiteRootRedirectsPlatformHost(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "platform"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "platform", "index.html"), []byte("platform-spa"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldPub, oldHost := config.C.App.PublicDir, config.C.Project.HTTPHost
+	t.Cleanup(func() {
+		config.C.App.PublicDir = oldPub
+		config.C.Project.HTTPHost = oldHost
+	})
+	config.C.App.PublicDir = dir
+	config.C.Project.HTTPHost = "demo.gosaas.cn"
+
+	hit := func(host string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+		c.Request.Host = host
+		siteRoot(c)
+		return w
+	}
+
+	plat := hit("demo.gosaas.cn")
+	if plat.Code != http.StatusFound || plat.Header().Get("Location") != "/platform/" {
+		t.Fatalf("platform host: %d %s", plat.Code, plat.Header().Get("Location"))
+	}
+
+	tenant := hit("shop.gosaas.cn")
+	if tenant.Code != http.StatusOK || !strings.Contains(tenant.Body.String(), "platform-spa") {
+		t.Fatalf("tenant host should serve platform index: %d %s", tenant.Code, tenant.Body.String())
+	}
+
+	config.C.Project.HTTPHost = ""
+	empty := hit("anything.example")
+	if empty.Code != http.StatusFound || empty.Header().Get("Location") != "/platform/" {
+		t.Fatalf("empty http_host: %d %s", empty.Code, empty.Header().Get("Location"))
+	}
+}
+
+func TestNginxRootProxiesToGo(t *testing.T) {
+	for _, conf := range []string{
+		"/workspace/backend/deploy/nginx.production.conf",
+		"/workspace/backend/deploy/nginx.prod.conf",
+		"/workspace/backend/deploy/nginx-strangler.conf",
+	} {
+		b, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		txt := string(b)
+		if !strings.Contains(txt, "location = /") {
+			t.Fatalf("%s missing location = / so nginx would serve public/index.html", conf)
+		}
+	}
+}

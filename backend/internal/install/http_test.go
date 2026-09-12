@@ -48,11 +48,14 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/install", nil)
 	Wizard(c)
-	if !strings.Contains(w.Body.String(), "开始安装") {
-		t.Fatalf("expected form: %s", w.Body.String())
+	body := w.Body.String()
+	for _, want := range []string{"开始安装", "许可协议", "环境监测", "参数配置", "单实例", "主从库"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %q in wizard: %s", want, body[:min(len(body), 400)])
+		}
 	}
-	if !strings.Contains(w.Body.String(), "单实例") || !strings.Contains(w.Body.String(), "主从库") {
-		t.Fatalf("wizard should offer topology choices: %s", w.Body.String())
+	if strings.Contains(body, "layui") {
+		t.Fatal("Go wizard must not ship the PHP layui page")
 	}
 
 	w2 := httptest.NewRecorder()
@@ -61,6 +64,30 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	Wizard(c2)
 	if !strings.Contains(w2.Body.String(), "开始安装") {
 		t.Fatalf("php alias should serve the Go wizard: %s", w2.Body.String())
+	}
+
+	eng := gin.New()
+	eng.GET("/install/assets/*filepath", Asset)
+	css := httptest.NewRecorder()
+	eng.ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/install/assets/mounted.css", nil))
+	if css.Code != 200 || !strings.Contains(css.Body.String(), "--theme") {
+		t.Fatalf("mounted.css: status=%d body=%s", css.Code, css.Body.String()[:min(css.Body.Len(), 200)])
+	}
+	for _, url := range []string{
+		"/install/assets/slogn.png",
+		"/install/assets/icon_mountSuccess.png",
+		"/install/assets/favicon.ico",
+	} {
+		aw := httptest.NewRecorder()
+		eng.ServeHTTP(aw, httptest.NewRequest(http.MethodGet, url, nil))
+		if aw.Code != 200 || aw.Body.Len() < 100 {
+			t.Fatalf("%s status=%d len=%d", url, aw.Code, aw.Body.Len())
+		}
+	}
+	denied := httptest.NewRecorder()
+	eng.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/install/assets/../wizard.go", nil))
+	if denied.Code == 200 {
+		t.Fatal("asset handler must not escape wizardassets")
 	}
 }
 
