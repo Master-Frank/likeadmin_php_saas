@@ -19,6 +19,8 @@ go run ./cmd/api
 
 生产索引请用 `bin/think ensure-indexes`（或 `LIKEADMIN_ENSURE_INDEXES=1`）显式创建，HTTP 启动默认不再串行 `CREATE INDEX`。`LIKEADMIN_REQUIRE_INDEXES=1` 可在缺索引时拒绝启动；`bin/think explain-indexes` 输出首批查询形状的 `EXPLAIN`，仅在明确设置 `LIKEADMIN_EXPLAIN_ANALYZE=1` 时执行 `EXPLAIN ANALYZE`。
 
+2 核 2GB 且 MySQL 同机时，不要用满默认 `max_open_conns=50`。建议 `LIKEADMIN_DB_MAX_OPEN=15`、`LIKEADMIN_DB_MAX_IDLE=5`，并开启 `LIKEADMIN_EXPORT_ASYNC=1`。规划并发见仓库根目录 [performance.md](../performance.md) 第 2.8 节（规划口径，不是实测 QPS）。
+
 平台端入口校验 `project.http_host`：与浏览器地址栏主机不一致时会返回「平台端入口域名错误」。用 `http://127.0.0.1:8080/platform/` 访问时，该项应写成 `127.0.0.1:8080`；不限域名则置空。
 
 PC 端入口是 `/pc/`。装修轮播等店铺链接沿用 uniapp 路径（如 `/pages/news/news`），Go 会 302 到对应 PC 页面（资讯中心 `/pc/information`），**不会**进 H5 `/mobile/`。H5 请直接访问 `/mobile/`。
