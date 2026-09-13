@@ -1191,20 +1191,16 @@ func readTenantSQL(name string) ([]byte, error) {
 }
 
 func randomSN() string {
-	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-	for {
-		b := make([]byte, 8)
-		n := util.NowUnix()
-		for i := 0; i < 8; i++ {
-			b[i] = chars[int(n+int64(i*17))%len(chars)]
-			n = n*1103515245 + 12345
+	// PHP Tenant::createUserSn uses mt_rand over [a-z0-9]. The previous
+	// unix-seeded LCG overflowed int64; Go's % keeps the sign, so
+	// chars[negative] panicked and gin.Recovery returned an empty 500.
+	return util.CreateTenantSN(func(sn string) bool {
+		if bootstrap.DB == nil {
+			return false
 		}
-		sn := string(b)
 		var t model.Tenant
-		if bootstrap.DB.Where("sn = ?", sn).First(&t).Error != nil {
-			return sn
-		}
-	}
+		return bootstrap.DB.Where("sn = ?", sn).First(&t).Error == nil
+	})
 }
 
 func tenantUserCounts(tenants []model.Tenant) map[uint]int64 {

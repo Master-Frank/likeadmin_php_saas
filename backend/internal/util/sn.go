@@ -34,6 +34,36 @@ func CreateUserSN(exists func(int) bool) int {
 	return int(time.Now().Unix()%90000000) + 10000000
 }
 
+const tenantSNChars = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+// CreateTenantSN mirrors PHP Tenant::createUserSn: prefix + 8 chars from [a-z0-9].
+// PHP uses mt_rand(0, 35). Do not derive the index from a unix-seeded LCG:
+// Go's remainder keeps the sign, so int64 overflow panics on chars[negative].
+func CreateTenantSN(exists func(string) bool) string {
+	return createTenantSN(exists, "", 8)
+}
+
+func createTenantSN(exists func(string) bool, prefix string, length int) string {
+	if length <= 0 {
+		length = 8
+	}
+	for i := 0; i < 64; i++ {
+		sn := prefix + randCharset(tenantSNChars, length)
+		if exists == nil || !exists(sn) {
+			return sn
+		}
+	}
+	return prefix + randCharset(tenantSNChars, length)
+}
+
+func randCharset(chars string, n int) string {
+	b := make([]byte, n)
+	for i := 0; i < n; i++ {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
+}
+
 func ZeroUnixPtr() *int64 {
 	z := int64(0)
 	return &z
