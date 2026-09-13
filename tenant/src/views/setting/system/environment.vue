@@ -12,7 +12,7 @@
         </el-card>
 
         <el-card shadow="never" class="!border-none mt-4">
-            <div>PHP环境要求</div>
+            <div>运行环境要求</div>
             <div class="mt-4">
                 <el-table :data="info.env">
                     <el-table-column prop="option" label="选项"></el-table-column>
@@ -60,7 +60,7 @@ import { systemInfo } from '@/api/setting/system'
 
 const info = reactive({
     server: [], // 服务器信息
-    env: [], // PHP环境要求
+    env: [], // 运行环境要求
     auth: [] // 目录权限
 })
 

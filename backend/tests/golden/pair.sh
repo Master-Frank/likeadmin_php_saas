@@ -3903,7 +3903,7 @@ fi
 go_ie="$(curl -sS "$GO/install/env")"
 ie_names="$(python3 -c 'import json,sys; print(",".join(i.get("name","") for i in ((json.load(sys.stdin).get("data") or {}).get("items") or [])))' <<<"$go_ie")"
 echo "install_env go_code=$(jcode <<<"$go_ie") go_ok=$(jget data.ok <<<"$go_ie") names=$ie_names"
-if [[ "$(jcode <<<"$go_ie")" != "1" || "$ie_names" != *"public/uploads"* || "$ie_names" != *"public/mobile"* || "$ie_names" != *".env"* ]]; then
+if [[ "$(jcode <<<"$go_ie")" != "1" || "$ie_names" != *"public/uploads"* || "$ie_names" != *"public/mobile"* || "$ie_names" != *"config.yaml"* ]]; then
   echo "  go_ie=${go_ie:0:400}"
   fail=$((fail + 1))
 fi

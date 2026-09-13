@@ -44,22 +44,19 @@ func TestProbeDir(t *testing.T) {
 
 func TestProbeWritableFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-	if err := os.WriteFile(path, []byte("x=1\n"), 0644); err != nil {
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("app:\n  debug: true\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	item := probeWritableFile(".env", path)
+	item := probeWritableFile("config.yaml", path)
 	if item.Status != "ok" {
 		t.Fatalf("%+v", item)
 	}
-	missing := probeWritableFile(".env", filepath.Join(dir, "no-such.env"))
-	if missing.Status != "ok" {
-		t.Fatalf("missing .env in writable dir should be created: %+v", missing)
+	missing := probeWritableFile("config.yaml", filepath.Join(dir, "missing.yaml"))
+	if missing.Status != "fail" {
+		t.Fatalf("missing yaml must fail: %+v", missing)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "no-such.env")); err != nil {
-		t.Fatalf("makeEnv should create file: %v", err)
-	}
-	empty := probeWritableFile(".env", "")
+	empty := probeWritableFile("config.yaml", "")
 	if empty.Status != "fail" || empty.Value != "未配置" {
 		t.Fatalf("%+v", empty)
 	}
@@ -90,7 +87,7 @@ func TestCollectEnvServerInfo(t *testing.T) {
 	for _, it := range items {
 		names[it.Name] = it.Value
 	}
-	for _, name := range []string{"服务器操作系统", "web服务器环境", "程序安装目录", "上传限制", "public/uploads", "public/mobile", ".env"} {
+	for _, name := range []string{"服务器操作系统", "web服务器环境", "程序安装目录", "上传限制", "public/uploads", "public/mobile", "config.yaml"} {
 		if _, ok := names[name]; !ok {
 			t.Fatalf("missing %s in %+v", name, names)
 		}
@@ -125,13 +122,19 @@ func TestEnvBlockingWritableTree(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	oldPub, oldLock := config.C.App.PublicDir, config.C.App.InstallLock
+	yamlPath := filepath.Join(root, "config.yaml")
+	if err := os.WriteFile(yamlPath, []byte("app:\n  debug: true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldPub, oldLock, oldPath := config.C.App.PublicDir, config.C.App.InstallLock, config.Path
 	t.Cleanup(func() {
 		config.C.App.PublicDir = oldPub
 		config.C.App.InstallLock = oldLock
+		config.Path = oldPath
 	})
 	config.C.App.PublicDir = pub
 	config.C.App.InstallLock = filepath.Join(cfgDir, "install.lock")
+	config.Path = yamlPath
 	if msg := EnvBlocking(); msg != "" {
 		t.Fatalf("writable tree: %s", msg)
 	}

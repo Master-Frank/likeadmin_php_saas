@@ -67,5 +67,5 @@ ThinkPHP 动作 `FooController::bar` 对应 HTTP `/platformapi/foo/bar`、`/tena
 
 - 接口前缀、JSON `{code,show,msg,data}`、`token` Header、密码算法与历史 PHP 一致。
 - 管理员 salt 为 `likeadmin`（`project.unique_identification`）。`delete_time` 用 `NULL` 不是 `0`。
-- 不要 `exec PHP`。不要提交 `.env`、`install.lock`、对拍生成的 `pair_*` Vue。
+- 不要 `exec PHP`。不要提交 `install.lock`、对拍生成的 `pair_*` Vue。运行时配置只维护 `backend/configs/config.yaml`，不要再写 PHP `.env`。
 - 对拍口径与模块表：`backend/tests/golden/README.md`。Go 运行：`backend/README.md`。

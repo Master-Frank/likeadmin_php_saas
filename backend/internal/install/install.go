@@ -98,12 +98,11 @@ func Run(c *gin.Context) {
 	if lockPath == "" {
 		lockPath = filepath.Join(config.C.App.PublicDir, "../config/install.lock")
 	}
-	envPath := filepath.Join(filepath.Dir(lockPath), "..", ".env")
 	res, err := Apply(Options{
 		Host: host, Port: port, User: user, Password: pass, Name: dbName, Prefix: prefix,
 		ClearDB: clearDB, ImportTest: importTest, DeferLock: true,
 		AdminUser: adminUser, AdminPassword: adminPass,
-		PublicDir: config.C.App.PublicDir, LockPath: lockPath, EnvPath: envPath,
+		PublicDir: config.C.App.PublicDir, LockPath: lockPath,
 		GoConfigPath: config.Path, HTTPHost: ctxutilHost(c),
 		DeployMode: deployMode, DBMode: dbMode,
 		RedisHost: pick(p, "redis_host"), RedisPassword: pick(p, "redis_password"),
@@ -135,7 +134,7 @@ func Run(c *gin.Context) {
 		response.Fail(c, err.Error())
 		return
 	}
-	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "env": res.Env})
+	response.Success(c, "安装成功", gin.H{"lock": res.Lock, "imported": res.Imported, "config": res.Config})
 }
 
 func firstNonEmpty(p map[string]any, keys ...string) string {

@@ -26,8 +26,7 @@ type Options struct {
 	ClearDB, ImportTest, SkipSQL                       bool
 	DeferLock                                          bool
 	AdminUser, AdminPassword                           string
-	PublicDir, LockPath, EnvPath                       string
-	GoConfigPath, HTTPHost                             string
+	PublicDir, LockPath, GoConfigPath, HTTPHost        string
 	Now                                                int64
 	DeployMode, DBMode                                 string
 	RedisHost, RedisPassword                           string
@@ -40,13 +39,13 @@ type Options struct {
 // Result is what POST /install returns in data.
 type Result struct {
 	Lock     string
-	Env      string
+	Config   string
 	Imported int
 	Salt     string
 }
 
 // Apply creates the database, imports like.sql, seeds the root admin, and writes
-// env/lock. It never touches protected pairing databases.
+// config.yaml / install.lock. It never touches protected pairing databases.
 func Apply(opt Options) (*Result, error) {
 	if msg := CheckParams(map[string]any{
 		"prefix": opt.Prefix, "admin_user": opt.AdminUser,
@@ -153,18 +152,9 @@ func Apply(opt Options) (*Result, error) {
 	if lock == "" && opt.PublicDir != "" {
 		lock = filepath.Join(opt.PublicDir, "../config/install.lock")
 	}
-	envPath := opt.EnvPath
-	if envPath == "" && lock != "" {
-		envPath = filepath.Join(filepath.Dir(lock), "..", ".env")
-	}
-	if envPath != "" {
-		if err := WriteEnv(envPath, opt.Host, opt.Name, opt.User, opt.Password, opt.Port, opt.Prefix, opt.HTTPHost, salt); err != nil {
-			return nil, fmt.Errorf("写入环境配置失败：%w", err)
-		}
-	}
 	if opt.GoConfigPath != "" {
 		if err := WriteGoConfigOpts(opt.goWrite(salt)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("写入环境配置失败：%w", err)
 		}
 	}
 	if lock != "" && !opt.DeferLock {
@@ -178,7 +168,7 @@ func Apply(opt Options) (*Result, error) {
 	if sqlDB, err := db.DB(); err == nil {
 		_ = sqlDB.Close()
 	}
-	return &Result{Lock: lock, Env: envPath, Imported: imported, Salt: salt}, nil
+	return &Result{Lock: lock, Config: opt.GoConfigPath, Imported: imported, Salt: salt}, nil
 }
 
 func WriteLock(lock string) error {

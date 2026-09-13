@@ -56,7 +56,7 @@ func CollectEnv() []envItem {
 	out = append(out, probeDir("public/admin", publicSub("admin")))
 	out = append(out, probeDir("public/mobile", publicSub("mobile")))
 	out = append(out, probeDir("config", configDir()))
-	out = append(out, probeWritableFile(".env", envFilePath()))
+	out = append(out, probeWritableFile("config.yaml", goConfigPath()))
 	out = append(out, probeDir("临时目录", os.TempDir()))
 	out = append(out, probeDiskSpace())
 	out = append(out, probeUploadLimit())
@@ -154,16 +154,8 @@ func probeWritableFile(name, path string) envItem {
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		// PHP install.php calls YxEnv::makeEnv before checkDirWrite('.env').
-		if mkErr := makeEnv(path); mkErr != nil {
-			item.Value = mkErr.Error()
-			return item
-		}
-		info, err = os.Stat(path)
-		if err != nil {
-			item.Value = "文件不存在"
-			return item
-		}
+		item.Value = "文件不存在"
+		return item
 	}
 	if info.IsDir() {
 		item.Value = "不是文件"
@@ -214,14 +206,8 @@ func publicSub(name string) string {
 	return filepath.Join("public", name)
 }
 
-func envFilePath() string {
-	if config.C.App.InstallLock != "" {
-		return filepath.Join(filepath.Dir(config.C.App.InstallLock), "..", ".env")
-	}
-	if config.C.App.PublicDir != "" {
-		return filepath.Join(config.C.App.PublicDir, "..", ".env")
-	}
-	return ".env"
+func goConfigPath() string {
+	return strings.TrimSpace(config.Path)
 }
 
 func runtimeDir() string {
@@ -241,12 +227,12 @@ func configDir() string {
 	return "config"
 }
 
-// EnvBlocking returns the first PHP-wizard directory/file that is not writable.
-// public/ and public/mobile are Go extras and do not block install.
+// EnvBlocking returns the first required directory/file that is not writable.
+// public/ and public/mobile are extra probes and do not block install.
 func EnvBlocking() string {
 	need := map[string]bool{
 		"runtime": true, "public/uploads": true, "public/platform": true,
-		"public/admin": true, "config": true, ".env": true,
+		"public/admin": true, "config": true, "config.yaml": true,
 	}
 	for _, it := range CollectEnv() {
 		if need[it.Name] && it.Status != "ok" {

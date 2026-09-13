@@ -21,7 +21,6 @@ bin-release/
 dump.rdb
 
 # Install / runtime (never commit)
-.env
 /.env
 /config/install.lock
 /runtime/*
@@ -29,6 +28,5 @@ dump.rdb
 /upgrade/
 /public/uploads/*
 !/public/uploads/index.html
-backend/internal/install/.env
 backend/runtime/
 *.log

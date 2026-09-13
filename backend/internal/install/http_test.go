@@ -57,6 +57,12 @@ func TestWizardServesFormWhenUnlocked(t *testing.T) {
 	if strings.Contains(body, "layui") {
 		t.Fatal("Go wizard must not ship the PHP layui page")
 	}
+	if strings.Contains(body, ".env文件") {
+		t.Fatal("wizard must not probe PHP .env")
+	}
+	if !strings.Contains(body, "config.yaml") {
+		t.Fatal("wizard should probe config.yaml")
+	}
 
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
@@ -214,9 +220,12 @@ func TestInstallHTTPFreshDatabase(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "attacker.yaml")); err == nil {
 		t.Fatal("HTTP installer must ignore caller-controlled go_config_path")
 	}
-	env, err := os.ReadFile(filepath.Join(root, ".env"))
-	if err != nil || !strings.Contains(string(env), smokeDB) {
-		t.Fatalf("env %s err=%v", env, err)
+	if _, err := os.Stat(filepath.Join(root, ".env")); err == nil {
+		t.Fatal("installer must not write PHP .env")
+	}
+	yamlBody, err := os.ReadFile(goCfg)
+	if err != nil || !strings.Contains(string(yamlBody), smokeDB) {
+		t.Fatalf("config.yaml %s err=%v", yamlBody, err)
 	}
 
 	w2 := httptest.NewRecorder()

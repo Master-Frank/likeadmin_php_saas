@@ -57,7 +57,6 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		t.Fatal(err)
 	}
 	lock := filepath.Join(dir, "config", "install.lock")
-	envPath := filepath.Join(dir, ".env")
 	goCfg := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(goCfg, []byte("database:\n  hostname: old\n  prefix: la_\nproject:\n  unique_identification: likeadmin\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -78,7 +77,7 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		Name: smokeDB, Prefix: "xx_",
 		AdminUser: "smokeadmin", AdminPassword: "likeadmin",
 		PublicDir: filepath.Join(dir, "public"),
-		LockPath:  lock, EnvPath: envPath, GoConfigPath: goCfg,
+		LockPath:  lock, GoConfigPath: goCfg,
 		HTTPHost: "install.likeadmin.test", Now: ts,
 	})
 	if err != nil {
@@ -90,22 +89,8 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 	if st, err := os.Stat(lock); err != nil || st.Size() != 0 {
 		t.Fatalf("lock should be empty touch file: %v size=%v", err, st)
 	}
-	envBody, err := os.ReadFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	env := string(envBody)
-	for _, want := range []string{
-		`DATABASE = "` + smokeDB + `"`,
-		`PREFIX = "xx_"`,
-		`USERNAME = "likeadmin"`,
-		`HOSTNAME = "127.0.0.1"`,
-		`UNIQUE_IDENTIFICATION = "` + res.Salt + `"`,
-		`HTTP_HOST = "install.likeadmin.test"`,
-	} {
-		if !strings.Contains(env, want) {
-			t.Fatalf("env missing %s\n%s", want, env)
-		}
+	if _, err := os.Stat(filepath.Join(dir, ".env")); err == nil {
+		t.Fatal("Apply must not write PHP .env")
 	}
 	goBody, err := os.ReadFile(goCfg)
 	if err != nil {
@@ -154,7 +139,6 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		AdminUser: "smokeadmin", AdminPassword: "likeadmin",
 		PublicDir: filepath.Join(dir, "public"),
 		LockPath:  filepath.Join(dir, "again.lock"),
-		EnvPath:   filepath.Join(dir, "again.env"),
 	})
 	if err == nil || !strings.Contains(err.Error(), "数据表已存在") {
 		t.Fatalf("second install without clear_db: %v", err)
@@ -174,7 +158,6 @@ func TestApplyFreshDatabaseLikePHP(t *testing.T) {
 		AdminUser: "again", AdminPassword: "likeadmin",
 		PublicDir: filepath.Join(dir, "public"),
 		LockPath:  filepath.Join(dir, "clear.lock"),
-		EnvPath:   filepath.Join(dir, "clear.env"),
 		Now:       ts + 1,
 	})
 	if err != nil {

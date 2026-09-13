@@ -1,9 +1,11 @@
 package platformapi
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
@@ -201,31 +203,106 @@ func clearRuntimeFileCache() {
 }
 
 func SystemInfo(c *gin.Context) {
-	writable := 0
-	runtimeDir := filepath.Join(config.C.App.PublicDir, "..", "runtime")
-	if config.C.App.PublicDir == "" {
-		runtimeDir = "runtime"
-	}
-	if err := os.MkdirAll(runtimeDir, 0o755); err == nil {
-		probe := filepath.Join(runtimeDir, ".write_probe")
-		if err := os.WriteFile(probe, []byte("ok"), 0o644); err == nil {
-			writable = 1
-			_ = os.Remove(probe)
-		}
-	}
 	response.Data(c, gin.H{
 		"server": []gin.H{
-			{"param": "服务器操作系统", "value": runtime.GOOS},
-			{"param": "web服务器环境", "value": "Go " + runtime.Version()},
-			{"param": "PHP版本", "value": runtime.Version()},
+			{"param": "服务器操作系统", "value": runtime.GOOS + "/" + runtime.GOARCH},
+			{"param": "web服务器环境", "value": "Go net/http"},
+			{"param": "Go版本", "value": runtime.Version()},
+			{"param": "配置文件", "value": config.Path},
 		},
 		"env": []gin.H{
-			{"option": "PHP版本", "require": "8.0版本以上", "status": 1, "remark": "Go 后端已替代 PHP 运行时"},
+			{"option": "Go版本", "require": "1.22及以上", "status": boolStatus(goAtLeast(1, 22)), "remark": ""},
+			{"option": "MySQL", "require": "可连接", "status": boolStatus(mysqlPingOK()), "remark": mysqlRemark()},
 		},
 		"auth": []gin.H{
-			{"dir": "/runtime", "require": "runtime目录可写", "status": writable, "remark": ""},
+			{"dir": "/runtime", "require": "runtime目录可写", "status": boolStatus(dirWritable(systemRuntimeDir())), "remark": ""},
+			{"dir": "config.yaml", "require": "配置文件可写", "status": boolStatus(fileWritable(config.Path)), "remark": ""},
+			{"dir": "/public/uploads", "require": "uploads目录可写", "status": boolStatus(dirWritable(systemUploadsDir())), "remark": ""},
 		},
 	})
+}
+
+func boolStatus(ok bool) int {
+	if ok {
+		return 1
+	}
+	return 0
+}
+
+func goAtLeast(major, minor int) bool {
+	ver := strings.TrimPrefix(runtime.Version(), "go")
+	var maj, min int
+	n, _ := fmt.Sscanf(ver, "%d.%d", &maj, &min)
+	if n < 1 {
+		return false
+	}
+	if maj != major {
+		return maj > major
+	}
+	return min >= minor
+}
+
+func mysqlPingOK() bool {
+	if bootstrap.DB == nil {
+		return false
+	}
+	sqlDB, err := bootstrap.DB.DB()
+	if err != nil {
+		return false
+	}
+	return sqlDB.Ping() == nil
+}
+
+func mysqlRemark() string {
+	if !mysqlPingOK() {
+		return "未连接"
+	}
+	host := strings.TrimSpace(config.C.Database.Hostname)
+	if host == "" {
+		return "已连接"
+	}
+	return host
+}
+
+func systemRuntimeDir() string {
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(config.C.App.PublicDir, "..", "runtime")
+	}
+	return "runtime"
+}
+
+func systemUploadsDir() string {
+	if config.C.App.PublicDir != "" {
+		return filepath.Join(config.C.App.PublicDir, "uploads")
+	}
+	return filepath.Join("public", "uploads")
+}
+
+func dirWritable(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return false
+	}
+	probe := filepath.Join(dir, ".write_probe")
+	if err := os.WriteFile(probe, []byte("ok"), 0o644); err != nil {
+		return false
+	}
+	_ = os.Remove(probe)
+	return true
+}
+
+func fileWritable(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
 }
 
 func LogLists(c *gin.Context) {

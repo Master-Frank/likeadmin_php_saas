@@ -2,7 +2,7 @@
 
 给后续维护者和 AI 的交接文档。产品前端（`platform/`、`tenant/`、`pc/`、`uniapp/`）仍是 Vue/uniapp；后端运行时走 Go（`backend/`）。ThinkPHP `server/` 已从工作树删除。
 
-**更新日期：** 2026-09-12
+**更新日期：** 2026-09-13
 
 ## 一句话结论
 
@@ -15,7 +15,7 @@ Go 覆盖原 PHP 全部公开 HTTP 动作、Think CLI、系统 crontab、代码�
 | `backend/` | Go 后端（HTTP `cmd/api`、CLI `cmd/think`、定时 `cmd/crontab`、切流 `cmd/strangler`） |
 | `public/` | SPA（`platform`/`admin`/`mobile`/`pc`）、`resource/`、`error/`、`uploads/` |
 | `config/install.lock` | 安装锁（不入库） |
-| `.env` `runtime/` `upgrade/` | 安装产物 / 导出 / 升级暂存（不入库） |
+| `.env`（勿用） `runtime/` `upgrade/` | 历史 PHP 安装产物 / 导出 / 升级暂存（不入库）。运行时配置只读 `backend/configs/config.yaml` |
 | `platform/` `tenant/` `pc/` `uniapp/` | 前端源码。发布脚本写入 `public/` |
 | `backend/deploy/nginx.production.conf` | 生产切流：API / install / crontab → Go，`root` 为 `public/` |
 | `backend/internal/router/coverage_test.go` | 前端路由硬编码白名单 |
@@ -63,7 +63,7 @@ Go **严于** 历史 PHP，不要为字节级一致回退：
 现网数据不在 git 里。上线前必须备份并拷贝：
 
 1. `server/public/uploads` → `public/uploads`
-2. `server/.env` → 仓库根 `.env`
+2. 把 PHP `.env` 里的库地址 / salt / `HTTP_HOST` 填进 `backend/configs/config.yaml`（不要再拷一份根目录 `.env`）
 3. `server/config/install.lock` → `config/install.lock`
 4. 把 nginx `root` 改成 `/opt/likeadmin/public`（或等价路径）
 5. 确认 `LIKEADMIN_CONFIG` 里 `public_dir` / `install_lock` 指向新位置
@@ -73,7 +73,7 @@ Go **严于** 历史 PHP，不要为字节级一致回退：
 
 ## 不要提交的文件
 
-- `.env`、`config/install.lock`、`backend/internal/install/.env`
+- `config/install.lock`
 - 对拍生成物：`platform/src/api/pair_gencrud.ts`、`platform/src/views/pair_gencrud/`、`tenant/src/api/pair_tenant_crud.ts`、`tenant/src/views/pair_tenant_crud/`
 - `public/uploads/*`（占位 `index.html` 除外）、`upgrade/`、`runtime/`
 
@@ -104,4 +104,4 @@ export GO=http://127.0.0.1:8080 TENANT_HOST=pair1.likeadmin.test
 - 安装向导外观对齐历史 PHP 四步页，但提交仍走 Go JSON `POST /install`，不要恢复 ThinkPHP 或 layui.js。
 - 不要 `exec PHP` 跑 think 命令。
 - 不要恢复 ThinkPHP `server/` 作为运行时依赖。
-- 不要提交 `.env` / `install.lock` / pair 生成的 CRUD Vue。
+- 不要提交 `install.lock` / pair 生成的 CRUD Vue。

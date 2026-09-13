@@ -226,7 +226,7 @@
   var envOK = false;
   var busy = false;
   var INFO = ["服务器操作系统", "web服务器环境", "Go", "程序安装目录", "磁盘空间", "上传限制"];
-  var DIRS = ["runtime", "public", "public/uploads", "public/platform", "public/admin", "public/mobile", "config", ".env", "临时目录"];
+  var DIRS = ["runtime", "public", "public/uploads", "public/platform", "public/admin", "public/mobile", "config", "config.yaml", "临时目录"];
   var DIR_REQ = {
     runtime: "runtime目录可写",
     public: "public目录可写",
@@ -235,7 +235,7 @@
     "public/admin": "admin目录可写",
     "public/mobile": "mobile目录可写",
     config: "config目录可写",
-    ".env": ".env文件可写",
+    "config.yaml": "config.yaml可写",
     "临时目录": "临时目录可写"
   };
 
