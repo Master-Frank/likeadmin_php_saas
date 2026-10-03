@@ -15,14 +15,58 @@ export function getModulesKey() {
 }
 
 // 过滤路由所需要的数据
-export function filterAsyncRoutes(routes: any[], firstRoute = true) {
+export function filterAsyncRoutes(routes: any[], firstRoute = true, parentPath = '') {
     return routes.map((route) => {
         const routeRecord = createRouteRecord(route, firstRoute)
+        const fullPath =
+            isExternal(routeRecord.path) || routeRecord.path.startsWith('/')
+                ? routeRecord.path
+                : joinRoutePath(parentPath, routeRecord.path)
         if (route.children != null && route.children && route.children.length) {
-            routeRecord.children = filterAsyncRoutes(route.children, false)
+            routeRecord.children = filterAsyncRoutes(route.children, false, fullPath)
+            // 目录本身没有页面。/permission、/consumer 直接打开时跳到第一个子菜单，
+            // 避免只剩一个空的 router-view。
+            if (route.type == MenuEnum.CATALOGUE && !isExternal(fullPath)) {
+                const target = firstMenuPath(routeRecord.children, fullPath)
+                if (target) {
+                    routeRecord.redirect = target
+                }
+            }
         }
         return routeRecord
     })
+}
+
+function joinRoutePath(parent: string, path: string) {
+    if (!path) {
+        return parent || '/'
+    }
+    if (path.startsWith('/')) {
+        return path.replace(/\/{2,}/g, '/')
+    }
+    const base = parent.endsWith('/') ? parent.slice(0, -1) : parent
+    return `${base}/${path}`.replace(/\/{2,}/g, '/')
+}
+
+// 目录下第一个可见菜单的绝对路径，例如 /permission/menu、/consumer/lists。
+function firstMenuPath(children: RouteRecordRaw[] | undefined, parentPath: string): string | undefined {
+    if (!children) {
+        return
+    }
+    for (const child of children) {
+        if (child.meta?.hidden || isExternal(child.path)) {
+            continue
+        }
+        const fullPath = joinRoutePath(parentPath, child.path)
+        if (child.meta?.type == MenuEnum.MENU) {
+            return fullPath
+        }
+        const nested = firstMenuPath(child.children, fullPath)
+        if (nested) {
+            return nested
+        }
+    }
+    return undefined
 }
 
 // 创建一条路由记录
