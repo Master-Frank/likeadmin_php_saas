@@ -193,6 +193,7 @@ func AdminMySelf(c *gin.Context) {
 		response.Fail(c, "管理员不存在")
 		return
 	}
+	ensureTenantMenuTree(c)
 	var menus []model.TenantSystemMenu
 	q := scopeTID(tdb(c).Where("is_disable = 0 AND type IN ?", []string{"M", "C"}), c)
 	roleIDs, deptIDs, jobIDs := []uint{}, []uint{}, []uint{}

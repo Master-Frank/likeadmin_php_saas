@@ -1,6 +1,7 @@
 package tenantapi
 
 import (
+	"likeadmin/backend/internal/bootstrap"
 	"likeadmin/backend/internal/cache"
 	"likeadmin/backend/internal/config"
 	"likeadmin/backend/internal/ctxutil"
@@ -9,6 +10,7 @@ import (
 	"likeadmin/backend/internal/lists"
 	"likeadmin/backend/internal/model"
 	"likeadmin/backend/internal/response"
+	"likeadmin/backend/internal/tenantmenu"
 	"likeadmin/backend/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -321,6 +323,7 @@ func MenuRoute(c *gin.Context) {
 		response.Data(c, []any{})
 		return
 	}
+	ensureTenantMenuTree(c)
 	response.Data(c, tenantMenuTreeByAdmin(c, admin))
 }
 
@@ -332,6 +335,7 @@ func MenuLists(c *gin.Context) {
 	if listsNeedTenant(c, q) {
 		return
 	}
+	ensureTenantMenuTree(c)
 	var rows []model.TenantSystemMenu
 	db := tdb(c).Where("tenant_id = ?", tenantDB(c)).Order("sort desc, id asc")
 	db.Find(&rows)
@@ -348,6 +352,7 @@ func MenuAll(c *gin.Context) {
 		response.Data(c, []any{})
 		return
 	}
+	ensureTenantMenuTree(c)
 	var rows []model.TenantSystemMenu
 	db := tdb(c).Select("id,pid,name").Where("is_disable = 0 AND tenant_id = ?", tid)
 	db.Order("sort desc, id desc").Find(&rows)
@@ -902,6 +907,16 @@ func tenantMenuMap(m model.TenantSystemMenu) map[string]any {
 		"tenant_id": m.TenantID, "create_time": util.FormatDateTime(m.CreateTime),
 		"update_time": util.FormatDateTimeOrNil(m.UpdateTime),
 	}
+}
+
+// ensureTenantMenuTree rewrites child pid values that still point at the
+// tenant_id=0 template, then the sidebar can hang 菜单/角色/管理员 under 权限管理.
+func ensureTenantMenuTree(c *gin.Context) {
+	tid := tenantDB(c)
+	if tid == 0 || bootstrap.DB == nil {
+		return
+	}
+	_ = tenantmenu.EnsureTree(bootstrap.DB, tdb(c), tid)
 }
 
 func tenantMenuTreeByAdmin(c *gin.Context, admin model.TenantAdmin) []map[string]any {
